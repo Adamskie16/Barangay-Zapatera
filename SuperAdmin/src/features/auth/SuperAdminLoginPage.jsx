@@ -74,11 +74,15 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const [unlockOtp, setUnlockOtp] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState('');
-  const [unlockSuccess, setUnlockSuccess] = useState('');
   const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
+  const [loginConfig, setLoginConfig] = useState(null);
 
   useEffect(() => {
+    StorageService.getConfigAsync().then((cfg) => {
+      if (cfg) setLoginConfig(cfg);
+    });
+
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -614,8 +618,8 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       {/* LEFT SIDE: Abstract Decorative Fluid/Marble Background (~50% width) */}
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
         <img
-          src="/auth-bg.jpg"
-          alt="Abstract decorative fluid background"
+          src={loginConfig?.login_bg_url || '/auth-bg.jpg'}
+          alt="Login background"
           className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
         />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-pink-500/15 pointer-events-none" />
@@ -638,13 +642,13 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           <div className="max-w-md my-auto py-12">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 backdrop-blur-md border border-red-500/30 text-red-200 text-xs font-semibold mb-6">
               <Lock className="w-3.5 h-3.5 text-red-300" />
-              Highest Security Level Required
+              {loginConfig?.login_badge || 'Highest Security Level Required'}
             </div>
             <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight mb-4">
-              Barangay Zapatera Super Admin Portal
+              {loginConfig?.login_title || 'Barangay Zapatera Super Admin Portal'}
             </h2>
             <p className="text-sm text-slate-200/90 leading-relaxed">
-              Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.
+              {loginConfig?.login_description || 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.'}
             </p>
           </div>
 

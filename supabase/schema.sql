@@ -120,6 +120,10 @@ CREATE TABLE IF NOT EXISTS public.system_config (
     contact_phone TEXT DEFAULT '(032) 253-1234',
     doc_prefix TEXT DEFAULT 'BZ-2026',
     auto_notify BOOLEAN DEFAULT true,
+    login_bg_url TEXT DEFAULT '/auth-bg.jpg',
+    login_title TEXT DEFAULT 'Barangay Zapatera Portal',
+    login_badge TEXT DEFAULT 'Barangay Administration',
+    login_description TEXT DEFAULT 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT single_row CHECK (id = 1)
 );

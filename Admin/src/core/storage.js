@@ -69,6 +69,11 @@ const INITIAL_CONFIG = {
   contact_phone: '(032) 253-1234',
   doc_prefix: 'BRGY-2026',
   auto_notify: true,
+  login_bg_url: '/auth-bg.jpg',
+  login_title: '',
+  login_badge: '',
+  login_description: '',
+  updated_at: new Date().toISOString(),
 };
 
 const INITIAL_LOGS = [
@@ -817,5 +822,52 @@ export const StorageService = {
       return users[userIndex];
     }
     return null;
+  },
+
+  // SYSTEM CONFIG
+  getConfig: () => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(INITIAL_CONFIG));
+    } catch {
+      return INITIAL_CONFIG;
+    }
+  },
+
+  getConfigAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+        if (data && !error) {
+          localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return StorageService.getConfig();
+  },
+
+  saveConfig: async (config) => {
+    const updated = { ...config, updated_at: new Date().toISOString() };
+    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase.from('system_config').upsert({ id: 1, ...updated });
+      }
+    } catch {
+      // Handled
+    }
+
+    StorageService.addLog({
+      user_email: 'admin@zapatera.gov.ph',
+      action: 'Updated System Settings',
+      feature: 'System Configuration',
+      details: 'Updated global system parameters and login design settings.',
+      level: 'info',
+    });
+
+    return updated;
   },
 };

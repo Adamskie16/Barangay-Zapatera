@@ -73,11 +73,15 @@ export default function AdminLoginPage({ onLoginSuccess }) {
   const [unlockOtp, setUnlockOtp] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState('');
-  const [unlockSuccess, setUnlockSuccess] = useState('');
   const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
+  const [loginConfig, setLoginConfig] = useState(null);
 
   useEffect(() => {
+    StorageService.getConfigAsync().then((cfg) => {
+      if (cfg) setLoginConfig(cfg);
+    });
+
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -611,8 +615,8 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       {/* LEFT SIDE: Abstract Decorative Fluid/Marble Background (~50% width) */}
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
         <img
-          src="/auth-bg.jpg"
-          alt="Abstract decorative fluid background"
+          src={loginConfig?.login_bg_url || '/auth-bg.jpg'}
+          alt="Login background"
           className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
         />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-blue-500/15 pointer-events-none" />
@@ -635,13 +639,13 @@ export default function AdminLoginPage({ onLoginSuccess }) {
           <div className="max-w-md my-auto py-12">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-xs font-semibold mb-6">
               <Lock className="w-3.5 h-3.5 text-blue-300" />
-              Administrative Staff Portal
+              {loginConfig?.login_badge || 'Administrative Staff Portal'}
             </div>
             <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight mb-4">
-              Administrator Management System
+              {loginConfig?.login_title || 'Administrator Management System'}
             </h2>
             <p className="text-sm text-slate-200/90 leading-relaxed">
-              Secure administrative access for managing resident records, document requests, event issuances, and community services.
+              {loginConfig?.login_description || 'Secure administrative access for managing resident records, document requests, event issuances, and community services.'}
             </p>
           </div>
 
