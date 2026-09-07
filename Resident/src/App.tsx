@@ -1,102 +1,118 @@
+// Resident/src/App.tsx
 import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   StatusBar,
-  Modal,
-  Image,
+  StyleSheet,
 } from 'react-native';
+import {
+  ResidentUser,
+  DocumentRequest,
+  DocumentType,
+  BarangayAnnouncement,
+  BarangayConfig,
+  ResidentNotification,
+} from './types';
 import { MobileStorage } from './core/storage';
-import { ResidentUser, DocumentRequest, DocumentType, BarangayEvent, BarangayConfig } from './types';
 import { supabase, isSupabaseConfigured } from './core/supabase';
-import ResidentAuthPage from './features/auth/ResidentAuthPage';
-import RequestDocumentView from './features/requests/RequestDocumentView';
-import ViewStatusView from './features/requests/ViewStatusView';
-import ViewEventsView from './features/events/ViewEventsView';
+import {
+  OFFICIAL_DOC_TYPES,
+  DEFAULT_BARANGAY_CONFIG,
+  SAMPLE_ANNOUNCEMENTS,
+  SAMPLE_SAMPLE_REQUESTS,
+} from './core/portalData';
 
-const DEFAULT_DOC_TYPES: DocumentType[] = [
+// Component Views
+import Navbar from './components/Navbar';
+import BottomNav, { NavTab } from './components/BottomNav';
+import ResidentAuthPage from './features/auth/ResidentAuthPage';
+import ResidentDashboard from './features/dashboard/ResidentDashboard';
+import DocumentCatalogView from './features/documents/DocumentCatalogView';
+import RequirementsModal from './features/documents/RequirementsModal';
+import RequestFlowModal from './features/requests/RequestFlowModal';
+import RequestTrackingModal from './features/requests/RequestTrackingModal';
+import MyRequestsView from './features/requests/MyRequestsView';
+import AnnouncementsView from './features/announcements/AnnouncementsView';
+import NotificationModal from './features/notifications/NotificationModal';
+import ProfileView from './features/profile/ProfileView';
+
+const INITIAL_NOTIFICATIONS: ResidentNotification[] = [
   {
-    id: 'dt-001',
-    code: 'BC-01',
-    title: 'Barangay Clearance',
-    description: 'Official certification for employment, legal transactions, or identification purposes.',
-    fee: 50.0,
-    processing_days: 1,
-    requirements: ['Valid Government ID', 'Proof of Address / Utility Bill'],
-    is_active: true,
-    created_at: new Date().toISOString(),
+    id: 'notif-1',
+    user_id: 'res-sample',
+    title: 'Document Ready for Pickup! 🎉',
+    message: 'Your Barangay Clearance (Ref: BRGY-2026-004128) is ready for pickup at Express Window 2.',
+    type: 'ready_pickup',
+    is_read: false,
+    link_tab: 'requests',
+    created_at: 'Today, 8:00 AM',
   },
   {
-    id: 'dt-002',
-    code: 'CI-02',
-    title: 'Certificate of Indigency',
-    description: 'Free certificate issued for medical aid, scholarship, or financial assistance.',
-    fee: 0.0,
-    processing_days: 1,
-    requirements: ['Affidavit of Low Income', 'Voter ID or Barangay ID'],
-    is_active: true,
-    created_at: new Date().toISOString(),
+    id: 'notif-2',
+    user_id: 'res-sample',
+    title: 'Public Health Advisory Posted',
+    message: 'Free Medical & Dental Mission scheduled for September 12 at the Barangay Gym.',
+    type: 'announcement',
+    is_read: false,
+    link_tab: 'announcements',
+    created_at: 'Yesterday, 3:30 PM',
   },
   {
-    id: 'dt-003',
-    code: 'CR-03',
-    title: 'Certificate of Residency',
-    description: 'Proof of continuous residence within Barangay Zapatera jurisdiction.',
-    fee: 30.0,
-    processing_days: 1,
-    requirements: ['Valid Photo ID', 'Landlord Statement / Billing Statement'],
-    is_active: true,
-    created_at: new Date().toISOString(),
+    id: 'notif-3',
+    user_id: 'res-sample',
+    title: 'Application Under Review',
+    message: 'Barangay records clerk is reviewing your Certificate of Residency request.',
+    type: 'status_update',
+    is_read: true,
+    link_tab: 'requests',
+    created_at: 'Sep 5, 2026',
   },
 ];
 
-const DEFAULT_CONFIG: BarangayConfig = {
-  barangay_name: 'Barangay Zapatera',
-  municipality: 'Cebu City',
-  province: 'Cebu',
-  seal_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80',
-  office_hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
-  contact_email: 'info@barangayzapatera.gov.ph',
-  contact_phone: '(032) 253-1234',
-  doc_prefix: 'BZ-2026',
-  auto_notify: true,
-  updated_at: new Date().toISOString(),
-};
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'request' | 'status' | 'events'>('request');
+  const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
-  const [requests, setRequests] = useState<DocumentRequest[]>([]);
-  const [events] = useState<BarangayEvent[]>([]);
-  const [docTypes] = useState<DocumentType[]>(DEFAULT_DOC_TYPES);
-  const [config] = useState<BarangayConfig>(DEFAULT_CONFIG);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_SAMPLE_REQUESTS);
+  const [docTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
+  const [announcements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
+  const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
+  const [notifications, setNotifications] = useState<ResidentNotification[]>(INITIAL_NOTIFICATIONS);
+
+  // Modals state
+  const [isRequestFlowOpen, setIsRequestFlowOpen] = useState<boolean>(false);
+  const [selectedDocForRequest, setSelectedDocForRequest] = useState<DocumentType | null>(null);
+
+  const [isRequirementsModalOpen, setIsRequirementsModalOpen] = useState<boolean>(false);
+  const [selectedDocForRequirements, setSelectedDocForRequirements] = useState<DocumentType | null>(null);
+
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState<boolean>(false);
+  const [selectedRequestForTracking, setSelectedRequestForTracking] = useState<DocumentRequest | null>(null);
+
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    loadSession();
+    loadResidentSession();
   }, []);
 
   useEffect(() => {
     if (currentUser) {
-      fetchRequests();
+      fetchResidentRequests();
     }
   }, [currentUser]);
 
-  const loadSession = async () => {
+  const loadResidentSession = async () => {
     try {
       const stored = await MobileStorage.getItem('zapatera_resident_session');
       if (stored) {
         setCurrentUser(JSON.parse(stored));
       }
-    } catch (err) {
-      console.warn('Load session notice:', err);
+    } catch {
+      // Ignore
     }
   };
 
-  const fetchRequests = async () => {
+  const fetchResidentRequests = async () => {
     if (!currentUser) return;
     try {
       if (isSupabaseConfigured()) {
@@ -106,30 +122,33 @@ export default function App() {
           .eq('resident_email', currentUser.email)
           .order('created_at', { ascending: false });
 
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           setRequests(data as DocumentRequest[]);
           return;
         }
       }
-    } catch (err) {
-      console.warn('Supabase fetch requests notice:', err);
+    } catch {
+      // Handled silently
     }
 
     try {
       const stored = await MobileStorage.getItem('zapatera_requests_db');
-      setRequests(stored ? JSON.parse(stored) : []);
+      if (stored) {
+        setRequests(JSON.parse(stored));
+      }
     } catch {
-      setRequests([]);
+      // Keep sample requests
     }
   };
 
   const handleLoginSuccess = async (user: ResidentUser) => {
     try {
       await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(user));
-    } catch (err) {
-      console.warn('Save session notice:', err);
+    } catch {
+      // Ignore
     }
     setCurrentUser(user);
+    setActiveTab('home');
   };
 
   const handleLogout = async () => {
@@ -138,53 +157,114 @@ export default function App() {
       if (isSupabaseConfigured()) {
         await supabase.auth.signOut();
       }
-    } catch (err) {
-      console.warn('Logout notice:', err);
+    } catch {
+      // Ignore
     }
     setCurrentUser(null);
-    setRequests([]);
-    setIsProfileModalOpen(false);
+    setActiveTab('home');
   };
 
-  const handleRequestSubmitted = async (newReqPayload: Partial<DocumentRequest> & { tracking_number: string }) => {
-    const fullReq: DocumentRequest = {
-      id: `req-${Date.now()}`,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      resident_id: currentUser?.id || '',
-      resident_name: currentUser?.full_name || '',
-      resident_email: currentUser?.email || '',
-      document_type_id: newReqPayload.document_type_id || '',
-      document_title: newReqPayload.document_title || '',
-      fee: newReqPayload.fee || 0,
-      purpose: newReqPayload.purpose || '',
-      requirements_attached: newReqPayload.requirements_attached || [],
-      pickup_time_slot: newReqPayload.pickup_time_slot || '',
-      ...newReqPayload,
-    } as DocumentRequest;
+  const handleUpdateProfile = async (updatedFields: Partial<ResidentUser>) => {
+    if (!currentUser) return;
+    const updatedUser: ResidentUser = {
+      ...currentUser,
+      ...updatedFields,
+    };
+    setCurrentUser(updatedUser);
+    try {
+      await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updatedUser));
+      if (isSupabaseConfigured()) {
+        await supabase
+          .from('profiles')
+          .update({
+            ...updatedFields,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('email', currentUser.email);
+      }
+    } catch {
+      // Handled
+    }
+  };
+
+  const handleRequestSubmitted = async (newReq: DocumentRequest) => {
+    const updatedList = [newReq, ...requests];
+    setRequests(updatedList);
+
+    // Add in-app notification
+    const newNotif: ResidentNotification = {
+      id: `notif-${Date.now()}`,
+      user_id: currentUser?.id || 'res-user',
+      title: 'Request Submitted Successfully',
+      message: `Your request for ${newReq.document_title} (Ref: ${newReq.tracking_number}) has been queued.`,
+      type: 'status_update',
+      is_read: false,
+      link_tab: 'requests',
+      created_at: 'Just now',
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase.from('requests').insert([fullReq]);
+        await supabase.from('requests').insert([newReq]);
       }
-    } catch (err) {
-      console.warn('Supabase insert notice:', err);
+    } catch {
+      // Handled
     }
 
     try {
-      const stored = await MobileStorage.getItem('zapatera_requests_db');
-      const existing: DocumentRequest[] = stored ? JSON.parse(stored) : [];
-      const updated = [fullReq, ...existing];
-      await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(updated));
-    } catch (err) {
-      console.warn('AsyncStorage req save notice:', err);
+      await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(updatedList));
+    } catch {
+      // Handled
     }
-
-    setRequests((prev) => [fullReq, ...prev]);
-    setActiveTab('status');
   };
 
+  const handleOpenRequirements = (doc?: DocumentType) => {
+    const targetDoc = doc || docTypes[0];
+    setSelectedDocForRequirements(targetDoc);
+    setIsRequirementsModalOpen(true);
+  };
+
+  const handleOpenRequestFlow = (doc?: DocumentType | string) => {
+    let targetDoc = docTypes[0];
+    if (typeof doc === 'string') {
+      targetDoc = docTypes.find((d) => d.id === doc) || docTypes[0];
+    } else if (doc) {
+      targetDoc = doc;
+    }
+    setSelectedDocForRequest(targetDoc);
+    setIsRequestFlowOpen(true);
+  };
+
+  const handleViewRequestDetails = (req: DocumentRequest) => {
+    setSelectedRequestForTracking(req);
+    setIsTrackingModalOpen(true);
+  };
+
+  const handleMarkAsRead = (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const handleNotificationClick = (notif: ResidentNotification) => {
+    setIsNotificationModalOpen(false);
+    if (notif.link_tab) {
+      setActiveTab(notif.link_tab);
+    }
+  };
+
+  const activeRequestsCount = requests.filter(
+    (r) => r.status === 'pending' || r.status === 'under_review' || r.status === 'processing' || r.status === 'ready_for_pickup'
+  ).length;
+
+  const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
+
+  // Unauthenticated screen
   if (!currentUser) {
     return (
       <SafeAreaView style={styles.authContainer}>
@@ -195,112 +275,121 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+    <SafeAreaView style={styles.appContainer}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Top Header Bar */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image
-            source={{ uri: config.seal_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80' }}
-            style={styles.headerSeal}
-          />
-          <View>
-            <Text style={styles.headerTitle}>{config.barangay_name.toUpperCase()}</Text>
-            <Text style={styles.headerSubtitle}>Resident Mobile Service Portal</Text>
-          </View>
-        </View>
+      {/* Top Government-Service Navbar */}
+      <Navbar
+        currentUser={currentUser}
+        config={config}
+        unreadNotifsCount={unreadNotifsCount}
+        onOpenNotifications={() => setIsNotificationModalOpen(true)}
+        onOpenProfile={() => setActiveTab('profile')}
+        onRequestDocument={() => handleOpenRequestFlow()}
+      />
 
-        <TouchableOpacity style={styles.profileBtn} onPress={() => setIsProfileModalOpen(true)}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{currentUser.full_name?.charAt(0) || 'R'}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Screen Content */}
+      {/* Screen Body Router */}
       <View style={styles.mainContent}>
-        {activeTab === 'request' && (
-          <RequestDocumentView
-            docTypes={docTypes}
+        {activeTab === 'home' && (
+          <ResidentDashboard
             currentUser={currentUser}
-            onRequestSubmitted={handleRequestSubmitted}
+            requests={requests}
+            announcements={announcements}
             config={config}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            onRequestDocument={(docId) => handleOpenRequestFlow(docId)}
+            onOpenRequirements={() => handleOpenRequirements()}
+            onViewRequestDetails={handleViewRequestDetails}
+            onViewAnnouncement={(ann) => setActiveTab('announcements')}
           />
         )}
-        {activeTab === 'status' && (
-          <ViewStatusView requests={requests} currentUser={currentUser} config={config} />
+
+        {activeTab === 'documents' && (
+          <DocumentCatalogView
+            docTypes={docTypes}
+            onSelectDocument={(doc) => handleOpenRequestFlow(doc)}
+            onViewRequirements={(doc) => handleOpenRequirements(doc)}
+          />
         )}
-        {activeTab === 'events' && <ViewEventsView events={events} />}
+
+        {activeTab === 'requests' && (
+          <MyRequestsView
+            requests={requests}
+            onViewRequestDetails={handleViewRequestDetails}
+            onRequestNew={() => handleOpenRequestFlow()}
+          />
+        )}
+
+        {activeTab === 'announcements' && (
+          <AnnouncementsView announcements={announcements} />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileView
+            currentUser={currentUser}
+            config={config}
+            onUpdateProfile={handleUpdateProfile}
+            onLogout={handleLogout}
+          />
+        )}
       </View>
 
-      {/* iOS & Android Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'request' && styles.tabItemActive]}
-          onPress={() => setActiveTab('request')}
-        >
-          <Text style={[styles.tabIconText, activeTab === 'request' && styles.tabIconActive]}>📝</Text>
-          <Text style={[styles.tabLabel, activeTab === 'request' && styles.tabLabelActive]}>Request</Text>
-        </TouchableOpacity>
+      {/* Accessible Bottom Navigation Bar */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={(tab) => setActiveTab(tab)}
+        activeRequestsCount={activeRequestsCount}
+        onRequestClick={() => handleOpenRequestFlow()}
+      />
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'status' && styles.tabItemActive]}
-          onPress={() => setActiveTab('status')}
-        >
-          <Text style={[styles.tabIconText, activeTab === 'status' && styles.tabIconActive]}>⏱️</Text>
-          <Text style={[styles.tabLabel, activeTab === 'status' && styles.tabLabelActive]}>Status ({requests.length})</Text>
-        </TouchableOpacity>
+      {/* MODALS */}
+      {/* 1. Requirements Guide Modal */}
+      <RequirementsModal
+        visible={isRequirementsModalOpen}
+        doc={selectedDocForRequirements}
+        onClose={() => setIsRequirementsModalOpen(false)}
+        onProceedToRequest={(doc) => {
+          setIsRequirementsModalOpen(false);
+          handleOpenRequestFlow(doc);
+        }}
+      />
 
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'events' && styles.tabItemActive]}
-          onPress={() => setActiveTab('events')}
-        >
-          <Text style={[styles.tabIconText, activeTab === 'events' && styles.tabIconActive]}>📢</Text>
-          <Text style={[styles.tabLabel, activeTab === 'events' && styles.tabLabelActive]}>Events</Text>
-        </TouchableOpacity>
-      </View>
+      {/* 2. 5-Step Request Flow & Appointment Scheduler */}
+      <RequestFlowModal
+        visible={isRequestFlowOpen}
+        initialDoc={selectedDocForRequest}
+        docTypes={docTypes}
+        currentUser={currentUser}
+        config={config}
+        onClose={() => setIsRequestFlowOpen(false)}
+        onRequestSubmitted={handleRequestSubmitted}
+        onTrackSubmittedRequest={(req) => {
+          setSelectedRequestForTracking(req);
+          setIsTrackingModalOpen(true);
+        }}
+      />
 
-      {/* Resident Profile & Logout Modal */}
-      <Modal visible={isProfileModalOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Resident Profile</Text>
-              <TouchableOpacity onPress={() => setIsProfileModalOpen(false)}>
-                <Text style={styles.modalCloseX}>✕</Text>
-              </TouchableOpacity>
-            </View>
+      {/* 3. Request Tracking & Claim Pass Modal */}
+      <RequestTrackingModal
+        visible={isTrackingModalOpen}
+        request={selectedRequestForTracking}
+        config={config}
+        onClose={() => setIsTrackingModalOpen(false)}
+        onReRequest={(req) => {
+          setIsTrackingModalOpen(false);
+          handleOpenRequestFlow(req.document_type_id);
+        }}
+      />
 
-            <View style={styles.profileBody}>
-              <View style={styles.profileAvatarLarge}>
-                <Text style={styles.profileAvatarLargeText}>{currentUser.full_name?.charAt(0) || 'R'}</Text>
-              </View>
-              <Text style={styles.profileName}>{currentUser.full_name}</Text>
-              <Text style={styles.profileEmail}>{currentUser.email}</Text>
-
-              <View style={styles.infoGroup}>
-                <Text style={styles.infoLabel}>Location / Sitio:</Text>
-                <Text style={styles.infoValue}>{currentUser.sitio || currentUser.address || 'Barangay Zapatera'}</Text>
-              </View>
-
-              <View style={styles.infoGroup}>
-                <Text style={styles.infoLabel}>ID Reference:</Text>
-                <Text style={styles.infoValue}>{currentUser.id_number || 'BZ-RESIDENT'}</Text>
-              </View>
-
-              <View style={styles.infoGroup}>
-                <Text style={styles.infoLabel}>Voter Status:</Text>
-                <Text style={styles.infoValue}>{currentUser.voter_status || 'Registered Voter'}</Text>
-              </View>
-
-              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-                <Text style={styles.logoutBtnText}>Log Out Account</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* 4. Notification Center Modal */}
+      <NotificationModal
+        visible={isNotificationModalOpen}
+        notifications={notifications}
+        onClose={() => setIsNotificationModalOpen(false)}
+        onMarkAsRead={handleMarkAsRead}
+        onMarkAllAsRead={handleMarkAllAsRead}
+        onNotificationClick={handleNotificationClick}
+      />
     </SafeAreaView>
   );
 }
@@ -310,178 +399,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#090d16',
   },
-  safeArea: {
+  appContainer: {
     flex: 1,
-    backgroundColor: '#0f172a',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#0f172a',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerSeal: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: '#3b82f6',
-  },
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 10,
-    color: '#94a3b8',
-  },
-  profileBtn: {
-    padding: 2,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    backgroundColor: '#f8fafc',
   },
   mainContent: {
     flex: 1,
-    backgroundColor: '#090d16',
-  },
-  bottomTabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    height: 60,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabItemActive: {},
-  tabIconText: {
-    fontSize: 18,
-  },
-  tabIconActive: {},
-  tabLabel: {
-    fontSize: 10,
-    color: '#64748b',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  tabLabelActive: {
-    color: '#38bdf8',
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.85)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#0f172a',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-  },
-  modalCloseX: {
-    color: '#94a3b8',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  profileBody: {
-    alignItems: 'center',
-  },
-  profileAvatarLarge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  profileAvatarLargeText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  profileEmail: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 16,
-  },
-  infoGroup: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  infoValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-  },
-  logoutBtn: {
-    width: '100%',
-    backgroundColor: '#e11d48',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  logoutBtnText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 13,
+    backgroundColor: '#f8fafc',
   },
 });

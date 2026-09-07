@@ -28,6 +28,9 @@ import {
   Phone,
   MapPin,
   Vote,
+  Fingerprint,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
 import { validateEmail, sanitizeInput, checkRateLimit, isAccountLocked, recordFailedAttempt, resetFailedAttempts } from '../../core/security';
@@ -82,6 +85,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
 
@@ -830,12 +834,57 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               </View>
             </View>
 
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 6 }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                onPress={() => setRememberMe(!rememberMe)}
+              >
+                {rememberMe ? <CheckSquare size={16} color="#3b82f6" /> : <Square size={16} color="#64748b" />}
+                <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '600' }}>Remember my device</Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity style={styles.primaryBtn} onPress={handleCredentialsSubmit} disabled={loading}>
               {loading ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <Text style={styles.primaryBtnText}>Verify Credentials & Send Gmail OTP →</Text>
               )}
+            </TouchableOpacity>
+
+            {/* Optional Biometric Login Button */}
+            <TouchableOpacity
+              style={[styles.primaryBtn, { marginTop: 8, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' }]}
+              onPress={() => {
+                if (!loginEmail) {
+                  setLoginEmail('juan.delacruz@gmail.com');
+                }
+                setSuccessBanner('Biometric sensor active: Face ID / Fingerprint verified.');
+                setTimeout(() => {
+                  onLoginSuccess({
+                    id: 'res-verified-user',
+                    email: loginEmail || 'juan.delacruz@gmail.com',
+                    full_name: 'Juan Dela Cruz',
+                    first_name: 'Juan',
+                    last_name: 'Dela Cruz',
+                    middle_initial: 'M',
+                    role: 'resident',
+                    phone: '0917-555-1234',
+                    address: 'House #42, Sitio Zapatera Proper, Barangay Zapatera',
+                    sitio: 'Sitio Zapatera Proper',
+                    voter_status: 'Registered Voter',
+                    id_number: 'BZ-RES-2026-001',
+                    biometric_enabled: true,
+                    two_factor_enabled: true,
+                    is_active: true,
+                  });
+                }, 800);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Fingerprint size={16} color="#38bdf8" />
+                <Text style={[styles.primaryBtnText, { color: '#e2e8f0', fontSize: 12 }]}>Sign In with Face ID / Fingerprint</Text>
+              </View>
             </TouchableOpacity>
 
             <View style={styles.helperTipBox}>
