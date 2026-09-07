@@ -17,8 +17,10 @@ export interface ResidentUser {
   last_name?: string;
   middle_initial?: string;
   birthdate?: string;
+  birth_date?: string;
   age?: number;
   civil_status?: 'Single' | 'Married' | 'Widowed' | 'Divorced' | 'Separated' | string;
+  years_in_barangay?: number | string;
   sitio?: string;
   voter_status?: 'Registered Voter' | 'Non-Registered Voter' | string;
   role: UserRole;
@@ -92,6 +94,8 @@ export interface DocumentRequest {
   resident_email: string;
   resident_phone?: string;
   resident_address?: string;
+  resident_birth_date?: string;
+  years_in_barangay?: number | string;
   document_type_id: string;
   document_title: string;
   fee: number;

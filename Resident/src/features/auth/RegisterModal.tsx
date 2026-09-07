@@ -15,11 +15,12 @@ import {
   MapPin,
   Vote,
   FileText,
+  Calendar,
 } from 'lucide-react';
 import { validateEmail, sanitizeInput } from '../../core/security';
 import { ResidentUser } from '../../types';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
-import { SAMPLE_SITIOS, checkPasswordStrength, isStrongPassword } from './ResidentAuthPage';
+import { SAMPLE_SITIOS, CIVIL_STATUS_OPTIONS, checkPasswordStrength, isStrongPassword } from './ResidentAuthPage';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -32,6 +33,8 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
     last_name: '',
     first_name: '',
     middle_initial: '',
+    birth_date: '',
+    civil_status: 'Single',
     email: '',
     phone: '',
     voter_status: 'Registered Voter', // 'Registered Voter' | 'Not Registered Voter'
@@ -75,31 +78,43 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
       return;
     }
 
-    // 2. Email Validation
+    // 2. Date of Birth Validation
+    if (!formData.birth_date.trim()) {
+      setError('Please provide your Date of Birth.');
+      return;
+    }
+
+    // 3. Civil Status Validation
+    if (!formData.civil_status) {
+      setError('Please select your Status / Civil Status.');
+      return;
+    }
+
+    // 4. Email Validation
     if (!validateEmail(formData.email)) {
       setError('Please enter a valid Gmail / email address.');
       return;
     }
 
-    // 3. Mobile Number Validation
+    // 5. Mobile Number Validation
     if (!formData.phone.trim()) {
       setError('Please enter your active mobile phone number.');
       return;
     }
 
-    // 4. Voter Status Validation
+    // 6. Voter Status Validation
     if (!formData.voter_status) {
       setError('Please indicate if you are a Registered Voter or Not.');
       return;
     }
 
-    // 5. Sitio Validation
+    // 7. Sitio Validation
     if (!formData.sitio) {
       setError('Please select your Sitio.');
       return;
     }
 
-    // 6. Strong Password Validation
+    // 8. Strong Password Validation
     if (!isStrongPassword(formData.password)) {
       setError(
         'Password Security Alert: A strong password requires at least 8 characters, 1 uppercase (A-Z), 1 lowercase (a-z), 1 number (0-9), and 1 special character (!@#$%^&*).'
@@ -107,13 +122,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
       return;
     }
 
-    // 8. Password Match Validation
+    // 9. Password Match Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Password Mismatch Alert: Password and Confirm Password do not match.');
       return;
     }
 
-    // 9. Privacy Policy Validation
+    // 10. Privacy Policy Validation
     if (!formData.privacyPolicyAccepted) {
       setError('You must agree to the Data Privacy Policy under RA 10173 to create an account.');
       return;
@@ -140,6 +155,8 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
               first_name: cleanFirstName,
               last_name: cleanLastName,
               middle_initial: cleanMI,
+              birth_date: formData.birth_date.trim(),
+              civil_status: formData.civil_status,
               phone: formData.phone.trim(),
               voter_status: formData.voter_status,
               sitio: formData.sitio,
@@ -170,11 +187,12 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
           first_name: cleanFirstName,
           last_name: cleanLastName,
           middle_initial: cleanMI,
+          birth_date: formData.birth_date.trim(),
+          civil_status: formData.civil_status,
           role: 'resident',
           phone: formData.phone.trim(),
           sitio: formData.sitio,
           voter_status: formData.voter_status,
-          civil_status: 'Single',
           id_type: formData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay ID',
           id_number: `BZ-RES-${Date.now().toString().slice(-6)}`,
           privacy_policy_accepted: true,
@@ -196,12 +214,14 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
       first_name: cleanFirstName,
       last_name: cleanLastName,
       middle_initial: cleanMI,
+      birth_date: formData.birth_date.trim(),
+      birthdate: formData.birth_date.trim(),
+      civil_status: formData.civil_status,
       role: 'resident',
       password: formData.password,
       phone: formData.phone.trim(),
       sitio: formData.sitio,
       voter_status: formData.voter_status,
-      civil_status: 'Single',
       id_type: formData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay ID',
       id_number: `BZ-RES-${Date.now().toString().slice(-6)}`,
       is_active: true,
@@ -285,9 +305,39 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
             )}
           </div>
 
+          {/* Personal Status & Date of Birth Details */}
+          <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
+            <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">2. Personal Status & Birth Details *</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Date of Birth *</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.birth_date}
+                  onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Status / Civil Status *</label>
+                <select
+                  value={formData.civil_status}
+                  onChange={(e) => setFormData({ ...formData, civil_status: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                >
+                  {CIVIL_STATUS_OPTIONS.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Contact & Sitio Details */}
           <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
-            <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">2. Contact & Residency Details *</h4>
+            <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">3. Contact & Residency Details *</h4>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">Gmail / Email Address *</label>
