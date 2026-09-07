@@ -453,29 +453,37 @@ export const StorageService = {
   getRequestsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+        const { data: reqData, error: reqErr } = await supabase
           .from('document_requests')
-          .select(`
-            *,
-            profiles:resident_id (
-              id, email, full_name, first_name, last_name, phone, address, sitio, birthdate, age, civil_status, voter_status, id_type, id_number, avatar_url
-            ),
-            document_types:document_type_id (
-              id, title, code, fee, processing_days, requirements
-            )
-          `)
+          .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
-          const normalized = data.map((req) => ({
-            ...req,
-            resident_name: req.profiles?.full_name || req.resident_name || 'Resident',
-            resident_email: req.profiles?.email || req.resident_email,
-            resident_phone: req.profiles?.phone || req.resident_phone,
-            resident_address: req.profiles?.address || req.profiles?.sitio || req.resident_address,
-            document_title: req.document_types?.title || req.document_title || 'Barangay Document',
-            fee: req.document_types?.fee !== undefined ? req.document_types.fee : req.fee,
-          }));
+        if (!reqErr && reqData && reqData.length > 0) {
+          const [profilesRes, docTypesRes] = await Promise.all([
+            supabase.from('profiles').select('*'),
+            supabase.from('document_types').select('*'),
+          ]);
+
+          const profilesMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
+          const docTypesMap = new Map((docTypesRes.data || []).map((d) => [d.id, d]));
+
+          const normalized = reqData.map((req) => {
+            const profile = profilesMap.get(req.resident_id) || {};
+            const docType = docTypesMap.get(req.document_type_id) || {};
+            return {
+              ...req,
+              profiles: profile,
+              document_types: docType,
+              resident_name: profile.full_name || req.resident_name || 'Resident',
+              resident_email: profile.email || req.resident_email,
+              resident_phone: profile.phone || req.resident_phone,
+              resident_address: profile.address || profile.sitio || req.resident_address,
+              document_title: docType.title || req.document_title || 'Barangay Document',
+              fee: docType.fee !== undefined ? docType.fee : (req.fee || 0),
+              pickup_date: req.pickup_date || 'To be scheduled',
+              pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
+            };
+          });
 
           localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(normalized));
           return normalized;

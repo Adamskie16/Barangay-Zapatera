@@ -258,12 +258,7 @@ export default function App() {
         
         let query = supabase
           .from('document_requests')
-          .select(`
-            *,
-            document_types:document_type_id (
-              id, title, code, fee, processing_days, requirements
-            )
-          `)
+          .select('*')
           .order('created_at', { ascending: false });
 
         if (isUuid) {
@@ -273,17 +268,19 @@ export default function App() {
         const { data, error } = await query;
 
         if (!error && data && data.length > 0) {
-          const formatted: DocumentRequest[] = data.map((req: any) => ({
-            id: req.id,
-            tracking_number: req.tracking_number,
-            resident_id: req.resident_id,
-            resident_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim(),
-            resident_email: currentUser.email,
-            resident_phone: currentUser.phone || '',
-            resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
-            document_type_id: req.document_type_id,
-            document_title: req.document_types?.title || req.document_title || 'Barangay Clearance',
-            fee: req.document_types?.fee !== undefined ? Number(req.document_types.fee) : (Number(req.fee) || 0),
+          const formatted: DocumentRequest[] = data.map((req: any) => {
+            const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
+            return {
+              id: req.id,
+              tracking_number: req.tracking_number,
+              resident_id: req.resident_id,
+              resident_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim(),
+              resident_email: currentUser.email,
+              resident_phone: currentUser.phone || '',
+              resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+              document_type_id: req.document_type_id,
+              document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
+              fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
             purpose: req.purpose,
             requirements_attached: Array.isArray(req.requirements_attached) ? req.requirements_attached : [],
             uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
@@ -330,9 +327,10 @@ export default function App() {
             ],
             created_at: req.created_at,
             updated_at: req.updated_at,
-          }));
+          };
+        });
 
-          setRequests(formatted);
+        setRequests(formatted);
           await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(formatted));
           return;
         }
