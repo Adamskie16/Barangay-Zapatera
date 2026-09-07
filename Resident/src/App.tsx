@@ -73,9 +73,9 @@ const INITIAL_NOTIFICATIONS: ResidentNotification[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
-  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_SAMPLE_REQUESTS);
-  const [docTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
-  const [announcements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
+  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_REQUESTS);
+  const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
+  const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
   const [notifications, setNotifications] = useState<ResidentNotification[]>(INITIAL_NOTIFICATIONS);
 
