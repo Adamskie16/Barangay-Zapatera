@@ -3,6 +3,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   FileText,
+  Newspaper,
   Calendar,
   Users,
   Settings,
@@ -17,6 +18,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'documents', label: 'Document Info Mgmt', icon: FileText },
+    { id: 'news', label: 'News & Bulletins Mgmt', icon: Newspaper },
     { id: 'events', label: 'Event Info Mgmt', icon: Calendar },
     { id: 'users', label: 'User Account Mgmt', icon: Users },
     { id: 'config', label: 'System Configurations', icon: Settings },

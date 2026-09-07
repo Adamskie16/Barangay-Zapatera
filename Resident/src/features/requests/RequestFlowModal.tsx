@@ -22,6 +22,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Camera,
+  Image as ImageIcon,
   Trash2,
   ShieldCheck,
   Check,
@@ -107,19 +108,78 @@ export default function RequestFlowModal({
 
   const selectedDoc = docTypes.find((d) => d.id === selectedDocId) || initialDoc || docTypes[0];
 
-  // Helper simulated upload
-  const handleSimulateUpload = (reqName: string, isPdf = false) => {
-    const newFile: UploadedRequirementFile = {
-      requirement_name: reqName,
-      file_name: isPdf
-        ? `${reqName.replace(/[^a-zA-Z0-9]/g, '_')}_Document.pdf`
-        : `${reqName.replace(/[^a-zA-Z0-9]/g, '_')}_Photo.jpg`,
-      file_type: isPdf ? 'application/pdf' : 'image/jpeg',
-      file_size: isPdf ? '1.4 MB' : '820 KB',
-      status: 'uploaded',
+  // Requirements list normalized from selectedDoc
+  const requirementsToUpload = (selectedDoc?.requirements && Array.isArray(selectedDoc.requirements) && selectedDoc.requirements.length > 0)
+    ? selectedDoc.requirements.map((r, i) => {
+        const name = typeof r === 'string' ? r : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
+        const isReq = typeof r === 'object' && 'is_required' in (r as any) ? !!(r as any).is_required : true;
+        return {
+          id: `req-${i}`,
+          name: name,
+          description: 'Original or clear digital scanned copy / camera photo',
+          is_required: isReq,
+        };
+      })
+    : (selectedDoc?.requirement_items || []);
+
+  // Real browser/device file and camera upload handler
+  const handleRealFileUpload = (reqName: string, mode: 'camera' | 'photo' | 'document' = 'photo') => {
+    if (typeof document === 'undefined') return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+
+    if (mode === 'camera') {
+      input.accept = 'image/*';
+      input.capture = 'environment';
+    } else if (mode === 'photo') {
+      input.accept = 'image/*';
+    } else {
+      input.accept = 'application/pdf,image/*';
+    }
+
+    input.onchange = (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+
+      const fileSize = file.size < 1024 * 1024
+        ? `${(file.size / 1024).toFixed(0)} KB`
+        : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isImage = file.type.startsWith('image/') || (!isPdf);
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        const newFile: UploadedRequirementFile = {
+          requirement_name: reqName,
+          file_name: file.name,
+          file_type: isPdf ? 'application/pdf' : 'image/jpeg',
+          file_size: fileSize,
+          file_url: isImage ? dataUrl : undefined,
+          status: 'uploaded',
+        };
+        setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
+        setUploadError('');
+      };
+
+      if (isImage) {
+        reader.readAsDataURL(file);
+      } else {
+        const newFile: UploadedRequirementFile = {
+          requirement_name: reqName,
+          file_name: file.name,
+          file_type: 'application/pdf',
+          file_size: fileSize,
+          status: 'uploaded',
+        };
+        setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
+        setUploadError('');
+      }
     };
-    setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
-    setUploadError('');
+
+    input.click();
   };
 
   const handleRemoveFile = (reqName: string) => {
@@ -143,11 +203,11 @@ export default function RequestFlowModal({
       setCurrentStep(3);
     } else if (currentStep === 3) {
       // Check mandatory requirements
-      const mandatoryItems = (selectedDoc.requirement_items || []).filter((r) => r.is_required);
+      const mandatoryItems = requirementsToUpload.filter((r) => r.is_required);
       if (mandatoryItems.length > 0) {
         const missing = mandatoryItems.find((m) => !uploadedFiles[m.name]);
         if (missing) {
-          setUploadError(`Required: Please upload a copy of "${missing.name}" before proceeding.`);
+          setUploadError(`Required: Please upload or capture a copy of "${missing.name}" before proceeding.`);
           return;
         }
       }
@@ -448,74 +508,100 @@ export default function RequestFlowModal({
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Upload Requirements</Text>
                 <Text style={styles.stepSubtitle}>
-                  Attach clear photos or PDF copies of the required supporting documents for {selectedDoc.title}.
+                  Attach clear photos, camera captures, or PDF copies of the required supporting documents for {selectedDoc.title}.
                 </Text>
 
-                <View style={styles.uploadsList}>
-                  {(selectedDoc.requirement_items || selectedDoc.requirements.map((r, i) => ({
-                    id: `req-${i}`,
-                    name: r,
-                    description: 'Original or clear digital scanned copy',
-                    is_required: i < 2,
-                  }))).map((item) => {
-                    const uploaded = uploadedFiles[item.name];
-                    return (
-                      <View key={item.id || item.name} style={styles.uploadItemCard}>
-                        <View style={styles.uploadItemHeader}>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={styles.uploadItemName}>{item.name}</Text>
-                              <View style={[styles.reqTag, item.is_required ? styles.reqTagRequired : styles.reqTagOptional]}>
-                                <Text style={[styles.reqTagText, item.is_required ? styles.reqTagTextRequired : styles.reqTagTextOptional]}>
-                                  {item.is_required ? 'REQUIRED' : 'OPTIONAL'}
-                                </Text>
+                {requirementsToUpload.length === 0 ? (
+                  <View style={styles.tipBox}>
+                    <ShieldCheck size={16} color="#059669" />
+                    <Text style={styles.tipText}>
+                      No supporting documents or attachments required for this document. You can proceed directly to select your express pickup schedule.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.uploadsList}>
+                    {requirementsToUpload.map((item) => {
+                      const uploaded = uploadedFiles[item.name];
+                      return (
+                        <View key={item.id || item.name} style={styles.uploadItemCard}>
+                          <View style={styles.uploadItemHeader}>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <Text style={styles.uploadItemName}>{item.name}</Text>
+                                <View style={[styles.reqTag, item.is_required ? styles.reqTagRequired : styles.reqTagOptional]}>
+                                  <Text style={[styles.reqTagText, item.is_required ? styles.reqTagTextRequired : styles.reqTagTextOptional]}>
+                                    {item.is_required ? 'REQUIRED' : 'OPTIONAL'}
+                                  </Text>
+                                </View>
+                              </View>
+                              {item.description && (
+                                <Text style={styles.uploadItemDesc}>{item.description}</Text>
+                              )}
+                            </View>
+                          </View>
+
+                          {uploaded ? (
+                            <View style={styles.uploadedFileContainer}>
+                              <View style={styles.uploadedFileRow}>
+                                {uploaded.file_url ? (
+                                  <Image
+                                    source={{ uri: uploaded.file_url }}
+                                    style={styles.uploadedThumbnail}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View style={styles.pdfBadge}>
+                                    <FileText size={18} color="#dc2626" />
+                                  </View>
+                                )}
+                                <View style={styles.uploadedFileLeft}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <CheckCircle2 size={14} color="#16a34a" />
+                                    <Text style={styles.uploadedFileName} numberOfLines={1}>{uploaded.file_name}</Text>
+                                  </View>
+                                  <Text style={styles.uploadedFileSize}>{uploaded.file_size} • Ready for verification</Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={styles.removeFileBtn}
+                                  onPress={() => handleRemoveFile(item.name)}
+                                  title="Remove attachment"
+                                >
+                                  <Trash2 size={15} color="#ef4444" />
+                                </TouchableOpacity>
                               </View>
                             </View>
-                            {item.description && (
-                              <Text style={styles.uploadItemDesc}>{item.description}</Text>
-                            )}
-                          </View>
+                          ) : (
+                            <View style={styles.uploadActionButtons}>
+                              <TouchableOpacity
+                                style={styles.uploadActionBtn}
+                                onPress={() => handleRealFileUpload(item.name, 'camera')}
+                              >
+                                <Camera size={14} color="#1d4ed8" />
+                                <Text style={styles.uploadActionText}>Photo / Camera</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.uploadActionBtn}
+                                onPress={() => handleRealFileUpload(item.name, 'photo')}
+                              >
+                                <ImageIcon size={14} color="#059669" />
+                                <Text style={[styles.uploadActionText, { color: '#059669' }]}>Upload Picture</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.uploadActionBtn}
+                                onPress={() => handleRealFileUpload(item.name, 'document')}
+                              >
+                                <Upload size={14} color="#7c3aed" />
+                                <Text style={[styles.uploadActionText, { color: '#7c3aed' }]}>Upload PDF</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
-
-                        {uploaded ? (
-                          <View style={styles.uploadedFileRow}>
-                            <View style={styles.uploadedFileLeft}>
-                              <CheckCircle2 size={16} color="#16a34a" />
-                              <View>
-                                <Text style={styles.uploadedFileName} numberOfLines={1}>{uploaded.file_name}</Text>
-                                <Text style={styles.uploadedFileSize}>{uploaded.file_size} • Ready for review</Text>
-                              </View>
-                            </View>
-                            <TouchableOpacity
-                              style={styles.removeFileBtn}
-                              onPress={() => handleRemoveFile(item.name)}
-                            >
-                              <Trash2 size={14} color="#ef4444" />
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          <View style={styles.uploadActionButtons}>
-                            <TouchableOpacity
-                              style={styles.uploadActionBtn}
-                              onPress={() => handleSimulateUpload(item.name, false)}
-                            >
-                              <Camera size={14} color="#1d4ed8" />
-                              <Text style={styles.uploadActionText}>Photo / Camera</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={styles.uploadActionBtn}
-                              onPress={() => handleSimulateUpload(item.name, true)}
-                            >
-                              <Upload size={14} color="#1d4ed8" />
-                              <Text style={styles.uploadActionText}>Upload PDF</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
 
@@ -1072,26 +1158,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1d4ed8',
   },
+  uploadedFileContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    overflow: 'hidden',
+  },
   uploadedFileRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
     padding: 8,
-    borderRadius: 8,
+    gap: 8,
+  },
+  uploadedThumbnail: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f1f5f9',
+  },
+  pdfBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
   },
   uploadedFileLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    flexDirection: 'column',
+    gap: 2,
     flex: 1,
   },
   uploadedFileName: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#15803d',
+    color: '#0f172a',
   },
   uploadedFileSize: {
     fontSize: 10,
@@ -1099,6 +1206,8 @@ const styles = StyleSheet.create({
   },
   removeFileBtn: {
     padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#fee2e2',
   },
   dateScroll: {
     flexDirection: 'row',

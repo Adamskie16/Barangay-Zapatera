@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import DashboardView from './features/dashboard/DashboardView';
 import DocumentsView from './features/documents/DocumentsView';
+import NewsView from './features/news/NewsView';
 import EventsView from './features/events/EventsView';
 import UsersView from './features/users/UsersView';
 import ConfigView from './features/config/ConfigView';
@@ -40,15 +41,22 @@ export default function App() {
   const [notifications, setNotifications] = useState(StorageService.getNotifications());
 
   const refreshState = async () => {
-    setUsers(StorageService.getUsers());
-    const docs = await StorageService.getDocTypesAsync();
-    setDocTypes(docs);
-    const evts = await StorageService.getEventsAsync();
-    setEvents(evts);
-    setRequests(StorageService.getRequests());
-    setConfig(StorageService.getConfig());
-    setLogs(StorageService.getLogs());
-    setNotifications(StorageService.getNotifications());
+    const [usrList, docs, evts, reqs, cfg, logsData, notifs] = await Promise.all([
+      StorageService.getUsersAsync(),
+      StorageService.getDocTypesAsync(),
+      StorageService.getEventsAsync(),
+      StorageService.getRequestsAsync(),
+      StorageService.getConfigAsync(),
+      StorageService.getLogsAsync(),
+      StorageService.getNotificationsAsync(),
+    ]);
+    if (usrList) setUsers(usrList);
+    if (docs) setDocTypes(docs);
+    if (evts) setEvents(evts);
+    if (reqs) setRequests(reqs);
+    if (cfg) setConfig(cfg);
+    if (logsData) setLogs(logsData);
+    if (notifs) setNotifications(notifs);
     setCurrentUser(StorageService.getCurrentUser());
   };
 
@@ -88,25 +96,25 @@ export default function App() {
     await refreshState();
   };
 
-  const handleSaveUser = (userPayload) => {
-    StorageService.saveUser(userPayload);
-    refreshState();
+  const handleSaveUser = async (userPayload) => {
+    await StorageService.saveUser(userPayload);
+    await refreshState();
   };
 
-  const handleDeleteUser = (userId) => {
-    StorageService.deleteUser(userId);
-    refreshState();
+  const handleDeleteUser = async (userId) => {
+    await StorageService.deleteUser(userId);
+    await refreshState();
   };
 
-  const handleSaveConfig = (newConfig) => {
-    const updated = StorageService.saveConfig(newConfig);
+  const handleSaveConfig = async (newConfig) => {
+    const updated = await StorageService.saveConfig(newConfig);
     setConfig(updated);
-    refreshState();
+    await refreshState();
   };
 
-  const handleSendNotification = (notifPayload) => {
-    StorageService.addNotification(notifPayload);
-    refreshState();
+  const handleSendNotification = async (notifPayload) => {
+    await StorageService.addNotification(notifPayload);
+    await refreshState();
   };
 
   // Auth Guard
@@ -118,6 +126,7 @@ export default function App() {
   const tabTitles = {
     dashboard: 'Super Admin System Dashboard',
     documents: 'Document Templates & Information Management',
+    news: 'Barangay News & Bulletin Management',
     events: 'Community Events & Announcements',
     users: 'User Account Provisioning & Roles',
     config: 'Global System Configurations',
@@ -170,6 +179,10 @@ export default function App() {
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
             />
+          )}
+
+          {activeTab === 'news' && (
+            <NewsView currentUser={currentUser} isDarkMode={isDarkMode} />
           )}
 
           {activeTab === 'events' && (

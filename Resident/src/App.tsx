@@ -20,7 +20,7 @@ import {
   OFFICIAL_DOC_TYPES,
   DEFAULT_BARANGAY_CONFIG,
   SAMPLE_ANNOUNCEMENTS,
-  SAMPLE_SAMPLE_REQUESTS,
+  SAMPLE_REQUESTS,
 } from './core/portalData';
 
 // Component Views
@@ -73,9 +73,9 @@ const INITIAL_NOTIFICATIONS: ResidentNotification[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
-  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_SAMPLE_REQUESTS);
-  const [docTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
-  const [announcements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
+  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_REQUESTS);
+  const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
+  const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
   const [notifications, setNotifications] = useState<ResidentNotification[]>(INITIAL_NOTIFICATIONS);
 
@@ -93,11 +93,14 @@ export default function App() {
 
   useEffect(() => {
     loadResidentSession();
+    fetchDocTypes();
+    fetchAnnouncements();
   }, []);
 
   useEffect(() => {
     if (currentUser) {
       fetchResidentRequests();
+      fetchResidentNotifications();
     }
   }, [currentUser]);
 
@@ -112,18 +115,228 @@ export default function App() {
     }
   };
 
+  const fetchDocTypes = async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_types')
+          .select('*')
+          .eq('is_active', true)
+          .order('title', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          const formatted: DocumentType[] = data.map((d: any) => ({
+            id: d.id,
+            code: d.code,
+            title: d.title,
+            description: d.description,
+            fee: Number(d.fee) || 0,
+            processing_days: Number(d.processing_days) || 1,
+            requirements: Array.isArray(d.requirements)
+              ? d.requirements
+              : typeof d.requirements === 'string'
+              ? JSON.parse(d.requirements)
+              : [],
+            is_active: d.is_active !== false,
+          }));
+          setDocTypes(formatted);
+        }
+      }
+    } catch {
+      // fallback to default
+    }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const [newsRes, eventsRes] = await Promise.all([
+          supabase
+            .from('news')
+            .select('*')
+            .eq('is_published', true)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('events')
+            .select('*')
+            .order('created_at', { ascending: false }),
+        ]);
+
+        const newsItems: BarangayAnnouncement[] = (newsRes.data || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          category: (item.category as any) || 'Public Advisory',
+          date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          description: item.description,
+          content: item.content || item.description,
+          banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+          location: item.location || 'Barangay Zapatera, Cebu City',
+          author: item.author || 'Barangay Administration',
+          is_important: !!item.is_important,
+          is_emergency: !!item.is_emergency,
+          created_at: item.created_at,
+        }));
+
+        const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
+          id: evt.id,
+          title: evt.title,
+          category: 'Events',
+          date: evt.event_date
+            ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          description: evt.description,
+          content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
+          banner_url: evt.image_url || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+          location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
+          author: evt.created_by_name || 'Barangay Office',
+          is_important: false,
+          is_emergency: false,
+          created_at: evt.created_at || evt.event_date,
+        }));
+
+        const combined = [...newsItems, ...eventItems].sort((a, b) => {
+          const timeA = new Date(a.created_at || 0).getTime();
+          const timeB = new Date(b.created_at || 0).getTime();
+          return timeB - timeA;
+        });
+
+        if (combined.length > 0) {
+          setAnnouncements(combined);
+          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(combined));
+          return;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    try {
+      const stored = await MobileStorage.getItem('zapatera_news_db');
+      if (stored) {
+        setAnnouncements(JSON.parse(stored));
+      }
+    } catch {
+      // fallback
+    }
+  };
+
+  const fetchResidentNotifications = async () => {
+    if (!currentUser) return;
+    try {
+      if (isSupabaseConfigured()) {
+        let query = supabase
+          .from('notifications')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+          query = query.or(`user_id.eq.${currentUser.id},role_target.eq.resident,role_target.is.null`);
+        } else {
+          query = query.or(`role_target.eq.resident,role_target.is.null`);
+        }
+
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          const formatted: ResidentNotification[] = data.map((n: any) => ({
+            id: n.id,
+            user_id: n.user_id || currentUser.id || 'res-user',
+            title: n.title,
+            message: n.message,
+            type: n.type || 'info',
+            is_read: n.is_read || false,
+            link_tab: (n.link_tab as any) || 'requests',
+            created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          }));
+          setNotifications(formatted);
+        }
+      }
+    } catch {
+      // Handled silently
+    }
+  };
+
   const fetchResidentRequests = async () => {
     if (!currentUser) return;
     try {
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('requests')
+        const isUuid = currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
+        
+        let query = supabase
+          .from('document_requests')
           .select('*')
-          .eq('resident_email', currentUser.email)
           .order('created_at', { ascending: false });
 
+        if (isUuid) {
+          query = query.eq('resident_id', currentUser.id);
+        }
+
+        const { data, error } = await query;
+
         if (!error && data && data.length > 0) {
-          setRequests(data as DocumentRequest[]);
+          const formatted: DocumentRequest[] = data.map((req: any) => {
+            const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
+            return {
+              id: req.id,
+              tracking_number: req.tracking_number,
+              resident_id: req.resident_id,
+              resident_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim(),
+              resident_email: currentUser.email,
+              resident_phone: currentUser.phone || '',
+              resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+              document_type_id: req.document_type_id,
+              document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
+              fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
+            purpose: req.purpose,
+            requirements_attached: Array.isArray(req.requirements_attached) ? req.requirements_attached : [],
+            uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
+            pickup_date: req.pickup_date || 'To be scheduled',
+            pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
+            pickup_location: req.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+            pickup_instructions: req.pickup_instructions || '',
+            status: req.status || 'pending',
+            notes: req.notes || '',
+            rejection_reason: req.rejection_reason || '',
+            timeline: req.timeline || [
+              {
+                status: 'pending',
+                label: 'Request Submitted',
+                description: 'Document request registered in system queue.',
+                timestamp: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                is_completed: true,
+                is_current: req.status === 'pending',
+              },
+              {
+                status: 'under_review',
+                label: 'Under Review',
+                description: 'Barangay records clerk is validating details and clearance.',
+                timestamp: req.status === 'under_review' || req.status === 'processing' || req.status === 'approved' || req.status === 'completed' ? 'Reviewed' : 'Pending',
+                is_completed: ['under_review', 'processing', 'approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
+                is_current: req.status === 'under_review' || req.status === 'processing',
+              },
+              {
+                status: 'ready_for_pickup',
+                label: 'Ready for Pickup',
+                description: `Document ready for collection at Express Window 2.`,
+                timestamp: req.pickup_date ? `${req.pickup_date} (${req.pickup_time_slot || 'Window 2'})` : 'To be scheduled',
+                is_completed: ['approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
+                is_current: req.status === 'approved' || req.status === 'ready_for_pickup',
+              },
+              {
+                status: 'completed',
+                label: 'Completed',
+                description: 'Document claimed and released to resident.',
+                timestamp: req.status === 'completed' || req.status === 'issued' ? 'Released' : 'Pending Release',
+                is_completed: req.status === 'completed' || req.status === 'issued',
+                is_current: req.status === 'completed' || req.status === 'issued',
+              },
+            ],
+            created_at: req.created_at,
+            updated_at: req.updated_at,
+          };
+        });
+
+        setRequests(formatted);
+          await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(formatted));
           return;
         }
       }
@@ -174,13 +387,17 @@ export default function App() {
     try {
       await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updatedUser));
       if (isSupabaseConfigured()) {
-        await supabase
-          .from('profiles')
-          .update({
-            ...updatedFields,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('email', currentUser.email);
+        const isUuid = currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
+        const updatePayload = {
+          ...updatedFields,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (isUuid) {
+          await supabase.from('profiles').update(updatePayload).eq('id', currentUser.id);
+        } else {
+          await supabase.from('profiles').update(updatePayload).eq('email', currentUser.email);
+        }
       }
     } catch {
       // Handled
@@ -205,11 +422,57 @@ export default function App() {
     setNotifications((prev) => [newNotif, ...prev]);
 
     try {
-      if (isSupabaseConfigured()) {
-        await supabase.from('requests').insert([newReq]);
+      if (isSupabaseConfigured() && currentUser?.id) {
+        const isDocTypeUuid = newReq.document_type_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newReq.document_type_id);
+        const isResidentUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
+
+        let residentProfileId = currentUser.id;
+        if (!isResidentUuid) {
+          const { data: p } = await supabase.from('profiles').select('id').eq('email', currentUser.email).maybeSingle();
+          if (p?.id) residentProfileId = p.id;
+        }
+
+        let docTypeId = isDocTypeUuid ? newReq.document_type_id : null;
+        if (!docTypeId && (newReq.document_type_id || newReq.document_title)) {
+          const { data: dRec } = await supabase
+            .from('document_types')
+            .select('id')
+            .or(`code.eq.${newReq.document_type_id},title.eq.${newReq.document_title}`)
+            .maybeSingle();
+          if (dRec?.id) docTypeId = dRec.id;
+        }
+
+        const payload = {
+          tracking_number: newReq.tracking_number,
+          resident_id: residentProfileId,
+          document_type_id: docTypeId,
+          purpose: newReq.purpose,
+          requirements_attached: newReq.requirements_attached || [],
+          uploaded_files: newReq.uploaded_files || [],
+          pickup_date: newReq.pickup_date,
+          pickup_time_slot: newReq.pickup_time_slot,
+          pickup_location: newReq.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+          pickup_instructions: newReq.pickup_instructions || '',
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        await supabase.from('document_requests').insert([payload]);
+
+        // Insert in notifications table
+        await supabase.from('notifications').insert([{
+          user_id: residentProfileId,
+          title: 'Request Submitted Successfully 📄',
+          message: `Your application for ${newReq.document_title} (Tracking: ${newReq.tracking_number}) was received.`,
+          type: 'status_update',
+          link_tab: 'requests',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        }]);
       }
     } catch {
-      // Handled
+      // Handled silently
     }
 
     try {
@@ -294,11 +557,12 @@ export default function App() {
           <ResidentDashboard
             currentUser={currentUser}
             requests={requests}
+            docTypes={docTypes}
             announcements={announcements}
             config={config}
             onNavigateTab={(tab) => setActiveTab(tab)}
-            onRequestDocument={(docId) => handleOpenRequestFlow(docId)}
-            onOpenRequirements={() => handleOpenRequirements()}
+            onRequestDocument={(doc) => handleOpenRequestFlow(doc)}
+            onOpenRequirements={(doc) => handleOpenRequirements(doc)}
             onViewRequestDetails={handleViewRequestDetails}
             onViewAnnouncement={(ann) => setActiveTab('announcements')}
           />

@@ -365,11 +365,3 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 INSERT INTO public.system_config (id, barangay_name, municipality, province, seal_url, doc_prefix)
 VALUES (1, 'Barangay Zapatera', 'Cebu City', 'Cebu', 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80', 'BZ-2026')
 ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.document_types (code, title, description, fee, processing_days, requirements)
-VALUES
-('BC-01', 'Barangay Clearance', 'Official document certifying good moral character and zero pending complaints for employment or legal requirements.', 50.00, 1, '["Valid Government Issued ID", "Proof of Residency / Utility Bill"]'::jsonb),
-('CI-02', 'Certificate of Indigency', 'Issued to low-income residents for medical, financial, or educational assistance.', 0.00, 1, '["Certificate of Low Income / Affidavit", "Barangay ID or Voter ID"]'::jsonb),
-('CR-03', 'Certificate of Residency', 'Proof of continuous residence within Barangay Zapatera for bank, school, or employment needs.', 30.00, 1, '["Valid ID showing address", "Lease Contract or Landlord Affidavit"]'::jsonb),
-('BP-04', 'Barangay Business Permit', 'Clearance for commercial establishments operating within the jurisdiction of Barangay Zapatera.', 250.00, 3, '["DTI/SEC Registration", "Lease Contract or Title", "Fire Safety Clearance"]'::jsonb)
-ON CONFLICT (code) DO NOTHING;

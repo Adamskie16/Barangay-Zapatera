@@ -6,6 +6,7 @@ import ReceiveRequestView from './features/requests/ReceiveRequestView';
 import ProcessDocumentsView from './features/requests/ProcessDocumentsView';
 import ApprovedDocumentsView from './features/requests/ApprovedDocumentsView';
 import DocumentsView from './features/documents/DocumentsView';
+import NewsView from './features/news/NewsView';
 import EventsView from './features/events/EventsView';
 import ReportsView from './features/reports/ReportsView';
 import LogsView from './features/logs/LogsView';
@@ -27,11 +28,16 @@ export default function App() {
   const [config] = useState(StorageService.getConfig());
 
   const refreshState = async () => {
-    setRequests(StorageService.getRequests());
-    setDocTypes(StorageService.getDocTypes());
-    const evts = await StorageService.getEventsAsync();
-    setEvents(evts);
-    setLogs(StorageService.getLogs());
+    const [reqs, docs, evts, logsData] = await Promise.all([
+      StorageService.getRequestsAsync(),
+      StorageService.getDocTypesAsync(),
+      StorageService.getEventsAsync(),
+      StorageService.getLogsAsync(),
+    ]);
+    if (reqs) setRequests(reqs);
+    if (docs) setDocTypes(docs);
+    if (evts) setEvents(evts);
+    if (logsData) setLogs(logsData);
     setCurrentUser(StorageService.getCurrentUser());
   };
 
@@ -44,19 +50,19 @@ export default function App() {
     refreshState();
   };
 
-  const handleUpdateRequestStatus = (updatedReq) => {
-    StorageService.saveRequest(updatedReq);
-    refreshState();
+  const handleUpdateRequestStatus = async (updatedReq) => {
+    await StorageService.saveRequest(updatedReq, currentUser);
+    await refreshState();
   };
 
-  const handleSaveDocType = (docTypePayload) => {
-    StorageService.saveDocType(docTypePayload);
-    refreshState();
+  const handleSaveDocType = async (docTypePayload) => {
+    await StorageService.saveDocType(docTypePayload);
+    await refreshState();
   };
 
-  const handleDeleteDocType = (docTypeId) => {
-    StorageService.deleteDocType(docTypeId);
-    refreshState();
+  const handleDeleteDocType = async (docTypeId) => {
+    await StorageService.deleteDocType(docTypeId);
+    await refreshState();
   };
 
   const handleSaveEvent = async (eventPayload) => {
@@ -86,6 +92,7 @@ export default function App() {
     process_documents: 'Process & Verify Document Requirements',
     approved_documents: 'Approved Documents & Digital Certificates',
     doc_info: 'Document Guidelines & Information',
+    news: 'Barangay News & Public Bulletins',
     events: 'Barangay Events & Community Notices',
     reports: 'Operational Processing Reports',
     users: 'User Account & Security Management',
@@ -148,6 +155,10 @@ export default function App() {
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
             />
+          )}
+
+          {activeTab === 'news' && (
+            <NewsView currentUser={currentUser} />
           )}
 
           {activeTab === 'events' && (

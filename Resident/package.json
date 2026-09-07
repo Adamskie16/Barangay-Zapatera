@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
+    "build": "vite build",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
