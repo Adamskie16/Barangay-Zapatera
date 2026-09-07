@@ -150,54 +150,59 @@ export default function App() {
   const fetchAnnouncements = async () => {
     try {
       if (isSupabaseConfigured()) {
-        const { data: newsData, error: newsErr } = await supabase
-          .from('news')
-          .select('*')
-          .eq('is_published', true)
-          .order('created_at', { ascending: false });
+        const [newsRes, eventsRes] = await Promise.all([
+          supabase
+            .from('news')
+            .select('*')
+            .eq('is_published', true)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('events')
+            .select('*')
+            .order('created_at', { ascending: false }),
+        ]);
 
-        if (!newsErr && newsData && newsData.length > 0) {
-          const formatted: BarangayAnnouncement[] = newsData.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            category: item.category || 'Public Advisory',
-            date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            description: item.description,
-            content: item.content || item.description,
-            banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
-            location: item.location || 'Barangay Zapatera, Cebu City',
-            author: item.author || 'Barangay Administration',
-            is_important: !!item.is_important,
-            is_emergency: !!item.is_emergency,
-            created_at: item.created_at,
-          }));
-          setAnnouncements(formatted);
-          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(formatted));
-          return;
-        }
+        const newsItems: BarangayAnnouncement[] = (newsRes.data || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          category: (item.category as any) || 'Public Advisory',
+          date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          description: item.description,
+          content: item.content || item.description,
+          banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+          location: item.location || 'Barangay Zapatera, Cebu City',
+          author: item.author || 'Barangay Administration',
+          is_important: !!item.is_important,
+          is_emergency: !!item.is_emergency,
+          created_at: item.created_at,
+        }));
 
-        const { data: eventData, error: eventErr } = await supabase
-          .from('events')
-          .select('*')
-          .in('target_audience', ['all', 'residents'])
-          .order('event_date', { ascending: true });
+        const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
+          id: evt.id,
+          title: evt.title,
+          category: 'Events',
+          date: evt.event_date
+            ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          description: evt.description,
+          content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
+          banner_url: evt.image_url || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+          location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
+          author: evt.created_by_name || 'Barangay Office',
+          is_important: false,
+          is_emergency: false,
+          created_at: evt.created_at || evt.event_date,
+        }));
 
-        if (!eventErr && eventData && eventData.length > 0) {
-          const formatted: BarangayAnnouncement[] = eventData.map((evt: any) => ({
-            id: evt.id,
-            title: evt.title,
-            category: 'Events',
-            date: new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            description: evt.description,
-            content: evt.description,
-            banner_url: evt.image_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&q=80',
-            location: evt.location,
-            author: evt.created_by_name || 'Barangay Office',
-            is_important: false,
-            is_emergency: false,
-            created_at: evt.created_at,
-          }));
-          setAnnouncements(formatted);
+        const combined = [...newsItems, ...eventItems].sort((a, b) => {
+          const timeA = new Date(a.created_at || 0).getTime();
+          const timeB = new Date(b.created_at || 0).getTime();
+          return timeB - timeA;
+        });
+
+        if (combined.length > 0) {
+          setAnnouncements(combined);
+          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(combined));
           return;
         }
       }
