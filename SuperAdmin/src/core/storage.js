@@ -53,55 +53,9 @@ const INITIAL_SUPER_ADMINS = [
   }
 ];
 
-const INITIAL_DOC_TYPES = [
-  {
-    id: 'dt-001',
-    code: 'BC-01',
-    title: 'Barangay Clearance',
-    description: 'Official certification for employment, postal ID, bank requirement, or legal purposes.',
-    fee: 50.00,
-    processing_days: 1,
-    requirements: ['Valid Government-Issued ID', 'Proof of Residency / Utility Bill', '1x1 or 2x2 Photo'],
-    is_active: true,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'dt-002',
-    code: 'CI-02',
-    title: 'Certificate of Indigency',
-    description: 'Free certificate issued for medical assistance, scholarship, or financial aid.',
-    fee: 0.00,
-    processing_days: 1,
-    requirements: ['Barangay ID or Voter Certificate', 'Certificate of Non-Filing / Low Income Statement'],
-    is_active: true,
-    created_at: new Date('2026-01-01').toISOString(),
-  }
-];
+const INITIAL_DOC_TYPES = [];
 
-const INITIAL_REQUESTS = [
-  {
-    id: 'req-101',
-    tracking_number: 'BZ-2026-9041',
-    resident_id: 'usr-003',
-    resident_name: 'Juan Dela Cruz',
-    resident_email: 'resident@gmail.com',
-    resident_phone: '0917-555-0199',
-    resident_address: '142 Sikatuna St., Sitio Upper Zapatera, Cebu City',
-    document_type_id: 'dt-001',
-    document_title: 'Barangay Clearance',
-    fee: 50.00,
-    purpose: 'Local Employment Application',
-    requirements_attached: ['Government_ID_Front.jpg', 'Electric_Bill_Jan2026.pdf'],
-    pickup_date: '2026-09-08',
-    pickup_time_slot: '3:00 PM - 3:30 PM',
-    status: 'under_review',
-    notes: 'Uploaded ID verified against resident record.',
-    rejection_reason: '',
-    processed_by: 'Maria Santos',
-    created_at: new Date('2026-07-20T10:30:00').toISOString(),
-    updated_at: new Date('2026-07-21T09:15:00').toISOString(),
-  }
-];
+const INITIAL_REQUESTS = [];
 
 const INITIAL_EVENTS = [];
 
@@ -118,53 +72,7 @@ const INITIAL_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
-const INITIAL_NEWS = [
-  {
-    id: 'news-1',
-    title: 'FREE Medical, Dental Mission & Health Clearance Day',
-    category: 'Public Advisory',
-    description: 'Barangay Zapatera Health Center will conduct free medical consultations, dental extractions, and health certificates at the Barangay Gym.',
-    content: 'The Barangay Council of Zapatera, in partnership with Cebu City Health Department, cordially invites all registered residents to the Annual Community Health & Wellness Caravan.\n\nServices Offered:\n• Free Doctor Consultations & Prescription Medicines\n• Free Dental Checkup & Tooth Extraction (Limited to first 100 residents)\n• Blood Pressure & Blood Sugar Screening\n• Free Barangay Health Clearance for Students & Senior Citizens\n• Flu Vaccinations for Elderly (60 years old and above)\n\nLocation: Barangay Zapatera Multi-Purpose Gymnasium\nDate & Time: Friday, September 12, 2026 | 8:00 AM – 3:00 PM\nPlease bring your Barangay ID or valid ID showing Zapatera residency.',
-    banner_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80',
-    location: 'Barangay Zapatera Gymnasium',
-    author: 'Committee on Health & Sanitation',
-    is_important: true,
-    is_emergency: false,
-    is_published: true,
-    target_audience: 'residents',
-    created_at: new Date('2026-07-15T08:00:00').toISOString(),
-  },
-  {
-    id: 'news-2',
-    title: 'URGENT: Scheduled Power Interruption Advisory (Sept 9, 2026)',
-    category: 'Maintenance',
-    description: 'VECO scheduled maintenance and pole relocation along Rahmann Street and Sitio San Roque from 8:00 AM to 1:00 PM.',
-    content: 'Visayan Electric Company (VECO) has notified the Barangay Administration regarding scheduled preventive maintenance and transformer replacement along Rahmann St., Sitio San Roque, and Sitio Riverside.\n\nAffected Areas:\n1. Rahmann Street (entire stretch)\n2. Sitio San Roque\n3. Sitio Riverside near Creek Area\n\nBarangay Hall operations will remain functional through generator power for document pickups and emergency services. Residents are advised to charge essential devices beforehand.',
-    banner_url: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=800&q=80',
-    location: 'Sitio San Roque & Rahmann St.',
-    author: 'Barangay Emergency Operations Center',
-    is_important: false,
-    is_emergency: true,
-    is_published: true,
-    target_audience: 'all',
-    created_at: new Date('2026-07-18T10:30:00').toISOString(),
-  },
-  {
-    id: 'news-3',
-    title: 'Digital Document Portal Release: Online 30-Minute Appointments',
-    category: 'Government Services',
-    description: 'Residents can now request clearances and certificates online and schedule express pickup times without waiting in queue.',
-    content: 'Welcome to the newly launched Barangay Zapatera Resident Digital Portal!\n\nUnder Resolution No. 2026-48, the Barangay Council has implemented a modern digital document system to speed up government transactions.\n\nKey Features:\n• File document requests 24/7 from your phone or computer.\n• Choose exact 30-minute appointment intervals for express collection.\n• Real-time SMS and email tracking updates.\n• Zero queuing at the Barangay Hall lobby.\n\nFor technical assistance or feedback, visit the Barangay Help Desk or email zapatera.cebucity@gmail.com.',
-    banner_url: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&q=80',
-    location: 'Barangay Zapatera Portal',
-    author: 'Office of the Barangay Captain',
-    is_important: true,
-    is_emergency: false,
-    is_published: true,
-    target_audience: 'residents',
-    created_at: new Date('2026-07-01T09:00:00').toISOString(),
-  }
-];
+const INITIAL_NEWS = [];
 
 const INITIAL_LOGS = [];
 

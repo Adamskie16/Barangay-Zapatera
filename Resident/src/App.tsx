@@ -20,7 +20,7 @@ import {
   OFFICIAL_DOC_TYPES,
   DEFAULT_BARANGAY_CONFIG,
   SAMPLE_ANNOUNCEMENTS,
-  SAMPLE_SAMPLE_REQUESTS,
+  SAMPLE_REQUESTS,
 } from './core/portalData';
 
 // Component Views

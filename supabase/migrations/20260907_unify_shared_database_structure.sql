@@ -265,19 +265,3 @@ CREATE POLICY "Activity Logs Read All" ON public.activity_logs FOR SELECT USING 
 
 DROP POLICY IF EXISTS "Activity Logs Insert All" ON public.activity_logs;
 CREATE POLICY "Activity Logs Insert All" ON public.activity_logs FOR INSERT WITH CHECK (true);
-
--- 10. SEED DEFAULT DOCUMENT TYPES
-INSERT INTO public.document_types (code, title, description, fee, processing_days, requirements, is_active)
-VALUES
-  ('BC-01', 'Barangay Clearance', 'Official certification for employment, postal ID, bank requirement, or local business clearance.', 50.00, 1, '["Valid Government-Issued ID", "Proof of Billing / Residency Verification", "1x1 or 2x2 Photo"]'::jsonb, true),
-  ('CI-02', 'Certificate of Indigency', 'Free certification for medical assistance (DSWD/Malasakit), scholarship, public attorney, or hospital billing.', 0.00, 1, '["Barangay ID or Voter Certificate", "Certificate of Non-Filing / Low Income Statement"]'::jsonb, true),
-  ('CR-03', 'Certificate of Residency', 'Proof of continuous residence within Barangay Zapatera for bank accounts, passport, school, or NBI.', 30.00, 1, '["Valid Government Photo ID", "Landlord Statement or Latest Utility Bill"]'::jsonb, true),
-  ('BP-04', 'Barangay Business Permit', 'Local commercial permit required for operating businesses within Barangay Zapatera jurisdiction.', 250.00, 3, '["DTI / SEC Registration Certificate", "Commercial Space Lease Contract", "Fire Safety Inspection Certificate"]'::jsonb, true),
-  ('GC-05', 'Certificate of Good Moral Character', 'Official attestation of good moral standing and clean barangay record for scholarships or employment.', 50.00, 1, '["Valid Government ID", "Barangay Records Clearance Check"]'::jsonb, true),
-  ('BC-06', 'Barangay Blotter Certification', 'Official copy/certification of filed incident or blotter entry for legal and police purposes.', 100.00, 2, '["Complainant Government ID", "Incident Case Reference Number"]'::jsonb, true)
-ON CONFLICT (code) DO UPDATE SET
-  title = EXCLUDED.title,
-  description = EXCLUDED.description,
-  fee = EXCLUDED.fee,
-  processing_days = EXCLUDED.processing_days,
-  requirements = EXCLUDED.requirements;
