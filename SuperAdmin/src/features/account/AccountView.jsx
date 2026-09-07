@@ -23,10 +23,8 @@ import {
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
-import LoginDesignView from './LoginDesignView';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
-  const [accountTab, setAccountTab] = useState('profile'); // 'profile' | 'login_design'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -444,46 +442,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
         </div>
       )}
 
-      {/* Account Navigation Sub-Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <button
-          type="button"
-          onClick={() => setAccountTab('profile')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            accountTab === 'profile'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-              : isDarkMode
-              ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <User className="w-4 h-4" />
-          <span>My Profile & Security</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setAccountTab('login_design')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            accountTab === 'login_design'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-              : isDarkMode
-              ? 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <ImageIcon className="w-4 h-4" />
-          <span>Login Screen Picture & Design</span>
-        </button>
-      </div>
-
-      {accountTab === 'login_design' ? (
-        <LoginDesignView isDarkMode={isDarkMode} />
-      ) : (
-        <>
-          {/* Header Profile Banner */}
-          <div
-            className={`p-6 rounded-2xl border shadow-sm transition-colors ${
+      {/* Header Profile Banner */}
+      <div
+        className={`p-6 rounded-2xl border shadow-sm transition-colors ${
               isDarkMode
                 ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-blue-950/60 border-slate-800 text-white'
                 : 'bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-slate-200 text-white'
@@ -964,8 +925,6 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             </div>
           </div>
         </div>
-      )}
-        </>
       )}
     </div>
   );

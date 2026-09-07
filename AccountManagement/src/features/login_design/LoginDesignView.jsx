@@ -1,4 +1,4 @@
-// Admin/src/features/account/LoginDesignView.jsx
+// AccountManagement/src/features/login_design/LoginDesignView.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Image as ImageIcon,
@@ -16,8 +16,8 @@ import {
   Eye,
   Search,
   X,
+  ExternalLink,
 } from 'lucide-react';
-import { StorageService } from '../../core/storage';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 
 const DEFAULT_PORTAL_NAMES = {
@@ -26,7 +26,30 @@ const DEFAULT_PORTAL_NAMES = {
   admin: 'Barangay Admin Portal Only',
 };
 
-export default function LoginDesignView({ isDarkMode }) {
+const INITIAL_LOCAL_DESIGNS = [
+  {
+    id: 'ld-001',
+    title: 'Barangay Zapatera Executive Portal',
+    badge: 'Executive Administration',
+    description: 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
+    image_url: '/auth-bg.jpg',
+    target_portal: 'all',
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString(),
+  },
+  {
+    id: 'ld-002',
+    title: 'Barangay Zapatera Administrative Management',
+    badge: 'Barangay Administration',
+    description: 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
+    image_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1200&q=80',
+    target_portal: 'admin',
+    is_active: false,
+    created_at: new Date('2026-01-02').toISOString(),
+  },
+];
+
+export default function LoginDesignView({ currentUser, isDarkMode }) {
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,10 +76,10 @@ export default function LoginDesignView({ isDarkMode }) {
   // Form Data State
   const [formData, setFormData] = useState({
     title: '',
-    badge: 'Barangay Administration',
+    badge: 'Executive Administration',
     description: '',
     image_url: '/auth-bg.jpg',
-    target_portal: 'admin',
+    target_portal: 'all',
     is_active: true,
   });
 
@@ -73,10 +96,26 @@ export default function LoginDesignView({ isDarkMode }) {
   const loadDesigns = async () => {
     setLoading(true);
     try {
-      const list = await StorageService.getLoginDesignsAsync();
-      setDesigns(list || []);
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('login_designs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          setDesigns(data);
+          localStorage.setItem('zapatera_login_designs_db', JSON.stringify(data));
+          setLoading(false);
+          return;
+        }
+      }
+      // Fallback
+      const stored = localStorage.getItem('zapatera_login_designs_db');
+      setDesigns(stored ? JSON.parse(stored) : INITIAL_LOCAL_DESIGNS);
     } catch (err) {
-      console.error('Error loading login designs in admin:', err);
+      console.error('Error loading login designs:', err);
+      const stored = localStorage.getItem('zapatera_login_designs_db');
+      setDesigns(stored ? JSON.parse(stored) : INITIAL_LOCAL_DESIGNS);
     } finally {
       setLoading(false);
     }
@@ -91,12 +130,12 @@ export default function LoginDesignView({ isDarkMode }) {
     setIsEditing(false);
     setEditingId(null);
     setFormData({
-      title: 'Administrator Management System',
-      badge: 'Administrative Staff Portal',
+      title: 'Barangay Zapatera Executive Portal',
+      badge: 'Executive Administration',
       description:
-        'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
+        'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
       image_url: '/auth-bg.jpg',
-      target_portal: 'admin',
+      target_portal: 'all',
       is_active: designs.length === 0,
     });
     setIsFormModalOpen(true);
@@ -108,16 +147,16 @@ export default function LoginDesignView({ isDarkMode }) {
     setEditingId(design.id);
     setFormData({
       title: design.title || '',
-      badge: design.badge || 'Barangay Administration',
+      badge: design.badge || 'Executive Administration',
       description: design.description || '',
       image_url: design.image_url || '/auth-bg.jpg',
-      target_portal: design.target_portal || 'admin',
+      target_portal: design.target_portal || 'all',
       is_active: design.is_active || false,
     });
     setIsFormModalOpen(true);
   };
 
-  // Handle Image File Selection
+  // Handle Image File Selection (Local File or Camera)
   const handleImageFileChange = (e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -156,13 +195,63 @@ export default function LoginDesignView({ isDarkMode }) {
 
     setSaving(true);
     try {
+      const payload = {
+        title: formData.title.trim(),
+        badge: formData.badge.trim(),
+        description: formData.description.trim(),
+        image_url: formData.image_url.trim(),
+        target_portal: formData.target_portal,
+        is_active: formData.is_active,
+        updated_at: new Date().toISOString(),
+      };
+
       if (isEditing && editingId) {
-        await StorageService.updateLoginDesign(editingId, formData);
+        if (payload.is_active && isSupabaseConfigured()) {
+          await supabase.from('login_designs').update({ is_active: false }).neq('id', editingId);
+        }
+        if (isSupabaseConfigured()) {
+          await supabase.from('login_designs').update(payload).eq('id', editingId);
+        }
         showNotification('Login design updated successfully!');
       } else {
-        await StorageService.createLoginDesign(formData);
+        const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `ld-${Date.now()}`;
+        if (payload.is_active && isSupabaseConfigured()) {
+          await supabase.from('login_designs').update({ is_active: false }).neq('id', newId);
+        }
+        if (isSupabaseConfigured()) {
+          await supabase.from('login_designs').insert([{ id: newId, ...payload, created_at: new Date().toISOString() }]);
+        }
         showNotification('New login design created and added to CMS library!');
       }
+
+      // If active, sync to system_config too
+      if (payload.is_active && isSupabaseConfigured()) {
+        try {
+          await supabase.from('system_config').upsert({
+            id: 1,
+            login_bg_url: payload.image_url,
+            login_title: payload.title,
+            login_badge: payload.badge,
+            login_description: payload.description,
+            updated_at: new Date().toISOString(),
+          });
+        } catch {}
+      }
+
+      // Log action
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('activity_logs').insert([{
+            user_email: currentUser?.email || 'superadmin@zapatera.gov.ph',
+            action: isEditing ? 'Updated Login Design' : 'Created Login Design',
+            feature: 'Account Management / Login CMS',
+            details: `Managed login design "${payload.title}"`,
+            level: 'info',
+            created_at: new Date().toISOString(),
+          }]);
+        } catch {}
+      }
+
       setIsFormModalOpen(false);
       await loadDesigns();
     } catch (err) {
@@ -176,7 +265,27 @@ export default function LoginDesignView({ isDarkMode }) {
   // Set As Active Design
   const handleSetActive = async (id, portal) => {
     try {
-      await StorageService.setActiveLoginDesign(id, portal);
+      if (isSupabaseConfigured()) {
+        await supabase.from('login_designs').update({ is_active: false }).neq('id', id);
+        const { data } = await supabase
+          .from('login_designs')
+          .update({ is_active: true, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (data) {
+          await supabase.from('system_config').upsert({
+            id: 1,
+            login_bg_url: data.image_url,
+            login_title: data.title,
+            login_badge: data.badge,
+            login_description: data.description,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+
       showNotification('Hero image design is now LIVE on the login screen!', 'success');
       await loadDesigns();
     } catch (err) {
@@ -189,7 +298,9 @@ export default function LoginDesignView({ isDarkMode }) {
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
     try {
-      await StorageService.deleteLoginDesign(deletingId);
+      if (isSupabaseConfigured()) {
+        await supabase.from('login_designs').delete().eq('id', deletingId);
+      }
       showNotification('Login design deleted from CMS library.', 'info');
       setIsDeleteModalOpen(false);
       setDeletingId(null);
@@ -217,7 +328,7 @@ export default function LoginDesignView({ isDarkMode }) {
   const activeHeroDesign = designs.find((d) => d.is_active) || designs[0];
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 font-sans pb-12">
       {/* Toast Notification Banner */}
       {toast.show && (
         <div
@@ -257,10 +368,10 @@ export default function LoginDesignView({ isDarkMode }) {
             <span className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
               <ImageIcon className="w-5 h-5" />
             </span>
-            <h2 className="text-lg font-bold tracking-tight">Login Design & Hero Image CMS</h2>
+            <h2 className="text-lg font-bold tracking-tight">Login Screen Design & Hero Picture CMS</h2>
           </div>
           <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Manage, upload, and customize hero pictures and text displayed on the login page split screen.
+            Upload pictures, edit hero titles, and choose which background is live on the SuperAdmin and Admin login screens.
           </p>
         </div>
 
@@ -331,7 +442,7 @@ export default function LoginDesignView({ isDarkMode }) {
             <div className="lg:col-span-7 space-y-3 text-white">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{activeHeroDesign.badge || 'Barangay Administration'}</span>
+                <span>{activeHeroDesign.badge || 'Executive Administration'}</span>
               </div>
               <h3 className="text-xl font-bold tracking-tight">{activeHeroDesign.title}</h3>
               <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
@@ -362,7 +473,7 @@ export default function LoginDesignView({ isDarkMode }) {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search login designs..."
+            placeholder="Search login designs by title or badge..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={`w-full pl-10 pr-4 py-2 rounded-xl text-xs border outline-none transition-colors ${
@@ -402,6 +513,19 @@ export default function LoginDesignView({ isDarkMode }) {
           </button>
           <button
             type="button"
+            onClick={() => setPortalFilter('super_admin')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              portalFilter === 'super_admin'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : isDarkMode
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Super Admin
+          </button>
+          <button
+            type="button"
             onClick={() => setPortalFilter('admin')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
               portalFilter === 'admin'
@@ -411,7 +535,7 @@ export default function LoginDesignView({ isDarkMode }) {
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            Admin Portals
+            Admin
           </button>
         </div>
       </div>
@@ -429,7 +553,7 @@ export default function LoginDesignView({ isDarkMode }) {
           }`}
         >
           <ImageIcon className="w-10 h-10 text-slate-400" />
-          <p className="text-sm font-bold">No login designs found matching your query.</p>
+          <p className="text-sm font-bold">No login designs found matching your search or filter.</p>
           <button
             type="button"
             onClick={handleOpenCreate}
@@ -699,7 +823,7 @@ export default function LoginDesignView({ isDarkMode }) {
                   type="text"
                   value={formData.badge}
                   onChange={(e) => setFormData((prev) => ({ ...prev, badge: e.target.value }))}
-                  placeholder="e.g. Administrative Staff Portal"
+                  placeholder="e.g. Executive Administration"
                   className={`w-full px-3.5 py-2.5 rounded-xl text-xs border outline-none font-medium ${
                     isDarkMode
                       ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
@@ -711,13 +835,13 @@ export default function LoginDesignView({ isDarkMode }) {
               {/* 3. Hero Title Input */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Hero Title
+                  Hero Title (Bold Text on Left Panel)
                 </label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g. Administrator Management System"
+                  placeholder="e.g. Barangay Zapatera Super Admin Portal"
                   className={`w-full px-3.5 py-2.5 rounded-xl text-xs border outline-none font-medium ${
                     isDarkMode
                       ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
@@ -735,7 +859,7 @@ export default function LoginDesignView({ isDarkMode }) {
                   rows={3}
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="e.g. Secure administrative access for managing resident records, document requests, event issuances, and community services."
+                  placeholder="e.g. Restricted executive interface for complete system governance, administrative user provisioning, and secure document records."
                   className={`w-full px-3.5 py-2.5 rounded-xl text-xs border outline-none font-medium ${
                     isDarkMode
                       ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
@@ -760,6 +884,7 @@ export default function LoginDesignView({ isDarkMode }) {
                     }`}
                   >
                     <option value="all">All Portals (SuperAdmin & Admin)</option>
+                    <option value="super_admin">Super Admin Portal Only</option>
                     <option value="admin">Barangay Admin Portal Only</option>
                   </select>
                 </div>
@@ -854,7 +979,7 @@ export default function LoginDesignView({ isDarkMode }) {
                   </div>
                   <div>
                     <span className="text-[10px] uppercase tracking-widest text-blue-300 font-bold block">
-                      Barangay Administration
+                      Executive Administration
                     </span>
                     <h1 className="text-sm font-extrabold text-white">Barangay Zapatera</h1>
                   </div>
@@ -863,7 +988,7 @@ export default function LoginDesignView({ isDarkMode }) {
                 <div className="relative z-10 max-w-md my-auto py-8">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-[11px] font-semibold mb-4">
                     <Lock className="w-3 h-3 text-blue-300" />
-                    {previewDesign.badge || 'Barangay Administration'}
+                    {previewDesign.badge || 'Executive Administration'}
                   </div>
                   <h2 className="text-2xl font-black text-white tracking-tight leading-tight mb-3">
                     {previewDesign.title}
@@ -875,7 +1000,7 @@ export default function LoginDesignView({ isDarkMode }) {
                   <span>© 2026 Barangay Zapatera, Cebu City</span>
                   <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Admin Auth Online
+                    Live Portal Auth
                   </span>
                 </div>
               </div>
@@ -887,7 +1012,7 @@ export default function LoginDesignView({ isDarkMode }) {
                     <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-sm">
                       BZ
                     </div>
-                    <span className="font-bold text-xs">Zapatera Admin Login</span>
+                    <span className="font-bold text-xs">Zapatera Login Portal</span>
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 font-bold text-slate-600">
                     Simulation
