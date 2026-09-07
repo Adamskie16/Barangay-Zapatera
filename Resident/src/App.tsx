@@ -150,25 +150,65 @@ export default function App() {
   const fetchAnnouncements = async () => {
     try {
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+        const { data: newsData, error: newsErr } = await supabase
+          .from('news')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false });
+
+        if (!newsErr && newsData && newsData.length > 0) {
+          const formatted: BarangayAnnouncement[] = newsData.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            category: item.category || 'Public Advisory',
+            date: new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            description: item.description,
+            content: item.content || item.description,
+            banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+            location: item.location || 'Barangay Zapatera, Cebu City',
+            author: item.author || 'Barangay Administration',
+            is_important: !!item.is_important,
+            is_emergency: !!item.is_emergency,
+            created_at: item.created_at,
+          }));
+          setAnnouncements(formatted);
+          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(formatted));
+          return;
+        }
+
+        const { data: eventData, error: eventErr } = await supabase
           .from('events')
           .select('*')
           .in('target_audience', ['all', 'residents'])
           .order('event_date', { ascending: true });
 
-        if (!error && data && data.length > 0) {
-          const formatted: BarangayAnnouncement[] = data.map((evt: any) => ({
+        if (!eventErr && eventData && eventData.length > 0) {
+          const formatted: BarangayAnnouncement[] = eventData.map((evt: any) => ({
             id: evt.id,
             title: evt.title,
-            category: 'Community Notice',
+            category: 'Events',
             date: new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             description: evt.description,
-            image_url: evt.image_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&q=80',
+            content: evt.description,
+            banner_url: evt.image_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&q=80',
             location: evt.location,
-            status: evt.status || 'upcoming',
+            author: evt.created_by_name || 'Barangay Office',
+            is_important: false,
+            is_emergency: false,
+            created_at: evt.created_at,
           }));
           setAnnouncements(formatted);
+          return;
         }
+      }
+    } catch {
+      // fallback
+    }
+
+    try {
+      const stored = await MobileStorage.getItem('zapatera_news_db');
+      if (stored) {
+        setAnnouncements(JSON.parse(stored));
       }
     } catch {
       // fallback

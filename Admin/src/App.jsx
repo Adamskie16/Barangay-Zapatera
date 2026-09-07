@@ -6,6 +6,7 @@ import ReceiveRequestView from './features/requests/ReceiveRequestView';
 import ProcessDocumentsView from './features/requests/ProcessDocumentsView';
 import ApprovedDocumentsView from './features/requests/ApprovedDocumentsView';
 import DocumentsView from './features/documents/DocumentsView';
+import NewsView from './features/news/NewsView';
 import EventsView from './features/events/EventsView';
 import ReportsView from './features/reports/ReportsView';
 import LogsView from './features/logs/LogsView';
@@ -91,6 +92,7 @@ export default function App() {
     process_documents: 'Process & Verify Document Requirements',
     approved_documents: 'Approved Documents & Digital Certificates',
     doc_info: 'Document Guidelines & Information',
+    news: 'Barangay News & Public Bulletins',
     events: 'Barangay Events & Community Notices',
     reports: 'Operational Processing Reports',
     users: 'User Account & Security Management',
@@ -153,6 +155,10 @@ export default function App() {
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
             />
+          )}
+
+          {activeTab === 'news' && (
+            <NewsView currentUser={currentUser} />
           )}
 
           {activeTab === 'events' && (

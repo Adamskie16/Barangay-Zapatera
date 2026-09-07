@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   DOC_TYPES: 'zapatera_doc_types_db',
   REQUESTS: 'zapatera_requests_db',
   EVENTS: 'zapatera_events_db',
+  NEWS: 'zapatera_news_db',
   CONFIG: 'zapatera_config_db',
   LOGS: 'zapatera_logs_db',
   NOTIFICATIONS: 'zapatera_notifications_db',
@@ -117,6 +118,54 @@ const INITIAL_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
+const INITIAL_NEWS = [
+  {
+    id: 'news-1',
+    title: 'FREE Medical, Dental Mission & Health Clearance Day',
+    category: 'Public Advisory',
+    description: 'Barangay Zapatera Health Center will conduct free medical consultations, dental extractions, and health certificates at the Barangay Gym.',
+    content: 'The Barangay Council of Zapatera, in partnership with Cebu City Health Department, cordially invites all registered residents to the Annual Community Health & Wellness Caravan.\n\nServices Offered:\n• Free Doctor Consultations & Prescription Medicines\n• Free Dental Checkup & Tooth Extraction (Limited to first 100 residents)\n• Blood Pressure & Blood Sugar Screening\n• Free Barangay Health Clearance for Students & Senior Citizens\n• Flu Vaccinations for Elderly (60 years old and above)\n\nLocation: Barangay Zapatera Multi-Purpose Gymnasium\nDate & Time: Friday, September 12, 2026 | 8:00 AM – 3:00 PM\nPlease bring your Barangay ID or valid ID showing Zapatera residency.',
+    banner_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80',
+    location: 'Barangay Zapatera Gymnasium',
+    author: 'Committee on Health & Sanitation',
+    is_important: true,
+    is_emergency: false,
+    is_published: true,
+    target_audience: 'residents',
+    created_at: new Date('2026-07-15T08:00:00').toISOString(),
+  },
+  {
+    id: 'news-2',
+    title: 'URGENT: Scheduled Power Interruption Advisory (Sept 9, 2026)',
+    category: 'Maintenance',
+    description: 'VECO scheduled maintenance and pole relocation along Rahmann Street and Sitio San Roque from 8:00 AM to 1:00 PM.',
+    content: 'Visayan Electric Company (VECO) has notified the Barangay Administration regarding scheduled preventive maintenance and transformer replacement along Rahmann St., Sitio San Roque, and Sitio Riverside.\n\nAffected Areas:\n1. Rahmann Street (entire stretch)\n2. Sitio San Roque\n3. Sitio Riverside near Creek Area\n\nBarangay Hall operations will remain functional through generator power for document pickups and emergency services. Residents are advised to charge essential devices beforehand.',
+    banner_url: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=800&q=80',
+    location: 'Sitio San Roque & Rahmann St.',
+    author: 'Barangay Emergency Operations Center',
+    is_important: false,
+    is_emergency: true,
+    is_published: true,
+    target_audience: 'all',
+    created_at: new Date('2026-07-18T10:30:00').toISOString(),
+  },
+  {
+    id: 'news-3',
+    title: 'Digital Document Portal Release: Online 30-Minute Appointments',
+    category: 'Government Services',
+    description: 'Residents can now request clearances and certificates online and schedule express pickup times without waiting in queue.',
+    content: 'Welcome to the newly launched Barangay Zapatera Resident Digital Portal!\n\nUnder Resolution No. 2026-48, the Barangay Council has implemented a modern digital document system to speed up government transactions.\n\nKey Features:\n• File document requests 24/7 from your phone or computer.\n• Choose exact 30-minute appointment intervals for express collection.\n• Real-time SMS and email tracking updates.\n• Zero queuing at the Barangay Hall lobby.\n\nFor technical assistance or feedback, visit the Barangay Help Desk or email zapatera.cebucity@gmail.com.',
+    banner_url: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=800&q=80',
+    location: 'Barangay Zapatera Portal',
+    author: 'Office of the Barangay Captain',
+    is_important: true,
+    is_emergency: false,
+    is_published: true,
+    target_audience: 'residents',
+    created_at: new Date('2026-07-01T09:00:00').toISOString(),
+  }
+];
+
 const INITIAL_LOGS = [];
 
 const INITIAL_NOTIFICATIONS = [
@@ -145,6 +194,9 @@ const initializeStorage = () => {
   }
   if (!localStorage.getItem(STORAGE_KEYS.EVENTS)) {
     localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(INITIAL_EVENTS));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.NEWS)) {
+    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(INITIAL_NEWS));
   }
   if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(INITIAL_CONFIG));
@@ -651,6 +703,123 @@ export const StorageService = {
       action: 'Deleted Barangay Event',
       feature: 'Barangay Events',
       details: `Deleted event "${target ? target.title : eventId}"`,
+      level: 'danger',
+    });
+  },
+
+  // NEWS & ANNOUNCEMENTS (Maps to public.news and public.events)
+  getNews: () => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.NEWS) || '[]');
+    } catch {
+      return INITIAL_NEWS;
+    }
+  },
+
+  getNewsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('news')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (data && !error && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return StorageService.getNews();
+  },
+
+  saveNews: async (newsItem, adminUser) => {
+    const news = StorageService.getNews();
+    const existingIndex = news.findIndex((n) => n.id === newsItem.id);
+    let saved = { ...newsItem };
+
+    if (existingIndex >= 0) {
+      news[existingIndex] = { ...news[existingIndex], ...newsItem };
+      saved = news[existingIndex];
+    } else {
+      saved.id = saved.id || `news-${Date.now()}`;
+      saved.created_at = new Date().toISOString();
+      news.unshift(saved);
+    }
+    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+        const adminId = adminUser?.id && isUuid(adminUser.id) ? adminUser.id : (isUuid(saved.created_by) ? saved.created_by : null);
+
+        const payload = {
+          title: saved.title,
+          category: saved.category || 'Public Advisory',
+          description: saved.description,
+          content: saved.content || saved.description,
+          banner_url: saved.banner_url || null,
+          location: saved.location || 'Barangay Zapatera, Cebu City',
+          author: saved.author || adminUser?.full_name || 'Office of the Super Admin',
+          is_important: !!saved.is_important,
+          is_emergency: !!saved.is_emergency,
+          is_published: saved.is_published !== false,
+          target_audience: saved.target_audience || 'all',
+          created_by: adminId,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (isUuid(saved.id)) {
+          payload.id = saved.id;
+          await supabase.from('news').upsert(payload);
+        } else {
+          const { data } = await supabase.from('news').insert([payload]).select();
+          if (data && data[0]) {
+            saved.id = data[0].id;
+          }
+        }
+      }
+    } catch {
+      // Handled silently
+    }
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'superadmin@zapatera.gov.ph',
+      action: existingIndex >= 0 ? 'Updated News Bulletin' : 'Published News Announcement',
+      feature: 'News & Announcements',
+      details: `Title: ${saved.title}, Category: ${saved.category}, Urgent: ${saved.is_emergency ? 'Yes' : 'No'}`,
+      level: saved.is_emergency ? 'warning' : 'info',
+    });
+
+    return saved;
+  },
+
+  deleteNews: async (newsId) => {
+    let news = StorageService.getNews();
+    const target = news.find((n) => n.id === newsId);
+    news = news.filter((n) => n.id !== newsId);
+    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newsId);
+        if (isUuid) {
+          await supabase.from('news').delete().eq('id', newsId);
+        } else if (target) {
+          await supabase.from('news').delete().eq('title', target.title);
+        }
+      }
+    } catch {
+      // Handled
+    }
+
+    StorageService.addLog({
+      user_email: 'superadmin@zapatera.gov.ph',
+      action: 'Deleted News Bulletin',
+      feature: 'News & Announcements',
+      details: `Deleted bulletin "${target ? target.title : newsId}"`,
       level: 'danger',
     });
   },

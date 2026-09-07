@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import DashboardView from './features/dashboard/DashboardView';
 import DocumentsView from './features/documents/DocumentsView';
+import NewsView from './features/news/NewsView';
 import EventsView from './features/events/EventsView';
 import UsersView from './features/users/UsersView';
 import ConfigView from './features/config/ConfigView';
@@ -125,6 +126,7 @@ export default function App() {
   const tabTitles = {
     dashboard: 'Super Admin System Dashboard',
     documents: 'Document Templates & Information Management',
+    news: 'Barangay News & Bulletin Management',
     events: 'Community Events & Announcements',
     users: 'User Account Provisioning & Roles',
     config: 'Global System Configurations',
@@ -177,6 +179,10 @@ export default function App() {
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
             />
+          )}
+
+          {activeTab === 'news' && (
+            <NewsView currentUser={currentUser} isDarkMode={isDarkMode} />
           )}
 
           {activeTab === 'events' && (
