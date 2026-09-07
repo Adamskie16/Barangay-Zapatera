@@ -24,17 +24,19 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react';
-import { ResidentUser, DocumentRequest, BarangayConfig, BarangayAnnouncement } from '../../types';
+import { ResidentUser, DocumentRequest, BarangayConfig, BarangayAnnouncement, DocumentType } from '../../types';
 import Badge from '../../components/Badge';
+import { formatCurrency } from '../../core/security';
 
 interface ResidentDashboardProps {
   currentUser: ResidentUser;
   requests: DocumentRequest[];
+  docTypes?: DocumentType[];
   announcements: BarangayAnnouncement[];
   config: BarangayConfig;
   onNavigateTab: (tab: 'home' | 'documents' | 'requests' | 'announcements' | 'profile') => void;
-  onRequestDocument: (docTypeId?: string) => void;
-  onOpenRequirements: () => void;
+  onRequestDocument: (docTypeId?: string | DocumentType) => void;
+  onOpenRequirements: (doc?: DocumentType) => void;
   onViewRequestDetails: (req: DocumentRequest) => void;
   onViewAnnouncement: (ann: BarangayAnnouncement) => void;
 }
@@ -42,6 +44,7 @@ interface ResidentDashboardProps {
 export default function ResidentDashboard({
   currentUser,
   requests,
+  docTypes = [],
   announcements,
   config,
   onNavigateTab,
@@ -268,6 +271,56 @@ export default function ResidentDashboard({
           <Text style={styles.statusSummaryLabel}>Rejected</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Official Barangay Documents (Live from Supabase CMS) */}
+      {docTypes && docTypes.length > 0 && (
+        <>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeading}>Official Barangay Documents</Text>
+            <TouchableOpacity onPress={() => onNavigateTab('documents')}>
+              <Text style={styles.seeAllText}>View All ({docTypes.length}) →</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docTypesScroll}>
+            {docTypes.map((doc) => (
+              <View key={doc.id} style={styles.docTypeCard}>
+                <View style={styles.docTypeHeader}>
+                  <View style={styles.docIconBox}>
+                    <FileText size={18} color="#1d4ed8" />
+                  </View>
+                  <View style={[styles.feeTag, doc.fee === 0 ? styles.feeTagFree : styles.feeTagPaid]}>
+                    <Text style={[styles.feeTagText, doc.fee === 0 ? styles.feeTagTextFree : styles.feeTagTextPaid]}>
+                      {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.docTypeTitle} numberOfLines={1}>{doc.title}</Text>
+                <Text style={styles.docTypeDesc} numberOfLines={2}>{doc.description}</Text>
+                <View style={styles.docTypeMeta}>
+                  <Clock size={11} color="#64748b" />
+                  <Text style={styles.docTypeMetaText}>{doc.processing_days} {doc.processing_days === 1 ? 'day' : 'days'} processing</Text>
+                </View>
+                <View style={styles.docTypeBtnRow}>
+                  <TouchableOpacity
+                    style={styles.docDetailsBtn}
+                    onPress={() => onOpenRequirements(doc)}
+                  >
+                    <Info size={13} color="#1d4ed8" />
+                    <Text style={styles.docDetailsBtnText}>Requirements</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.docApplyBtn}
+                    onPress={() => onRequestDocument(doc)}
+                  >
+                    <Text style={styles.docApplyBtnText}>Apply</Text>
+                    <ArrowRight size={12} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </>
+      )}
 
       {/* Recent Announcements Section */}
       <View style={styles.sectionHeaderRow}>
@@ -721,5 +774,110 @@ const styles = StyleSheet.create({
   infoFooterSub: {
     fontSize: 11,
     color: '#64748b',
+  },
+  docTypesScroll: {
+    marginBottom: 16,
+  },
+  docTypeCard: {
+    width: 220,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'space-between',
+  },
+  docTypeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  docIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  feeTagFree: {
+    backgroundColor: '#dcfce7',
+  },
+  feeTagPaid: {
+    backgroundColor: '#eff6ff',
+  },
+  feeTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  feeTagTextFree: {
+    color: '#166534',
+  },
+  feeTagTextPaid: {
+    color: '#1d4ed8',
+  },
+  docTypeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  docTypeDesc: {
+    fontSize: 11,
+    color: '#64748b',
+    lineHeight: 15,
+    marginBottom: 8,
+  },
+  docTypeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 10,
+  },
+  docTypeMetaText: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  docTypeBtnRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  docDetailsBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  docDetailsBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  docApplyBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#1d4ed8',
+  },
+  docApplyBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

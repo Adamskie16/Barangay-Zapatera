@@ -427,10 +427,20 @@ export default function App() {
           if (p?.id) residentProfileId = p.id;
         }
 
+        let docTypeId = isDocTypeUuid ? newReq.document_type_id : null;
+        if (!docTypeId && (newReq.document_type_id || newReq.document_title)) {
+          const { data: dRec } = await supabase
+            .from('document_types')
+            .select('id')
+            .or(`code.eq.${newReq.document_type_id},title.eq.${newReq.document_title}`)
+            .maybeSingle();
+          if (dRec?.id) docTypeId = dRec.id;
+        }
+
         const payload = {
           tracking_number: newReq.tracking_number,
           resident_id: residentProfileId,
-          document_type_id: isDocTypeUuid ? newReq.document_type_id : null,
+          document_type_id: docTypeId,
           purpose: newReq.purpose,
           requirements_attached: newReq.requirements_attached || [],
           uploaded_files: newReq.uploaded_files || [],
@@ -542,11 +552,12 @@ export default function App() {
           <ResidentDashboard
             currentUser={currentUser}
             requests={requests}
+            docTypes={docTypes}
             announcements={announcements}
             config={config}
             onNavigateTab={(tab) => setActiveTab(tab)}
-            onRequestDocument={(docId) => handleOpenRequestFlow(docId)}
-            onOpenRequirements={() => handleOpenRequirements()}
+            onRequestDocument={(doc) => handleOpenRequestFlow(doc)}
+            onOpenRequirements={(doc) => handleOpenRequirements(doc)}
             onViewRequestDetails={handleViewRequestDetails}
             onViewAnnouncement={(ann) => setActiveTab('announcements')}
           />
