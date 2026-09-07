@@ -193,7 +193,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 placeholder="Search document title, code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -205,7 +205,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Documents ({docTypes.length})</option>
                 <option value="active">Active Only</option>
@@ -345,7 +345,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 placeholder="e.g. BC-01"
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono uppercase"
               />
             </div>
             <div>
@@ -357,7 +357,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 required
                 value={formData.fee}
                 onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -370,7 +370,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="e.g. Barangay Clearance"
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -382,7 +382,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Provide document scope and details..."
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -395,7 +395,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 required
                 value={formData.processing_days}
                 onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -403,7 +403,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               <select
                 value={formData.is_active}
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="true">Active Template</option>
                 <option value="false">Inactive / Suspended</option>
@@ -420,7 +420,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               value={formData.requirementsStr}
               onChange={(e) => setFormData({ ...formData, requirementsStr: e.target.value })}
               placeholder="Valid Government ID&#10;Proof of Address"
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 

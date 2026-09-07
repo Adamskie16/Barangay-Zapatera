@@ -38,7 +38,7 @@ export default function NotificationsView({ notifications, onSendNotification })
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-900/20 transition-colors"
+          className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors"
         >
           <Megaphone className="w-4 h-4" />
           <span>Broadcast New Announcement</span>
@@ -94,7 +94,7 @@ export default function NotificationsView({ notifications, onSendNotification })
               <select
                 value={formData.role_target}
                 onChange={(e) => setFormData({ ...formData, role_target: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-semibold"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
               >
                 <option value="residents">All Residents</option>
                 <option value="admins">All Barangay Admins</option>
@@ -106,7 +106,7 @@ export default function NotificationsView({ notifications, onSendNotification })
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="info">Information (Blue)</option>
                 <option value="success">Success / Event (Green)</option>
@@ -124,7 +124,7 @@ export default function NotificationsView({ notifications, onSendNotification })
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="e.g. Scheduled Power Interruption Notice"
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -136,7 +136,7 @@ export default function NotificationsView({ notifications, onSendNotification })
               value={formData.message}
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               placeholder="Type notification text..."
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -150,7 +150,7 @@ export default function NotificationsView({ notifications, onSendNotification })
             </button>
             <button
               type="submit"
-              className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+              className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Dispatch Alert Broadcast</span>

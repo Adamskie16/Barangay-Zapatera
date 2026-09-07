@@ -131,8 +131,8 @@ export default function LogsView() {
             <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-900 text-emerald-400">
-            <Terminal className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-900 text-blue-400">
+            <Terminal className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
             {isSupabaseConfigured() ? 'Live Audit Trail Active' : 'System Audit Engine'}
           </span>
         </div>
@@ -150,7 +150,7 @@ export default function LogsView() {
                 onClick={() => setLevelFilter(lvl)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors cursor-pointer ${
                   levelFilter === lvl
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-blue-600 text-white shadow-xs font-bold'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -170,7 +170,7 @@ export default function LogsView() {
               placeholder="Search by user, action, or module..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono"
+              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
             />
           </div>
         </div>
@@ -185,14 +185,14 @@ export default function LogsView() {
                 type="date"
                 value={startDate}
                 onChange={(e) => { setStartDate(e.target.value); setDatePreset('custom'); }}
-                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-emerald-500"
+                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
               />
               <span className="text-slate-400 font-bold">to</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => { setEndDate(e.target.value); setDatePreset('custom'); }}
-                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-emerald-500"
+                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function LogsView() {
                 onClick={() => handlePresetChange(p.id)}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
                   datePreset === p.id
-                    ? 'bg-emerald-600 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >

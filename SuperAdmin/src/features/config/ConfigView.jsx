@@ -57,7 +57,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 required
                 value={formData.barangay_name}
                 onChange={(e) => setFormData({ ...formData, barangay_name: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-semibold"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
               />
             </div>
             <div>
@@ -67,7 +67,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 required
                 value={formData.municipality}
                 onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -77,7 +77,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 required
                 value={formData.province}
                 onChange={(e) => setFormData({ ...formData, province: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 type="text"
                 value={formData.seal_url}
                 onChange={(e) => setFormData({ ...formData, seal_url: e.target.value })}
-                className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono"
+                className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
               />
               {formData.seal_url && (
                 <img
@@ -117,7 +117,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 value={formData.office_hours}
                 onChange={(e) => setFormData({ ...formData, office_hours: e.target.value })}
                 placeholder="Mon - Fri: 8:00 AM - 5:00 PM"
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -126,7 +126,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 type="email"
                 value={formData.contact_email}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -135,7 +135,7 @@ export default function ConfigView({ config, onSaveConfig }) {
                 type="text"
                 value={formData.contact_phone}
                 onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -157,10 +157,10 @@ export default function ConfigView({ config, onSaveConfig }) {
                 value={formData.doc_prefix}
                 onChange={(e) => setFormData({ ...formData, doc_prefix: e.target.value })}
                 placeholder="e.g. BZ-2026"
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono font-bold"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono font-bold"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Tracking numbers will format as: <span className="font-mono font-bold text-emerald-700">{formData.doc_prefix}-XXXX</span>
+                Tracking numbers will format as: <span className="font-mono font-bold text-blue-700">{formData.doc_prefix}-XXXX</span>
               </p>
             </div>
 
@@ -169,7 +169,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <select
                 value={formData.auto_notify}
                 onChange={(e) => setFormData({ ...formData, auto_notify: e.target.value === 'true' })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-semibold"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
               >
                 <option value="true">Enabled (Auto dispatch status changes)</option>
                 <option value="false">Disabled (Manual updates only)</option>
