@@ -589,7 +589,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           </button>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-900/20 transition-colors shrink-0 cursor-pointer"
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors shrink-0 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>Provision New Account</span>
@@ -732,7 +732,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                           {isLocked ? (
                             <button
                               onClick={() => handleUnlockUser(u)}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
                               title="Unlock Account"
                             >
                               <Unlock className="w-3.5 h-3.5" />
@@ -972,7 +972,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           <div className="space-y-4 text-xs">
             <div className={`p-4 rounded-xl border flex items-start space-x-3 ${
               securityActionType === 'unlock'
-                ? isDarkMode ? 'bg-emerald-950/30 border-emerald-800/60 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                ? isDarkMode ? 'bg-blue-950/30 border-blue-800/60 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'
                 : isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-800'
             }`}>
               <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" />
@@ -1019,7 +1019,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                     }
                   }}
                   placeholder="Enter your administrator password"
-                  className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-xs ${
+                  className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
                     isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
                   }`}
                 />
@@ -1055,7 +1055,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 onClick={handleExecuteSecurityAction}
                 className={`px-4 py-2 font-semibold text-white rounded-lg shadow-md disabled:opacity-50 flex items-center space-x-2 cursor-pointer ${
                   securityActionType === 'unlock'
-                    ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20'
+                    ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
                     : 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/20'
                 }`}
               >

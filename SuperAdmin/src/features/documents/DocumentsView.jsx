@@ -263,7 +263,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </div>
             <button
               onClick={openCreateModal}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-900/20 transition-colors cursor-pointer"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Document Type</span>
@@ -372,14 +372,14 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             darkMode={isDarkMode}
           >
             <div className="space-y-4 text-xs">
-              <div className="p-4 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-200 flex items-start space-x-3">
-                <AlertTriangle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="p-4 bg-blue-950/60 border border-blue-800/80 rounded-xl text-blue-200 flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-sm text-emerald-100">{editingDoc ? 'Authorize Template Update' : 'Authorize New Template Creation'}</p>
-                  <p className="text-xs text-emerald-300 mt-1">
+                  <p className="font-bold text-sm text-blue-100">{editingDoc ? 'Authorize Template Update' : 'Authorize New Template Creation'}</p>
+                  <p className="text-xs text-blue-300 mt-1">
                     Please confirm your logged-in account password to authorize {editingDoc ? 'updating' : 'creating'} certificate template guidelines for{' '}
                     <strong className="text-white">{formData.title || 'Certificate Template'}</strong> (
-                    <span className="font-mono text-emerald-200">{formData.code || 'CODE'}</span>).
+                    <span className="font-mono text-blue-200">{formData.code || 'CODE'}</span>).
                   </p>
                 </div>
               </div>
@@ -392,7 +392,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               )}
 
               <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 space-y-2">
-                <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                   <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Account Password (Required to Authorize)
                 </label>
                 <div className="relative">
@@ -406,7 +406,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                       setSaveAuthError('');
                     }}
                     placeholder="Enter your logged-in account password"
-                    className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-xs ${
+                    className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
                       isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
                     }`}
                   />
@@ -440,7 +440,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   type="button"
                   disabled={isSaving || !savePasswordInput.trim()}
                   onClick={handleSaveExecute}
-                  className="px-4 py-2 font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-md shadow-emerald-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
+                  className="px-4 py-2 font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md shadow-blue-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
                 >
                   {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Authorize & Save</span>
@@ -555,7 +555,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     placeholder="e.g. BC-01"
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-mono uppercase"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono uppercase"
                   />
                 </div>
                 <div>
@@ -567,7 +567,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     required
                     value={formData.fee}
                     onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -580,7 +580,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="e.g. Barangay Clearance"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   required
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -604,7 +604,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     required
                     value={formData.processing_days}
                     onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -612,7 +612,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   <select
                     value={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="true">Active Template</option>
                     <option value="false">Inactive / Suspended</option>
@@ -629,7 +629,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   value={formData.requirementsStr}
                   onChange={(e) => setFormData({ ...formData, requirementsStr: e.target.value })}
                   placeholder="e.g. Valid Government ID&#10;Proof of Address"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -643,7 +643,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm cursor-pointer flex items-center space-x-1.5"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm cursor-pointer flex items-center space-x-1.5"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>Proceed to Security Authorization</span>
