@@ -31,6 +31,7 @@ import {
   Fingerprint,
   CheckSquare,
   Square,
+  Calendar,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
 import { validateEmail, sanitizeInput, checkRateLimit, isAccountLocked, recordFailedAttempt, resetFailedAttempts } from '../../core/security';
@@ -51,6 +52,14 @@ export const SAMPLE_SITIOS: string[] = [
   'Sitio Riverside',
   'Sitio Ramos',
   'Sitio Kamagong',
+];
+
+export const CIVIL_STATUS_OPTIONS: string[] = [
+  'Single',
+  'Married',
+  'Widowed',
+  'Separated',
+  'Divorced',
 ];
 
 interface ResidentAuthPageProps {
@@ -106,6 +115,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     last_name: '',
     first_name: '',
     middle_initial: '',
+    birth_date: '',
+    civil_status: 'Single',
     email: '',
     phone: '',
     voter_status: 'Registered Voter', // 'Registered Voter' | 'Not Registered Voter'
@@ -525,31 +536,43 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
-    // 2. Email Validation
+    // 2. Date of Birth Validation
+    if (!regData.birth_date.trim()) {
+      setErrorMessage('Required: Please provide your Date of Birth.');
+      return;
+    }
+
+    // 3. Civil Status Validation
+    if (!regData.civil_status) {
+      setErrorMessage('Required: Please select your Status / Civil Status.');
+      return;
+    }
+
+    // 4. Email Validation
     if (!validateEmail(regData.email)) {
       setErrorMessage('Required: Please enter a valid Gmail / email address.');
       return;
     }
 
-    // 3. Mobile Number Validation
+    // 5. Mobile Number Validation
     if (!regData.phone.trim()) {
       setErrorMessage('Required: Please provide your 11-digit mobile phone number (e.g. 09171234567).');
       return;
     }
 
-    // 4. Voter Status Validation
+    // 6. Voter Status Validation
     if (!regData.voter_status) {
       setErrorMessage('Required: Please select if you are a Registered Voter or Not.');
       return;
     }
 
-    // 5. Sitio Selection Validation
+    // 7. Sitio Selection Validation
     if (!regData.sitio) {
       setErrorMessage('Required: Please select your Sitio in Barangay Zapatera.');
       return;
     }
 
-    // 6. Strong Password Validation
+    // 8. Strong Password Validation
     if (!isStrongPassword(regData.password)) {
       setErrorMessage(
         'Password Security Alert: Your password does not meet the strong password requirements. A strong password requires: at least 8 characters, 1 uppercase letter (A-Z), 1 lowercase letter (a-z), 1 number (0-9), and 1 special character (!@#$%^&*).'
@@ -557,13 +580,13 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
-    // 7. Confirm Password Matching Validation
+    // 9. Confirm Password Matching Validation
     if (regData.password !== regData.confirmPassword) {
       setErrorMessage('Password Mismatch Alert: Password and Confirm Password do not match. Please re-enter.');
       return;
     }
 
-    // 8. Privacy Policy Acceptance Validation
+    // 10. Privacy Policy Acceptance Validation
     if (!regData.privacyPolicyAccepted) {
       setErrorMessage(
         'Privacy Policy Required: You must read and agree to the Barangay Zapatera Data Privacy Policy before registering.'
@@ -583,7 +606,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     let assignedId = `res-${Date.now()}`;
 
-    // 9. Store to Supabase Auth & Database Profiles
+    // Store to Supabase Auth & Database Profiles
     try {
       if (isSupabaseConfigured()) {
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
@@ -596,6 +619,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               first_name: cleanFirstName,
               last_name: cleanLastName,
               middle_initial: cleanMI,
+              birth_date: regData.birth_date.trim(),
+              civil_status: regData.civil_status,
               role: 'resident',
               phone: regData.phone.trim(),
               voter_status: regData.voter_status,
@@ -628,11 +653,12 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               first_name: cleanFirstName,
               last_name: cleanLastName,
               middle_initial: cleanMI,
+              birth_date: regData.birth_date.trim(),
+              civil_status: regData.civil_status,
               role: 'resident',
               phone: regData.phone.trim(),
               sitio: regData.sitio,
               voter_status: regData.voter_status,
-              civil_status: 'Single',
               id_type: regData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay Resident ID',
               id_number: `BZ-RES-${Date.now().toString().slice(-6)}`,
               privacy_policy_accepted: true,
@@ -657,11 +683,13 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       first_name: cleanFirstName,
       last_name: cleanLastName,
       middle_initial: cleanMI,
+      birth_date: regData.birth_date.trim(),
+      birthdate: regData.birth_date.trim(),
+      civil_status: regData.civil_status,
       role: 'resident',
       password: regData.password,
       phone: regData.phone.trim(),
       sitio: regData.sitio,
-      civil_status: 'Single',
       voter_status: regData.voter_status,
       id_type: regData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay Resident ID',
       id_number: `BZ-RES-${Date.now().toString().slice(-6)}`,
@@ -1103,9 +1131,58 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             </View>
           ) : null}
 
+          {/* Section: Personal Status & Date of Birth */}
+          <View style={styles.sectionDivider}>
+            <Text style={styles.sectionTitle}>2. Personal Status & Birth Details *</Text>
+          </View>
+
+          {/* Date of Birth Input Field */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Date of Birth (YYYY-MM-DD) *</Text>
+            <View style={{ position: 'relative', justifyContent: 'center' }}>
+              <TextInput
+                style={[styles.input, { paddingLeft: 36 }]}
+                placeholder="YYYY-MM-DD (e.g. 1998-05-15)"
+                placeholderTextColor="#64748b"
+                value={regData.birth_date}
+                onChangeText={(txt) => setRegData({ ...regData, birth_date: txt })}
+                maxLength={10}
+              />
+              <View style={{ position: 'absolute', left: 12 }}>
+                <Calendar size={15} color="#94a3b8" />
+              </View>
+            </View>
+          </View>
+
+          {/* Civil Status / Status Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Status / Civil Status *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
+              {CIVIL_STATUS_OPTIONS.map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.sitioPill,
+                    regData.civil_status === status && styles.sitioPillActive,
+                  ]}
+                  onPress={() => setRegData({ ...regData, civil_status: status })}
+                >
+                  <Text
+                    style={[
+                      styles.sitioPillText,
+                      regData.civil_status === status && styles.sitioPillTextActive,
+                    ]}
+                  >
+                    {status}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Section: Contact & Residency Info */}
           <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>2. Contact & Residency Details *</Text>
+            <Text style={styles.sectionTitle}>3. Contact & Residency Details *</Text>
           </View>
 
           <View style={styles.inputGroup}>

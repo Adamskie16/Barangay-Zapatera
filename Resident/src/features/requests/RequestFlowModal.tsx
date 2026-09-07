@@ -79,6 +79,11 @@ export default function RequestFlowModal({
   const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
   const [customPurpose, setCustomPurpose] = useState<string>('');
 
+  // Step 2 Resident Info State
+  const [yearsInBarangay, setYearsInBarangay] = useState<string>(
+    currentUser.years_in_barangay ? String(currentUser.years_in_barangay) : ''
+  );
+
   // Step 3 Uploads State
   const [uploadedFiles, setUploadedFiles] = useState<{ [reqKey: string]: UploadedRequirementFile }>({});
   const [uploadError, setUploadError] = useState<string>('');
@@ -200,6 +205,11 @@ export default function RequestFlowModal({
       setUploadError('');
       setCurrentStep(2);
     } else if (currentStep === 2) {
+      if (!yearsInBarangay || !yearsInBarangay.trim()) {
+        setUploadError('Please specify how many years you have resided in Barangay Zapatera.');
+        return;
+      }
+      setUploadError('');
       setCurrentStep(3);
     } else if (currentStep === 3) {
       // Check mandatory requirements
@@ -237,6 +247,8 @@ export default function RequestFlowModal({
       resident_email: currentUser.email,
       resident_phone: currentUser.phone || '0917-000-0000',
       resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+      resident_birth_date: currentUser.birth_date || currentUser.birthdate,
+      years_in_barangay: yearsInBarangay.trim(),
       document_type_id: selectedDoc.id,
       document_title: selectedDoc.title,
       fee: selectedDoc.fee,
@@ -470,6 +482,14 @@ export default function RequestFlowModal({
                   </View>
 
                   <View style={styles.infoRow}>
+                    <Calendar size={15} color="#1d4ed8" />
+                    <View style={styles.infoCol}>
+                      <Text style={styles.infoLabel}>Date of Birth</Text>
+                      <Text style={styles.infoValue}>{currentUser.birth_date || currentUser.birthdate || 'Not specified'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoRow}>
                     <Phone size={15} color="#1d4ed8" />
                     <View style={styles.infoCol}>
                       <Text style={styles.infoLabel}>Contact Mobile Number</Text>
@@ -492,6 +512,19 @@ export default function RequestFlowModal({
                       <Text style={styles.infoValue}>{currentUser.voter_status || 'Registered Voter'}</Text>
                     </View>
                   </View>
+                </View>
+
+                {/* Input field: Years in the Barangay */}
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.inputLabel}>Years in the Barangay (Length of Residency) *</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="e.g. 5 (Number of years living in Barangay Zapatera)"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={yearsInBarangay}
+                    onChangeText={setYearsInBarangay}
+                  />
                 </View>
 
                 <View style={styles.tipBox}>
@@ -687,7 +720,9 @@ export default function RequestFlowModal({
                     <Text style={styles.summaryHeader}>RESIDENT DETAILS</Text>
                     <Text style={styles.summarySubText}>Name: {currentUser.full_name}</Text>
                     <Text style={styles.summarySubText}>Address: {currentUser.sitio || currentUser.address || 'Barangay Zapatera'}</Text>
+                    <Text style={styles.summarySubText}>Date of Birth: {currentUser.birth_date || currentUser.birthdate || 'On Record'}</Text>
                     <Text style={styles.summarySubText}>Mobile: {currentUser.phone || '0917-000-0000'}</Text>
+                    <Text style={styles.summarySubText}>Years in Barangay: {yearsInBarangay ? `${yearsInBarangay} year(s)` : 'Not specified'}</Text>
                   </View>
 
                   <View style={styles.summaryDivider} />

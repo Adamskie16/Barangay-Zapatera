@@ -44,6 +44,17 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 -- Ensure columns exist if table was created previously
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS civil_status TEXT DEFAULT 'Single';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS years_in_barangay INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS middle_initial TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS sitio TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS voter_status TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS privacy_policy_accepted BOOLEAN DEFAULT true;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0;
 
 -- 2. DOCUMENT TYPES TABLE (Templates & Fees)
 CREATE TABLE IF NOT EXISTS public.document_types (
@@ -67,6 +78,11 @@ CREATE TABLE IF NOT EXISTS public.document_requests (
     document_type_id UUID NOT NULL REFERENCES public.document_types(id),
     purpose TEXT NOT NULL,
     requirements_attached JSONB DEFAULT '[]'::jsonb,
+    uploaded_files JSONB DEFAULT '[]'::jsonb,
+    resident_birth_date DATE,
+    years_in_barangay INTEGER,
+    pickup_date TEXT,
+    pickup_time_slot TEXT,
     status request_status_enum NOT NULL DEFAULT 'pending',
     notes TEXT,
     rejection_reason TEXT,
