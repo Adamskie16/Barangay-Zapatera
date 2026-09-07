@@ -12,12 +12,11 @@ const STORAGE_KEYS = {
   SESSION: 'zapatera_admin_session',
 };
 
-// Seed Initial Admin Data
+// Default seed data for initial cache
 const INITIAL_ADMINS = [
   {
     id: 'adm-000',
     email: 'mardee131@gmail.com',
-    password: '123456789',
     full_name: 'Mardee (Barangay Admin)',
     first_name: 'Mardee',
     last_name: 'Admin',
@@ -56,10 +55,10 @@ const INITIAL_DOC_TYPES = [
     id: 'dt-001',
     code: 'BC-01',
     title: 'Barangay Clearance',
-    description: 'Official certification for employment, legal transactions, or identification purposes.',
+    description: 'Official certification for employment, postal ID, bank requirement, or legal purposes.',
     fee: 50.00,
     processing_days: 1,
-    requirements: ['Valid Government ID', 'Proof of Address / Utility Bill'],
+    requirements: ['Valid Government-Issued ID', 'Proof of Residency / Utility Bill', '1x1 or 2x2 Photo'],
     is_active: true,
     created_at: new Date('2026-01-01').toISOString(),
   },
@@ -67,10 +66,10 @@ const INITIAL_DOC_TYPES = [
     id: 'dt-002',
     code: 'CI-02',
     title: 'Certificate of Indigency',
-    description: 'Free certificate issued for medical aid, scholarship, or financial assistance.',
+    description: 'Free certificate issued for medical assistance, scholarship, or financial aid.',
     fee: 0.00,
     processing_days: 1,
-    requirements: ['Affidavit of Low Income', 'Voter ID or Barangay ID'],
+    requirements: ['Barangay ID or Voter Certificate', 'Certificate of Non-Filing / Low Income Statement'],
     is_active: true,
     created_at: new Date('2026-01-01').toISOString(),
   },
@@ -81,7 +80,7 @@ const INITIAL_DOC_TYPES = [
     description: 'Proof of continuous residence within Barangay Zapatera jurisdiction.',
     fee: 30.00,
     processing_days: 1,
-    requirements: ['Valid Photo ID', 'Landlord Statement / Billing Statement'],
+    requirements: ['Valid Government Photo ID', 'Landlord Statement or Latest Utility Bill'],
     is_active: true,
     created_at: new Date('2026-01-01').toISOString(),
   },
@@ -89,10 +88,10 @@ const INITIAL_DOC_TYPES = [
     id: 'dt-004',
     code: 'BP-04',
     title: 'Barangay Business Permit',
-    description: 'Local business clearance required for operating commercial establishments in Zapatera.',
+    description: 'Local commercial clearance required for operating establishments in Zapatera.',
     fee: 250.00,
     processing_days: 3,
-    requirements: ['DTI / SEC Certificate', 'Lease Contract', 'Fire Inspection Clearance'],
+    requirements: ['DTI / SEC Registration Certificate', 'Commercial Space Lease Contract', 'Fire Safety Clearance'],
     is_active: true,
     created_at: new Date('2026-01-01').toISOString(),
   }
@@ -105,11 +104,14 @@ const INITIAL_REQUESTS = [
     resident_id: 'usr-003',
     resident_name: 'Juan Dela Cruz',
     resident_email: 'resident@gmail.com',
+    resident_phone: '0917-555-0199',
+    resident_address: '142 Sikatuna St., Sitio Upper Zapatera, Cebu City',
     document_type_id: 'dt-001',
     document_title: 'Barangay Clearance',
     fee: 50.00,
     purpose: 'Local Employment Application',
     requirements_attached: ['Government_ID_Front.jpg', 'Electric_Bill_Jan2026.pdf'],
+    pickup_date: '2026-09-08',
     pickup_time_slot: '3:00 PM - 3:30 PM',
     status: 'under_review',
     notes: 'Uploaded ID verified against resident record.',
@@ -124,11 +126,14 @@ const INITIAL_REQUESTS = [
     resident_id: 'usr-004',
     resident_name: 'Ana Reyes',
     resident_email: 'ana.reyes@gmail.com',
+    resident_phone: '0922-888-1234',
+    resident_address: '88 Rahmann St., Sitio Centro, Zapatera, Cebu City',
     document_type_id: 'dt-002',
     document_title: 'Certificate of Indigency',
     fee: 0.00,
     purpose: 'Medical Assistance at Vicente Sotto Hospital',
     requirements_attached: ['Affidavit_Indigency.pdf', 'Barangay_ID.jpg'],
+    pickup_date: '2026-09-08',
     pickup_time_slot: '1:30 PM - 2:00 PM',
     status: 'approved',
     notes: 'Approved by Barangay Secretary.',
@@ -137,29 +142,33 @@ const INITIAL_REQUESTS = [
     approved_at: new Date('2026-07-21T14:20:00').toISOString(),
     created_at: new Date('2026-07-19T08:10:00').toISOString(),
     updated_at: new Date('2026-07-21T14:20:00').toISOString(),
-  },
-  {
-    id: 'req-103',
-    tracking_number: 'BZ-2026-7734',
-    resident_id: 'usr-003',
-    resident_name: 'Juan Dela Cruz',
-    resident_email: 'resident@gmail.com',
-    document_type_id: 'dt-004',
-    document_title: 'Barangay Business Permit',
-    fee: 250.00,
-    purpose: 'Sari-Sari Store Operation',
-    requirements_attached: ['DTI_Permit_2026.pdf'],
-    pickup_time_slot: '3:30 PM - 4:00 PM',
-    status: 'pending',
-    notes: '',
-    rejection_reason: '',
-    processed_by: '',
-    created_at: new Date('2026-07-22T08:00:00').toISOString(),
-    updated_at: new Date('2026-07-22T08:00:00').toISOString(),
   }
 ];
 
-const INITIAL_EVENTS = [];
+const INITIAL_EVENTS = [
+  {
+    id: 'evt-001',
+    title: 'Free Barangay Medical & Dental Mission',
+    description: 'Free consultations, basic laboratory screenings, fluoride treatments, and prescription medicines for all bona fide residents of Zapatera.',
+    event_date: '2026-09-12T08:00:00',
+    location: 'Zapatera Barangay Complex Multi-Purpose Gym',
+    target_audience: 'residents',
+    status: 'upcoming',
+    created_by_name: 'Barangay Health Center',
+    created_at: new Date('2026-07-01').toISOString(),
+  },
+  {
+    id: 'evt-002',
+    title: 'Sitio Clean-Up Drive & Anti-Dengue Fogging',
+    description: 'Community-wide cleanup operation across Sitio Upper, Centro, and Lower to eliminate mosquito breeding grounds before the rainy season peak.',
+    event_date: '2026-09-19T06:00:00',
+    location: 'All Sitios (Assembly at Barangay Hall Quadrangle)',
+    target_audience: 'all',
+    status: 'upcoming',
+    created_by_name: 'Office of the Barangay Captain',
+    created_at: new Date('2026-07-05').toISOString(),
+  }
+];
 
 const INITIAL_CONFIG = {
   barangay_name: 'Barangay Zapatera',
@@ -169,33 +178,30 @@ const INITIAL_CONFIG = {
   office_hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
   contact_email: 'info@barangayzapatera.gov.ph',
   contact_phone: '(032) 253-1234',
-  doc_prefix: 'BZ-2026',
+  doc_prefix: 'BRGY-2026',
   auto_notify: true,
-  updated_at: new Date().toISOString(),
 };
 
-const INITIAL_LOGS = [];
+const INITIAL_LOGS = [
+  {
+    id: 'log-001',
+    user_email: 'admin@zapatera.gov.ph',
+    action: 'Processed Request (Approved)',
+    feature: 'Process Documents',
+    details: 'Tracking: BZ-2026-8812, Status: approved',
+    level: 'info',
+    created_at: new Date('2026-07-21T14:20:00').toISOString(),
+  }
+];
 
 const INITIAL_NOTIFICATIONS = [
   {
     id: 'notif-001',
-    user_id: 'usr-003',
-    role_target: null,
-    title: 'Request Under Review',
-    message: 'Your request for Barangay Clearance (BZ-2026-9041) is currently being processed by admin.',
+    title: 'New Document Application Received',
+    message: 'Resident Juan Dela Cruz submitted a Barangay Clearance request (BZ-2026-9041).',
     type: 'info',
     is_read: false,
-    created_at: new Date('2026-07-21T09:15:00').toISOString(),
-  },
-  {
-    id: 'notif-002',
-    user_id: null,
-    role_target: 'residents',
-    title: 'New Event Announced',
-    message: 'Barangay Health & Wellness Medical Mission scheduled for August 5, 2026.',
-    type: 'success',
-    is_read: false,
-    created_at: new Date('2026-07-15').toISOString(),
+    created_at: new Date('2026-07-20T10:30:00').toISOString(),
   }
 ];
 
@@ -226,7 +232,7 @@ const initializeStorage = () => {
 initializeStorage();
 
 export const StorageService = {
-  // ADMINS (Targeting 'admins' table in Supabase)
+  // PROFILES / USERS (Directly maps to public.profiles)
   getUsers: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.ADMINS) || '[]');
@@ -234,9 +240,29 @@ export const StorageService = {
       return INITIAL_ADMINS;
     }
   },
-  saveUser: (user) => {
+
+  getUsersAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return StorageService.getUsers();
+  },
+
+  saveUser: async (user) => {
     const users = StorageService.getUsers();
-    const existingIndex = users.findIndex((u) => u.id === user.id || u.email === user.email);
+    const existingIndex = users.findIndex((u) => u.id === user.id || (u.email && u.email.toLowerCase() === (user.email || '').toLowerCase()));
     if (existingIndex >= 0) {
       users[existingIndex] = { ...users[existingIndex], ...user };
     } else {
@@ -246,18 +272,21 @@ export const StorageService = {
     }
     localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
 
-    // Supabase sync
     try {
       if (isSupabaseConfigured()) {
-        supabase.from('admins').upsert(user);
+        await supabase.from('profiles').upsert({
+          ...user,
+          updated_at: new Date().toISOString()
+        });
       }
-    } catch (err) {
-      console.warn('Supabase admins sync notice:', err);
+    } catch {
+      // Ignore
     }
 
     return user;
   },
 
+  // DOCUMENT TYPES (Directly maps to public.document_types)
   getDocTypes: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.DOC_TYPES) || '[]');
@@ -265,20 +294,83 @@ export const StorageService = {
       return INITIAL_DOC_TYPES;
     }
   },
-  saveDocType: (docType) => {
-    const docTypes = StorageService.getDocTypes();
-    const existingIndex = docTypes.findIndex((d) => d.id === docType.id);
-    if (existingIndex >= 0) {
-      docTypes[existingIndex] = { ...docTypes[existingIndex], ...docType };
-    } else {
-      docType.id = docType.id || `dt-${Date.now()}`;
-      docType.created_at = new Date().toISOString();
-      docTypes.push(docType);
+
+  getDocTypesAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_types')
+          .select('*')
+          .order('title', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch {
+      // fallback
     }
-    localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
-    return docType;
+    return StorageService.getDocTypes();
   },
 
+  saveDocType: async (docType) => {
+    const docTypes = StorageService.getDocTypes();
+    const existingIndex = docTypes.findIndex((d) => d.id === docType.id || d.code === docType.code);
+    let saved = { ...docType };
+
+    if (existingIndex >= 0) {
+      docTypes[existingIndex] = { ...docTypes[existingIndex], ...docType };
+      saved = docTypes[existingIndex];
+    } else {
+      saved.created_at = new Date().toISOString();
+      docTypes.push(saved);
+    }
+    localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saved.id);
+        const payload = {
+          code: saved.code,
+          title: saved.title,
+          description: saved.description || '',
+          fee: parseFloat(saved.fee) || 0,
+          processing_days: parseInt(saved.processing_days) || 1,
+          requirements: Array.isArray(saved.requirements) ? saved.requirements : [],
+          is_active: saved.is_active !== false,
+          updated_at: new Date().toISOString(),
+        };
+        if (isUuid) {
+          payload.id = saved.id;
+        }
+        await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+      }
+    } catch {
+      // handled
+    }
+
+    return saved;
+  },
+
+  deleteDocType: async (docTypeId) => {
+    let docTypes = StorageService.getDocTypes();
+    docTypes = docTypes.filter((d) => d.id !== docTypeId);
+    localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docTypeId);
+        if (isUuid) {
+          await supabase.from('document_types').delete().eq('id', docTypeId);
+        }
+      }
+    } catch {
+      // handled
+    }
+  },
+
+  // DOCUMENT REQUESTS (Shared across Resident, Admin, SuperAdmin)
   getRequests: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
@@ -286,31 +378,142 @@ export const StorageService = {
       return INITIAL_REQUESTS;
     }
   },
-  saveRequest: (req) => {
+
+  getRequestsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_requests')
+          .select(`
+            *,
+            profiles:resident_id (
+              id, email, full_name, first_name, last_name, phone, address, sitio, birthdate, age, civil_status, voter_status, id_type, id_number, avatar_url
+            ),
+            document_types:document_type_id (
+              id, title, code, fee, processing_days, requirements
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          // Normalize joined profile & document type data for components
+          const normalized = data.map((req) => ({
+            ...req,
+            resident_name: req.profiles?.full_name || req.resident_name || 'Resident',
+            resident_email: req.profiles?.email || req.resident_email,
+            resident_phone: req.profiles?.phone || req.resident_phone,
+            resident_address: req.profiles?.address || req.profiles?.sitio || req.resident_address,
+            document_title: req.document_types?.title || req.document_title || 'Barangay Document',
+            fee: req.document_types?.fee !== undefined ? req.document_types.fee : req.fee,
+          }));
+
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(normalized));
+          return normalized;
+        }
+      }
+    } catch {
+      // fallback to local
+    }
+    return StorageService.getRequests();
+  },
+
+  saveRequest: async (req, adminUser) => {
     const requests = StorageService.getRequests();
-    const existingIndex = requests.findIndex((r) => r.id === req.id);
+    const existingIndex = requests.findIndex((r) => r.id === req.id || r.tracking_number === req.tracking_number);
     req.updated_at = new Date().toISOString();
+    
     if (existingIndex >= 0) {
       requests[existingIndex] = { ...requests[existingIndex], ...req };
     } else {
       req.id = req.id || `req-${Date.now()}`;
-      req.created_at = new Date().toISOString();
+      req.created_at = req.created_at || new Date().toISOString();
       requests.unshift(req);
     }
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
 
+    // Supabase update & targeted resident notification
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id);
+        const adminId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+
+        const payload = {
+          status: req.status,
+          notes: req.notes || '',
+          rejection_reason: req.rejection_reason || '',
+          pickup_date: req.pickup_date || null,
+          pickup_time_slot: req.pickup_time_slot || null,
+          processed_by: adminId,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (req.status === 'approved' || req.status === 'ready_for_pickup') {
+          payload.approved_at = req.approved_at || new Date().toISOString();
+        }
+        if (req.status === 'completed' || req.status === 'issued') {
+          payload.issued_at = req.issued_at || new Date().toISOString();
+        }
+
+        if (isUuid) {
+          await supabase.from('document_requests').update(payload).eq('id', req.id);
+        } else if (req.tracking_number) {
+          await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+        }
+
+        // Automatic user-specific Notification creation in public.notifications
+        const residentId = req.resident_id || req.profiles?.id;
+        const isResidentUuid = residentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(residentId);
+        
+        let notifTitle = 'Application Status Updated';
+        let notifMsg = `Your request ${req.tracking_number || ''} status is now: ${req.status}.`;
+        let notifType = 'info';
+
+        if (req.status === 'under_review' || req.status === 'processing') {
+          notifTitle = 'Request Under Review 📄';
+          notifMsg = `Your ${req.document_title || 'document request'} (Ref: ${req.tracking_number}) is being processed by Barangay Admin.`;
+          notifType = 'status_update';
+        } else if (req.status === 'approved' || req.status === 'ready_for_pickup') {
+          notifTitle = 'Document Ready for Pickup! 🎉';
+          notifMsg = `Your ${req.document_title || 'document'} is ready for pickup on ${req.pickup_date || 'your scheduled date'} (${req.pickup_time_slot || 'Window 2'}).`;
+          notifType = 'ready_pickup';
+        } else if (req.status === 'completed' || req.status === 'issued') {
+          notifTitle = 'Document Released & Completed ✅';
+          notifMsg = `Your ${req.document_title || 'document'} (Ref: ${req.tracking_number}) has been released. Thank you!`;
+          notifType = 'success';
+        } else if (req.status === 'declined' || req.status === 'rejected') {
+          notifTitle = 'Request Attention Required ⚠️';
+          notifMsg = `Your request was returned: ${req.rejection_reason || 'Please check requirements or contact Barangay Hall.'}`;
+          notifType = 'warning';
+        }
+
+        if (isResidentUuid) {
+          await supabase.from('notifications').insert([{
+            user_id: residentId,
+            title: notifTitle,
+            message: notifMsg,
+            type: notifType,
+            link_tab: 'requests',
+            is_read: false,
+            created_at: new Date().toISOString()
+          }]);
+        }
+      }
+    } catch {
+      // Handled silently
+    }
+
     StorageService.addLog({
-      user_email: req.processed_by || 'admin@zapatera.gov.ph',
-      action: existingIndex >= 0 ? `Processed Request (${req.status})` : 'New Request',
+      user_email: adminUser?.email || req.processed_by || 'admin@zapatera.gov.ph',
+      action: existingIndex >= 0 ? `Updated Request Status (${req.status})` : 'New Request',
       feature: 'Process Documents',
-      details: `Tracking: ${req.tracking_number}, Status: ${req.status}`,
-      level: 'info',
+      details: `Tracking: ${req.tracking_number}, Resident: ${req.resident_name || req.resident_email}, Status: ${req.status}`,
+      level: req.status === 'declined' || req.status === 'rejected' ? 'warning' : 'info',
     });
 
     return req;
   },
 
-  // EVENTS
+  // EVENTS & ANNOUNCEMENTS
   getEvents: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]');
@@ -318,6 +521,7 @@ export const StorageService = {
       return INITIAL_EVENTS;
     }
   },
+
   getEventsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
@@ -326,20 +530,21 @@ export const StorageService = {
           .select('*, profiles:created_by(full_name, email)')
           .order('event_date', { ascending: true });
 
-        if (data && !error) {
+        if (data && !error && data.length > 0) {
           const formatted = data.map((evt) => ({
             ...evt,
-            created_by_name: evt.profiles?.full_name || evt.profiles?.email || evt.created_by_name || (typeof evt.created_by === 'string' && !/^[0-9a-f-]{36}$/i.test(evt.created_by) && evt.created_by !== 'null' ? evt.created_by : null) || 'Admin',
+            created_by_name: evt.profiles?.full_name || evt.profiles?.email || evt.created_by_name || 'Admin',
           }));
           localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(formatted));
           return formatted;
         }
       }
-    } catch (err) {
-      console.warn('Supabase fetch events notice:', err);
+    } catch {
+      // fallback
     }
     return StorageService.getEvents();
   },
+
   saveEvent: async (event) => {
     const events = StorageService.getEvents();
     const existingIndex = events.findIndex((e) => e.id === event.id);
@@ -390,12 +595,12 @@ export const StorageService = {
           }
         }
       }
-    } catch (err) {
-      console.warn('Supabase event sync notice:', err);
+    } catch {
+      // Handled
     }
 
     StorageService.addLog({
-      user_email: saved.created_by_email || (typeof saved.created_by === 'string' && saved.created_by.includes('@') ? saved.created_by : null) || saved.created_by_name || 'admin@zapatera.gov.ph',
+      user_email: saved.created_by_email || saved.created_by_name || 'admin@zapatera.gov.ph',
       action: existingIndex >= 0 ? 'Updated Barangay Event' : 'Posted New Barangay Event',
       feature: 'Event Information Management',
       details: `Title: ${saved.title}, Date: ${saved.event_date}, Venue: ${saved.location}`,
@@ -404,6 +609,7 @@ export const StorageService = {
 
     return saved;
   },
+
   deleteEvent: async (eventId) => {
     let events = StorageService.getEvents();
     const target = events.find((e) => e.id === eventId);
@@ -419,8 +625,8 @@ export const StorageService = {
           await supabase.from('events').delete().eq('title', target.title);
         }
       }
-    } catch (err) {
-      console.warn('Supabase event delete notice:', err);
+    } catch {
+      // Handled
     }
   },
 
@@ -432,10 +638,15 @@ export const StorageService = {
     }
   },
 
-  // LOGS
+  // AUDIT LOGS
   getLogs: () => {
-    return [];
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+    } catch {
+      return INITIAL_LOGS;
+    }
   },
+
   getLogsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
@@ -444,16 +655,27 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(data));
           return data;
         }
       }
-    } catch (err) {
-      console.warn('Supabase getLogs notice:', err);
+    } catch {
+      // fallback
     }
-    return [];
+    return StorageService.getLogs();
   },
+
   addLog: async (log) => {
+    const logs = StorageService.getLogs();
+    const newEntry = {
+      id: `log-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      ...log,
+    };
+    logs.unshift(newEntry);
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 100)));
+
     if (isSupabaseConfigured()) {
       try {
         const payload = {
@@ -466,11 +688,11 @@ export const StorageService = {
           created_at: new Date().toISOString(),
         };
         await supabase.from('activity_logs').insert([payload]);
-      } catch (err) {
-        console.warn('Supabase activity_logs insert exception:', err);
+      } catch {
+        // Handled silently
       }
     }
-    return null;
+    return newEntry;
   },
 
   getNotifications: () => {
@@ -490,6 +712,7 @@ export const StorageService = {
     }
     return null;
   },
+
   setCurrentUser: (user) => {
     if (!user) {
       localStorage.removeItem(STORAGE_KEYS.SESSION);
@@ -499,9 +722,17 @@ export const StorageService = {
   },
 
   // SECURITY & MFA LOGIC
-  recordFailedAttempt: (email) => {
+  recordFailedAttempt: async (email) => {
+    try {
+      if (isSupabaseConfigured() && email) {
+        await supabase.rpc('record_failed_login_attempt', { user_email: email });
+      }
+    } catch {
+      // Handled silently
+    }
+
     const users = StorageService.getUsers();
-    const userIndex = users.findIndex((u) => u.email.toLowerCase() === (email || '').toLowerCase());
+    const userIndex = users.findIndex((u) => u.email?.toLowerCase() === (email || '').toLowerCase());
     if (userIndex >= 0) {
       const user = users[userIndex];
       const failed = (user.failed_attempts || 0) + 1;
@@ -518,31 +749,48 @@ export const StorageService = {
         });
       }
       users[userIndex] = user;
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
       return user;
     }
     return null;
   },
 
-  resetFailedAttempts: (email) => {
+  resetFailedAttempts: async (email) => {
+    try {
+      if (isSupabaseConfigured() && email) {
+        await supabase.rpc('reset_account_lockout', { user_email: email });
+      }
+    } catch {
+      // Handled silently
+    }
+
     const users = StorageService.getUsers();
-    const userIndex = users.findIndex((u) => u.email.toLowerCase() === (email || '').toLowerCase());
+    const userIndex = users.findIndex((u) => u.email?.toLowerCase() === (email || '').toLowerCase());
     if (userIndex >= 0) {
       users[userIndex].failed_attempts = 0;
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      users[userIndex].is_locked = false;
+      localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
       return users[userIndex];
     }
     return null;
   },
 
-  unlockUser: (email) => {
+  unlockUser: async (email) => {
+    try {
+      if (isSupabaseConfigured() && email) {
+        await supabase.rpc('reset_account_lockout', { user_email: email });
+      }
+    } catch {
+      // Handled silently
+    }
+
     const users = StorageService.getUsers();
-    const userIndex = users.findIndex((u) => u.email.toLowerCase() === (email || '').toLowerCase());
+    const userIndex = users.findIndex((u) => u.email?.toLowerCase() === (email || '').toLowerCase());
     if (userIndex >= 0) {
       users[userIndex].failed_attempts = 0;
       users[userIndex].is_locked = false;
       users[userIndex].is_active = true;
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
       StorageService.addLog({
         user_email: email,
         action: 'ACCOUNT UNLOCKED',
@@ -554,31 +802,4 @@ export const StorageService = {
     }
     return null;
   },
-
-  generateOTP: (email) => {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const payload = {
-      email: email.toLowerCase(),
-      otp,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
-    sessionStorage.setItem(`zapatera_otp_${email.toLowerCase()}`, JSON.stringify(payload));
-    return otp;
-  },
-
-  verifyOTP: (email, code) => {
-    const key = `zapatera_otp_${email.toLowerCase()}`;
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return false;
-    try {
-      const data = JSON.parse(raw);
-      if (data.otp === String(code).trim() && Date.now() <= data.expiresAt) {
-        sessionStorage.removeItem(key);
-        return true;
-      }
-    } catch (err) {
-      console.warn('OTP verification error:', err);
-    }
-    return false;
-  }
 };
