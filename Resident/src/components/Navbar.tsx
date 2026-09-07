@@ -88,10 +88,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
     zIndex: 10,
   },
   headerLeft: {

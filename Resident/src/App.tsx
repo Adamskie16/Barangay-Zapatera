@@ -230,9 +230,9 @@ export default function App() {
           .order('created_at', { ascending: false });
 
         if (currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
-          query = query.or(`user_id.eq.${currentUser.id},role_target.eq.residents,role_target.eq.all`);
+          query = query.or(`user_id.eq.${currentUser.id},role_target.eq.resident,role_target.is.null`);
         } else {
-          query = query.or(`role_target.eq.residents,role_target.eq.all`);
+          query = query.or(`role_target.eq.resident,role_target.is.null`);
         }
 
         const { data, error } = await query;
