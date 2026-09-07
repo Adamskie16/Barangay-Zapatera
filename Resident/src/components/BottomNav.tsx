@@ -12,7 +12,6 @@ import {
   Clock,
   Megaphone,
   User,
-  PlusCircle,
 } from 'lucide-react';
 
 export type NavTab = 'home' | 'documents' | 'requests' | 'announcements' | 'profile';
@@ -21,14 +20,13 @@ interface BottomNavProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   activeRequestsCount?: number;
-  onRequestClick: () => void;
+  onRequestClick?: () => void;
 }
 
 export default function BottomNav({
   activeTab,
   onTabChange,
   activeRequestsCount = 0,
-  onRequestClick,
 }: BottomNavProps) {
   return (
     <View style={styles.container}>
@@ -62,16 +60,6 @@ export default function BottomNav({
         </Text>
       </TouchableOpacity>
 
-      {/* Center Floating Request Button */}
-      <TouchableOpacity
-        style={styles.centerFab}
-        onPress={onRequestClick}
-        activeOpacity={0.85}
-      >
-        <PlusCircle size={26} color="#ffffff" />
-        <Text style={styles.fabLabel}>Apply</Text>
-      </TouchableOpacity>
-
       {/* Requests Status Tab */}
       <TouchableOpacity
         style={styles.tabItem}
@@ -96,7 +84,7 @@ export default function BottomNav({
         </Text>
       </TouchableOpacity>
 
-      {/* Announcements / Profile Tab */}
+      {/* Announcements / Bulletins Tab */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => onTabChange('announcements')}
@@ -134,7 +122,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    height: 64,
+    height: 62,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
@@ -143,7 +131,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     shadowColor: '#000000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: -2 },
     zIndex: 20,
@@ -159,7 +147,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 3,
   },
   tabLabelActive: {
     color: '#1d4ed8',
@@ -184,26 +172,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
     color: '#ffffff',
-  },
-  centerFab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#1d4ed8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -22,
-    shadowColor: '#1d4ed8',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    borderWidth: 3,
-    borderColor: '#ffffff',
-  },
-  fabLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginTop: -2,
   },
 });
