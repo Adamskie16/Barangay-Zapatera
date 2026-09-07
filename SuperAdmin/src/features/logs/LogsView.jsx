@@ -31,7 +31,7 @@ export default function LogsView() {
           setLoading(false);
           return;
         } else if (error) {
-          console.warn('Supabase audit_logs query error:', error.message);
+          console.warn('Supabase activity_logs query error:', error.message);
         }
       }
     } catch (err) {

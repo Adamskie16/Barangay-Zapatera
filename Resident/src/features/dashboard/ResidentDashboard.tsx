@@ -304,16 +304,10 @@ export default function ResidentDashboard({
                   <TouchableOpacity
                     style={styles.docDetailsBtn}
                     onPress={() => onOpenRequirements(doc)}
+                    activeOpacity={0.7}
                   >
                     <Info size={13} color="#1d4ed8" />
-                    <Text style={styles.docDetailsBtnText}>Requirements</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.docApplyBtn}
-                    onPress={() => onRequestDocument(doc)}
-                  >
-                    <Text style={styles.docApplyBtnText}>Apply</Text>
-                    <ArrowRight size={12} color="#ffffff" />
+                    <Text style={styles.docDetailsBtnText}>Requirements & Info</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -855,29 +849,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 9,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
   docDetailsBtnText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#1d4ed8',
-  },
-  docApplyBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#1d4ed8',
-  },
-  docApplyBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#ffffff',
   },
 });

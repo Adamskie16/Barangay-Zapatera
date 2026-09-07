@@ -445,11 +445,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       {/* Header Profile Banner */}
       <div
         className={`p-6 rounded-2xl border shadow-sm transition-colors ${
-          isDarkMode
-            ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-blue-950/60 border-slate-800 text-white'
-            : 'bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-slate-200 text-white'
-        }`}
-      >
+              isDarkMode
+                ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-blue-950/60 border-slate-800 text-white'
+                : 'bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-slate-200 text-white'
+            }`}
+          >
         <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
           {/* Avatar Preview */}
           <div className="relative group">

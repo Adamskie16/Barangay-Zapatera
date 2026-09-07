@@ -1,10 +1,11 @@
 // AccountManagement/src/components/Sidebar.jsx
 import React from 'react';
-import { Users, History, LogOut, Moon, Sun, UserCheck } from 'lucide-react';
+import { Users, Image as ImageIcon, History, LogOut, Moon, Sun, UserCheck } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout, isDarkMode, onToggleDarkMode }) {
   const menuItems = [
     { id: 'accounts', label: 'Account Management', icon: Users },
+    { id: 'login_design', label: 'Login Screen Design', icon: ImageIcon },
     { id: 'logs', label: 'Activity Logs', icon: History },
   ];
 

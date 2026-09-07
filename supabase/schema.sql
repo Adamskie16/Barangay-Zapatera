@@ -120,6 +120,10 @@ CREATE TABLE IF NOT EXISTS public.system_config (
     contact_phone TEXT DEFAULT '(032) 253-1234',
     doc_prefix TEXT DEFAULT 'BZ-2026',
     auto_notify BOOLEAN DEFAULT true,
+    login_bg_url TEXT DEFAULT '/auth-bg.jpg',
+    login_title TEXT DEFAULT 'Barangay Zapatera Portal',
+    login_badge TEXT DEFAULT 'Barangay Administration',
+    login_description TEXT DEFAULT 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT single_row CHECK (id = 1)
 );
@@ -149,6 +153,47 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 8. NEWS & BULLETINS TABLE
+CREATE TABLE IF NOT EXISTS public.news (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Public Advisory',
+    description TEXT NOT NULL,
+    content TEXT NOT NULL,
+    banner_url TEXT,
+    location TEXT DEFAULT 'Barangay Zapatera, Cebu City',
+    author TEXT DEFAULT 'Barangay Administration',
+    is_important BOOLEAN NOT NULL DEFAULT false,
+    is_emergency BOOLEAN NOT NULL DEFAULT false,
+    is_published BOOLEAN NOT NULL DEFAULT true,
+    target_audience TEXT NOT NULL DEFAULT 'residents',
+    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_category ON public.news(category);
+CREATE INDEX IF NOT EXISTS idx_news_is_emergency ON public.news(is_emergency);
+CREATE INDEX IF NOT EXISTS idx_news_created_at ON public.news(created_at);
+
+-- 9. LOGIN DESIGNS CMS TABLE
+CREATE TABLE IF NOT EXISTS public.login_designs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    badge TEXT DEFAULT 'Barangay Administration',
+    description TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    target_portal TEXT NOT NULL DEFAULT 'all',
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_designs_is_active ON public.login_designs(is_active);
+CREATE INDEX IF NOT EXISTS idx_login_designs_target ON public.login_designs(target_portal);
+CREATE INDEX IF NOT EXISTS idx_login_designs_created_at ON public.login_designs(created_at);
+
 -- Row Level Security (RLS) Policies
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_types ENABLE ROW LEVEL SECURITY;
@@ -157,6 +202,8 @@ ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.login_designs ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if re-running script to avoid "policy already exists" error
 DROP POLICY IF EXISTS "Public Profiles Read" ON public.profiles;
@@ -178,7 +225,30 @@ DROP POLICY IF EXISTS "Events Admin Manage" ON public.events;
 DROP POLICY IF EXISTS "Config Read All" ON public.system_config;
 DROP POLICY IF EXISTS "Config SuperAdmin Manage" ON public.system_config;
 
-DROP POLICY IF EXISTS "Audit Logs Admin Read" ON public.audit_logs;
+DROP POLICY IF EXISTS "Notifications Read All" ON public.notifications;
+DROP POLICY IF EXISTS "Notifications Insert All" ON public.notifications;
+DROP POLICY IF EXISTS "Notifications Update All" ON public.notifications;
+DROP POLICY IF EXISTS "Notifications Delete All" ON public.notifications;
+
+DROP POLICY IF EXISTS "Activity Logs Read All" ON public.activity_logs;
+DROP POLICY IF EXISTS "Activity Logs Insert All" ON public.activity_logs;
+DROP POLICY IF EXISTS "Activity Logs Admin Read" ON public.activity_logs;
+
+DROP POLICY IF EXISTS "News Read All" ON public.news;
+DROP POLICY IF EXISTS "News Insert All" ON public.news;
+DROP POLICY IF EXISTS "News Update All" ON public.news;
+DROP POLICY IF EXISTS "News Delete All" ON public.news;
+
+DROP POLICY IF EXISTS "Login Designs Read All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Insert All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Update All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Delete All" ON public.login_designs;
+
+-- Login Designs Policies
+CREATE POLICY "Login Designs Read All" ON public.login_designs FOR SELECT USING (true);
+CREATE POLICY "Login Designs Insert All" ON public.login_designs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Login Designs Update All" ON public.login_designs FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Login Designs Delete All" ON public.login_designs FOR DELETE USING (true);
 
 -- Helper function to prevent RLS infinite recursion on public.profiles
 CREATE OR REPLACE FUNCTION public.is_admin_or_superadmin(user_id UUID)
@@ -225,9 +295,21 @@ CREATE POLICY "Config SuperAdmin Manage" ON public.system_config FOR ALL USING (
     public.is_admin_or_superadmin(auth.uid())
 );
 
-CREATE POLICY "Activity Logs Admin Read" ON public.activity_logs FOR SELECT USING (
-    public.is_admin_or_superadmin(auth.uid())
-);
+-- Notifications Policies
+CREATE POLICY "Notifications Read All" ON public.notifications FOR SELECT USING (true);
+CREATE POLICY "Notifications Insert All" ON public.notifications FOR INSERT WITH CHECK (true);
+CREATE POLICY "Notifications Update All" ON public.notifications FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Notifications Delete All" ON public.notifications FOR DELETE USING (true);
+
+-- Activity Logs Policies
+CREATE POLICY "Activity Logs Read All" ON public.activity_logs FOR SELECT USING (true);
+CREATE POLICY "Activity Logs Insert All" ON public.activity_logs FOR INSERT WITH CHECK (true);
+
+-- News Policies
+CREATE POLICY "News Read All" ON public.news FOR SELECT USING (true);
+CREATE POLICY "News Insert All" ON public.news FOR INSERT WITH CHECK (true);
+CREATE POLICY "News Update All" ON public.news FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "News Delete All" ON public.news FOR DELETE USING (true);
 
 -- AUTOMATIC TRIGGERS (SuperAdmin Account Page & Profile Sync)
 

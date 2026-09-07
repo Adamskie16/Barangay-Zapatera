@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import LoginPage from './features/auth/LoginPage';
 import AccountCreationView from './features/accounts/AccountCreationView';
 import ActivityLogsView from './features/logs/ActivityLogsView';
+import LoginDesignView from './features/login_design/LoginDesignView';
 import { supabase } from './core/supabase';
 import './index.css';
 
@@ -73,6 +74,7 @@ export default function App() {
           isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
         }`}>
           {activeTab === 'accounts' && <AccountCreationView currentUser={currentUser} isDarkMode={isDarkMode} />}
+          {activeTab === 'login_design' && <LoginDesignView currentUser={currentUser} isDarkMode={isDarkMode} />}
           {activeTab === 'logs' && <ActivityLogsView currentUser={currentUser} isDarkMode={isDarkMode} />}
         </main>
       </div>
