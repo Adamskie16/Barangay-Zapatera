@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   CONFIG: 'zapatera_config_db',
   LOGS: 'zapatera_logs_db',
   NOTIFICATIONS: 'zapatera_notifications_db',
+  LOGIN_DESIGNS: 'zapatera_login_designs_db',
   SESSION: 'zapatera_admin_session',
 };
 
@@ -75,6 +76,29 @@ const INITIAL_CONFIG = {
   login_description: '',
   updated_at: new Date().toISOString(),
 };
+
+const INITIAL_LOGIN_DESIGNS = [
+  {
+    id: 'ld-001',
+    title: 'Barangay Zapatera Executive Portal',
+    badge: 'Executive Administration',
+    description: 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
+    image_url: '/auth-bg.jpg',
+    target_portal: 'all',
+    is_active: true,
+    created_at: new Date('2026-01-01').toISOString(),
+  },
+  {
+    id: 'ld-002',
+    title: 'Barangay Zapatera Administrative Management',
+    badge: 'Barangay Administration',
+    description: 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
+    image_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1200&q=80',
+    target_portal: 'admin',
+    is_active: false,
+    created_at: new Date('2026-01-02').toISOString(),
+  }
+];
 
 const INITIAL_LOGS = [
   {
@@ -869,5 +893,211 @@ export const StorageService = {
     });
 
     return updated;
+  },
+
+  // LOGIN DESIGNS CMS
+  getLoginDesigns: () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.LOGIN_DESIGNS);
+      return stored ? JSON.parse(stored) : INITIAL_LOGIN_DESIGNS;
+    } catch {
+      return INITIAL_LOGIN_DESIGNS;
+    }
+  },
+
+  getLoginDesignsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('login_designs')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (data && !error && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch (e) {
+      console.warn('getLoginDesignsAsync fallback:', e);
+    }
+    return StorageService.getLoginDesigns();
+  },
+
+  getActiveLoginDesignAsync: async (portal = 'admin') => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('login_designs')
+          .select('*')
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false });
+        if (data && !error && data.length > 0) {
+          const match = data.find((d) => d.target_portal === portal || d.target_portal === 'all') || data[0];
+          return match;
+        }
+      }
+    } catch (e) {}
+    const local = StorageService.getLoginDesigns();
+    return local.find((d) => d.is_active && (d.target_portal === portal || d.target_portal === 'all')) || local[0] || null;
+  },
+
+  createLoginDesign: async (design) => {
+    const newEntry = {
+      id: design.id || `ld-${Date.now()}`,
+      title: design.title || 'Barangay Zapatera Portal',
+      badge: design.badge || 'Barangay Administration',
+      description: design.description || '',
+      image_url: design.image_url || '/auth-bg.jpg',
+      target_portal: design.target_portal || 'all',
+      is_active: design.is_active || false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const designs = StorageService.getLoginDesigns();
+    if (newEntry.is_active) {
+      designs.forEach((d) => {
+        if (d.target_portal === newEntry.target_portal || newEntry.target_portal === 'all') {
+          d.is_active = false;
+        }
+      });
+    }
+    designs.unshift(newEntry);
+    localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(designs));
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (newEntry.is_active) {
+          await supabase.from('login_designs').update({ is_active: false }).neq('id', newEntry.id);
+        }
+        await supabase.from('login_designs').insert([newEntry]);
+      } catch (err) {
+        console.warn('createLoginDesign supabase sync err:', err);
+      }
+    }
+
+    StorageService.addLog({
+      user_email: 'admin@zapatera.gov.ph',
+      action: 'Created Login Design',
+      feature: 'Login Design CMS',
+      details: `Created new login design "${newEntry.title}"`,
+      level: 'info',
+    });
+
+    return newEntry;
+  },
+
+  updateLoginDesign: async (id, updates) => {
+    const designs = StorageService.getLoginDesigns();
+    const index = designs.findIndex((d) => d.id === id);
+    if (index >= 0) {
+      const updated = {
+        ...designs[index],
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (updated.is_active) {
+        designs.forEach((d) => {
+          if (d.id !== id && (d.target_portal === updated.target_portal || updated.target_portal === 'all')) {
+            d.is_active = false;
+          }
+        });
+      }
+
+      designs[index] = updated;
+      localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(designs));
+
+      if (isSupabaseConfigured()) {
+        try {
+          if (updated.is_active) {
+            await supabase.from('login_designs').update({ is_active: false }).neq('id', id);
+          }
+          await supabase.from('login_designs').update(updated).eq('id', id);
+        } catch (err) {
+          console.warn('updateLoginDesign supabase sync err:', err);
+        }
+      }
+
+      StorageService.addLog({
+        user_email: 'admin@zapatera.gov.ph',
+        action: 'Updated Login Design',
+        feature: 'Login Design CMS',
+        details: `Updated login design "${updated.title}"`,
+        level: 'info',
+      });
+
+      return updated;
+    }
+    return null;
+  },
+
+  setActiveLoginDesign: async (id, portal = 'admin') => {
+    const designs = StorageService.getLoginDesigns();
+    let activated = null;
+    designs.forEach((d) => {
+      if (d.id === id) {
+        d.is_active = true;
+        d.updated_at = new Date().toISOString();
+        activated = d;
+      } else if (d.target_portal === portal || portal === 'all' || d.target_portal === 'all') {
+        d.is_active = false;
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(designs));
+
+    if (isSupabaseConfigured() && activated) {
+      try {
+        await supabase.from('login_designs').update({ is_active: false }).neq('id', id);
+        await supabase.from('login_designs').update({ is_active: true, updated_at: new Date().toISOString() }).eq('id', id);
+
+        // Also update system_config table for fallback compatibility
+        await supabase.from('system_config').upsert({
+          id: 1,
+          login_bg_url: activated.image_url,
+          login_title: activated.title,
+          login_badge: activated.badge,
+          login_description: activated.description,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('setActiveLoginDesign supabase sync err:', err);
+      }
+    }
+
+    StorageService.addLog({
+      user_email: 'admin@zapatera.gov.ph',
+      action: 'Activated Login Design',
+      feature: 'Login Design CMS',
+      details: `Activated login hero visual "${activated?.title || id}"`,
+      level: 'info',
+    });
+
+    return activated;
+  },
+
+  deleteLoginDesign: async (id) => {
+    const designs = StorageService.getLoginDesigns();
+    const target = designs.find((d) => d.id === id);
+    const filtered = designs.filter((d) => d.id !== id);
+    localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(filtered));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('login_designs').delete().eq('id', id);
+      } catch (err) {
+        console.warn('deleteLoginDesign supabase sync err:', err);
+      }
+    }
+
+    StorageService.addLog({
+      user_email: 'admin@zapatera.gov.ph',
+      action: 'Deleted Login Design',
+      feature: 'Login Design CMS',
+      details: `Deleted login design "${target?.title || id}"`,
+      level: 'danger',
+    });
+
+    return true;
   },
 };

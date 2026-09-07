@@ -176,6 +176,24 @@ CREATE INDEX IF NOT EXISTS idx_news_category ON public.news(category);
 CREATE INDEX IF NOT EXISTS idx_news_is_emergency ON public.news(is_emergency);
 CREATE INDEX IF NOT EXISTS idx_news_created_at ON public.news(created_at);
 
+-- 9. LOGIN DESIGNS CMS TABLE
+CREATE TABLE IF NOT EXISTS public.login_designs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    badge TEXT DEFAULT 'Barangay Administration',
+    description TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    target_portal TEXT NOT NULL DEFAULT 'all',
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_designs_is_active ON public.login_designs(is_active);
+CREATE INDEX IF NOT EXISTS idx_login_designs_target ON public.login_designs(target_portal);
+CREATE INDEX IF NOT EXISTS idx_login_designs_created_at ON public.login_designs(created_at);
+
 -- Row Level Security (RLS) Policies
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_types ENABLE ROW LEVEL SECURITY;
@@ -185,6 +203,7 @@ ALTER TABLE public.system_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.login_designs ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if re-running script to avoid "policy already exists" error
 DROP POLICY IF EXISTS "Public Profiles Read" ON public.profiles;
@@ -219,6 +238,17 @@ DROP POLICY IF EXISTS "News Read All" ON public.news;
 DROP POLICY IF EXISTS "News Insert All" ON public.news;
 DROP POLICY IF EXISTS "News Update All" ON public.news;
 DROP POLICY IF EXISTS "News Delete All" ON public.news;
+
+DROP POLICY IF EXISTS "Login Designs Read All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Insert All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Update All" ON public.login_designs;
+DROP POLICY IF EXISTS "Login Designs Delete All" ON public.login_designs;
+
+-- Login Designs Policies
+CREATE POLICY "Login Designs Read All" ON public.login_designs FOR SELECT USING (true);
+CREATE POLICY "Login Designs Insert All" ON public.login_designs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Login Designs Update All" ON public.login_designs FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Login Designs Delete All" ON public.login_designs FOR DELETE USING (true);
 
 -- Helper function to prevent RLS infinite recursion on public.profiles
 CREATE OR REPLACE FUNCTION public.is_admin_or_superadmin(user_id UUID)

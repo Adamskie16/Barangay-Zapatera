@@ -78,8 +78,19 @@ export default function AdminLoginPage({ onLoginSuccess }) {
   const [loginConfig, setLoginConfig] = useState(null);
 
   useEffect(() => {
-    StorageService.getConfigAsync().then((cfg) => {
-      if (cfg) setLoginConfig(cfg);
+    StorageService.getActiveLoginDesignAsync('admin').then((activeDesign) => {
+      if (activeDesign) {
+        setLoginConfig({
+          login_bg_url: activeDesign.image_url,
+          login_title: activeDesign.title,
+          login_badge: activeDesign.badge,
+          login_description: activeDesign.description,
+        });
+      } else {
+        StorageService.getConfigAsync().then((cfg) => {
+          if (cfg) setLoginConfig(cfg);
+        });
+      }
     });
 
     // 1. Detect if redirected from password reset email link
