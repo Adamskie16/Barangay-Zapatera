@@ -28,9 +28,11 @@ CREATE POLICY "Login Designs Read All" ON public.login_designs FOR SELECT USING 
 DROP POLICY IF EXISTS "Login Designs Insert All" ON public.login_designs;
 CREATE POLICY "Login Designs Insert All" ON public.login_designs FOR INSERT WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Login Designs Update All" ON public.login_designs FOR UPDATE USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Login Designs Update All" ON public.login_designs;
+CREATE POLICY "Login Designs Update All" ON public.login_designs FOR UPDATE USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Login Designs Delete All" ON public.login_designs FOR DELETE USING (true);
+DROP POLICY IF EXISTS "Login Designs Delete All" ON public.login_designs;
+CREATE POLICY "Login Designs Delete All" ON public.login_designs FOR DELETE USING (true);
 
 -- Seed Initial Default Login Designs if empty
 INSERT INTO public.login_designs (id, title, badge, description, image_url, target_portal, is_active)
