@@ -435,14 +435,32 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     }
 
     try {
+      // 1. Generate 6-digit unlock code & record in account_unlock_requests
+      const generatedCode = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
       if (isSupabaseConfigured()) {
+        // Record pending unlock request
+        await supabase
+          .from('account_unlock_requests')
+          .upsert({
+            email: targetEmail,
+            code_hash: generatedCode,
+            status: 'pending',
+            failed_attempts: 3,
+            used: false,
+            expires_at: expiresAt,
+            locked_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+
+        // Dispatch Supabase Auth OTP
         await supabase.auth.signInWithOtp({
           email: targetEmail,
           options: { shouldCreateUser: false },
         });
       }
-    } catch (e) {
-      // Handled silently to prevent enumeration
+    } catch (err) {
+      // Handled gracefully (e.g. rate limit 429 or network)
     }
 
     setUnlockLoading(false);
@@ -450,7 +468,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     setUnlockCountdown(600); // 10 mins
     setUnlockTimerActive(true);
     setStep(6);
-    setUnlockSuccess('If an account exists for this email, an unlock code has been sent.');
+    setUnlockSuccess('If an account exists for this email, an unlock code has been dispatched.');
   };
 
   /**
@@ -475,18 +493,40 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     }
 
     const targetEmail = unlockEmail.trim().toLowerCase();
+    const enteredCode = unlockOtp.trim();
     let isCodeValid = false;
 
     try {
       if (isSupabaseConfigured()) {
+        // 1. Try Supabase verifyOtp
         const { data, error: otpErr } = await supabase.auth.verifyOtp({
           email: targetEmail,
-          token: unlockOtp.trim(),
+          token: enteredCode,
           type: 'email',
         });
 
         if (!otpErr && data?.user) {
           isCodeValid = true;
+        }
+
+        // 2. Fallback: Verify against account_unlock_requests table
+        if (!isCodeValid) {
+          const { data: reqData } = await supabase
+            .from('account_unlock_requests')
+            .select('*')
+            .eq('email', targetEmail)
+            .eq('code_hash', enteredCode)
+            .eq('used', false)
+            .gte('expires_at', new Date().toISOString())
+            .maybeSingle();
+
+          if (reqData) {
+            isCodeValid = true;
+            await supabase
+              .from('account_unlock_requests')
+              .update({ used: true, status: 'verified', resolved_at: new Date().toISOString() })
+              .eq('id', reqData.id);
+          }
         }
       }
     } catch (err) {
@@ -494,7 +534,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     }
 
     if (!isCodeValid) {
-      setUnlockError('Invalid verification code. Please check your Gmail or request a new code.');
+      setUnlockError('Invalid or expired verification code. Please try again or request a new code.');
       setUnlockLoading(false);
       return;
     }
@@ -511,16 +551,32 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const handleResendUnlockCode = async () => {
     setUnlockError('');
     setUnlockLoading(true);
+    const targetEmail = unlockEmail.trim().toLowerCase();
     try {
+      const generatedCode = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
       if (isSupabaseConfigured()) {
+        await supabase
+          .from('account_unlock_requests')
+          .upsert({
+            email: targetEmail,
+            code_hash: generatedCode,
+            status: 'pending',
+            failed_attempts: 3,
+            used: false,
+            expires_at: expiresAt,
+            locked_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+
         await supabase.auth.signInWithOtp({
-          email: unlockEmail.trim().toLowerCase(),
+          email: targetEmail,
           options: { shouldCreateUser: false },
         });
       }
       setUnlockCountdown(600);
       setUnlockTimerActive(true);
-      setUnlockSuccess('A new unlock code has been sent to your Gmail.');
+      setUnlockSuccess('A new unlock code has been dispatched.');
     } catch (e) {
       setUnlockError('Failed to resend unlock code.');
     } finally {
