@@ -74,6 +74,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const [unlockOtp, setUnlockOtp] = useState('');
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState('');
+  const [unlockSuccess, setUnlockSuccess] = useState('');
   const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
   const [loginConfig, setLoginConfig] = useState(null);
