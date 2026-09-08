@@ -158,6 +158,21 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     }
   }, []);
 
+  // Live BroadcastChannel synchronization for instant account unlocking across tabs/portals
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('zapatera_security_channel');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'ACCOUNT_UNLOCKED' && event.data?.email === loginEmail.toLowerCase().trim()) {
+          setIsLocked(false);
+          setErrorMessage('');
+          setSuccessBanner('Your account has been unlocked. You may now log in.');
+        }
+      };
+      return () => channel.close();
+    }
+  }, [loginEmail]);
+
   // Live password strength indicator for register
   const passwordStrength = checkPasswordStrength(regData.password);
   const passwordsMatch = regData.password && regData.confirmPassword && regData.password === regData.confirmPassword;
