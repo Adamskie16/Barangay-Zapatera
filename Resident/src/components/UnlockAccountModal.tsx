@@ -99,21 +99,37 @@ export default function UnlockAccountModal({
     const cleanEmail = email.trim().toLowerCase();
 
     try {
+      // 1. Generate 6-digit unlock code & record in account_unlock_requests
+      const generatedCode = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
       if (isSupabaseConfigured()) {
+        await supabase
+          .from('account_unlock_requests')
+          .upsert({
+            email: cleanEmail,
+            code_hash: generatedCode,
+            status: 'pending',
+            failed_attempts: 3,
+            used: false,
+            expires_at: expiresAt,
+            locked_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+
         await supabase.auth.signInWithOtp({
           email: cleanEmail,
           options: { shouldCreateUser: false },
         });
       }
     } catch (e) {
-      // Handled silently to prevent account enumeration
+      // Handled silently
     }
 
     setLoading(false);
     setCountdown(600);
     setTimerActive(true);
     setStep(2);
-    setSuccessMessage('If an account exists for this email, an unlock code has been sent.');
+    setSuccessMessage('If an account exists for this email, an unlock code has been dispatched.');
   };
 
   /**
@@ -135,18 +151,40 @@ export default function UnlockAccountModal({
 
     setLoading(true);
     const cleanEmail = email.trim().toLowerCase();
+    const enteredCode = otpCode.trim();
     let isCodeValid = false;
 
     try {
       if (isSupabaseConfigured()) {
+        // 1. Try Supabase Auth verifyOtp
         const { data, error: otpErr } = await supabase.auth.verifyOtp({
           email: cleanEmail,
-          token: otpCode.trim(),
+          token: enteredCode,
           type: 'email',
         });
 
         if (!otpErr && data?.user) {
           isCodeValid = true;
+        }
+
+        // 2. Fallback: Verify against account_unlock_requests table
+        if (!isCodeValid) {
+          const { data: reqData } = await supabase
+            .from('account_unlock_requests')
+            .select('*')
+            .eq('email', cleanEmail)
+            .eq('code_hash', enteredCode)
+            .eq('used', false)
+            .gte('expires_at', new Date().toISOString())
+            .maybeSingle();
+
+          if (reqData) {
+            isCodeValid = true;
+            await supabase
+              .from('account_unlock_requests')
+              .update({ used: true, status: 'verified', resolved_at: new Date().toISOString() })
+              .eq('id', reqData.id);
+          }
         }
       }
     } catch (err) {
@@ -154,7 +192,7 @@ export default function UnlockAccountModal({
     }
 
     if (!isCodeValid) {
-      setErrorMessage('Invalid verification code. Please try again.');
+      setErrorMessage('Invalid or expired verification code. Please try again or request a new code.');
       setLoading(false);
       return;
     }
@@ -173,7 +211,22 @@ export default function UnlockAccountModal({
     const cleanEmail = email.trim().toLowerCase();
 
     try {
+      const generatedCode = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
       if (isSupabaseConfigured()) {
+        await supabase
+          .from('account_unlock_requests')
+          .upsert({
+            email: cleanEmail,
+            code_hash: generatedCode,
+            status: 'pending',
+            failed_attempts: 3,
+            used: false,
+            expires_at: expiresAt,
+            locked_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+
         await supabase.auth.signInWithOtp({
           email: cleanEmail,
           options: { shouldCreateUser: false },
@@ -181,7 +234,7 @@ export default function UnlockAccountModal({
       }
       setCountdown(600);
       setTimerActive(true);
-      setSuccessMessage('A new unlock code has been dispatched to your Gmail.');
+      setSuccessMessage('A new unlock code has been dispatched.');
     } catch (e) {
       setErrorMessage('Failed to resend unlock code. Please check your connection.');
     } finally {

@@ -83,6 +83,21 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     }
   }, []);
 
+  // BroadcastChannel for live cross-tab unlock synchronization
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('zapatera_security_channel');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'ACCOUNT_UNLOCKED' && event.data?.email === email.toLowerCase().trim()) {
+          setIsLocked(false);
+          setError('');
+          setInfoMsg('Your account has been unlocked. You may now log in.');
+        }
+      };
+      return () => channel.close();
+    }
+  }, [email]);
+
   const [showResendConfirmation, setShowResendConfirmation] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
