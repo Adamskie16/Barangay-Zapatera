@@ -32,11 +32,10 @@ interface MyRequestsViewProps {
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: 'All Requests', value: 'all' },
-  { label: 'Pending Review', value: 'pending' },
+  { label: 'Pending', value: 'pending' },
   { label: 'Processing', value: 'processing' },
-  { label: 'Ready for Pickup', value: 'ready_for_pickup' },
-  { label: 'Completed', value: 'completed' },
-  { label: 'Rejected', value: 'rejected' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Declined', value: 'declined' },
 ];
 
 export default function MyRequestsView({
@@ -50,16 +49,17 @@ export default function MyRequestsView({
 
   // Filter Active vs Completed/History
   const activeRequestsList = requests.filter(
-    (r) => r.status === 'pending' || r.status === 'under_review' || r.status === 'processing' || r.status === 'ready_for_pickup'
+    (r) => r.status === 'pending' || r.status === 'under_review' || r.status === 'processing' || r.status === 'ready_for_pickup' || r.status === 'approved'
   );
 
   const historyRequestsList = requests.filter(
-    (r) => r.status === 'completed' || r.status === 'rejected'
+    (r) => r.status === 'completed' || r.status === 'rejected' || r.status === 'declined'
   );
 
   const baseList = activeTab === 'active' ? activeRequestsList : historyRequestsList;
 
   const filteredRequests = baseList.filter((r) => {
+    const normStatus = (r.status || 'pending').toLowerCase();
     const matchesSearch =
       r.document_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -67,8 +67,11 @@ export default function MyRequestsView({
 
     const matchesStatus =
       statusFilter === 'all' ||
-      r.status === statusFilter ||
-      (statusFilter === 'pending' && r.status === 'under_review');
+      normStatus === statusFilter ||
+      (statusFilter === 'pending' && (normStatus === 'pending' || normStatus === 'under_review')) ||
+      (statusFilter === 'processing' && (normStatus === 'processing' || normStatus === 'under_review')) ||
+      (statusFilter === 'approved' && (normStatus === 'approved' || normStatus === 'ready_for_pickup' || normStatus === 'completed')) ||
+      (statusFilter === 'declined' && (normStatus === 'declined' || normStatus === 'rejected'));
 
     return matchesSearch && matchesStatus;
   });
@@ -80,7 +83,7 @@ export default function MyRequestsView({
         <View style={styles.titleRow}>
           <View>
             <Text style={styles.title}>My Document Requests</Text>
-            <Text style={styles.subtitle}>Track live progress and review completed clearance history.</Text>
+            <Text style={styles.subtitle}>Track live progress and review document clearance statuses.</Text>
           </View>
           <TouchableOpacity style={styles.newBtn} onPress={onRequestNew}>
             <PlusCircle size={16} color="#ffffff" />
@@ -110,7 +113,7 @@ export default function MyRequestsView({
             }}
           >
             <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>
-              Request History ({historyRequestsList.length})
+              Request History / Declined ({historyRequestsList.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -154,71 +157,89 @@ export default function MyRequestsView({
       {/* Requests Content List */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {filteredRequests.length > 0 ? (
-          filteredRequests.map((req) => (
-            <TouchableOpacity
-              key={req.id}
-              style={[
-                styles.requestCard,
-                req.status === 'ready_for_pickup' && styles.requestCardReady,
-                req.status === 'rejected' && styles.requestCardRejected,
-              ]}
-              onPress={() => onViewRequestDetails(req)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardDocTitle}>{req.document_title}</Text>
-                  <Text style={styles.cardTrackingNo}>Ref: <Text style={styles.trackingCodeText}>{req.tracking_number}</Text></Text>
-                </View>
-                <Badge status={req.status} size="sm" />
-              </View>
+          filteredRequests.map((req) => {
+            const isDeclined = req.status === 'declined' || req.status === 'rejected';
+            const isApproved = req.status === 'approved' || req.status === 'ready_for_pickup';
+            const declineReasonText = req.declined_details || req.declined_reason || req.rejection_reason || 'Missing required residency documents or incomplete attachments.';
+            const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 8, 2026';
+            const adminProcessor = req.processed_by || 'Barangay Administrator';
 
-              <Text style={styles.cardPurpose} numberOfLines={2}>
-                Purpose: {req.purpose}
-              </Text>
-
-              <View style={styles.scheduleRow}>
-                <View style={styles.scheduleItem}>
-                  <Calendar size={13} color="#64748b" />
-                  <Text style={styles.scheduleLabel}>Date: <Text style={styles.scheduleVal}>{req.pickup_date || 'N/A'}</Text></Text>
+            return (
+              <TouchableOpacity
+                key={req.id}
+                style={[
+                  styles.requestCard,
+                  isApproved && styles.requestCardReady,
+                  isDeclined && styles.requestCardRejected,
+                ]}
+                onPress={() => onViewRequestDetails(req)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.cardHeader}>
+                  <View>
+                    <Text style={styles.cardDocTitle}>{req.document_title}</Text>
+                    <Text style={styles.cardTrackingNo}>Ref: <Text style={styles.trackingCodeText}>{req.tracking_number}</Text></Text>
+                  </View>
+                  <Badge status={req.status} size="sm" />
                 </View>
-                <View style={styles.scheduleItem}>
-                  <Clock size={13} color="#64748b" />
-                  <Text style={styles.scheduleLabel}>Slot: <Text style={styles.scheduleVal}>{req.pickup_time_slot || 'Regular'}</Text></Text>
-                </View>
-              </View>
 
-              {req.status === 'ready_for_pickup' && (
-                <View style={styles.readyHighlightBanner}>
-                  <PackageCheck size={14} color="#15803d" />
-                  <Text style={styles.readyHighlightText}>
-                    Ready for Collection at Express Window 2! Tap to view claim pass.
-                  </Text>
-                </View>
-              )}
-
-              {req.status === 'rejected' && req.rejection_reason && (
-                <View style={styles.rejectedBanner}>
-                  <AlertTriangle size={14} color="#b91c1c" />
-                  <Text style={styles.rejectedBannerText} numberOfLines={2}>
-                    Reason: {req.rejection_reason}
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.cardFooter}>
-                <Text style={styles.feeText}>
-                  Fee: <Text style={styles.feeValue}>{req.fee === 0 ? 'FREE' : formatCurrency(req.fee)}</Text>
+                <Text style={styles.cardPurpose} numberOfLines={2}>
+                  Purpose: {req.purpose}
                 </Text>
-                <View style={styles.viewDetailsBtn}>
-                  <Text style={styles.viewDetailsBtnText}>
-                    {req.status === 'ready_for_pickup' ? 'View Claiming Pass' : 'View Timeline'}
-                  </Text>
-                  <ArrowRight size={13} color="#1d4ed8" />
+
+                <View style={styles.scheduleRow}>
+                  <View style={styles.scheduleItem}>
+                    <Calendar size={13} color="#64748b" />
+                    <Text style={styles.scheduleLabel}>Date: <Text style={styles.scheduleVal}>{req.pickup_date || 'Scheduled'}</Text></Text>
+                  </View>
+                  <View style={styles.scheduleItem}>
+                    <Clock size={13} color="#64748b" />
+                    <Text style={styles.scheduleLabel}>Slot: <Text style={styles.scheduleVal}>{req.pickup_time_slot || '9:00 AM - 9:30 AM'}</Text></Text>
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))
+
+                {/* 6. Resident-Side Declined Notification Box */}
+                {isDeclined && (
+                  <View style={styles.declinedDetailedBox}>
+                    <View style={styles.declinedHeaderRow}>
+                      <Text style={styles.declinedBadgeTitle}>🔴 Request Declined</Text>
+                      <Text style={styles.declinedStatusText}>Status: DECLINED</Text>
+                    </View>
+                    <View style={styles.declinedDetailItem}>
+                      <Text style={styles.declinedFieldLabel}>Reason for Declining:</Text>
+                      <Text style={styles.declinedFieldVal}>{declineReasonText}</Text>
+                    </View>
+                    <View style={styles.declinedMetaRow}>
+                      <Text style={styles.declinedMetaText}>Date Declined: <Text style={{ fontWeight: '700' }}>{dateDeclinedFormatted}</Text></Text>
+                      <Text style={styles.declinedMetaText}>Processed By: <Text style={{ fontWeight: '700' }}>{adminProcessor}</Text></Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Approved Box */}
+                {isApproved && (
+                  <View style={styles.readyHighlightBanner}>
+                    <PackageCheck size={14} color="#15803d" />
+                    <Text style={styles.readyHighlightText}>
+                      Document Request Approved! Ready for pickup at Express Counter ({req.pickup_time_slot || '9:00 AM - 9:30 AM'}).
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.cardFooter}>
+                  <Text style={styles.feeText}>
+                    Fee: <Text style={styles.feeValue}>{req.fee === 0 ? 'FREE' : formatCurrency(req.fee)}</Text>
+                  </Text>
+                  <View style={styles.viewDetailsBtn}>
+                    <Text style={styles.viewDetailsBtnText}>
+                      {isDeclined ? 'View Decline Details' : isApproved ? 'View Claim Pass' : 'View Details'}
+                    </Text>
+                    <ArrowRight size={13} color="#1d4ed8" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         ) : (
           <EmptyState
             icon={activeTab === 'active' ? 'requests' : 'history'}
@@ -483,4 +504,63 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1d4ed8',
   },
+  declinedDetailedBox: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1.5,
+    borderColor: '#fecdd3',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 8,
+  },
+  declinedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffe4e6',
+  },
+  declinedBadgeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991b1b',
+  },
+  declinedStatusText: {
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    color: '#b91c1c',
+    backgroundColor: '#fee2e2',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  declinedDetailItem: {
+    gap: 2,
+  },
+  declinedFieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#7f1d1d',
+    textTransform: 'uppercase',
+  },
+  declinedFieldVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#991b1b',
+    lineHeight: 16,
+  },
+  declinedMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#ffe4e6',
+  },
+  declinedMetaText: {
+    fontSize: 10,
+    color: '#9f1239',
+  },
 });
+

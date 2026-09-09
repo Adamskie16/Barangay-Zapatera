@@ -46,9 +46,14 @@ export default function RequestTrackingModal({
 }: RequestTrackingModalProps) {
   if (!request) return null;
 
-  const isRejected = request.status === 'rejected';
-  const isReady = request.status === 'ready_for_pickup';
+  const isRejected = request.status === 'rejected' || request.status === 'declined';
+  const isReady = request.status === 'ready_for_pickup' || request.status === 'approved';
   const isCompleted = request.status === 'completed';
+
+  const declineReasonText = request.declined_reason || request.rejection_reason || 'Missing valid proof of residency.';
+  const declineDetailsText = request.declined_details || '';
+  const dateDeclinedFormatted = request.declined_at || request.rejected_at || request.updated_at ? new Date(request.declined_at || request.rejected_at || request.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 8, 2026';
+  const processedByAdmin = request.processed_by || 'Barangay Administrator';
 
   // Default timeline steps if not populated
   const timelineSteps = request.timeline || [
@@ -61,28 +66,20 @@ export default function RequestTrackingModal({
       is_current: request.status === 'pending',
     },
     {
-      status: 'under_review',
-      label: 'Under Staff Review',
-      description: 'Records and Lupong Tagapamayapa blotter clearance verification.',
+      status: 'processing',
+      label: 'Processing & Requirements Verification',
+      description: 'Barangay Administrator is verifying resident identification and attached documents.',
       timestamp: request.status !== 'pending' ? 'Verified' : 'In Progress',
       is_completed: request.status !== 'pending',
-      is_current: request.status === 'under_review',
+      is_current: request.status === 'processing' || request.status === 'under_review',
     },
     {
-      status: 'processing',
-      label: 'Processing & Dry Seal',
-      description: 'Official clearance printed, sealed, and approved by Barangay Secretary.',
-      timestamp: isReady || isCompleted ? 'Completed' : 'Pending Review',
-      is_completed: isReady || isCompleted,
-      is_current: request.status === 'processing',
-    },
-    {
-      status: 'ready_for_pickup',
-      label: 'Ready for Pickup',
-      description: `Available at Express Counter on ${request.pickup_date} (${request.pickup_time_slot}).`,
-      timestamp: isReady || isCompleted ? 'Ready at Window' : 'Scheduled',
-      is_completed: isReady || isCompleted,
-      is_current: isReady,
+      status: 'approved',
+      label: isRejected ? 'Request Declined' : 'Approved & Ready for Pickup',
+      description: isRejected ? 'Application declined due to incomplete or invalid requirements.' : `Available at Express Counter on ${request.pickup_date || 'scheduled date'} (${request.pickup_time_slot || '9:00 AM - 9:30 AM'}).`,
+      timestamp: isReady || isCompleted || isRejected ? (isRejected ? 'Declined' : 'Approved') : 'Scheduled',
+      is_completed: isReady || isCompleted || isRejected,
+      is_current: isReady || isRejected,
     },
     {
       status: 'completed',
@@ -123,26 +120,49 @@ export default function RequestTrackingModal({
               <Text style={styles.trackingPurpose}>Purpose: {request.purpose}</Text>
             </View>
 
-            {/* REJECTION ALERT BANNER */}
+            {/* 7. RESIDENT NOTIFICATION MODAL / REJECTION CARD */}
             {isRejected && (
               <View style={styles.rejectionCard}>
                 <View style={styles.rejectionHeader}>
-                  <XCircle size={20} color="#b91c1c" />
-                  <Text style={styles.rejectionTitle}>Application Rejected</Text>
+                  <XCircle size={22} color="#b91c1c" />
+                  <div>
+                    <Text style={styles.rejectionTitle}>Document Request Declined</Text>
+                    <Text style={styles.rejectionSubtitle}>
+                      Unfortunately, your document request could not be approved because the submitted requirements did not meet the barangay's verification requirements.
+                    </Text>
+                  </div>
                 </View>
-                <Text style={styles.rejectionReasonLabel}>Reason for Rejection:</Text>
-                <Text style={styles.rejectionReasonText}>
-                  {request.rejection_reason || 'Incomplete supporting documents or unresolved sitio census records.'}
-                </Text>
 
-                {request.required_action && (
-                  <View style={styles.rejectionActionBox}>
-                    <Info size={14} color="#991b1b" />
-                    <Text style={styles.rejectionActionText}>
-                      Required Action: {request.required_action}
+                <View style={styles.declineSectionItem}>
+                  <Text style={styles.rejectionReasonLabel}>Reason:</Text>
+                  <Text style={styles.rejectionReasonText}>
+                    {declineReasonText}
+                  </Text>
+                </View>
+
+                {declineDetailsText ? (
+                  <View style={styles.declineSectionItem}>
+                    <Text style={styles.rejectionReasonLabel}>Additional Details / Explanation:</Text>
+                    <Text style={styles.rejectionReasonText}>
+                      {declineDetailsText}
                     </Text>
                   </View>
-                )}
+                ) : null}
+
+                <View style={styles.rejectionActionBox}>
+                  <Info size={16} color="#991b1b" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rejectionActionHeader}>What you need to do:</Text>
+                    <Text style={styles.rejectionActionText}>
+                      Please submit a valid and current proof of residency and create a new request.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.declineMetaBox}>
+                  <Text style={styles.declineMetaLine}>Date Declined: <Text style={{ fontWeight: '700' }}>{dateDeclinedFormatted}</Text></Text>
+                  <Text style={styles.declineMetaLine}>Processed By: <Text style={{ fontWeight: '700' }}>{processedByAdmin}</Text></Text>
+                </View>
 
                 {onReRequest && (
                   <TouchableOpacity
@@ -385,43 +405,73 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
+    gap: 10,
   },
   rejectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffe4e6',
   },
   rejectionTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: '#991b1b',
   },
+  rejectionSubtitle: {
+    fontSize: 11,
+    color: '#b91c1c',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  declineSectionItem: {
+    gap: 2,
+  },
   rejectionReasonLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#7f1d1d',
+    textTransform: 'uppercase',
   },
   rejectionReasonText: {
     fontSize: 12,
+    fontWeight: '600',
     color: '#991b1b',
-    marginTop: 2,
     lineHeight: 16,
   },
   rejectionActionBox: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 8,
     backgroundColor: '#fee2e2',
-    padding: 8,
+    padding: 10,
     borderRadius: 8,
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+  },
+  rejectionActionHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7f1d1d',
+    marginBottom: 2,
   },
   rejectionActionText: {
     fontSize: 11,
     fontWeight: '600',
     color: '#991b1b',
-    flex: 1,
+    lineHeight: 15,
+  },
+  declineMetaBox: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ffe4e6',
+    gap: 4,
+  },
+  declineMetaLine: {
+    fontSize: 10,
+    color: '#9f1239',
   },
   reRequestBtn: {
     flexDirection: 'row',
@@ -431,7 +481,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc2626',
     paddingVertical: 10,
     borderRadius: 8,
-    marginTop: 10,
+    marginTop: 8,
   },
   reRequestBtnText: {
     color: '#ffffff',

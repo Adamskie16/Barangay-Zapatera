@@ -129,6 +129,7 @@ export default function App() {
             <ReceiveRequestView
               requests={requests}
               onProcessRequest={handleUpdateRequestStatus}
+              currentUser={currentUser}
             />
           )}
 
