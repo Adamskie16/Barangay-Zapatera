@@ -14,54 +14,47 @@ export default function Badge({ status, size = 'md' }: BadgeProps) {
     switch (status) {
       case 'pending':
         return {
-          label: 'Pending Review',
+          label: 'Pending',
           bg: '#fef3c7',
           border: '#fde68a',
           text: '#92400e',
-          icon: <Clock size={size === 'sm' ? 10 : 12} color="#92400e" />,
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟠</Text>,
         };
       case 'under_review':
-        return {
-          label: 'Under Review',
-          bg: '#e0f2fe',
-          border: '#bae6fd',
-          text: '#0369a1',
-          icon: <RefreshCw size={size === 'sm' ? 10 : 12} color="#0369a1" />,
-        };
       case 'processing':
         return {
           label: 'Processing',
-          bg: '#e0e7ff',
-          border: '#c7d2fe',
-          text: '#3730a3',
-          icon: <RefreshCw size={size === 'sm' ? 10 : 12} color="#3730a3" />,
+          bg: '#e0f2fe',
+          border: '#bae6fd',
+          text: '#0369a1',
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🔵</Text>,
         };
       case 'ready_for_pickup':
         return {
           label: 'Ready for Pickup',
           bg: '#dcfce7',
           border: '#86efac',
-          text: '#166534',
-          icon: <PackageCheck size={size === 'sm' ? 10 : 12} color="#166534" />,
+          text: '#15803d',
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟢</Text>,
         };
+      case 'approved':
       case 'completed':
       case 'issued':
-      case 'approved':
         return {
-          label: 'Completed',
-          bg: '#d1fae5',
-          border: '#a7f3d0',
-          text: '#065f46',
-          icon: <CheckCircle2 size={size === 'sm' ? 10 : 12} color="#065f46" />,
+          label: status === 'completed' ? 'Completed' : 'Approved',
+          bg: '#dcfce7',
+          border: '#86efac',
+          text: '#15803d',
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟢</Text>,
         };
       case 'rejected':
       case 'declined':
         return {
-          label: 'Rejected',
+          label: 'Declined',
           bg: '#fee2e2',
           border: '#fca5a5',
           text: '#991b1b',
-          icon: <XCircle size={size === 'sm' ? 10 : 12} color="#991b1b" />,
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🔴</Text>,
         };
       default:
         return {
