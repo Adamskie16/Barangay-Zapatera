@@ -10,21 +10,23 @@ import {
   XCircle,
   AlertTriangle,
   FileText,
-  FileCheck,
+  FileCheck2,
   Eye,
   Download,
   Calendar,
   Clock,
   User,
   Mail,
-  HelpCircle,
   Check,
   X,
   AlertCircle,
-  FileSpreadsheet,
   ExternalLink,
   ShieldCheck,
   ArrowRight,
+  ArrowLeft,
+  Printer,
+  FileBadge,
+  Sparkles,
   Info
 } from 'lucide-react';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
@@ -41,6 +43,8 @@ const DECLINE_REASONS = [
 
 export default function ReceiveRequestView({
   requests = [],
+  docTypes = [],
+  config = {},
   onProcessRequest,
   currentUser,
   loading = false,
@@ -50,6 +54,7 @@ export default function ReceiveRequestView({
 
   // Main Document Processing Workspace Modal State
   const [selectedReq, setSelectedReq] = useState(null);
+  const [activeStep, setActiveStep] = useState(1); // Step 1: Verification & Review, Step 2: Document Generator
   const [verificationMap, setVerificationMap] = useState({});
   const [processingNotes, setProcessingNotes] = useState('');
 
@@ -82,50 +87,69 @@ export default function ReceiveRequestView({
     return matchesStatus && matchesSearch;
   });
 
-  // Extract requirements list for the request
+  // Determine if a request actually has required attachment guidelines
   const getRequirementList = (req) => {
     if (!req) return [];
+
+    // 1. Check matching docType guidelines
+    const matchedDocType = docTypes.find(
+      (dt) =>
+        dt.id === req.document_type_id ||
+        dt.code === req.document_type_id ||
+        dt.title?.toLowerCase() === req.document_title?.toLowerCase()
+    );
+
+    const docTypeReqs = matchedDocType?.requirements?.filter(
+      (r) => r && typeof r === 'string' && r.trim().toLowerCase() !== 'none' && r.trim().toLowerCase() !== 'no requirements' && r.trim().toLowerCase() !== 'n/a'
+    ) || [];
+
+    // 2. Check uploaded_files array
     if (req.uploaded_files && Array.isArray(req.uploaded_files) && req.uploaded_files.length > 0) {
       return req.uploaded_files.map((fileObj, idx) => ({
         id: `req-file-${idx}`,
         name: fileObj.requirement_name || `Requirement #${idx + 1}`,
-        fileName: fileObj.file_name || `document_attachment_${idx + 1}.pdf`,
+        fileName: fileObj.file_name || `attachment_${idx + 1}.pdf`,
         fileType: fileObj.file_type || 'image/jpeg',
         uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
         status: fileObj.status || 'pending',
       }));
     }
 
+    // 3. Check requirements_attached array
     if (req.requirements_attached && Array.isArray(req.requirements_attached) && req.requirements_attached.length > 0) {
-      return req.requirements_attached.map((item, idx) => ({
-        id: `req-att-${idx}`,
-        name: typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`),
-        fileName: typeof item === 'string' ? `${item.toLowerCase().replace(/[^a-z0-9]/g, '_')}_scan.pdf` : (item.fileName || 'attachment.pdf'),
+      const validAttached = req.requirements_attached.filter(
+        (item) => {
+          const str = typeof item === 'string' ? item : item?.name || '';
+          return str.trim().toLowerCase() !== 'none' && str.trim().toLowerCase() !== 'n/a' && str.trim() !== '';
+        }
+      );
+
+      if (validAttached.length > 0) {
+        return validAttached.map((item, idx) => ({
+          id: `req-att-${idx}`,
+          name: typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`),
+          fileName: typeof item === 'string' ? `${item.toLowerCase().replace(/[^a-z0-9]/g, '_')}_scan.pdf` : (item.fileName || 'attachment.pdf'),
+          fileType: 'application/pdf',
+          uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+          status: 'pending',
+        }));
+      }
+    }
+
+    // 4. If docType defined requirements exist
+    if (docTypeReqs.length > 0) {
+      return docTypeReqs.map((reqTitle, idx) => ({
+        id: `req-doctype-${idx}`,
+        name: reqTitle,
+        fileName: `${reqTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_document.pdf`,
         fileType: 'application/pdf',
         uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
         status: 'pending',
       }));
     }
 
-    // Default standard mock requirements if none attached
-    return [
-      {
-        id: 'req-def-1',
-        name: 'Valid Government Issued ID',
-        fileName: `${(req.resident_name || 'applicant').toLowerCase().replace(/[^a-z0-9]/g, '_')}_valid_id.png`,
-        fileType: 'image/png',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
-        status: 'pending',
-      },
-      {
-        id: 'req-def-2',
-        name: 'Proof of Residency / Barangay Certificate',
-        fileName: 'proof_of_residency_billing.pdf',
-        fileType: 'application/pdf',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
-        status: 'pending',
-      },
-    ];
+    // If no requirements specified in docType and none attached, return empty array
+    return [];
   };
 
   // 2. Process Button Behavior:
@@ -141,7 +165,6 @@ export default function ReceiveRequestView({
       }
     }
 
-    // Initialize requirement statuses
     const reqList = getRequirementList(updatedReq);
     const initialMap = {};
     reqList.forEach((item) => {
@@ -154,10 +177,10 @@ export default function ReceiveRequestView({
 
     setVerificationMap(initialMap);
     setProcessingNotes(updatedReq.notes || '');
+    setActiveStep(1); // Start at verification/review
     setSelectedReq(updatedReq);
   };
 
-  // Toggle single requirement verification
   const handleSetVerification = (reqName, status) => {
     setVerificationMap((prev) => ({
       ...prev,
@@ -165,14 +188,16 @@ export default function ReceiveRequestView({
     }));
   };
 
-  // Determine if all requirements are verified
   const currentReqList = getRequirementList(selectedReq);
+  const hasRequirements = currentReqList.length > 0;
   const totalReqCount = currentReqList.length;
   const verifiedCount = currentReqList.filter((item) => verificationMap[item.name] === 'verified').length;
   const hasInvalidOrMissing = currentReqList.some(
     (item) => verificationMap[item.name] === 'invalid' || verificationMap[item.name] === 'missing'
   );
-  const canApprove = totalReqCount > 0 && verifiedCount === totalReqCount && !hasInvalidOrMissing;
+
+  // If no requirements exist, can approve immediately. If requirements exist, must all be verified.
+  const canApprove = !hasRequirements || (totalReqCount > 0 && verifiedCount === totalReqCount && !hasInvalidOrMissing);
 
   // 4. Approve Document Request:
   const handleOpenApproveConfirm = () => {
@@ -248,6 +273,10 @@ export default function ReceiveRequestView({
     setSelectedReq(null);
   };
 
+  const handlePrintDocument = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Header */}
@@ -255,7 +284,7 @@ export default function ReceiveRequestView({
         <div>
           <h2 className="text-xl font-bold text-slate-900">Document Requests Management Workspace</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Central operational queue for receiving, processing, and validating resident clearance applications.
+            Central operational queue for receiving, processing, and generating resident clearance certificates.
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -402,280 +431,467 @@ export default function ReceiveRequestView({
         </div>
       </div>
 
-      {/* 3. Document Processing Modal / Workspace */}
+      {/* 3. Document Processing Workspace Modal with Multi-Step Generator */}
       <Modal
         isOpen={!!selectedReq}
         onClose={() => setSelectedReq(null)}
         title={`Document Processing Workspace — ${selectedReq?.tracking_number}`}
+        maxWidth="max-w-4xl"
       >
         {selectedReq && (
-          <div className="space-y-6 text-xs max-h-[80vh] overflow-y-auto pr-1">
-            {/* Request Details Grid */}
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase">Tracking Number:</span>
-                  <span className="font-mono text-sm font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
-                    {selectedReq.tracking_number}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-slate-500">Processing Status:</span>
-                  <Badge variant={selectedReq.status}>
-                    {selectedReq.status?.replace('_', ' ')}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resident Applicant</p>
-                  <p className="text-sm font-bold text-slate-900 mt-0.5">{selectedReq.resident_name}</p>
-                  <p className="text-slate-500 text-[11px] flex items-center mt-0.5">
-                    <Mail className="w-3 h-3 mr-1 text-slate-400" />
-                    {selectedReq.resident_email}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Document Requested & Fee</p>
-                  <p className="text-sm font-bold text-blue-800 mt-0.5">{selectedReq.document_title}</p>
-                  <p className="text-emerald-700 font-bold text-[11px]">
-                    Fee: {selectedReq.fee > 0 ? formatCurrency(selectedReq.fee) : 'Free of Charge'}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pick-up Time Slot & Date</p>
-                  <p className="font-mono font-bold text-slate-800 text-xs mt-0.5">
-                    Slot: <span className="text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200">{selectedReq.pickup_time_slot || '9:00 AM - 9:30 AM'}</span>
-                  </p>
-                  <p className="text-slate-500 text-[11px] mt-1 flex items-center">
-                    <Calendar className="w-3 h-3 mr-1 text-slate-400" />
-                    Submitted: {formatDate(selectedReq.created_at)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-200">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Purpose of Request</p>
-                <p className="text-xs text-slate-800 font-medium mt-1 bg-white p-2.5 rounded-lg border border-slate-200">
-                  {selectedReq.purpose || 'Local Employment Application'}
-                </p>
-              </div>
-            </div>
-
-            {/* Submitted Requirements Verification Desk */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    <span>Submitted Verification Requirements</span>
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Review and verify all applicant-provided identification and documents before granting approval.
-                  </p>
-                </div>
-
-                {/* Verification Summary Badge */}
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                    canApprove
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                      : hasInvalidOrMissing
-                      ? 'bg-rose-50 text-rose-800 border-rose-300'
-                      : 'bg-amber-50 text-amber-800 border-amber-300'
+          <div className="space-y-6 text-xs max-h-[82vh] overflow-y-auto pr-1">
+            {/* Step Navigation Tabs */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveStep(1)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 cursor-pointer transition-all ${
+                    activeStep === 1
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {verifiedCount} of {totalReqCount} Verified
-                </span>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>1. Review & Verification</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveStep(2)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 cursor-pointer transition-all ${
+                    activeStep === 2
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>2. Official Document Generator</span>
+                </button>
               </div>
 
-              {/* Requirement Cards List */}
-              <div className="space-y-3">
-                {currentReqList.map((item, idx) => {
-                  const currentStatus = verificationMap[item.name] || 'verified';
-                  return (
-                    <div
-                      key={item.id || idx}
-                      className={`p-4 rounded-xl border transition-all ${
-                        currentStatus === 'verified'
-                          ? 'bg-white border-emerald-200 shadow-2xs'
-                          : currentStatus === 'invalid'
-                          ? 'bg-rose-50/40 border-rose-300 shadow-2xs'
-                          : 'bg-amber-50/40 border-amber-300 shadow-2xs'
+              <div className="flex items-center space-x-2">
+                <span className="text-slate-400 font-medium">Status:</span>
+                <Badge variant={selectedReq.status}>
+                  {selectedReq.status?.replace('_', ' ')}
+                </Badge>
+              </div>
+            </div>
+
+            {/* STEP 1: REVIEW & VERIFICATION */}
+            {activeStep === 1 && (
+              <div className="space-y-5">
+                {/* Request Details Grid */}
+                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resident Applicant</p>
+                      <p className="text-sm font-bold text-slate-900 mt-0.5">{selectedReq.resident_name}</p>
+                      <p className="text-slate-500 text-[11px] flex items-center mt-0.5">
+                        <Mail className="w-3 h-3 mr-1 text-slate-400" />
+                        {selectedReq.resident_email}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Document Requested & Fee</p>
+                      <p className="text-sm font-bold text-blue-800 mt-0.5">{selectedReq.document_title}</p>
+                      <p className="text-emerald-700 font-bold text-[11px]">
+                        Fee: {selectedReq.fee > 0 ? formatCurrency(selectedReq.fee) : 'Free of Charge'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pick-up Time Slot & Date</p>
+                      <p className="font-mono font-bold text-slate-800 text-xs mt-0.5">
+                        Slot: <span className="text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200">{selectedReq.pickup_time_slot || '9:00 AM - 9:30 AM'}</span>
+                      </p>
+                      <p className="text-slate-500 text-[11px] mt-1 flex items-center">
+                        <Calendar className="w-3 h-3 mr-1 text-slate-400" />
+                        Submitted: {formatDate(selectedReq.created_at)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-200">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Purpose of Request</p>
+                    <p className="text-xs text-slate-800 font-medium mt-1 bg-white p-2.5 rounded-lg border border-slate-200">
+                      {selectedReq.purpose || 'Local Employment Application'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Submitted Requirements Verification Desk (ONLY IF REQUIREMENTS EXIST) */}
+                {hasRequirements ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-blue-600" />
+                          <span>Submitted Verification Requirements</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Review and verify resident attachments based on document requirements.
+                        </p>
+                      </div>
+
+                      {/* Verification Summary Badge */}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                          canApprove
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : hasInvalidOrMissing
+                            ? 'bg-rose-50 text-rose-800 border-rose-300'
+                            : 'bg-amber-50 text-amber-800 border-amber-300'
+                        }`}
+                      >
+                        {verifiedCount} of {totalReqCount} Verified
+                      </span>
+                    </div>
+
+                    {/* Requirement Cards List */}
+                    <div className="space-y-3">
+                      {currentReqList.map((item, idx) => {
+                        const currentStatus = verificationMap[item.name] || 'verified';
+                        return (
+                          <div
+                            key={item.id || idx}
+                            className={`p-4 rounded-xl border transition-all ${
+                              currentStatus === 'verified'
+                                ? 'bg-white border-emerald-200 shadow-2xs'
+                                : currentStatus === 'invalid'
+                                ? 'bg-rose-50/40 border-rose-300 shadow-2xs'
+                                : 'bg-amber-50/40 border-amber-300 shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-start space-x-3">
+                                <div
+                                  className={`p-2.5 rounded-lg ${
+                                    currentStatus === 'verified'
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : currentStatus === 'invalid'
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}
+                                >
+                                  <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-slate-900 text-xs">{item.name}</p>
+                                  <p className="font-mono text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                    <span>File: {item.fileName}</span>
+                                    <span className="text-slate-300">•</span>
+                                    <span>Uploaded: {item.uploadDate}</span>
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* File Action Buttons */}
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewFile({
+                                      name: item.name,
+                                      fileName: item.fileName,
+                                      fileType: item.fileType,
+                                      residentName: selectedReq.resident_name,
+                                    })
+                                  }
+                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>View / Preview</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    alert(`Downloading verification file: ${item.fileName}`);
+                                  }}
+                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Verification Status Selector Buttons */}
+                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-slate-500">Requirement Verification:</span>
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetVerification(item.name, 'verified')}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
+                                    currentStatus === 'verified'
+                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
+                                  }`}
+                                >
+                                  <span>Verified</span>
+                                  <span>✅</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetVerification(item.name, 'invalid')}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
+                                    currentStatus === 'invalid'
+                                      ? 'bg-rose-600 text-white shadow-xs'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
+                                  }`}
+                                >
+                                  <span>Invalid</span>
+                                  <span>❌</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetVerification(item.name, 'missing')}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
+                                    currentStatus === 'missing'
+                                      ? 'bg-amber-500 text-white shadow-xs'
+                                      : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
+                                  }`}
+                                >
+                                  <span>Missing</span>
+                                  <span>⚠️</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  /* Notice when no requirements are required */
+                  <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center space-x-3 text-blue-900">
+                    <Info className="w-5 h-5 text-blue-600 shrink-0" />
+                    <div>
+                      <p className="font-bold text-xs">No Verification Attachments Required</p>
+                      <p className="text-[11px] text-blue-700 mt-0.5">
+                        This certificate type ({selectedReq.document_title}) does not require resident supporting document uploads. You may proceed directly to document generation and approval.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Processing Notes */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Administrative Notes / Internal Processing Log (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={processingNotes}
+                    onChange={(e) => setProcessingNotes(e.target.value)}
+                    placeholder="Add verification notes (e.g. Identity verified with Barangay Masterlist)..."
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Step 1 Footer */}
+                <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReq(null)}
+                    className="w-full sm:w-auto px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  >
+                    Close Window
+                  </button>
+
+                  <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2.5">
+                    {/* Decline Request Button */}
+                    <button
+                      type="button"
+                      onClick={handleOpenDeclineModal}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5 cursor-pointer active:scale-95"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Decline Request</span>
+                    </button>
+
+                    {/* Step 2 Trigger: Official Document Generator */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep(2)}
+                      disabled={!canApprove}
+                      className={`px-4 py-2 font-bold rounded-lg shadow-sm transition-all inline-flex items-center space-x-1.5 ${
+                        canApprove
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       }`}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-start space-x-3">
-                          <div
-                            className={`p-2.5 rounded-lg ${
-                              currentStatus === 'verified'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : currentStatus === 'invalid'
-                                ? 'bg-rose-100 text-rose-700'
-                                : 'bg-amber-100 text-amber-700'
-                            }`}
-                          >
-                            <FileText className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900 text-xs">{item.name}</p>
-                            <p className="font-mono text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                              <span>File: {item.fileName}</span>
-                              <span className="text-slate-300">•</span>
-                              <span>Uploaded: {item.uploadDate}</span>
-                            </p>
-                          </div>
-                        </div>
+                      <Printer className="w-4 h-4" />
+                      <span>Proceed to Official Document Generator</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </button>
 
-                        {/* File Action Buttons */}
-                        <div className="flex items-center space-x-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewFile({
-                                name: item.name,
-                                fileName: item.fileName,
-                                fileType: item.fileType,
-                                residentName: selectedReq.resident_name,
-                              })
-                            }
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>View / Preview</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              alert(`Downloading verification file: ${item.fileName}`);
-                            }}
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Verification Status Selector Buttons */}
-                      <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold text-slate-500">Requirement Verification Status:</span>
-                        <div className="flex items-center space-x-1.5">
-                          {/* Verified */}
-                          <button
-                            type="button"
-                            onClick={() => handleSetVerification(item.name, 'verified')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
-                              currentStatus === 'verified'
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
-                            }`}
-                          >
-                            <span>Verified</span>
-                            <span>✅</span>
-                          </button>
-
-                          {/* Invalid */}
-                          <button
-                            type="button"
-                            onClick={() => handleSetVerification(item.name, 'invalid')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
-                              currentStatus === 'invalid'
-                                ? 'bg-rose-600 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
-                            }`}
-                          >
-                            <span>Invalid</span>
-                            <span>❌</span>
-                          </button>
-
-                          {/* Missing */}
-                          <button
-                            type="button"
-                            onClick={() => handleSetVerification(item.name, 'missing')}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center space-x-1 cursor-pointer transition-all ${
-                              currentStatus === 'missing'
-                                ? 'bg-amber-500 text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
-                            }`}
-                          >
-                            <span>Missing</span>
-                            <span>⚠️</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Administrative Processing Notes */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Administrative Notes / Internal Processing Log (Optional)
-              </label>
-              <textarea
-                rows={2}
-                value={processingNotes}
-                onChange={(e) => setProcessingNotes(e.target.value)}
-                placeholder="Add verification notes (e.g. Identity verified with Barangay Masterlist Sitio Upper)..."
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Validation Notice if requirements are not verified */}
-            {!canApprove && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2.5 text-amber-800">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-                <p className="text-[11px] font-medium">
-                  <strong>Verification Note:</strong> To approve this request, all required documents must be marked as <strong>Verified ✅</strong> without missing or invalid items. If requirements are not met, click <strong>Decline Request</strong> to provide corrective feedback to the resident.
-                </p>
+                    {/* Direct Quick Approve */}
+                    <button
+                      type="button"
+                      onClick={handleOpenApproveConfirm}
+                      disabled={!canApprove}
+                      className={`px-4 py-2 font-bold rounded-lg shadow-sm transition-all inline-flex items-center space-x-1.5 ${
+                        canApprove
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve Document</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Main Action Footer: Decline Request | Approve Document */}
-            <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedReq(null)}
-                className="w-full sm:w-auto px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Close Window
-              </button>
+            {/* STEP 2: OFFICIAL DOCUMENT GENERATOR & PRINT */}
+            {activeStep === 2 && (
+              <div className="space-y-5">
+                {/* Generator Header Toolbar */}
+                <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <FileBadge className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-white">Official Barangay Document Generator</h4>
+                      <p className="text-[11px] text-slate-300">
+                        Ready for digital printing, official stamp sealing, and archiving.
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="w-full sm:w-auto flex items-center justify-end space-x-3">
-                {/* 5. Red Decline Request Button */}
-                <button
-                  type="button"
-                  onClick={handleOpenDeclineModal}
-                  className="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95"
-                >
-                  <XCircle className="w-4 h-4" />
-                  <span>Decline Request</span>
-                </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handlePrintDocument}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs inline-flex items-center space-x-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print Document</span>
+                    </button>
 
-                {/* 4. Prominent Green Approve Document Button */}
-                <button
-                  type="button"
-                  onClick={handleOpenApproveConfirm}
-                  disabled={!canApprove}
-                  className={`w-full sm:w-auto px-5 py-2 font-bold rounded-lg shadow-sm transition-all inline-flex items-center justify-center space-x-1.5 ${
-                    canApprove
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  }`}
-                  title={!canApprove ? 'Mark all requirements as Verified before approving.' : 'Approve Document Request'}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve Document</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => alert(`Exporting ${selectedReq.document_title} as PDF...`)}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs inline-flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download PDF</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Printable Certificate Template Box */}
+                <div className="bg-white p-8 sm:p-10 rounded-2xl border-4 border-double border-slate-300 shadow-lg font-serif max-w-2xl mx-auto space-y-6 text-slate-900 print:shadow-none print:border-none print:m-0">
+                  {/* Republic Header */}
+                  <div className="text-center space-y-1 border-b border-slate-300 pb-4">
+                    <div className="flex items-center justify-center space-x-3 mb-2">
+                      <div className="w-16 h-16 rounded-full overflow-hidden border border-slate-200 bg-white flex items-center justify-center">
+                        <img
+                          src={config?.seal_url || '/logo.jpg'}
+                          alt="Barangay Seal"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs uppercase tracking-widest text-slate-500 font-sans">Republic of the Philippines</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-700 font-sans">
+                      Province of {config?.province || 'Cebu'} • City of {config?.municipality || 'Cebu City'}
+                    </p>
+                    <h2 className="text-xl font-extrabold uppercase text-slate-900 tracking-wider font-sans">
+                      {config?.barangay_name || 'BARANGAY ZAPATERA'}
+                    </h2>
+                    <p className="text-[11px] italic text-slate-500 font-sans">
+                      Office of the Punong Barangay & Clearance Secretariat
+                    </p>
+                  </div>
+
+                  {/* Certificate Document Title */}
+                  <div className="text-center py-2">
+                    <h1 className="text-2xl font-black uppercase tracking-widest text-slate-900 underline decoration-slate-400 underline-offset-8">
+                      {selectedReq.document_title?.toUpperCase() || 'OFFICIAL BARANGAY CLEARANCE'}
+                    </h1>
+                    <p className="text-xs font-mono font-bold text-slate-600 mt-3 font-sans">
+                      CONTROL NO: <span className="text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">{selectedReq.tracking_number}</span>
+                    </p>
+                  </div>
+
+                  {/* Main Legal Certification Body */}
+                  <div className="text-sm text-slate-800 space-y-4 leading-relaxed font-sans px-2 sm:px-4">
+                    <p className="font-bold text-slate-900">TO WHOM IT MAY CONCERN:</p>
+
+                    <p className="indent-8 text-justify">
+                      THIS IS TO CERTIFY that <span className="font-black uppercase text-slate-900 text-base underline">{selectedReq.resident_name}</span>, of legal age, Filipino citizen, and a bonafide resident of <span className="font-bold text-slate-900">Barangay Zapatera, Cebu City</span>, is known to be of good moral character, a law-abiding citizen, and has zero derogatory criminal record or adverse blotter complaints on file in this barangay.
+                    </p>
+
+                    <p className="indent-8 text-justify">
+                      This official clearance is issued upon the request of the above-named resident for the following purpose:
+                    </p>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center font-bold text-slate-900 uppercase tracking-wide">
+                      "{selectedReq.purpose || 'Local Employment Application'}"
+                    </div>
+
+                    <p className="indent-8 text-justify">
+                      GIVEN AND ISSUED this <span className="font-bold">{new Date().getDate()}th</span> day of <span className="font-bold">{new Date().toLocaleString('default', { month: 'long' })}</span>, <span className="font-bold">{new Date().getFullYear()}</span> at Barangay Zapatera, Cebu City, Philippines.
+                    </p>
+                  </div>
+
+                  {/* Signatures & Seal */}
+                  <div className="pt-8 grid grid-cols-2 gap-8 text-center font-sans">
+                    <div className="space-y-1 pt-6 border-t border-slate-300">
+                      <p className="font-bold text-slate-900 text-xs uppercase">
+                        {currentUser?.full_name || selectedReq.processed_by || 'MARIA SANTOS'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 uppercase font-semibold">Barangay Secretary / Admin</p>
+                    </div>
+
+                    <div className="space-y-1 pt-6 border-t border-slate-300">
+                      <p className="font-bold text-slate-900 text-xs uppercase">HON. FRANCISCO R. BINGHAY</p>
+                      <p className="text-[10px] text-slate-500 uppercase font-semibold">Punong Barangay</p>
+                    </div>
+                  </div>
+
+                  {/* Authenticity Footer */}
+                  <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400 font-sans">
+                    <span className="flex items-center text-emerald-700 font-bold">
+                      <ShieldCheck className="w-4 h-4 mr-1 text-emerald-600" /> Official Document Dry Seal Validated
+                    </span>
+                    <span>Issued: {formatDate(selectedReq.approved_at || new Date().toISOString())}</span>
+                  </div>
+                </div>
+
+                {/* Step 2 Bottom Controls */}
+                <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStep(1)}
+                    className="w-full sm:w-auto px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer flex items-center justify-center space-x-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Verification Review</span>
+                  </button>
+
+                  <div className="w-full sm:w-auto flex items-center justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={handleOpenApproveConfirm}
+                      className="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve & Finalize Document</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </Modal>
@@ -826,7 +1042,7 @@ export default function ReceiveRequestView({
             {/* Simulated Document / ID Card Preview Box */}
             <div className="bg-slate-900 rounded-2xl p-6 text-center text-white space-y-4 shadow-inner">
               <div className="w-20 h-20 mx-auto rounded-full bg-slate-800 border-2 border-blue-500 flex items-center justify-center">
-                <FileCheck className="w-10 h-10 text-blue-400" />
+                <FileCheck2 className="w-10 h-10 text-blue-400" />
               </div>
               <div>
                 <h4 className="font-bold text-base text-white">Barangay Zapatera Verification Document</h4>
