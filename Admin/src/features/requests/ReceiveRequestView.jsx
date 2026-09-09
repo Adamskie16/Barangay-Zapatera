@@ -805,7 +805,7 @@ export default function ReceiveRequestView({
                     <button
                       type="button"
                       onClick={handlePrintAndApprove}
-                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-900/30 inline-flex items-center space-x-1.5 cursor-pointer active:scale-95 transition-all"
+                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-900/30 inline-flex items-center space-x-1.5 cursor-pointer active:scale-95 transition-all"
                     >
                       <Printer className="w-4 h-4" />
                       <span>Print Document & Set Approved</span>
@@ -1005,18 +1005,9 @@ export default function ReceiveRequestView({
                   <div className="xl:col-span-7 bg-slate-100 rounded-2xl p-4 sm:p-6 border border-slate-200 flex flex-col items-center justify-start min-h-[600px] overflow-hidden">
                     <div className="w-full flex items-center justify-between mb-3 px-1">
                       <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                         <span>Live A4 Document Preview</span>
                       </span>
-
-                      <button
-                        type="button"
-                        onClick={handlePrintAndApprove}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer inline-flex items-center space-x-1"
-                      >
-                        <Printer size={13} />
-                        <span>Print</span>
-                      </button>
                     </div>
 
                     {/* Scaled Preview Template Box */}
@@ -1056,7 +1047,7 @@ export default function ReceiveRequestView({
                   <button
                     type="button"
                     onClick={handlePrintAndApprove}
-                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-900/20 inline-flex items-center space-x-2 cursor-pointer active:scale-95"
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-900/20 inline-flex items-center space-x-2 cursor-pointer active:scale-95 transition-all"
                   >
                     <Printer className="w-4 h-4" />
                     <span>Print Document & Set Approved</span>
