@@ -1,23 +1,12 @@
 // Admin/src/features/requests/ApprovedDocumentsView.jsx
 import React, { useState } from 'react';
-import Modal from '../../components/Modal';
-import Badge from '../../components/Badge';
-import CertificatePreview from '../../components/CertificatePreview';
 import {
   FileCheck2,
-  Eye,
-  Printer,
   PackageCheck,
   Package,
   Search,
   ArrowUpDown,
-  Calendar,
-  Clock,
-  User,
-  Mail,
-  RotateCcw,
-  CheckCircle2,
-  FileText
+  RotateCcw
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
@@ -29,7 +18,6 @@ export default function ApprovedDocumentsView({
   currentUser,
   loading = false,
 }) {
-  const [selectedReq, setSelectedReq] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [sortBy, setSortBy] = useState('date_desc'); // 'date_desc' | 'date_asc' | 'name_asc' | 'name_desc' | 'status'
@@ -70,13 +58,6 @@ export default function ApprovedDocumentsView({
     };
 
     onUpdateRequestStatus(updated);
-    if (selectedReq?.id === req.id) {
-      setSelectedReq(updated);
-    }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   // Filter & Search
@@ -303,9 +284,8 @@ export default function ApprovedDocumentsView({
                         )}
                       </td>
 
-                      {/* Action Buttons */}
-                      <td className="p-4 text-right space-x-2">
-                        {/* Toggle Claim / Unclaim Action */}
+                      {/* Action Buttons: Toggle Claim / Unclaim Action only */}
+                      <td className="p-4 text-right">
                         <button
                           onClick={() => handleToggleClaimStatus(req)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors cursor-pointer ${
@@ -327,16 +307,6 @@ export default function ApprovedDocumentsView({
                             </>
                           )}
                         </button>
-
-                        {/* Certificate Preview Action */}
-                        <button
-                          onClick={() => setSelectedReq(req)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors shadow-xs cursor-pointer"
-                          title="View Digital Certificate"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Preview</span>
-                        </button>
                       </td>
                     </tr>
                   );
@@ -346,72 +316,6 @@ export default function ApprovedDocumentsView({
           </table>
         </div>
       </div>
-
-      {/* Certificate Preview & Print Modal */}
-      <Modal
-        isOpen={!!selectedReq}
-        onClose={() => setSelectedReq(null)}
-        title={`Official Certificate Digital Copy — ${selectedReq?.tracking_number}`}
-        maxWidth="max-w-3xl"
-      >
-        {selectedReq && (
-          <div className="space-y-6">
-            {/* Modal Header Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-center space-x-3">
-                <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-200">
-                  {selectedReq.tracking_number}
-                </span>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                    isClaimed(selectedReq)
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                      : 'bg-amber-50 text-amber-700 border-amber-300'
-                  }`}
-                >
-                  {isClaimed(selectedReq) ? 'Claimed' : 'Unclaimed'}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleClaimStatus(selectedReq)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center space-x-1 transition-colors cursor-pointer ${
-                    isClaimed(selectedReq)
-                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                  }`}
-                >
-                  {isClaimed(selectedReq) ? (
-                    <>
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Set Unclaimed</span>
-                    </>
-                  ) : (
-                    <>
-                      <PackageCheck className="w-3.5 h-3.5" />
-                      <span>Set Claimed</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 shadow-xs cursor-pointer active:scale-95 transition-all"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Certificate</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Live Certificate Body */}
-            <CertificatePreview request={selectedReq} config={config} />
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }
