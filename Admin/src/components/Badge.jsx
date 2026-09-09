@@ -19,22 +19,11 @@ export default function Badge({ children, variant = 'info' }) {
     danger: 'bg-rose-50 text-rose-700 border-rose-300',
   };
 
-  const badgeIcons = {
-    pending: '🟠',
-    processing: '🔵',
-    under_review: '🔵',
-    approved: '🟢',
-    declined: '🔴',
-    rejected: '🔴',
-  };
-
-  const icon = badgeIcons[normalized];
-
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border capitalize gap-1.5 ${variants[normalized] || variants.info}`}>
-      {icon && <span className="text-[10px] leading-none">{icon}</span>}
-      <span>{children}</span>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs border capitalize ${variants[normalized] || variants.info}`}>
+      {children}
     </span>
   );
 }
+
 
