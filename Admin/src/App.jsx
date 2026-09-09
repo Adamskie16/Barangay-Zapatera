@@ -3,7 +3,6 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import DashboardView from './features/dashboard/DashboardView';
 import ReceiveRequestView from './features/requests/ReceiveRequestView';
-import ProcessDocumentsView from './features/requests/ProcessDocumentsView';
 import ApprovedDocumentsView from './features/requests/ApprovedDocumentsView';
 import DocumentsView from './features/documents/DocumentsView';
 import NewsView from './features/news/NewsView';
@@ -88,9 +87,8 @@ export default function App() {
 
   const tabTitles = {
     dashboard: 'Barangay Admin Operations Dashboard',
-    receive_request: 'Receive Application Requests Inbox',
-    process_documents: 'Process & Verify Document Requirements',
-    approved_documents: 'Approved Documents & Digital Certificates',
+    receive_request: 'Document Application Requests Management',
+    approved_documents: 'Approved Documents & Claiming Registry',
     doc_info: 'Document Guidelines & Information',
     news: 'Barangay News & Public Bulletins',
     events: 'Barangay Events & Community Notices',
@@ -135,19 +133,12 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'process_documents' && (
-            <ProcessDocumentsView
-              requests={requests}
-              onUpdateRequestStatus={handleUpdateRequestStatus}
-              currentUser={currentUser}
-            />
-          )}
-
           {activeTab === 'approved_documents' && (
             <ApprovedDocumentsView
               requests={requests}
               onUpdateRequestStatus={handleUpdateRequestStatus}
               config={config}
+              currentUser={currentUser}
             />
           )}
 
