@@ -18,8 +18,7 @@ import {
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'receive_request', label: 'Receive Requests', icon: Inbox },
-    { id: 'process_documents', label: 'Process Documents (Verify)', icon: CheckSquare },
+    { id: 'receive_request', label: 'Document Requests', icon: Inbox },
     { id: 'approved_documents', label: 'Approved Documents', icon: FileCheck2 },
     { id: 'doc_info', label: 'Document Information', icon: FileText },
     { id: 'news', label: 'News & Bulletins', icon: Newspaper },
