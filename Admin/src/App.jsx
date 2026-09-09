@@ -128,6 +128,8 @@ export default function App() {
           {activeTab === 'receive_request' && (
             <ReceiveRequestView
               requests={requests}
+              docTypes={docTypes}
+              config={config}
               onProcessRequest={handleUpdateRequestStatus}
               currentUser={currentUser}
             />
