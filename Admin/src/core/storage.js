@@ -14,53 +14,7 @@ const STORAGE_KEYS = {
   SESSION: 'zapatera_admin_session',
 };
 
-// Default seed data for initial cache
-const INITIAL_ADMINS = [
-  {
-    id: 'adm-000',
-    email: 'mardee131@gmail.com',
-    full_name: 'Mardee (Barangay Admin)',
-    first_name: 'Mardee',
-    last_name: 'Admin',
-    middle_initial: 'M',
-    role: 'admin',
-    phone: '09171234567',
-    address: 'Sitio Upper, Zapatera, Cebu City',
-    id_type: 'Barangay ID',
-    id_number: 'ADM-00001',
-    is_active: true,
-    failed_attempts: 0,
-    is_locked: false,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'adm-001',
-    email: 'admin@zapatera.gov.ph',
-    full_name: 'Maria Santos (Barangay Secretary)',
-    first_name: 'Maria',
-    last_name: 'Santos',
-    middle_initial: 'G',
-    role: 'admin',
-    phone: '09187654321',
-    address: 'Sitio Upper, Zapatera, Cebu City',
-    id_type: 'Barangay ID',
-    id_number: 'ADM-10492',
-    is_active: true,
-    failed_attempts: 0,
-    is_locked: false,
-    created_at: new Date('2026-01-05').toISOString(),
-  }
-];
-
-const INITIAL_DOC_TYPES = [];
-
-const INITIAL_REQUESTS = [];
-
-const INITIAL_EVENTS = [];
-
-const INITIAL_NEWS = [];
-
-const INITIAL_CONFIG = {
+const DEFAULT_CONFIG = {
   barangay_name: 'Barangay Zapatera',
   municipality: 'Cebu City',
   province: 'Cebu',
@@ -77,88 +31,13 @@ const INITIAL_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
-const INITIAL_LOGIN_DESIGNS = [
-  {
-    id: 'ld-001',
-    title: 'Barangay Zapatera Executive Portal',
-    badge: 'Executive Administration',
-    description: 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
-    image_url: '/auth-bg.jpg',
-    target_portal: 'all',
-    is_active: true,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'ld-002',
-    title: 'Barangay Zapatera Administrative Management',
-    badge: 'Barangay Administration',
-    description: 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
-    image_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1200&q=80',
-    target_portal: 'admin',
-    is_active: false,
-    created_at: new Date('2026-01-02').toISOString(),
-  }
-];
-
-const INITIAL_LOGS = [
-  {
-    id: 'log-001',
-    user_email: 'admin@zapatera.gov.ph',
-    action: 'Processed Request (Approved)',
-    feature: 'Process Documents',
-    details: 'Tracking: BZ-2026-8812, Status: approved',
-    level: 'info',
-    created_at: new Date('2026-07-21T14:20:00').toISOString(),
-  }
-];
-
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 'notif-001',
-    title: 'New Document Application Received',
-    message: 'Resident Juan Dela Cruz submitted a Barangay Clearance request (BZ-2026-9041).',
-    type: 'info',
-    is_read: false,
-    created_at: new Date('2026-07-20T10:30:00').toISOString(),
-  }
-];
-
-const initializeStorage = () => {
-  if (!localStorage.getItem(STORAGE_KEYS.ADMINS)) {
-    localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(INITIAL_ADMINS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.DOC_TYPES)) {
-    localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(INITIAL_DOC_TYPES));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.REQUESTS)) {
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(INITIAL_REQUESTS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.EVENTS)) {
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(INITIAL_EVENTS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.NEWS)) {
-    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(INITIAL_NEWS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(INITIAL_CONFIG));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.LOGS)) {
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(INITIAL_LOGS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS)) {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(INITIAL_NOTIFICATIONS));
-  }
-};
-
-initializeStorage();
-
 export const StorageService = {
   // PROFILES / USERS (Directly maps to public.profiles)
   getUsers: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.ADMINS) || '[]');
     } catch {
-      return INITIAL_ADMINS;
+      return [];
     }
   },
 
@@ -170,13 +49,13 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(data));
           return data;
         }
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.error('Supabase getUsersAsync error:', err);
     }
     return StorageService.getUsers();
   },
@@ -296,7 +175,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
     } catch {
-      return INITIAL_REQUESTS;
+      return [];
     }
   },
 
@@ -308,7 +187,7 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!reqErr && reqData && reqData.length > 0) {
+        if (!reqErr && reqData) {
           const [profilesRes, docTypesRes] = await Promise.all([
             supabase.from('profiles').select('*'),
             supabase.from('document_types').select('*'),
@@ -339,8 +218,8 @@ export const StorageService = {
           return normalized;
         }
       }
-    } catch {
-      // fallback to local
+    } catch (err) {
+      console.error('Supabase getRequestsAsync error:', err);
     }
     return StorageService.getRequests();
   },
@@ -377,9 +256,12 @@ export const StorageService = {
 
         if (req.status === 'approved' || req.status === 'ready_for_pickup') {
           payload.approved_at = req.approved_at || new Date().toISOString();
+          if (req.is_claimed === false) {
+            payload.issued_at = null;
+          }
         }
         if (req.status === 'completed' || req.status === 'issued') {
-          payload.issued_at = req.issued_at || new Date().toISOString();
+          payload.issued_at = req.issued_at || req.claimed_at || new Date().toISOString();
         }
 
         if (isUuid) {

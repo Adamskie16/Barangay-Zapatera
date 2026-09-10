@@ -291,37 +291,39 @@ export default function ApprovedDocumentsView({
                       </td>
 
                       {/* Action Buttons: Mark Claimed/Unclaimed & Delete */}
-                      <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleClaimStatus(req)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors cursor-pointer ${
-                            claimed
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                          }`}
-                          title={claimed ? 'Mark as Unclaimed' : 'Mark as Claimed / Released'}
-                        >
-                          {claimed ? (
-                            <>
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Mark Unclaimed</span>
-                            </>
-                          ) : (
-                            <>
-                              <PackageCheck className="w-3.5 h-3.5" />
-                              <span>Mark Claimed</span>
-                            </>
-                          )}
-                        </button>
+                      <td className="p-4 text-right">
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleToggleClaimStatus(req)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              claimed
+                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                            }`}
+                            title={claimed ? 'Mark as Unclaimed' : 'Mark as Claimed / Released'}
+                          >
+                            {claimed ? (
+                              <>
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Mark Unclaimed</span>
+                              </>
+                            ) : (
+                              <>
+                                <PackageCheck className="w-3.5 h-3.5" />
+                                <span>Mark Claimed</span>
+                              </>
+                            )}
+                          </button>
 
-                        <button
-                          onClick={() => setDeleteConfirmReq(req)}
-                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors cursor-pointer"
-                          title="Delete Approved Record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete</span>
-                        </button>
+                          <button
+                            onClick={() => setDeleteConfirmReq(req)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+                            title="Delete Approved Record from Database"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
