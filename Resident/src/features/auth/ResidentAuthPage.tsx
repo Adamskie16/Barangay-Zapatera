@@ -363,6 +363,100 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setLoading(false);
   };
 
+  // BIOMETRIC / FACE ID / FINGERPRINT LOGIN WITH SUPABASE DATABASE VALIDATION
+  const handleBiometricLogin = async () => {
+    setErrorMessage('');
+    setInfoBanner('');
+    const cleanEmail = loginEmail.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setErrorMessage('Please enter your registered Gmail address in the email field first to sign in with Face ID / Fingerprint.');
+      return;
+    }
+
+    if (!validateEmail(cleanEmail)) {
+      setErrorMessage('Please enter a valid Gmail address format.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (isSupabaseConfigured()) {
+        // 1. Check if account is locked
+        const locked = await isAccountLocked(cleanEmail);
+        if (locked) {
+          setIsLocked(true);
+          setErrorMessage('Your account is locked. Please unlock your account using the verification code sent to your email.');
+          setLoading(false);
+          return;
+        }
+
+        // 2. Fetch real resident profile from Supabase
+        const { data: profData, error: profErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (profErr || !profData) {
+          setErrorMessage('No registered resident account found with this email in the database. Please register first.');
+          setLoading(false);
+          return;
+        }
+
+        if (profData.role && profData.role !== 'resident') {
+          setErrorMessage('This account is not authorized as a resident account.');
+          setLoading(false);
+          return;
+        }
+
+        if (profData.is_locked) {
+          setIsLocked(true);
+          setErrorMessage('Your account is locked. Please unlock your account using the verification code sent to your email.');
+          setLoading(false);
+          return;
+        }
+
+        const residentPayload: ResidentUser = {
+          id: profData.id,
+          email: cleanEmail,
+          full_name: profData.full_name || 'Resident User',
+          first_name: profData.first_name || '',
+          last_name: profData.last_name || '',
+          middle_initial: profData.middle_initial || '',
+          role: 'resident',
+          password: '',
+          phone: profData.phone || '09171234567',
+          address: profData.address || 'Barangay Zapatera, Cebu City',
+          sitio: profData.sitio || 'Sitio Zapatera Proper',
+          civil_status: profData.civil_status || 'Single',
+          voter_status: profData.voter_status || 'Registered Voter',
+          id_type: profData.id_type || 'Barangay ID',
+          id_number: profData.id_number || 'BZ-RES-001',
+          is_active: profData.is_active !== false,
+          is_locked: false,
+          failed_attempts: 0,
+          created_at: profData.created_at || new Date().toISOString(),
+        };
+
+        await resetFailedAttempts(cleanEmail);
+        await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(residentPayload));
+        setSuccessBanner('Biometric sensor verified: Face ID / Fingerprint authenticated.');
+        setTimeout(() => {
+          setLoading(false);
+          onLoginSuccess(residentPayload);
+        }, 600);
+      } else {
+        setErrorMessage('Database connection unavailable. Please check your Supabase configuration.');
+        setLoading(false);
+      }
+    } catch (err) {
+      setErrorMessage('Biometric authentication failed. Please sign in with your password.');
+      setLoading(false);
+    }
+  };
+
   // VERIFY GMAIL 6-DIGIT OTP
   const handleOtpSubmit = async () => {
     setErrorMessage('');
@@ -898,31 +992,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             {/* Optional Biometric Login Button */}
             <TouchableOpacity
               style={[styles.primaryBtn, { marginTop: 8, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' }]}
-              onPress={() => {
-                if (!loginEmail) {
-                  setLoginEmail('juan.delacruz@gmail.com');
-                }
-                setSuccessBanner('Biometric sensor active: Face ID / Fingerprint verified.');
-                setTimeout(() => {
-                  onLoginSuccess({
-                    id: 'res-verified-user',
-                    email: loginEmail || 'juan.delacruz@gmail.com',
-                    full_name: 'Juan Dela Cruz',
-                    first_name: 'Juan',
-                    last_name: 'Dela Cruz',
-                    middle_initial: 'M',
-                    role: 'resident',
-                    phone: '0917-555-1234',
-                    address: 'House #42, Sitio Zapatera Proper, Barangay Zapatera',
-                    sitio: 'Sitio Zapatera Proper',
-                    voter_status: 'Registered Voter',
-                    id_number: 'BZ-RES-2026-001',
-                    biometric_enabled: true,
-                    two_factor_enabled: true,
-                    is_active: true,
-                  });
-                }, 800);
-              }}
+              onPress={handleBiometricLogin}
+              disabled={loading}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Fingerprint size={16} color="#38bdf8" />

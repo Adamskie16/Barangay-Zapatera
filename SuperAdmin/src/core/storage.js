@@ -16,51 +16,7 @@ const STORAGE_KEYS = {
   SESSION: 'zapatera_superadmin_session',
 };
 
-// Seed Initial Super Admin Data
-const INITIAL_SUPER_ADMINS = [
-  {
-    id: 'sa-000',
-    email: 'mardee131@gmail.com',
-    full_name: 'Mardee (Super Admin)',
-    first_name: 'Mardee',
-    last_name: 'Admin',
-    middle_initial: 'M',
-    role: 'super_admin',
-    phone: '09171234567',
-    address: 'Barangay Hall, Zapatera, Cebu City',
-    id_type: 'Government ID',
-    id_number: 'SA-00001',
-    is_active: true,
-    failed_attempts: 0,
-    is_locked: false,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'sa-001',
-    email: 'superadmin@zapatera.gov.ph',
-    full_name: 'Hon. Executive Officer',
-    first_name: 'Executive',
-    last_name: 'Officer',
-    middle_initial: 'H',
-    role: 'super_admin',
-    phone: '09171234567',
-    address: 'Barangay Hall, Zapatera, Cebu City',
-    id_type: 'Government ID',
-    id_number: 'SA-99081',
-    is_active: true,
-    failed_attempts: 0,
-    is_locked: false,
-    created_at: new Date('2026-01-01').toISOString(),
-  }
-];
-
-const INITIAL_DOC_TYPES = [];
-
-const INITIAL_REQUESTS = [];
-
-const INITIAL_EVENTS = [];
-
-const INITIAL_CONFIG = {
+const DEFAULT_CONFIG = {
   barangay_name: 'Barangay Zapatera',
   municipality: 'Cebu City',
   province: 'Cebu',
@@ -73,76 +29,6 @@ const INITIAL_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
-const INITIAL_NEWS = [];
-
-const INITIAL_LOGS = [];
-
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: 'notif-001',
-    user_id: 'usr-003',
-    role_target: null,
-    title: 'Request Under Review',
-    message: 'Your request for Barangay Clearance (BZ-2026-9041) is currently being processed by admin.',
-    type: 'info',
-    is_read: false,
-    created_at: new Date('2026-07-21T09:15:00').toISOString(),
-  }
-];
-
-const INITIAL_LOGIN_DESIGNS = [
-  {
-    id: 'ld-001',
-    title: 'Barangay Zapatera Executive Portal',
-    badge: 'Executive Administration',
-    description: 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
-    image_url: '/auth-bg.jpg',
-    target_portal: 'all',
-    is_active: true,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'ld-002',
-    title: 'Barangay Zapatera Administrative Management',
-    badge: 'Barangay Administration',
-    description: 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
-    image_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1200&q=80',
-    target_portal: 'admin',
-    is_active: false,
-    created_at: new Date('2026-01-02').toISOString(),
-  }
-];
-
-// Helper to initialize local storage
-const initializeStorage = () => {
-  if (!localStorage.getItem(STORAGE_KEYS.SUPER_ADMINS)) {
-    localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(INITIAL_SUPER_ADMINS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.DOC_TYPES)) {
-    localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(INITIAL_DOC_TYPES));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.REQUESTS)) {
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(INITIAL_REQUESTS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.EVENTS)) {
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(INITIAL_EVENTS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.NEWS)) {
-    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(INITIAL_NEWS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(INITIAL_CONFIG));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.LOGS)) {
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(INITIAL_LOGS));
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS)) {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(INITIAL_NOTIFICATIONS));
-  }
-};
-
-initializeStorage();
-
 // Storage Service Class
 export const StorageService = {
   // PROFILES / USERS (Directly maps to public.profiles)
@@ -150,7 +36,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.SUPER_ADMINS) || '[]');
     } catch {
-      return INITIAL_SUPER_ADMINS;
+      return [];
     }
   },
 
