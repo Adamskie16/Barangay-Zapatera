@@ -96,12 +96,27 @@ export default function ReceiveRequestView({
   const [genSignatoryName, setGenSignatoryName] = useState('HON. DAVID M. AGRAVANTE');
   const [genSignatoryTitle, setGenSignatoryTitle] = useState('Punong Barangay');
 
-  // Filter requests
-  const filteredRequests = requests.filter((r) => {
+  // Filter requests: Active operational queue (Pending, Processing, Declined)
+  // Approved and issued documents are automatically transferred to the Approved Documents registry
+  const operationalRequests = requests.filter(
+    (r) =>
+      r.status !== 'approved' &&
+      r.status !== 'ready_for_pickup' &&
+      r.status !== 'issued' &&
+      r.status !== 'completed' &&
+      !r.is_claimed
+  );
+
+  const pendingCount = operationalRequests.filter((r) => (r.status || 'pending').toLowerCase() === 'pending').length;
+  const processingCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'processing' || (r.status || '').toLowerCase() === 'under_review').length;
+  const declinedCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'declined' || (r.status || '').toLowerCase() === 'rejected').length;
+
+  const filteredRequests = operationalRequests.filter((r) => {
     const normStatus = (r.status || 'pending').toLowerCase();
     const matchesStatus =
       statusFilter === 'all' ||
       normStatus === statusFilter ||
+      (statusFilter === 'pending' && normStatus === 'pending') ||
       (statusFilter === 'processing' && (normStatus === 'under_review' || normStatus === 'processing')) ||
       (statusFilter === 'declined' && (normStatus === 'rejected' || normStatus === 'declined'));
 
@@ -279,7 +294,7 @@ export default function ReceiveRequestView({
       onProcessRequest(updatedPayload);
     }
 
-    setSelectedReq(updatedPayload);
+    setSelectedReq(null);
 
     // Trigger browser print
     window.print();
@@ -343,10 +358,10 @@ export default function ReceiveRequestView({
         </div>
         <div className="flex items-center space-x-3">
           <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            {requests.filter((r) => r.status === 'pending').length} Pending
+            {pendingCount} Pending
           </span>
           <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            {requests.filter((r) => r.status === 'processing' || r.status === 'under_review').length} Processing
+            {processingCount} Processing
           </span>
         </div>
       </div>
@@ -355,11 +370,10 @@ export default function ReceiveRequestView({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
         <div className="flex flex-wrap items-center gap-1.5">
           {[
-            { id: 'all', label: 'All Requests' },
-            { id: 'pending', label: 'Pending' },
-            { id: 'processing', label: 'Processing' },
-            { id: 'approved', label: 'Approved' },
-            { id: 'declined', label: 'Declined' },
+            { id: 'all', label: `All Requests (${operationalRequests.length})` },
+            { id: 'pending', label: `Pending (${pendingCount})` },
+            { id: 'processing', label: `Processing (${processingCount})` },
+            { id: 'declined', label: `Declined (${declinedCount})` },
           ].map((tab) => (
             <button
               key={tab.id}

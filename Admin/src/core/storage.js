@@ -441,6 +441,33 @@ export const StorageService = {
     return req;
   },
 
+  deleteRequest: async (requestId, trackingNumber, adminUser) => {
+    let requests = StorageService.getRequests();
+    requests = requests.filter((r) => r.id !== requestId && r.tracking_number !== trackingNumber);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId);
+        if (isUuid) {
+          await supabase.from('document_requests').delete().eq('id', requestId);
+        } else if (trackingNumber) {
+          await supabase.from('document_requests').delete().eq('tracking_number', trackingNumber);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting document request from Supabase:', err);
+    }
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Deleted Approved Document Record',
+      feature: 'Approved Documents',
+      details: `Tracking: ${trackingNumber || requestId}, Deleted by ${adminUser?.full_name || adminUser?.email || 'Admin'}`,
+      level: 'warning',
+    });
+  },
+
   // EVENTS & ANNOUNCEMENTS
   getEvents: () => {
     try {

@@ -54,6 +54,11 @@ export default function App() {
     await refreshState();
   };
 
+  const handleDeleteRequest = async (requestId, trackingNumber) => {
+    await StorageService.deleteRequest(requestId, trackingNumber, currentUser);
+    await refreshState();
+  };
+
   const handleSaveDocType = async (docTypePayload) => {
     await StorageService.saveDocType(docTypePayload);
     await refreshState();
@@ -137,6 +142,7 @@ export default function App() {
             <ApprovedDocumentsView
               requests={requests}
               onUpdateRequestStatus={handleUpdateRequestStatus}
+              onDeleteRequest={handleDeleteRequest}
               config={config}
               currentUser={currentUser}
             />
