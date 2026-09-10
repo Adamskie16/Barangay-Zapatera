@@ -17,6 +17,7 @@ import {
   ArrowRight,
   PlusCircle,
   PackageCheck,
+  CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
 import { DocumentRequest, RequestStatus } from '../../types';
@@ -30,11 +31,16 @@ interface MyRequestsViewProps {
   onRequestNew: () => void;
 }
 
-const STATUS_FILTERS: { label: string; value: string }[] = [
-  { label: 'All Requests', value: 'all' },
+const ACTIVE_STATUS_FILTERS: { label: string; value: string }[] = [
+  { label: 'All Active', value: 'all' },
   { label: 'Pending', value: 'pending' },
   { label: 'Processing', value: 'processing' },
-  { label: 'Approved', value: 'approved' },
+  { label: 'Ready for Pickup', value: 'approved' },
+];
+
+const HISTORY_STATUS_FILTERS: { label: string; value: string }[] = [
+  { label: 'All History', value: 'all' },
+  { label: 'Claimed Documents', value: 'claimed' },
   { label: 'Declined', value: 'declined' },
 ];
 
@@ -47,31 +53,47 @@ export default function MyRequestsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Filter Active vs Completed/History
+  // Helper to check if request is claimed / completed
+  const isClaimed = (r: DocumentRequest) => {
+    return r.status === 'issued' || r.status === 'completed' || !!r.is_claimed;
+  };
+
+  // Filter Active vs Request History (Claimed / Completed / Declined)
   const activeRequestsList = requests.filter(
-    (r) => r.status === 'pending' || r.status === 'under_review' || r.status === 'processing' || r.status === 'ready_for_pickup' || r.status === 'approved'
+    (r) => !isClaimed(r) && r.status !== 'rejected' && r.status !== 'declined'
   );
 
   const historyRequestsList = requests.filter(
-    (r) => r.status === 'completed' || r.status === 'rejected' || r.status === 'declined'
+    (r) => isClaimed(r) || r.status === 'rejected' || r.status === 'declined'
   );
 
   const baseList = activeTab === 'active' ? activeRequestsList : historyRequestsList;
+  const currentFilters = activeTab === 'active' ? ACTIVE_STATUS_FILTERS : HISTORY_STATUS_FILTERS;
 
   const filteredRequests = baseList.filter((r) => {
+    const claimed = isClaimed(r);
     const normStatus = (r.status || 'pending').toLowerCase();
     const matchesSearch =
       r.document_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       r.purpose.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === 'all' ||
-      normStatus === statusFilter ||
-      (statusFilter === 'pending' && (normStatus === 'pending' || normStatus === 'under_review')) ||
-      (statusFilter === 'processing' && (normStatus === 'processing' || normStatus === 'under_review')) ||
-      (statusFilter === 'approved' && (normStatus === 'approved' || normStatus === 'ready_for_pickup' || normStatus === 'completed')) ||
-      (statusFilter === 'declined' && (normStatus === 'declined' || normStatus === 'rejected'));
+    let matchesStatus = true;
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'claimed') {
+        matchesStatus = claimed;
+      } else if (statusFilter === 'declined') {
+        matchesStatus = normStatus === 'declined' || normStatus === 'rejected';
+      } else if (statusFilter === 'pending') {
+        matchesStatus = (normStatus === 'pending' || normStatus === 'under_review') && !claimed;
+      } else if (statusFilter === 'processing') {
+        matchesStatus = normStatus === 'processing' && !claimed;
+      } else if (statusFilter === 'approved') {
+        matchesStatus = (normStatus === 'approved' || normStatus === 'ready_for_pickup') && !claimed;
+      } else {
+        matchesStatus = normStatus === statusFilter;
+      }
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -113,7 +135,7 @@ export default function MyRequestsView({
             }}
           >
             <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>
-              Request History / Declined ({historyRequestsList.length})
+              Request History ({historyRequestsList.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -132,7 +154,7 @@ export default function MyRequestsView({
 
         {/* Status Filter Pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {STATUS_FILTERS.map((f) => (
+          {currentFilters.map((f) => (
             <TouchableOpacity
               key={f.value}
               style={[
@@ -158,8 +180,9 @@ export default function MyRequestsView({
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {filteredRequests.length > 0 ? (
           filteredRequests.map((req) => {
+            const claimed = isClaimed(req);
             const isDeclined = req.status === 'declined' || req.status === 'rejected';
-            const isApproved = req.status === 'approved' || req.status === 'ready_for_pickup';
+            const isApproved = (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
             const declineReasonText = req.declined_details || req.declined_reason || req.rejection_reason || 'Missing required residency documents or incomplete attachments.';
             const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 8, 2026';
             const adminProcessor = req.processed_by || 'Barangay Administrator';
@@ -170,6 +193,7 @@ export default function MyRequestsView({
                 style={[
                   styles.requestCard,
                   isApproved && styles.requestCardReady,
+                  claimed && styles.requestCardClaimed,
                   isDeclined && styles.requestCardRejected,
                 ]}
                 onPress={() => onViewRequestDetails(req)}
@@ -180,7 +204,7 @@ export default function MyRequestsView({
                     <Text style={styles.cardDocTitle}>{req.document_title}</Text>
                     <Text style={styles.cardTrackingNo}>Ref: <Text style={styles.trackingCodeText}>{req.tracking_number}</Text></Text>
                   </View>
-                  <Badge status={req.status} size="sm" />
+                  <Badge status={claimed ? 'issued' : req.status} size="sm" />
                 </View>
 
                 <Text style={styles.cardPurpose} numberOfLines={2}>
@@ -197,6 +221,17 @@ export default function MyRequestsView({
                     <Text style={styles.scheduleLabel}>Slot: <Text style={styles.scheduleVal}>{req.pickup_time_slot || '9:00 AM - 9:30 AM'}</Text></Text>
                   </View>
                 </View>
+
+                {/* Claimed Box */}
+                {claimed && (
+                  <View style={styles.claimedHighlightBanner}>
+                    <CheckCircle2 size={14} color="#15803d" />
+                    <Text style={styles.claimedHighlightText}>
+                      Document Claimed & Released at Barangay Hall
+                      {req.claimed_at ? ` on ${new Date(req.claimed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}.
+                    </Text>
+                  </View>
+                )}
 
                 {/* 6. Resident-Side Declined Notification Box */}
                 {isDeclined && (
@@ -232,7 +267,7 @@ export default function MyRequestsView({
                   </Text>
                   <View style={styles.viewDetailsBtn}>
                     <Text style={styles.viewDetailsBtnText}>
-                      {isDeclined ? 'View Decline Details' : isApproved ? 'View Claim Pass' : 'View Details'}
+                      {claimed ? 'View Release Details' : isDeclined ? 'View Decline Details' : isApproved ? 'View Claim Pass' : 'Track Progress'}
                     </Text>
                     <ArrowRight size={13} color="#1d4ed8" />
                   </View>
@@ -397,6 +432,11 @@ const styles = StyleSheet.create({
     borderColor: '#86efac',
     borderWidth: 1.5,
   },
+  requestCardClaimed: {
+    borderColor: '#86efac',
+    borderWidth: 1.5,
+    backgroundColor: '#f0fdf4',
+  },
   requestCardRejected: {
     borderColor: '#fca5a5',
   },
@@ -458,6 +498,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   readyHighlightText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+    flex: 1,
+  },
+  claimedHighlightBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#dcfce7',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  claimedHighlightText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#15803d',

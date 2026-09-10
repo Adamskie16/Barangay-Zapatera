@@ -17,7 +17,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  QrCode,
   ShieldCheck,
   Download,
   Info,
@@ -46,9 +45,10 @@ export default function RequestTrackingModal({
 }: RequestTrackingModalProps) {
   if (!request) return null;
 
+  const isClaimed = request.status === 'issued' || request.status === 'completed' || !!request.is_claimed;
   const isRejected = request.status === 'rejected' || request.status === 'declined';
-  const isReady = request.status === 'ready_for_pickup' || request.status === 'approved';
-  const isCompleted = request.status === 'completed';
+  const isReady = (request.status === 'ready_for_pickup' || request.status === 'approved') && !isClaimed;
+  const isCompleted = isClaimed;
 
   const declineReasonText = request.declined_reason || request.rejection_reason || 'Missing valid proof of residency.';
   const declineDetailsText = request.declined_details || '';
@@ -84,7 +84,7 @@ export default function RequestTrackingModal({
     {
       status: 'completed',
       label: 'Document Released',
-      description: 'Official document signed and handed over to resident.',
+      description: isCompleted ? 'Official document claimed and released to resident.' : 'Official document signed and handed over to resident.',
       timestamp: isCompleted ? 'Claimed' : 'Pending Pickup',
       is_completed: isCompleted,
       is_current: isCompleted,
@@ -114,7 +114,7 @@ export default function RequestTrackingModal({
                   <Text style={styles.trackingRefLabel}>TRACKING NUMBER</Text>
                   <Text style={styles.trackingRefCode}>{request.tracking_number}</Text>
                 </View>
-                <Badge status={request.status} size="md" />
+                <Badge status={isClaimed ? 'issued' : request.status} size="md" />
               </View>
               <Text style={styles.trackingDocName}>{request.document_title}</Text>
               <Text style={styles.trackingPurpose}>Purpose: {request.purpose}</Text>
@@ -179,7 +179,32 @@ export default function RequestTrackingModal({
               </View>
             )}
 
-            {/* READY FOR PICKUP PASS CARD */}
+            {/* CLAIMED SUCCESS CARD */}
+            {isCompleted && (
+              <View style={styles.claimedSuccessCard}>
+                <View style={styles.claimedHeader}>
+                  <CheckCircle2 size={22} color="#15803d" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.claimedTitle}>Document Successfully Claimed</Text>
+                    <Text style={styles.claimedSubtitle}>
+                      This official certificate has been released to the resident applicant at the Barangay Hall.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.claimedMetaBox}>
+                  <Text style={styles.claimedMetaLine}>
+                    Date Released: <Text style={{ fontWeight: '700' }}>{request.claimed_at || request.issued_at ? new Date(request.claimed_at || request.issued_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Released'}</Text>
+                  </Text>
+                  {request.claimed_by_admin && (
+                    <Text style={styles.claimedMetaLine}>
+                      Released By: <Text style={{ fontWeight: '700' }}>{request.claimed_by_admin}</Text>
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* READY FOR PICKUP PASS CARD (NO QR CODE) */}
             {isReady && (
               <View style={styles.readyPassCard}>
                 <View style={styles.readyPassHeader}>
@@ -191,11 +216,11 @@ export default function RequestTrackingModal({
                 <View style={styles.passGrid}>
                   <View style={styles.passCol}>
                     <Text style={styles.passLabel}>PICKUP DATE</Text>
-                    <Text style={styles.passValue}>{request.pickup_date}</Text>
+                    <Text style={styles.passValue}>{request.pickup_date || 'Scheduled Date'}</Text>
                   </View>
                   <View style={styles.passCol}>
                     <Text style={styles.passLabel}>APPOINTMENT INTERVAL</Text>
-                    <Text style={styles.passValue}>{request.pickup_time_slot}</Text>
+                    <Text style={styles.passValue}>{request.pickup_time_slot || '9:00 AM - 9:30 AM'}</Text>
                   </View>
                 </View>
 
@@ -206,13 +231,11 @@ export default function RequestTrackingModal({
                   </Text>
                 </View>
 
-                {/* QR Code Simulation */}
-                <View style={styles.qrSection}>
-                  <View style={styles.qrPlaceholder}>
-                    <QrCode size={64} color="#0f172a" />
-                  </View>
-                  <Text style={styles.qrSubText}>
-                    Present this QR code or Tracking No. <Text style={{ fontWeight: '800' }}>{request.tracking_number}</Text> to the Counter Clerk.
+                {/* Instructions Box without QR */}
+                <View style={styles.claimNoticeBox}>
+                  <Info size={16} color="#15803d" />
+                  <Text style={styles.claimNoticeText}>
+                    Present Tracking No. <Text style={{ fontWeight: '800', fontFamily: 'monospace' }}>{request.tracking_number}</Text> and your valid ID at the Barangay Hall Express Counter to claim your document.
                   </Text>
                 </View>
 
@@ -552,31 +575,58 @@ const styles = StyleSheet.create({
     color: '#166534',
     flex: 1,
   },
-  qrSection: {
+  claimNoticeBox: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: '#ffffff',
-    padding: 12,
-    borderRadius: 10,
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#dcfce7',
     marginBottom: 10,
   },
-  qrPlaceholder: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 6,
+  claimNoticeText: {
+    fontSize: 11,
+    color: '#166534',
+    lineHeight: 16,
+    flex: 1,
+    fontWeight: '600',
   },
-  qrSubText: {
-    fontSize: 10,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 14,
+  claimedSuccessCard: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  claimedHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dcfce7',
+  },
+  claimedTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  claimedSubtitle: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  claimedMetaBox: {
+    gap: 4,
+  },
+  claimedMetaLine: {
+    fontSize: 11,
+    color: '#14532d',
   },
   readyFeeRow: {
     flexDirection: 'row',
