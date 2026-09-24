@@ -989,47 +989,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 )}
               </TouchableOpacity>
 
-              {/* Social Login / Fast Access Section */}
-              <View style={styles.orDividerRow}>
-                <Text style={styles.orDividerText}>- Or sign in with -</Text>
-              </View>
-
-              <View style={styles.socialRow}>
-                {/* Google Button */}
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={() => {
-                    if (isSupabaseConfigured()) {
-                      supabase.auth.signInWithOAuth({ provider: 'google' });
-                    }
-                  }}
-                >
-                  <Text style={styles.googleIconText}>G</Text>
-                </TouchableOpacity>
-
-                {/* Facebook Button */}
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={() => {
-                    if (isSupabaseConfigured()) {
-                      supabase.auth.signInWithOAuth({ provider: 'facebook' });
-                    }
-                  }}
-                >
-                  <Text style={styles.facebookIconText}>f</Text>
-                </TouchableOpacity>
-
-                {/* Biometric Fast Access Button */}
-                <TouchableOpacity
-                  style={styles.socialBtn}
-                  onPress={handleBiometricLogin}
-                  disabled={loading}
-                  title="Sign In with Biometrics"
-                >
-                  <Fingerprint size={20} color="#0284c7" />
-                </TouchableOpacity>
-              </View>
-
               {/* Bottom Switcher */}
               <View style={styles.footerLinkRow}>
                 <Text style={styles.footerText}>Don't have an account? </Text>
@@ -1408,42 +1367,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 <Text style={styles.primaryBtnText}>Sign up</Text>
               )}
             </TouchableOpacity>
-
-            {/* Social Divider */}
-            <View style={styles.orDividerRow}>
-              <Text style={styles.orDividerText}>- Or sign up with -</Text>
-            </View>
-
-            <View style={styles.socialRow}>
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => {
-                  if (isSupabaseConfigured()) {
-                    supabase.auth.signInWithOAuth({ provider: 'google' });
-                  }
-                }}
-              >
-                <Text style={styles.googleIconText}>G</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => {
-                  if (isSupabaseConfigured()) {
-                    supabase.auth.signInWithOAuth({ provider: 'facebook' });
-                  }
-                }}
-              >
-                <Text style={styles.facebookIconText}>f</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.socialBtn}
-                onPress={() => setIsPrivacyModalOpen(true)}
-              >
-                <ShieldCheck size={20} color="#10b981" />
-              </TouchableOpacity>
-            </View>
 
             {/* Footer Switcher */}
             <View style={styles.footerLinkRow}>
