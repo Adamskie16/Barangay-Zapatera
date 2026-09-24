@@ -3,6 +3,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   FileText,
+  Printer,
   Newspaper,
   Calendar,
   Users,

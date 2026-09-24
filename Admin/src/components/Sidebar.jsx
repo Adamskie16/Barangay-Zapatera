@@ -6,6 +6,7 @@ import {
   CheckSquare,
   FileCheck2,
   FileText,
+  Printer,
   Calendar,
   Newspaper,
   BarChart2,
