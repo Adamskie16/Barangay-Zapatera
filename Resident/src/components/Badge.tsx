@@ -38,10 +38,18 @@ export default function Badge({ status, size = 'md' }: BadgeProps) {
           icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟢</Text>,
         };
       case 'approved':
+        return {
+          label: 'Approved',
+          bg: '#dcfce7',
+          border: '#86efac',
+          text: '#15803d',
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟢</Text>,
+        };
       case 'completed':
       case 'issued':
+      case 'claimed':
         return {
-          label: status === 'completed' ? 'Completed' : 'Approved',
+          label: 'Claimed',
           bg: '#dcfce7',
           border: '#86efac',
           text: '#15803d',

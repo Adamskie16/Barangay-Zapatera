@@ -30,14 +30,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
   // Profile Form State (Including Account Role)
   const [profile, setProfile] = useState({
-    id: currentUser?.id || 'adm-001',
-    email: currentUser?.email || 'admin@zapatera.gov.ph',
+    id: currentUser?.id || '',
+    email: currentUser?.email || '',
     role: currentUser?.role || 'admin',
-    full_name: currentUser?.full_name || 'Barangay Staff Officer',
-    username: currentUser?.username || 'admin',
-    phone: currentUser?.phone || '09171234567',
-    avatar_url: currentUser?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80',
-    created_at: currentUser?.created_at || new Date('2026-01-01').toISOString(),
+    full_name: currentUser?.full_name || '',
+    username: currentUser?.username || '',
+    phone: currentUser?.phone || '',
+    avatar_url: currentUser?.avatar_url || '',
+    created_at: currentUser?.created_at || new Date().toISOString(),
     updated_at: currentUser?.updated_at || new Date().toISOString(),
   });
 

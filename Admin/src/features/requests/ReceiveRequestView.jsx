@@ -93,15 +93,39 @@ export default function ReceiveRequestView({
   });
   const [genIssuedLocation, setGenIssuedLocation] = useState('Barangay Zapatera, Cebu City, Philippines');
   const [genBodyText, setGenBodyText] = useState(documentTemplates.barangayCertification.defaultBody);
-  const [genSignatoryName, setGenSignatoryName] = useState('HON. DAVID M. AGRAVANTE');
-  const [genSignatoryTitle, setGenSignatoryTitle] = useState('Punong Barangay');
+  const [genSignatoryName, setGenSignatoryName] = useState(config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE');
+  const [genSignatoryTitle, setGenSignatoryTitle] = useState(config?.signatory_title || 'Punong Barangay');
 
-  // Filter requests
-  const filteredRequests = requests.filter((r) => {
+  useEffect(() => {
+    if (config?.punong_barangay || config?.signatory_name) {
+      setGenSignatoryName(config.punong_barangay || config.signatory_name);
+    }
+    if (config?.signatory_title) {
+      setGenSignatoryTitle(config.signatory_title);
+    }
+  }, [config]);
+
+  // Filter requests: Active operational queue (Pending, Processing, Declined)
+  // Approved and issued documents are automatically transferred to the Approved Documents registry
+  const operationalRequests = requests.filter(
+    (r) =>
+      r.status !== 'approved' &&
+      r.status !== 'ready_for_pickup' &&
+      r.status !== 'issued' &&
+      r.status !== 'completed' &&
+      !r.is_claimed
+  );
+
+  const pendingCount = operationalRequests.filter((r) => (r.status || 'pending').toLowerCase() === 'pending').length;
+  const processingCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'processing' || (r.status || '').toLowerCase() === 'under_review').length;
+  const declinedCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'declined' || (r.status || '').toLowerCase() === 'rejected').length;
+
+  const filteredRequests = operationalRequests.filter((r) => {
     const normStatus = (r.status || 'pending').toLowerCase();
     const matchesStatus =
       statusFilter === 'all' ||
       normStatus === statusFilter ||
+      (statusFilter === 'pending' && normStatus === 'pending') ||
       (statusFilter === 'processing' && (normStatus === 'under_review' || normStatus === 'processing')) ||
       (statusFilter === 'declined' && (normStatus === 'rejected' || normStatus === 'declined'));
 
@@ -136,7 +160,7 @@ export default function ReceiveRequestView({
         name: fileObj.requirement_name || `Requirement #${idx + 1}`,
         fileName: fileObj.file_name || `attachment_${idx + 1}.pdf`,
         fileType: fileObj.file_type || 'image/jpeg',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+        uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: fileObj.status || 'pending',
       }));
     }
@@ -155,7 +179,7 @@ export default function ReceiveRequestView({
           name: typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`),
           fileName: typeof item === 'string' ? `${item.toLowerCase().replace(/[^a-z0-9]/g, '_')}_scan.pdf` : (item.fileName || 'attachment.pdf'),
           fileType: 'application/pdf',
-          uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+          uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
           status: 'pending',
         }));
       }
@@ -167,7 +191,7 @@ export default function ReceiveRequestView({
         name: reqTitle,
         fileName: `${reqTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_document.pdf`,
         fileType: 'application/pdf',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+        uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: 'pending',
       }));
     }
@@ -204,8 +228,8 @@ export default function ReceiveRequestView({
     // Setup Document Generator Initial Values with Applicant info
     setGenName(updatedReq.resident_name || '');
     setGenAddress(updatedReq.resident_address || 'Barangay Zapatera, Cebu City');
-    setGenDob(updatedReq.resident_birth_date || '');
-    setGenContact(updatedReq.resident_phone || '');
+    setGenDob(updatedReq.resident_birth_date || updatedReq.date_of_birth || updatedReq.dob || updatedReq.birthdate || '');
+    setGenContact(updatedReq.resident_phone || updatedReq.phone || updatedReq.contact_no || '');
     setGenYearsInBarangay(updatedReq.years_in_barangay || '5 years');
     setGenPurpose(updatedReq.purpose || 'Local Employment Application');
 
@@ -279,7 +303,7 @@ export default function ReceiveRequestView({
       onProcessRequest(updatedPayload);
     }
 
-    setSelectedReq(updatedPayload);
+    setSelectedReq(null);
 
     // Trigger browser print
     window.print();
@@ -343,10 +367,10 @@ export default function ReceiveRequestView({
         </div>
         <div className="flex items-center space-x-3">
           <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            {requests.filter((r) => r.status === 'pending').length} Pending
+            {pendingCount} Pending
           </span>
           <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            {requests.filter((r) => r.status === 'processing' || r.status === 'under_review').length} Processing
+            {processingCount} Processing
           </span>
         </div>
       </div>
@@ -355,11 +379,10 @@ export default function ReceiveRequestView({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
         <div className="flex flex-wrap items-center gap-1.5">
           {[
-            { id: 'all', label: 'All Requests' },
-            { id: 'pending', label: 'Pending' },
-            { id: 'processing', label: 'Processing' },
-            { id: 'approved', label: 'Approved' },
-            { id: 'declined', label: 'Declined' },
+            { id: 'all', label: `All Requests (${operationalRequests.length})` },
+            { id: 'pending', label: `Pending (${pendingCount})` },
+            { id: 'processing', label: `Processing (${processingCount})` },
+            { id: 'declined', label: `Declined (${declinedCount})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -459,7 +482,7 @@ export default function ReceiveRequestView({
 
                       {/* Date Submitted */}
                       <td className="p-4 text-slate-500 font-medium">
-                        {req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026, 07:29 PM'}
+                        {req.created_at ? formatDate(req.created_at) : formatDate(new Date())}
                       </td>
 
                       {/* Actions: Blue Process Button */}
@@ -766,7 +789,7 @@ export default function ReceiveRequestView({
                       <span>Decline Request</span>
                     </button>
 
-                    {/* Proceed to Print Document Button */}
+                    {/* Proceed to Official Document Generator Button */}
                     <button
                       type="button"
                       onClick={() => setActiveStep(2)}
@@ -778,7 +801,7 @@ export default function ReceiveRequestView({
                       }`}
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Proceed to Print Document</span>
+                      <span>Proceed to Official Document Generator</span>
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </button>
                   </div>
@@ -794,10 +817,10 @@ export default function ReceiveRequestView({
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <FileBadge className="w-4 h-4 text-blue-400" />
-                      <span>Official Document Generator & Print</span>
+                      <span>Official Document Generator</span>
                     </h3>
                     <p className="text-[11px] text-slate-300 mt-0.5">
-                      Printing this document will officially approve the resident application and update status to Approved.
+                      Generate official barangay certificate, review live preview, and print to officially approve resident application.
                     </p>
                   </div>
 
@@ -859,7 +882,7 @@ export default function ReceiveRequestView({
                       {/* 1. Document Title */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          1. Document Title <span className="text-blue-600 font-mono font-normal">{"{documentTitle}"}</span>
+                          1. Document Title
                         </label>
                         <input
                           type="text"
@@ -873,7 +896,7 @@ export default function ReceiveRequestView({
                       {/* 2. Applicant Name */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          2. Resident Applicant Name <span className="text-blue-600 font-mono font-normal">{"{name}"}</span>
+                          2. Resident Applicant Name
                         </label>
                         <input
                           type="text"
@@ -887,7 +910,7 @@ export default function ReceiveRequestView({
                       {/* 3. Address */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          3. Address <span className="text-blue-600 font-mono font-normal">{"{address}"}</span>
+                          3. Address
                         </label>
                         <input
                           type="text"
@@ -902,10 +925,9 @@ export default function ReceiveRequestView({
                         <div>
                           <label className="block font-bold text-slate-700 mb-1">4. Date of Birth</label>
                           <input
-                            type="text"
+                            type="date"
                             value={genDob}
                             onChange={(e) => setGenDob(e.target.value)}
-                            placeholder="e.g. Jan 15, 1995"
                             className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                           />
                         </div>
@@ -946,7 +968,7 @@ export default function ReceiveRequestView({
                       {/* 7. Purpose */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          7. Purpose <span className="text-blue-600 font-mono font-normal">{"{purpose}"}</span>
+                          7. Purpose
                         </label>
                         <input
                           type="text"
@@ -1026,6 +1048,7 @@ export default function ReceiveRequestView({
                           bodyText={genBodyText}
                           signatoryName={genSignatoryName}
                           signatoryTitle={genSignatoryTitle}
+                          config={config}
                         />
                       </div>
                     </div>
@@ -1191,6 +1214,7 @@ export default function ReceiveRequestView({
           bodyText={genBodyText}
           signatoryName={genSignatoryName}
           signatoryTitle={genSignatoryTitle}
+          config={config}
         />
       </div>
     </div>

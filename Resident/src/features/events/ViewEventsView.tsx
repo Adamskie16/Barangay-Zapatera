@@ -8,31 +8,8 @@ interface ViewEventsViewProps {
   events: BarangayEvent[];
 }
 
-const DEFAULT_EVENTS: BarangayEvent[] = [
-  {
-    id: 'ev-1',
-    title: 'Barangay Zapatera General Assembly',
-    description: 'Annual community update on barangay projects, document issuance guidelines, and public safety programs.',
-    event_date: new Date('2026-08-20T09:00:00').toISOString(),
-    location: 'Barangay Zapatera Multipurpose Complex',
-    target_audience: 'all',
-    status: 'upcoming',
-    image_url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=500&q=80',
-  },
-  {
-    id: 'ev-2',
-    title: 'Free Community Health & Dental Mission',
-    description: 'Free medical consultations, dental checkups, and medicine distribution for registered Zapatera residents.',
-    event_date: new Date('2026-08-25T08:00:00').toISOString(),
-    location: 'Zapatera Health Center',
-    target_audience: 'residents',
-    status: 'upcoming',
-    image_url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=500&q=80',
-  },
-];
-
-export default function ViewEventsView({ events }: ViewEventsViewProps) {
-  const displayEvents = events && events.length > 0 ? events : DEFAULT_EVENTS;
+export default function ViewEventsView({ events = [] }: ViewEventsViewProps) {
+  const displayEvents = events || [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -43,30 +20,45 @@ export default function ViewEventsView({ events }: ViewEventsViewProps) {
         </Text>
       </View>
 
-      <View style={styles.listContainer}>
-        {displayEvents.map((item) => (
-          <View key={item.id} style={styles.eventCard}>
-            {item.image_url ? (
-              <Image source={{ uri: item.image_url }} style={styles.eventImage} />
-            ) : null}
+      {displayEvents.length > 0 ? (
+        <View style={styles.listContainer}>
+          {displayEvents.map((item) => (
+            <View key={item.id} style={styles.eventCard}>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.eventImage} />
+              ) : null}
 
-            <View style={styles.cardContent}>
-              <View style={styles.badgeRow}>
-                <Badge variant={item.status}>{item.status}</Badge>
-                <Text style={styles.audienceText}>Target: {item.target_audience.toUpperCase()}</Text>
-              </View>
+              <View style={styles.cardContent}>
+                <View style={styles.badgeRow}>
+                  <Badge variant={item.status}>{item.status}</Badge>
+                  {item.target_audience ? (
+                    <Text style={styles.audienceText}>Target: {item.target_audience.toUpperCase()}</Text>
+                  ) : null}
+                </View>
 
-              <Text style={styles.eventTitle}>{item.title}</Text>
-              <Text style={styles.eventDesc}>{item.description}</Text>
+                <Text style={styles.eventTitle}>{item.title}</Text>
+                <Text style={styles.eventDesc}>{item.description}</Text>
 
-              <View style={styles.detailsBox}>
-                <Text style={styles.detailText}>📅 Date: {formatDate(item.event_date)}</Text>
-                <Text style={styles.detailText}>📍 Location: {item.location}</Text>
+                <View style={styles.detailsBox}>
+                  {item.event_date ? (
+                    <Text style={styles.detailText}>📅 Date: {formatDate(item.event_date)}</Text>
+                  ) : null}
+                  {item.location ? (
+                    <Text style={styles.detailText}>📍 Location: {item.location}</Text>
+                  ) : null}
+                </View>
               </View>
             </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>No Upcoming Events</Text>
+          <Text style={styles.emptySubtitle}>
+            There are currently no scheduled public events or assemblies. Please check back later for announcements.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -85,11 +77,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#ffffff',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#94a3b8',
     marginTop: 4,
   },
@@ -97,51 +89,73 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   eventCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1e293b',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1e293b',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   eventImage: {
     width: '100%',
-    height: 140,
+    height: 180,
+    resizeMode: 'cover',
   },
   cardContent: {
     padding: 16,
   },
   badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   audienceText: {
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#60a5fa',
   },
   eventTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#f8fafc',
     marginBottom: 6,
   },
   eventDesc: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: 13,
+    color: '#cbd5e1',
     lineHeight: 18,
     marginBottom: 12,
   },
   detailsBox: {
-    backgroundColor: '#020617',
+    backgroundColor: '#0f172a',
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 8,
     gap: 4,
   },
   detailText: {
-    fontSize: 11,
-    color: '#cbd5e1',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginTop: 20,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#f8fafc',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

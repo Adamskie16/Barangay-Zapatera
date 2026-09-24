@@ -26,28 +26,7 @@ const DEFAULT_PORTAL_NAMES = {
   admin: 'Barangay Admin Portal Only',
 };
 
-const INITIAL_LOCAL_DESIGNS = [
-  {
-    id: 'ld-001',
-    title: 'Barangay Zapatera Executive Portal',
-    badge: 'Executive Administration',
-    description: 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
-    image_url: '/auth-bg.jpg',
-    target_portal: 'all',
-    is_active: true,
-    created_at: new Date('2026-01-01').toISOString(),
-  },
-  {
-    id: 'ld-002',
-    title: 'Barangay Zapatera Administrative Management',
-    badge: 'Barangay Administration',
-    description: 'Secure administrative access for managing resident records, document requests, event issuances, and community services.',
-    image_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1200&q=80',
-    target_portal: 'admin',
-    is_active: false,
-    created_at: new Date('2026-01-02').toISOString(),
-  },
-];
+const INITIAL_LOCAL_DESIGNS = [];
 
 export default function LoginDesignView({ currentUser, isDarkMode }) {
   const [designs, setDesigns] = useState([]);

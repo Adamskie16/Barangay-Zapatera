@@ -1,23 +1,15 @@
 // Admin/src/features/requests/ApprovedDocumentsView.jsx
 import React, { useState } from 'react';
 import Modal from '../../components/Modal';
-import Badge from '../../components/Badge';
-import CertificatePreview from '../../components/CertificatePreview';
 import {
   FileCheck2,
-  Eye,
-  Printer,
   PackageCheck,
   Package,
   Search,
   ArrowUpDown,
-  Calendar,
-  Clock,
-  User,
-  Mail,
   RotateCcw,
-  CheckCircle2,
-  FileText
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
@@ -25,14 +17,16 @@ import { TableSkeleton } from '../../components/SkeletonLoader';
 export default function ApprovedDocumentsView({
   requests = [],
   onUpdateRequestStatus,
+  onDeleteRequest,
   config,
   currentUser,
   loading = false,
 }) {
-  const [selectedReq, setSelectedReq] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [sortBy, setSortBy] = useState('date_desc'); // 'date_desc' | 'date_asc' | 'name_asc' | 'name_desc' | 'status'
+  const [deleteConfirmReq, setDeleteConfirmReq] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter only approved, issued, or completed requests
   const approvedRequests = requests.filter(
@@ -70,13 +64,6 @@ export default function ApprovedDocumentsView({
     };
 
     onUpdateRequestStatus(updated);
-    if (selectedReq?.id === req.id) {
-      setSelectedReq(updated);
-    }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   // Filter & Search
@@ -287,7 +274,7 @@ export default function ApprovedDocumentsView({
 
                       {/* Date Approved */}
                       <td className="p-4 text-slate-500 font-medium">
-                        {req.approved_at ? formatDate(req.approved_at) : req.updated_at ? formatDate(req.updated_at) : 'Sep 8, 2026'}
+                        {req.approved_at ? formatDate(req.approved_at) : req.updated_at ? formatDate(req.updated_at) : formatDate(new Date())}
                       </td>
 
                       {/* Claim Status Badge */}
@@ -303,40 +290,40 @@ export default function ApprovedDocumentsView({
                         )}
                       </td>
 
-                      {/* Action Buttons */}
-                      <td className="p-4 text-right space-x-2">
-                        {/* Toggle Claim / Unclaim Action */}
-                        <button
-                          onClick={() => handleToggleClaimStatus(req)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors cursor-pointer ${
-                            claimed
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                          }`}
-                          title={claimed ? 'Mark as Unclaimed' : 'Mark as Claimed / Released'}
-                        >
-                          {claimed ? (
-                            <>
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Mark Unclaimed</span>
-                            </>
-                          ) : (
-                            <>
-                              <PackageCheck className="w-3.5 h-3.5" />
-                              <span>Mark Claimed</span>
-                            </>
-                          )}
-                        </button>
+                      {/* Action Buttons: Mark Claimed/Unclaimed & Delete */}
+                      <td className="p-4 text-right">
+                        <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleToggleClaimStatus(req)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              claimed
+                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                            }`}
+                            title={claimed ? 'Mark as Unclaimed' : 'Mark as Claimed / Released'}
+                          >
+                            {claimed ? (
+                              <>
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Mark Unclaimed</span>
+                              </>
+                            ) : (
+                              <>
+                                <PackageCheck className="w-3.5 h-3.5" />
+                                <span>Mark Claimed</span>
+                              </>
+                            )}
+                          </button>
 
-                        {/* Certificate Preview Action */}
-                        <button
-                          onClick={() => setSelectedReq(req)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold inline-flex items-center space-x-1 transition-colors shadow-xs cursor-pointer"
-                          title="View Digital Certificate"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Preview</span>
-                        </button>
+                          <button
+                            onClick={() => setDeleteConfirmReq(req)}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+                            title="Delete Approved Record from Database"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -347,71 +334,61 @@ export default function ApprovedDocumentsView({
         </div>
       </div>
 
-      {/* Certificate Preview & Print Modal */}
-      <Modal
-        isOpen={!!selectedReq}
-        onClose={() => setSelectedReq(null)}
-        title={`Official Certificate Digital Copy — ${selectedReq?.tracking_number}`}
-        maxWidth="max-w-3xl"
-      >
-        {selectedReq && (
-          <div className="space-y-6">
-            {/* Modal Header Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <div className="flex items-center space-x-3">
-                <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-200">
-                  {selectedReq.tracking_number}
-                </span>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                    isClaimed(selectedReq)
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                      : 'bg-amber-50 text-amber-700 border-amber-300'
-                  }`}
-                >
-                  {isClaimed(selectedReq) ? 'Claimed' : 'Unclaimed'}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleClaimStatus(selectedReq)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center space-x-1 transition-colors cursor-pointer ${
-                    isClaimed(selectedReq)
-                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                  }`}
-                >
-                  {isClaimed(selectedReq) ? (
-                    <>
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Set Unclaimed</span>
-                    </>
-                  ) : (
-                    <>
-                      <PackageCheck className="w-3.5 h-3.5" />
-                      <span>Set Claimed</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 shadow-xs cursor-pointer active:scale-95 transition-all"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Certificate</span>
-                </button>
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmReq && (
+        <Modal
+          isOpen={!!deleteConfirmReq}
+          onClose={() => !isDeleting && setDeleteConfirmReq(null)}
+          title="Confirm Delete Document Record"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-900 flex items-start space-x-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-sm text-red-950">Permanent Deletion Warning</p>
+                <p className="mt-1 leading-relaxed text-red-800">
+                  Are you sure you want to delete tracking record <strong className="font-mono bg-red-100 px-1.5 py-0.5 rounded border border-red-300">{deleteConfirmReq.tracking_number}</strong> for <strong className="text-red-950">{deleteConfirmReq.resident_name || 'Resident'}</strong>?
+                </p>
+                <p className="mt-2 text-[11px] text-red-700 font-semibold">
+                  ⚠️ This action will permanently remove this record from Supabase and the system database.
+                </p>
               </div>
             </div>
 
-            {/* Live Certificate Body */}
-            <CertificatePreview request={selectedReq} config={config} />
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirmReq(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  try {
+                    setIsDeleting(true);
+                    const reqToDelete = deleteConfirmReq;
+                    if (onDeleteRequest) {
+                      await onDeleteRequest(reqToDelete.id, reqToDelete.tracking_number);
+                    }
+                  } finally {
+                    setIsDeleting(false);
+                    setDeleteConfirmReq(null);
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs inline-flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? 'Deleting...' : 'Delete Permanently'}</span>
+              </button>
+            </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 }

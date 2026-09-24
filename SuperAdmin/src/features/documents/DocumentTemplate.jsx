@@ -4,7 +4,8 @@ import { formatIssuedDateOrdinal } from './documentTemplates';
 
 /**
  * Standard A4 Printable Document Template (210mm x 297mm)
- * Used identically for live on-screen preview and browser print / PDF generation.
+ * Enhanced Official Barangay Zapatera Certification Layout
+ * Matches official government letterhead and key-value resident table format.
  */
 export default function DocumentTemplate({
   documentTitle = 'BARANGAY CERTIFICATION',
@@ -17,113 +18,162 @@ export default function DocumentTemplate({
   issuedDate = '',
   issuedLocation = 'Barangay Zapatera, Cebu City, Philippines',
   bodyText = 'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.',
-  signatoryName = 'HON. DAVID M. AGRAVANTE',
-  signatoryTitle = 'Punong Barangay',
-  logoUrl = '/logo.jpg',
+  signatoryName = '',
+  signatoryTitle = '',
+  logoUrl = '',
+  config = {},
 }) {
   const formattedDate = formatIssuedDateOrdinal(issuedDate);
 
+  const formattedDob = dateOfBirth ? (
+    /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)
+      ? new Date(dateOfBirth + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : dateOfBirth
+  ) : '____________________';
+
+  const finalSignatoryName = signatoryName || config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE';
+  const finalSignatoryTitle = signatoryTitle || config?.signatory_title || 'Punong Barangay';
+  const finalLogoUrl = logoUrl || config?.seal_url || '/zapatera_seal.png';
+  const finalBarangayName = config?.barangay_name || 'Barangay Zapatera';
+  const finalHallAddress = config?.hall_address || '197 D. Jakosalem St., Cebu City';
+  const finalContactPhone = config?.contact_phone || '(032)503-6465';
+  const finalContactEmail = config?.contact_email || 'zapatera.lnb24@gmail.com';
+
   return (
-    <div className="document-a4-page bg-white text-slate-900 font-serif leading-normal select-text shadow-xl print:shadow-none border border-slate-200 print:border-none mx-auto relative box-border overflow-hidden">
-      <div className="document-inner-content flex flex-col justify-between h-full p-[18mm] sm:p-[20mm]">
-        
-        {/* HEADER SECTION */}
-        <div className="text-center space-y-1 relative pb-4 border-b-2 border-slate-900">
-          {/* Logo */}
-          <div className="absolute left-0 top-0 w-20 h-20 flex items-center justify-center">
-            <img
-              src={logoUrl}
-              alt="Barangay Zapatera Seal"
-              className="w-18 h-18 object-contain rounded-full border border-slate-300"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
+    <div className="document-a4-page bg-white text-slate-900 font-serif leading-normal select-text shadow-xl print:shadow-none border border-slate-300 print:border-none mx-auto relative box-border overflow-hidden">
+      <div className="document-inner-content flex flex-col justify-between h-full p-[15mm] sm:p-[18mm] bg-white">
+
+        {/* TOP HEADER SECTION */}
+        <div className="relative pb-4">
+          <div className="flex items-center justify-between">
+            {/* Top-Left: Official Barangay Zapatera Seal */}
+            <div className="w-24 h-24 flex items-center justify-center shrink-0">
+              <img
+                src={finalLogoUrl}
+                alt={`${finalBarangayName} Seal`}
+                className="w-22 h-22 object-contain"
+                onError={(e) => {
+                  e.target.src = '/logo.jpg';
+                }}
+              />
+            </div>
+
+            {/* Top-Center: Official Barangay Letterhead Details */}
+            <div className="text-center flex-1 px-4 space-y-0.5 font-sans">
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-950 uppercase tracking-tight">
+                {finalBarangayName}
+              </h2>
+              <p className="text-xs sm:text-sm font-semibold text-slate-900">
+                {finalHallAddress}
+              </p>
+              <p className="text-xs sm:text-sm font-bold text-slate-900">
+                {finalContactPhone}
+              </p>
+              <p className="text-xs font-medium text-blue-700 underline">
+                email add: {finalContactEmail}
+              </p>
+            </div>
+
+            {/* Top-Right: Official City of Cebu Seal & Bagong Pilipinas Logo */}
+            <div className="flex items-center space-x-2 shrink-0">
+              <div className="w-16 h-16 sm:w-18 sm:h-18 flex items-center justify-center">
+                <img
+                  src="/cebu_city_seal.png"
+                  alt="City of Cebu Seal"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="w-16 h-16 sm:w-18 sm:h-18 flex items-center justify-center">
+                <img
+                  src="/bagong_pilipinas.png"
+                  alt="Bagong Pilipinas"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-0.5">
-            <p className="text-xs uppercase tracking-widest font-sans font-medium text-slate-700">
-              Republic of the Philippines
-            </p>
-            <p className="text-sm font-bold uppercase tracking-wider text-slate-800">
-              City of Cebu
-            </p>
-            <p className="text-lg font-extrabold uppercase tracking-wide text-blue-900 font-sans">
-              Barangay Zapatera
-            </p>
-          </div>
-
-          <div className="text-[11px] text-slate-600 font-sans space-y-0.5 pt-1">
-            <p>197 D. Jakosalem St., Cebu City</p>
-            <p>(032)503-6465 • email add: zapatera.lnb24@gmail.com</p>
-          </div>
-
-          <div className="pt-2">
-            <p className="text-xs font-bold font-sans tracking-widest text-slate-900 uppercase">
+          {/* OFFICE OF THE PUNONG BARANGAY BANNER */}
+          <div className="mt-5 text-center">
+            <h3 className="text-base sm:text-lg font-black uppercase tracking-widest text-slate-950 font-sans">
               OFFICE OF THE PUNONG BARANGAY
-            </p>
+            </h3>
+            <div className="w-full h-1 bg-slate-950 mt-2"></div>
           </div>
         </div>
 
         {/* DOCUMENT TITLE */}
-        <div className="my-6 text-center">
-          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-[0.18em] font-sans text-slate-900 underline underline-offset-8 decoration-2 decoration-slate-900">
-            {documentTitle || 'BARANGAY CERTIFICATION'}
+        <div className="text-center my-4">
+          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-slate-950">
+            {documentTitle}
           </h1>
         </div>
 
-        {/* RESIDENT INFORMATION TABLE */}
-        <div className="my-4 bg-slate-50/60 print:bg-transparent rounded-lg p-4 print:p-0 border border-slate-200 print:border-none">
-          <div className="space-y-2.5 text-xs sm:text-sm text-slate-800">
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Name :</span>
-              <span className="font-bold underline decoration-slate-400 underline-offset-2 uppercase flex-1 break-words">
-                {name || '________________________________________'}
-              </span>
-            </div>
+        {/* STRUCTURED KEY-VALUE RESIDENT INFORMATION TABLE */}
+        <div className="my-3 font-sans text-sm sm:text-base space-y-2.5 px-2">
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Name</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-extrabold uppercase text-slate-950 tracking-wide">
+              {name || '________________________________________'}
+            </span>
+          </div>
 
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Address :</span>
-              <span className="flex-1 break-words">
-                {address || 'Barangay Zapatera, Cebu City'}
-              </span>
-            </div>
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Address</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-medium text-slate-900">
+              {address || '195 D. Jakosalem St., Brgy. Zapatera, Cebu City'}
+            </span>
+          </div>
 
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Date of Birth :</span>
-              <span className="flex-1">
-                {dateOfBirth || '____________________'}
-              </span>
-            </div>
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Date of Birth</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-medium text-slate-900">
+              {formattedDob}
+            </span>
+          </div>
 
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Contact No. :</span>
-              <span className="flex-1 font-mono">
-                {contactNo || '____________________'}
-              </span>
-            </div>
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Contact No.</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-medium text-slate-900 font-mono">
+              {contactNo || '____________________'}
+            </span>
+          </div>
 
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Years in Barangay :</span>
-              <span className="flex-1">
-                {yearsInBarangay ? `${yearsInBarangay}` : '____________________'}
-              </span>
-            </div>
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Years in Barangay</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-medium text-slate-900">
+              {yearsInBarangay || '____________________'}
+            </span>
+          </div>
 
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Purpose :</span>
-              <span className="font-bold underline decoration-slate-400 underline-offset-2 flex-1 break-words text-slate-900">
-                {purpose || '________________________________________'}
-              </span>
-            </div>
+          <div className="grid grid-cols-12 items-baseline">
+            <span className="col-span-4 font-bold text-slate-900">Purpose</span>
+            <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
+            <span className="col-span-7 font-bold text-slate-950 uppercase">
+              {purpose || 'ANY LEGAL PURPOSE'}
+            </span>
           </div>
         </div>
 
-        {/* CERTIFICATION BODY PARAGRAPH */}
-        <div className="my-6 space-y-4 text-xs sm:text-sm text-slate-800 leading-relaxed text-justify">
+        {/* CERTIFICATION BODY PARAGRAPHS */}
+        <div className="space-y-4 text-justify text-sm sm:text-base font-serif pt-4 leading-relaxed">
           <p className="indent-10">
-            {bodyText ||
-              'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.'}
+            {bodyText}
+          </p>
+
+          <p className="indent-10">
+            This certification is issued upon the request of the above-named person for whatever legal purpose it may serve.
           </p>
 
           <p className="indent-10">
@@ -133,7 +183,7 @@ export default function DocumentTemplate({
         </div>
 
         {/* SIGNATURE & OFFICIAL SEAL SECTION */}
-        <div className="mt-8 pt-4 flex items-end justify-between">
+        <div className="mt-8 pt-6 flex items-end justify-between">
           {/* Official Seal Watermark / Box */}
           <div className="w-36 h-28 border-2 border-dashed border-slate-400 rounded-lg flex flex-col items-center justify-center text-center p-2 text-slate-400">
             <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-500">
@@ -145,13 +195,13 @@ export default function DocumentTemplate({
           </div>
 
           {/* Punong Barangay Signature */}
-          <div className="text-center min-w-[240px]">
-            <div className="h-10"></div>
-            <p className="text-sm sm:text-base font-black text-slate-950 uppercase font-sans tracking-wide border-b-2 border-slate-900 pb-1">
-              {signatoryName}
+          <div className="text-center min-w-[260px]">
+            <div className="h-12"></div>
+            <p className="text-base sm:text-lg font-black text-slate-950 uppercase font-sans tracking-wide border-b-2 border-slate-900 pb-1">
+              {finalSignatoryName}
             </p>
-            <p className="text-xs font-bold text-slate-600 uppercase font-sans mt-1">
-              {signatoryTitle}
+            <p className="text-xs sm:text-sm font-bold text-slate-700 uppercase font-sans mt-1">
+              {finalSignatoryTitle}
             </p>
           </div>
         </div>

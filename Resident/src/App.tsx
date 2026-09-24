@@ -37,39 +37,6 @@ import AnnouncementsView from './features/announcements/AnnouncementsView';
 import NotificationModal from './features/notifications/NotificationModal';
 import ProfileView from './features/profile/ProfileView';
 
-const INITIAL_NOTIFICATIONS: ResidentNotification[] = [
-  {
-    id: 'notif-1',
-    user_id: 'res-sample',
-    title: 'Document Ready for Pickup! 🎉',
-    message: 'Your Barangay Clearance (Ref: BRGY-2026-004128) is ready for pickup at Express Window 2.',
-    type: 'ready_pickup',
-    is_read: false,
-    link_tab: 'requests',
-    created_at: 'Today, 8:00 AM',
-  },
-  {
-    id: 'notif-2',
-    user_id: 'res-sample',
-    title: 'Public Health Advisory Posted',
-    message: 'Free Medical & Dental Mission scheduled for September 12 at the Barangay Gym.',
-    type: 'announcement',
-    is_read: false,
-    link_tab: 'announcements',
-    created_at: 'Yesterday, 3:30 PM',
-  },
-  {
-    id: 'notif-3',
-    user_id: 'res-sample',
-    title: 'Application Under Review',
-    message: 'Barangay records clerk is reviewing your Certificate of Residency request.',
-    type: 'status_update',
-    is_read: true,
-    link_tab: 'requests',
-    created_at: 'Sep 5, 2026',
-  },
-];
-
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
@@ -77,7 +44,7 @@ export default function App() {
   const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
   const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
-  const [notifications, setNotifications] = useState<ResidentNotification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<ResidentNotification[]>([]);
 
   // Modals state
   const [isRequestFlowOpen, setIsRequestFlowOpen] = useState<boolean>(false);
