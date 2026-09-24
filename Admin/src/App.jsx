@@ -24,24 +24,40 @@ export default function App() {
   const [docTypes, setDocTypes] = useState(StorageService.getDocTypes());
   const [events, setEvents] = useState(StorageService.getEvents());
   const [logs, setLogs] = useState(StorageService.getLogs());
-  const [config] = useState(StorageService.getConfig());
+  const [config, setConfig] = useState(StorageService.getConfig());
 
   const refreshState = async () => {
-    const [reqs, docs, evts, logsData] = await Promise.all([
+    const [reqs, docs, evts, logsData, cfg] = await Promise.all([
       StorageService.getRequestsAsync(),
       StorageService.getDocTypesAsync(),
       StorageService.getEventsAsync(),
       StorageService.getLogsAsync(),
+      StorageService.getConfigAsync(),
     ]);
     if (reqs) setRequests(reqs);
     if (docs) setDocTypes(docs);
     if (evts) setEvents(evts);
     if (logsData) setLogs(logsData);
+    if (cfg) setConfig(cfg);
     setCurrentUser(StorageService.getCurrentUser());
   };
 
   useEffect(() => {
     refreshState();
+
+    const handleConfigUpdate = () => {
+      StorageService.getConfigAsync().then((newCfg) => {
+        if (newCfg) setConfig(newCfg);
+      });
+    };
+
+    window.addEventListener('storage', handleConfigUpdate);
+    window.addEventListener('zapatera_config_updated', handleConfigUpdate);
+
+    return () => {
+      window.removeEventListener('storage', handleConfigUpdate);
+      window.removeEventListener('zapatera_config_updated', handleConfigUpdate);
+    };
   }, []);
 
   const handleLoginSuccess = (user) => {
