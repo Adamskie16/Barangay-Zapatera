@@ -829,734 +829,631 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.headerArea}>
-        <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80' }}
-          style={styles.sealLogo}
-        />
-        <Text style={styles.portalTitle}>BARANGAY ZAPATERA</Text>
-        <Text style={styles.portalSubtitle}>Resident Digital Service Portal</Text>
-      </View>
+      {/* Outer Centered Responsive Card Container */}
+      <View style={styles.authCard}>
+        {/* Top Header & Branding */}
+        <View style={styles.headerArea}>
+          {/* Top Row: Back Arrow if in sub-step or register */}
+          <View style={styles.topNavRow}>
+            {(activeTab === 'register' || authStep !== 'credentials') ? (
+              <TouchableOpacity
+                style={styles.circleBackBtn}
+                onPress={() => {
+                  if (authStep !== 'credentials') {
+                    setAuthStep('credentials');
+                    setErrorMessage('');
+                    setSuccessBanner('');
+                    setInfoBanner('');
+                  } else {
+                    setActiveTab('login');
+                    setErrorMessage('');
+                    setSuccessBanner('');
+                    setInfoBanner('');
+                  }
+                }}
+              >
+                <ArrowLeft size={18} color="#1e293b" />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 36 }} />
+            )}
 
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'login' && styles.tabBtnActive]}
-          onPress={() => {
-            setActiveTab('login');
-            setAuthStep('credentials');
-            setErrorMessage('');
-            setSuccessBanner('');
-            setInfoBanner('');
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === 'login' && styles.tabTextActive]}>Resident Login</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'register' && styles.tabBtnActive]}
-          onPress={() => {
-            setActiveTab('register');
-            setErrorMessage('');
-            setSuccessBanner('');
-            setInfoBanner('');
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === 'register' && styles.tabTextActive]}>New Resident Sign Up</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Dynamic Alerts and Banners */}
-      {successBanner ? (
-        <View style={styles.successBox}>
-          <View style={styles.alertHeaderRow}>
-            <CheckCircle2 size={18} color="#10b981" />
-            <Text style={styles.successTitle}>Registration Completed</Text>
-          </View>
-          <Text style={styles.successText}>{successBanner}</Text>
-        </View>
-      ) : null}
-
-      {infoBanner ? (
-        <View style={styles.infoBox}>
-          <View style={styles.alertHeaderRow}>
-            <Info size={18} color="#3b82f6" />
-            <Text style={styles.infoTitle}>Verification Notice</Text>
-          </View>
-          <Text style={styles.infoText}>{infoBanner}</Text>
-        </View>
-      ) : null}
-
-      {errorMessage ? (
-        <View style={[styles.errorBox, isLocked && styles.lockedBox]}>
-          <View style={styles.alertHeaderRow}>
-            {isLocked ? <Lock size={18} color="#f43f5e" /> : <AlertTriangle size={18} color="#f43f5e" />}
-            <Text style={styles.errorTitle}>{isLocked ? 'Account Security Lockout' : 'Validation Alert'}</Text>
-          </View>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          {isLocked ? (
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 10, paddingVertical: 10, backgroundColor: '#dc2626' }]}
-              onPress={() => setIsUnlockModalOpen(true)}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Unlock size={16} color="#ffffff" />
-                <Text style={styles.primaryBtnText}>Unlock Account with Gmail Code</Text>
+            {/* Modern Cignifi-Style Brand Logo with Dot Accents */}
+            <View style={styles.brandLogoWrapper}>
+              <Text style={styles.brandLogoText}>zapatera</Text>
+              <View style={styles.dotAccents}>
+                <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
+                <View style={[styles.dot, { backgroundColor: '#10b981' }]} />
+                <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
               </View>
-            </TouchableOpacity>
-          ) : null}
-          {showResendConfirmation ? (
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 8, paddingVertical: 8, backgroundColor: '#2563eb' }]}
-              onPress={handleResendConfirmation}
-              disabled={resendLoading}
-            >
-              {resendLoading ? (
-                <ActivityIndicator color="#ffffff" size="small" />
-              ) : (
-                <Text style={[styles.primaryBtnText, { fontSize: 12 }]}>Resend Confirmation Email Link ✉</Text>
-              )}
-            </TouchableOpacity>
-          ) : null}
+            </View>
+
+            <View style={{ width: 36 }} />
+          </View>
         </View>
-      ) : null}
 
-      {/* ================================================================= */}
-      {/* 1. RESIDENT LOGIN TAB */}
-      {/* ================================================================= */}
-      {activeTab === 'login' ? (
-        authStep === 'credentials' ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Resident Sign In</Text>
-            <Text style={styles.cardSubtitle}>
-              Enter your registered Gmail credentials to request documents & certificates.
-            </Text>
+        {/* Dynamic Alerts and Banners */}
+        {successBanner ? (
+          <View style={styles.successBox}>
+            <View style={styles.alertHeaderRow}>
+              <CheckCircle2 size={16} color="#059669" />
+              <Text style={styles.successTitle}>Registration Completed</Text>
+            </View>
+            <Text style={styles.successText}>{successBanner}</Text>
+          </View>
+        ) : null}
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Gmail / Email Address *</Text>
-              <View style={styles.inputWrapper}>
+        {infoBanner ? (
+          <View style={styles.infoBox}>
+            <View style={styles.alertHeaderRow}>
+              <Info size={16} color="#2563eb" />
+              <Text style={styles.infoTitle}>Verification Notice</Text>
+            </View>
+            <Text style={styles.infoText}>{infoBanner}</Text>
+          </View>
+        ) : null}
+
+        {errorMessage ? (
+          <View style={[styles.errorBox, isLocked && styles.lockedBox]}>
+            <View style={styles.alertHeaderRow}>
+              {isLocked ? <Lock size={16} color="#dc2626" /> : <AlertTriangle size={16} color="#dc2626" />}
+              <Text style={styles.errorTitle}>{isLocked ? 'Account Security Lockout' : 'Validation Alert'}</Text>
+            </View>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+            {isLocked ? (
+              <TouchableOpacity
+                style={[styles.primaryBtn, { marginTop: 10, paddingVertical: 10, backgroundColor: '#dc2626' }]}
+                onPress={() => setIsUnlockModalOpen(true)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Unlock size={16} color="#ffffff" />
+                  <Text style={styles.primaryBtnText}>Unlock Account with Gmail Code</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+            {showResendConfirmation ? (
+              <TouchableOpacity
+                style={[styles.primaryBtn, { marginTop: 8, paddingVertical: 8, backgroundColor: '#1e3a8a' }]}
+                onPress={handleResendConfirmation}
+                disabled={resendLoading}
+              >
+                {resendLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={[styles.primaryBtnText, { fontSize: 12 }]}>Resend Confirmation Email Link ✉</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ================================================================= */}
+        {/* 1. RESIDENT LOGIN TAB */}
+        {/* ================================================================= */}
+        {activeTab === 'login' ? (
+          authStep === 'credentials' ? (
+            <View style={styles.formContainer}>
+              <Text style={styles.formTitle}>Login to your Account</Text>
+
+              <View style={styles.inputGroup}>
                 <TextInput
-                  style={styles.inputWithIcon}
-                  placeholder="resident.name@gmail.com"
-                  placeholderTextColor="#64748b"
+                  style={styles.modernInput}
+                  placeholder="Email"
+                  placeholderTextColor="#94a3b8"
                   value={loginEmail}
                   onChangeText={setLoginEmail}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
               </View>
-            </View>
 
-            <View style={styles.inputGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <Text style={styles.label}>Password *</Text>
-                <TouchableOpacity onPress={() => { setAuthStep('forgot_password'); setErrorMessage(''); setSuccessBanner(''); }}>
-                  <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '600' }}>Forgot password?</Text>
-                </TouchableOpacity>
+              <View style={styles.inputGroup}>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="Password"
+                    placeholderTextColor="#94a3b8"
+                    value={loginPassword}
+                    onChangeText={setLoginPassword}
+                    secureTextEntry={!showLoginPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setShowLoginPassword(!showLoginPassword)}
+                  >
+                    {showLoginPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.passwordWrapper}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Enter your account password"
-                  placeholderTextColor="#64748b"
-                  value={loginPassword}
-                  onChangeText={setLoginPassword}
-                  secureTextEntry={!showLoginPassword}
-                />
+
+              <View style={styles.rememberForgotRow}>
                 <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowLoginPassword(!showLoginPassword)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  onPress={() => setRememberMe(!rememberMe)}
                 >
-                  {showLoginPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  {rememberMe ? <CheckSquare size={16} color="#1e3a8a" /> : <Square size={16} color="#94a3b8" />}
+                  <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '500' }}>Remember me</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => { setAuthStep('forgot_password'); setErrorMessage(''); setSuccessBanner(''); }}>
+                  <Text style={{ color: '#1e3a8a', fontSize: 12, fontWeight: '600' }}>Forgot password?</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleCredentialsSubmit} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Sign in</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Social Login / Fast Access Section */}
+              <View style={styles.orDividerRow}>
+                <Text style={styles.orDividerText}>- Or sign in with -</Text>
+              </View>
+
+              <View style={styles.socialRow}>
+                {/* Google Button */}
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={() => {
+                    if (isSupabaseConfigured()) {
+                      supabase.auth.signInWithOAuth({ provider: 'google' });
+                    }
+                  }}
+                >
+                  <Text style={styles.googleIconText}>G</Text>
+                </TouchableOpacity>
+
+                {/* Facebook Button */}
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={() => {
+                    if (isSupabaseConfigured()) {
+                      supabase.auth.signInWithOAuth({ provider: 'facebook' });
+                    }
+                  }}
+                >
+                  <Text style={styles.facebookIconText}>f</Text>
+                </TouchableOpacity>
+
+                {/* Biometric Fast Access Button */}
+                <TouchableOpacity
+                  style={styles.socialBtn}
+                  onPress={handleBiometricLogin}
+                  disabled={loading}
+                  title="Sign In with Biometrics"
+                >
+                  <Fingerprint size={20} color="#0284c7" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Bottom Switcher */}
+              <View style={styles.footerLinkRow}>
+                <Text style={styles.footerText}>Don't have an account? </Text>
+                <TouchableOpacity onPress={() => { setActiveTab('register'); setErrorMessage(''); setSuccessBanner(''); }}>
+                  <Text style={styles.footerLinkText}>Sign up</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 6 }}>
-              <TouchableOpacity
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                onPress={() => setRememberMe(!rememberMe)}
-              >
-                {rememberMe ? <CheckSquare size={16} color="#3b82f6" /> : <Square size={16} color="#64748b" />}
-                <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '600' }}>Remember my device</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleCredentialsSubmit} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Verify Credentials & Send Gmail OTP →</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Optional Biometric Login Button */}
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 8, backgroundColor: '#0f172a', borderWidth: 1, borderColor: '#334155' }]}
-              onPress={handleBiometricLogin}
-              disabled={loading}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Fingerprint size={16} color="#38bdf8" />
-                <Text style={[styles.primaryBtnText, { color: '#e2e8f0', fontSize: 12 }]}>Sign In with Face ID / Fingerprint</Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.helperTipBox}>
-              <ShieldCheck size={14} color="#3b82f6" />
-              <Text style={styles.helperTipText}>
-                Protected with Multi-Factor Authentication (MFA) & Automatic 3-Strike Security Lockout.
+          ) : authStep === 'forgot_password' ? (
+            /* FORGOT PASSWORD STEP */
+            <View style={styles.formContainer}>
+              <Text style={styles.formTitle}>Reset your Password</Text>
+              <Text style={styles.formSubtitle}>
+                Enter your registered Gmail address. We'll dispatch a recovery link to your inbox.
               </Text>
-            </View>
-          </View>
-        ) : authStep === 'forgot_password' ? (
-          /* FORGOT PASSWORD STEP */
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Reset Resident Password</Text>
-            <Text style={styles.cardSubtitle}>
-              Enter your registered Gmail address below. We'll send a password recovery link to your Gmail inbox.
-            </Text>
 
+              <View style={styles.inputGroup}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Registered Gmail / Email"
+                  placeholderTextColor="#94a3b8"
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleForgotPasswordSubmit} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Send Reset Link</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.footerLinkRow}>
+                <TouchableOpacity
+                  onPress={() => { setAuthStep('credentials'); setErrorMessage(''); setSuccessBanner(''); }}
+                >
+                  <Text style={styles.footerLinkText}>Back to Sign in</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : authStep === 'reset_password' ? (
+            /* SET NEW PASSWORD STEP (FROM RECOVERY LINK) */
+            <View style={styles.formContainer}>
+              <Text style={styles.formTitle}>Create New Password</Text>
+              <Text style={styles.formSubtitle}>
+                Your recovery token is verified. Please set your new secure account password.
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="New Password (min. 8 chars)"
+                    placeholderTextColor="#94a3b8"
+                    value={resetNewPassword}
+                    onChangeText={setResetNewPassword}
+                    secureTextEntry={!showResetNewPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setShowResetNewPassword(!showResetNewPassword)}
+                  >
+                    {showResetNewPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="Confirm New Password"
+                    placeholderTextColor="#94a3b8"
+                    value={resetConfirmPassword}
+                    onChangeText={setResetConfirmPassword}
+                    secureTextEntry={!showResetConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeBtn}
+                    onPress={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                  >
+                    {showResetConfirmPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={handleResetPasswordSubmit}
+                disabled={loading || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Save New Password</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.footerLinkRow}>
+                <TouchableOpacity
+                  onPress={() => { setAuthStep('credentials'); setErrorMessage(''); setSuccessBanner(''); }}
+                >
+                  <Text style={styles.footerLinkText}>Cancel & Back to Sign in</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* MFA OTP VERIFICATION STEP */
+            <View style={styles.formContainer}>
+              <Text style={styles.formTitle}>Enter Security Code</Text>
+              <Text style={styles.formSubtitle}>
+                Enter the 6-digit authentication OTP dispatched to your Gmail.
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <TextInput
+                  style={[styles.modernInput, styles.otpInputText]}
+                  placeholder="• • • • • •"
+                  placeholderTextColor="#94a3b8"
+                  value={otpInput}
+                  onChangeText={setOtpInput}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
+              </View>
+
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleOtpSubmit} disabled={loading}>
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Verify & Sign in</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.otpActionRow}>
+                <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp} disabled={loading}>
+                  <Text style={styles.resendBtnText}>Resend Code</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backBtn}
+                  onPress={() => {
+                    setAuthStep('credentials');
+                    setOtpInput('');
+                    setErrorMessage('');
+                  }}
+                >
+                  <Text style={styles.backBtnText}>Back to Sign in</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )
+        ) : (
+          /* ================================================================= */
+          /* 2. NEW RESIDENT SIGN UP TAB */
+          /* ================================================================= */
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>Create your Account</Text>
+
+            {/* Email Address */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Registered Gmail Address *</Text>
               <TextInput
-                style={styles.input}
-                placeholder="resident.name@gmail.com"
-                placeholderTextColor="#64748b"
-                value={forgotEmail}
-                onChangeText={setForgotEmail}
+                style={styles.modernInput}
+                placeholder="Email"
+                placeholderTextColor="#94a3b8"
+                value={regData.email}
+                onChangeText={(txt) => setRegData({ ...regData, email: txt })}
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
             </View>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleForgotPasswordSubmit} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Send Password Reset Link ✉</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.backBtn, { marginTop: 12, alignSelf: 'center' }]}
-              onPress={() => { setAuthStep('credentials'); setErrorMessage(''); setSuccessBanner(''); }}
-            >
-              <Text style={styles.backBtnText}>← Back to Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        ) : authStep === 'reset_password' ? (
-          /* SET NEW PASSWORD STEP (FROM RECOVERY LINK) */
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Choose New Password</Text>
-            <Text style={styles.cardSubtitle}>
-              Your Gmail recovery token is verified. Please create and confirm your new secure password.
-            </Text>
-
+            {/* Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>New Password (min. 8 characters) *</Text>
               <View style={styles.passwordWrapper}>
                 <TextInput
                   style={styles.passwordInput}
-                  placeholder="Enter new password"
-                  placeholderTextColor="#64748b"
-                  value={resetNewPassword}
-                  onChangeText={setResetNewPassword}
-                  secureTextEntry={!showResetNewPassword}
+                  placeholder="Password"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.password}
+                  onChangeText={(txt) => setRegData({ ...regData, password: txt })}
+                  secureTextEntry={!showRegPassword}
                 />
                 <TouchableOpacity
                   style={styles.eyeBtn}
-                  onPress={() => setShowResetNewPassword(!showResetNewPassword)}
+                  onPress={() => setShowRegPassword(!showRegPassword)}
                 >
-                  {showResetNewPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  {showRegPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
                 </TouchableOpacity>
               </View>
             </View>
 
+            {/* Confirm Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Confirm New Password *</Text>
               <View style={styles.passwordWrapper}>
                 <TextInput
                   style={styles.passwordInput}
-                  placeholder="Re-enter new password"
-                  placeholderTextColor="#64748b"
-                  value={resetConfirmPassword}
-                  onChangeText={setResetConfirmPassword}
-                  secureTextEntry={!showResetConfirmPassword}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.confirmPassword}
+                  onChangeText={(txt) => setRegData({ ...regData, confirmPassword: txt })}
+                  secureTextEntry={!showRegConfirmPassword}
                 />
                 <TouchableOpacity
                   style={styles.eyeBtn}
-                  onPress={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                  onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
                 >
-                  {showResetConfirmPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  {showRegConfirmPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
                 </TouchableOpacity>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={handleResetPasswordSubmit}
-              disabled={loading || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-            >
-              {loading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Save New Password & Unlock Account</Text>
-              )}
-            </TouchableOpacity>
+            {/* Full Name Fields */}
+            <View style={styles.nameRow}>
+              <View style={[styles.inputGroup, { flex: 2, marginRight: 8 }]}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Last Name"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.last_name}
+                  onChangeText={(txt) => setRegData({ ...regData, last_name: txt })}
+                />
+              </View>
 
-            <TouchableOpacity
-              style={[styles.backBtn, { marginTop: 12, alignSelf: 'center' }]}
-              onPress={() => { setAuthStep('credentials'); setErrorMessage(''); setSuccessBanner(''); }}
-            >
-              <Text style={styles.backBtnText}>← Cancel and Return to Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* MFA OTP VERIFICATION STEP */
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Gmail Security MFA Code</Text>
-            <Text style={styles.cardSubtitle}>
-              Enter the 6-digit authentication OTP dispatched to your Gmail address.
-            </Text>
+              <View style={[styles.inputGroup, { flex: 2, marginRight: 8 }]}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="First Name"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.first_name}
+                  onChangeText={(txt) => setRegData({ ...regData, first_name: txt })}
+                />
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>6-Digit Verification Code *</Text>
-              <TextInput
-                style={[styles.input, styles.otpInputText]}
-                placeholder="• • • • • •"
-                placeholderTextColor="#64748b"
-                value={otpInput}
-                onChangeText={setOtpInput}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <TextInput
+                  style={[styles.modernInput, { textAlign: 'center' }]}
+                  placeholder="M.I."
+                  placeholderTextColor="#94a3b8"
+                  maxLength={3}
+                  value={regData.middle_initial}
+                  onChangeText={(txt) => setRegData({ ...regData, middle_initial: txt })}
+                />
+              </View>
             </View>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleOtpSubmit} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.primaryBtnText}>Authorize Login Session</Text>
-              )}
-            </TouchableOpacity>
+            {/* Date of Birth & Phone in Row */}
+            <View style={styles.nameRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Birthdate (YYYY-MM-DD)"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.birth_date}
+                  onChangeText={(txt) => setRegData({ ...regData, birth_date: txt })}
+                  maxLength={10}
+                />
+              </View>
 
-            <View style={styles.otpActionRow}>
-              <TouchableOpacity style={styles.resendBtn} onPress={handleResendOtp} disabled={loading}>
-                <Text style={styles.resendBtnText}>Resend 6-Digit OTP</Text>
-              </TouchableOpacity>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Mobile Phone"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.phone}
+                  onChangeText={(txt) => setRegData({ ...regData, phone: txt })}
+                  keyboardType="phone-pad"
+                  maxLength={13}
+                />
+              </View>
+            </View>
 
+            {/* Select Sitio */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.fieldSubLabel}>Select Sitio (Barangay Zapatera):</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
+                {SAMPLE_SITIOS.map((sitioName) => (
+                  <TouchableOpacity
+                    key={sitioName}
+                    style={[
+                      styles.sitioPill,
+                      regData.sitio === sitioName && styles.sitioPillActive,
+                    ]}
+                    onPress={() => setRegData({ ...regData, sitio: sitioName })}
+                  >
+                    <Text
+                      style={[
+                        styles.sitioPillText,
+                        regData.sitio === sitioName && styles.sitioPillTextActive,
+                      ]}
+                    >
+                      {sitioName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Voter Status */}
+            <View style={styles.inputGroup}>
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    regData.voter_status === 'Registered Voter' && styles.toggleBtnActive,
+                  ]}
+                  onPress={() => setRegData({ ...regData, voter_status: 'Registered Voter' })}
+                >
+                  <Text
+                    style={[
+                      styles.toggleBtnText,
+                      regData.voter_status === 'Registered Voter' && styles.toggleBtnTextActive,
+                    ]}
+                  >
+                    Registered Voter
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.toggleBtn,
+                    regData.voter_status === 'Not Registered Voter' && styles.toggleBtnActive,
+                  ]}
+                  onPress={() => setRegData({ ...regData, voter_status: 'Not Registered Voter' })}
+                >
+                  <Text
+                    style={[
+                      styles.toggleBtnText,
+                      regData.voter_status === 'Not Registered Voter' && styles.toggleBtnTextActive,
+                    ]}
+                  >
+                    Non-Voter
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Privacy Agreement */}
+            <View style={styles.privacyPolicyContainer}>
               <TouchableOpacity
-                style={styles.backBtn}
+                style={styles.checkboxTouchable}
+                onPress={() => setRegData({ ...regData, privacyPolicyAccepted: !regData.privacyPolicyAccepted })}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    regData.privacyPolicyAccepted && styles.checkboxChecked,
+                  ]}
+                >
+                  {regData.privacyPolicyAccepted ? <Check size={12} color="#ffffff" /> : null}
+                </View>
+
+                <Text style={styles.privacyPolicyLabel}>
+                  I agree to the{' '}
+                  <Text
+                    style={styles.privacyPolicyLink}
+                    onPress={() => setIsPrivacyModalOpen(true)}
+                  >
+                    Data Privacy Policy
+                  </Text>{' '}
+                  under RA 10173.
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Submit Sign Up Button */}
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleRegister} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Sign up</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Social Divider */}
+            <View style={styles.orDividerRow}>
+              <Text style={styles.orDividerText}>- Or sign up with -</Text>
+            </View>
+
+            <View style={styles.socialRow}>
+              <TouchableOpacity
+                style={styles.socialBtn}
                 onPress={() => {
-                  setAuthStep('credentials');
-                  setOtpInput('');
-                  setErrorMessage('');
+                  if (isSupabaseConfigured()) {
+                    supabase.auth.signInWithOAuth({ provider: 'google' });
+                  }
                 }}
               >
-                <Text style={styles.backBtnText}>← Back to Login</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )
-      ) : (
-        /* ================================================================= */
-        /* 2. NEW RESIDENT SIGN UP TAB (All Required Fields & Strong Password) */
-        /* ================================================================= */
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Resident Account Registration</Text>
-          <Text style={styles.cardSubtitle}>
-            Complete all required fields below to create your official Barangay Zapatera resident profile.
-          </Text>
-
-          {/* Section: Full Name (Last Name, First Name, Middle Initial) */}
-          <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>1. Full Name Information *</Text>
-          </View>
-
-          <View style={styles.nameRow}>
-            <View style={[styles.inputGroup, { flex: 2, marginRight: 8 }]}>
-              <Text style={styles.label}>Last Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Dela Cruz"
-                placeholderTextColor="#64748b"
-                value={regData.last_name}
-                onChangeText={(txt) => setRegData({ ...regData, last_name: txt })}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, { flex: 2, marginRight: 8 }]}>
-              <Text style={styles.label}>First Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Juan"
-                placeholderTextColor="#64748b"
-                value={regData.first_name}
-                onChangeText={(txt) => setRegData({ ...regData, first_name: txt })}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>MI *</Text>
-              <TextInput
-                style={[styles.input, { textAlign: 'center' }]}
-                placeholder="M."
-                placeholderTextColor="#64748b"
-                maxLength={3}
-                value={regData.middle_initial}
-                onChangeText={(txt) => setRegData({ ...regData, middle_initial: txt })}
-              />
-            </View>
-          </View>
-
-          {previewFormattedName ? (
-            <View style={styles.namePreviewBox}>
-              <Text style={styles.namePreviewLabel}>Official Formatted Name:</Text>
-              <Text style={styles.namePreviewValue}>{previewFormattedName}</Text>
-            </View>
-          ) : null}
-
-          {/* Section: Personal Status & Date of Birth */}
-          <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>2. Personal Status & Birth Details *</Text>
-          </View>
-
-          {/* Date of Birth Input Field */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Date of Birth (YYYY-MM-DD) *</Text>
-            <View style={{ position: 'relative', justifyContent: 'center' }}>
-              <TextInput
-                style={[styles.input, { paddingLeft: 36 }]}
-                placeholder="YYYY-MM-DD (e.g. 1998-05-15)"
-                placeholderTextColor="#64748b"
-                value={regData.birth_date}
-                onChangeText={(txt) => setRegData({ ...regData, birth_date: txt })}
-                maxLength={10}
-              />
-              <View style={{ position: 'absolute', left: 12 }}>
-                <Calendar size={15} color="#94a3b8" />
-              </View>
-            </View>
-          </View>
-
-          {/* Civil Status / Status Selection */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Status / Civil Status *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
-              {CIVIL_STATUS_OPTIONS.map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.sitioPill,
-                    regData.civil_status === status && styles.sitioPillActive,
-                  ]}
-                  onPress={() => setRegData({ ...regData, civil_status: status })}
-                >
-                  <Text
-                    style={[
-                      styles.sitioPillText,
-                      regData.civil_status === status && styles.sitioPillTextActive,
-                    ]}
-                  >
-                    {status}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Section: Contact & Residency Info */}
-          <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>3. Contact & Residency Details *</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Gmail / Email Address *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="juan.delacruz@gmail.com"
-              placeholderTextColor="#64748b"
-              value={regData.email}
-              onChangeText={(txt) => setRegData({ ...regData, email: txt })}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mobile Phone Number *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="09171234567"
-              placeholderTextColor="#64748b"
-              value={regData.phone}
-              onChangeText={(txt) => setRegData({ ...regData, phone: txt })}
-              keyboardType="phone-pad"
-              maxLength={13}
-            />
-          </View>
-
-          {/* Registered Voter Status (Yes / No) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Registered Voter in Barangay Zapatera? *</Text>
-            <View style={styles.toggleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleBtn,
-                  regData.voter_status === 'Registered Voter' && styles.toggleBtnActive,
-                ]}
-                onPress={() => setRegData({ ...regData, voter_status: 'Registered Voter' })}
-              >
-                <Vote size={14} color={regData.voter_status === 'Registered Voter' ? '#ffffff' : '#94a3b8'} />
-                <Text
-                  style={[
-                    styles.toggleBtnText,
-                    regData.voter_status === 'Registered Voter' && styles.toggleBtnTextActive,
-                  ]}
-                >
-                  Yes (Registered Voter)
-                </Text>
+                <Text style={styles.googleIconText}>G</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.toggleBtn,
-                  regData.voter_status === 'Not Registered Voter' && styles.toggleBtnActiveRose,
-                ]}
-                onPress={() => setRegData({ ...regData, voter_status: 'Not Registered Voter' })}
+                style={styles.socialBtn}
+                onPress={() => {
+                  if (isSupabaseConfigured()) {
+                    supabase.auth.signInWithOAuth({ provider: 'facebook' });
+                  }
+                }}
               >
-                <X size={14} color={regData.voter_status === 'Not Registered Voter' ? '#ffffff' : '#94a3b8'} />
-                <Text
-                  style={[
-                    styles.toggleBtnText,
-                    regData.voter_status === 'Not Registered Voter' && styles.toggleBtnTextActive,
-                  ]}
-                >
-                  No (Non-Voter)
-                </Text>
+                <Text style={styles.facebookIconText}>f</Text>
               </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* Select Sitio (Sample list with easy customization) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Select Sitio (Barangay Zapatera) *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
-              {SAMPLE_SITIOS.map((sitioName) => (
-                <TouchableOpacity
-                  key={sitioName}
-                  style={[
-                    styles.sitioPill,
-                    regData.sitio === sitioName && styles.sitioPillActive,
-                  ]}
-                  onPress={() => setRegData({ ...regData, sitio: sitioName })}
-                >
-                  <MapPin size={12} color={regData.sitio === sitioName ? '#ffffff' : '#94a3b8'} />
-                  <Text
-                    style={[
-                      styles.sitioPillText,
-                      regData.sitio === sitioName && styles.sitioPillTextActive,
-                    ]}
-                  >
-                    {sitioName}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Section: Security & Strong Password */}
-          <View style={styles.sectionDivider}>
-            <Text style={styles.sectionTitle}>3. Account Password & Security *</Text>
-          </View>
-
-          {/* Strong Password Requirement Guide Alert */}
-          <View style={styles.passwordRequirementsBox}>
-            <View style={styles.alertHeaderRow}>
-              <Shield size={16} color="#60a5fa" />
-              <Text style={styles.passwordRequirementsTitle}>Strong Password Requirements (Required):</Text>
-            </View>
-
-            <View style={styles.checklistGrid}>
-              <View style={styles.checklistItem}>
-                {passwordStrength.hasLength ? (
-                  <Check size={14} color="#10b981" />
-                ) : (
-                  <X size={14} color="#ef4444" />
-                )}
-                <Text
-                  style={[
-                    styles.checklistText,
-                    passwordStrength.hasLength && styles.checklistTextValid,
-                  ]}
-                >
-                  At least 8 characters
-                </Text>
-              </View>
-
-              <View style={styles.checklistItem}>
-                {passwordStrength.hasUpper ? (
-                  <Check size={14} color="#10b981" />
-                ) : (
-                  <X size={14} color="#ef4444" />
-                )}
-                <Text
-                  style={[
-                    styles.checklistText,
-                    passwordStrength.hasUpper && styles.checklistTextValid,
-                  ]}
-                >
-                  1 Uppercase letter (A-Z)
-                </Text>
-              </View>
-
-              <View style={styles.checklistItem}>
-                {passwordStrength.hasLower ? (
-                  <Check size={14} color="#10b981" />
-                ) : (
-                  <X size={14} color="#ef4444" />
-                )}
-                <Text
-                  style={[
-                    styles.checklistText,
-                    passwordStrength.hasLower && styles.checklistTextValid,
-                  ]}
-                >
-                  1 Lowercase letter (a-z)
-                </Text>
-              </View>
-
-              <View style={styles.checklistItem}>
-                {passwordStrength.hasNumber ? (
-                  <Check size={14} color="#10b981" />
-                ) : (
-                  <X size={14} color="#ef4444" />
-                )}
-                <Text
-                  style={[
-                    styles.checklistText,
-                    passwordStrength.hasNumber && styles.checklistTextValid,
-                  ]}
-                >
-                  1 Number (0-9)
-                </Text>
-              </View>
-
-              <View style={styles.checklistItem}>
-                {passwordStrength.hasSpecial ? (
-                  <Check size={14} color="#10b981" />
-                ) : (
-                  <X size={14} color="#ef4444" />
-                )}
-                <Text
-                  style={[
-                    styles.checklistText,
-                    passwordStrength.hasSpecial && styles.checklistTextValid,
-                  ]}
-                >
-                  1 Special symbol (!@#$%^&*)
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Password Input with Eye Icon */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password *</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Create a strong password"
-                placeholderTextColor="#64748b"
-                value={regData.password}
-                onChangeText={(txt) => setRegData({ ...regData, password: txt })}
-                secureTextEntry={!showRegPassword}
-              />
               <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowRegPassword(!showRegPassword)}
+                style={styles.socialBtn}
+                onPress={() => setIsPrivacyModalOpen(true)}
               >
-                {showRegPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Confirm Password Input with Eye Icon */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Confirm Password *</Text>
-            <View style={styles.passwordWrapper}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Re-enter your password to confirm"
-                placeholderTextColor="#64748b"
-                value={regData.confirmPassword}
-                onChangeText={(txt) => setRegData({ ...regData, confirmPassword: txt })}
-                secureTextEntry={!showRegConfirmPassword}
-              />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
-              >
-                {showRegConfirmPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                <ShieldCheck size={20} color="#10b981" />
               </TouchableOpacity>
             </View>
 
-            {regData.confirmPassword ? (
-              <View style={styles.matchStatusRow}>
-                {passwordsMatch ? (
-                  <View style={styles.matchValidBox}>
-                    <CheckCircle2 size={12} color="#10b981" />
-                    <Text style={styles.matchValidText}>Passwords match perfectly</Text>
-                  </View>
-                ) : (
-                  <View style={styles.matchInvalidBox}>
-                    <X size={12} color="#ef4444" />
-                    <Text style={styles.matchInvalidText}>Passwords do not match yet</Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
+            {/* Footer Switcher */}
+            <View style={styles.footerLinkRow}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => { setActiveTab('login'); setErrorMessage(''); setSuccessBanner(''); }}>
+                <Text style={styles.footerLinkText}>Sign in</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          {/* Section: Privacy Policy Agreement */}
-          <View style={styles.privacyPolicyContainer}>
-            <TouchableOpacity
-              style={styles.checkboxTouchable}
-              onPress={() => setRegData({ ...regData, privacyPolicyAccepted: !regData.privacyPolicyAccepted })}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  regData.privacyPolicyAccepted && styles.checkboxChecked,
-                ]}
-              >
-                {regData.privacyPolicyAccepted ? <Check size={14} color="#ffffff" /> : null}
-              </View>
-
-              <Text style={styles.privacyPolicyLabel}>
-                I have read, understood, and agree to the{' '}
-                <Text
-                  style={styles.privacyPolicyLink}
-                  onPress={() => setIsPrivacyModalOpen(true)}
-                >
-                  Barangay Zapatera Data Privacy Policy
-                </Text>{' '}
-                under Republic Act No. 10173 (Data Privacy Act of 2012). *
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Submit Registration Button */}
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleRegister} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Register Resident Account & Send Confirmation →</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Privacy Policy Modal */}
       <Modal
@@ -1628,248 +1525,261 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 }
 
 const styles = StyleSheet.create({
-  lockedBox: {
-    backgroundColor: 'rgba(127, 29, 29, 0.45)',
-    borderColor: '#ef4444',
-    borderWidth: 1.5,
-  },
   container: {
     flex: 1,
-    backgroundColor: '#090d16',
+    backgroundColor: '#eff2fc',
   },
   contentContainer: {
-    padding: 20,
-    paddingTop: 45,
-    paddingBottom: 60,
+    padding: 16,
+    paddingTop: 32,
+    paddingBottom: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100%',
+  },
+  authCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 32,
+    padding: 24,
+    width: '100%',
+    maxWidth: 440,
+    shadowColor: '#1e3a8a',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 28,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.8)',
   },
   headerArea: {
+    marginBottom: 8,
+  },
+  topNavRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    minHeight: 40,
   },
-  sealLogo: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: '#3b82f6',
+  circleBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  portalTitle: {
-    fontSize: 20,
+  brandLogoWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandLogoText: {
+    fontSize: 26,
     fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: 1,
+    color: '#1e3a8a',
+    letterSpacing: -0.5,
   },
-  portalSubtitle: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 4,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 18,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  tabBtnActive: {
-    backgroundColor: '#2563eb',
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94a3b8',
-  },
-  tabTextActive: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  alertHeaderRow: {
+  dotAccents: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  successBox: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
-    borderColor: '#10b981',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  successTitle: {
-    color: '#34d399',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginLeft: 6,
-  },
-  successText: {
-    color: '#a7f3d0',
-    fontSize: 12,
-    lineHeight: 18,
+    gap: 3,
+    marginLeft: 4,
     marginTop: 2,
   },
-  infoBox: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: '#3b82f6',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 16,
+  dot: {
+    width: 5.5,
+    height: 5.5,
+    borderRadius: 3,
   },
-  infoTitle: {
-    color: '#60a5fa',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginLeft: 6,
-  },
-  infoText: {
-    color: '#bfdbfe',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-    borderWidth: 1,
-    borderColor: '#f43f5e',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    color: '#fb7185',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginLeft: 6,
-  },
-  errorText: {
-    color: '#fecdd3',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  card: {
-    backgroundColor: '#131c2e',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    padding: 20,
-    marginBottom: 20,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#94a3b8',
+  formContainer: {
     marginTop: 4,
-    marginBottom: 18,
-    lineHeight: 17,
   },
-  sectionDivider: {
-    marginTop: 10,
+  formTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 18,
+    letterSpacing: -0.3,
+  },
+  formSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: -10,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  inputGroup: {
     marginBottom: 12,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#60a5fa',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  fieldSubLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 6,
+  },
+  modernInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: '#0f172a',
+    fontSize: 13,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingRight: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: '#0f172a',
+    fontSize: 13,
+  },
+  eyeBtn: {
+    padding: 8,
+  },
+  rememberForgotRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  primaryBtn: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1e3a8a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  primaryBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  orDividerRow: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 14,
+  },
+  orDividerText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  socialRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 18,
+  },
+  socialBtn: {
+    width: 60,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  googleIconText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ea4335',
+  },
+  facebookIconText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1877f2',
+  },
+  footerLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  footerLinkText: {
+    fontSize: 13,
+    color: '#1e3a8a',
+    fontWeight: 'bold',
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   namePreviewBox: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: 'rgba(59, 130, 246, 0.2)',
     borderRadius: 10,
     padding: 10,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   namePreviewLabel: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   namePreviewValue: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#60a5fa',
+    color: '#1e3a8a',
     marginTop: 2,
   },
-  inputGroup: {
-    marginBottom: 14,
+  sitioScroll: {
+    flexDirection: 'row',
+    marginTop: 2,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#090d16',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    color: '#ffffff',
-    fontSize: 13,
-  },
-  inputWrapper: {
-    position: 'relative',
-  },
-  inputWithIcon: {
-    backgroundColor: '#090d16',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    color: '#ffffff',
-    fontSize: 13,
-  },
-  passwordWrapper: {
+  sitioPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#090d16',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingRight: 10,
+    borderColor: '#e2e8f0',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginRight: 8,
+    gap: 4,
   },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+  sitioPillActive: {
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a',
+  },
+  sitioPillText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  sitioPillTextActive: {
     color: '#ffffff',
-    fontSize: 13,
-  },
-  eyeBtn: {
-    padding: 8,
-  },
-  otpInputText: {
-    textAlign: 'center',
-    fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: 8,
-    fontFamily: 'monospace',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -1880,191 +1790,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#090d16',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    paddingVertical: 11,
+    paddingVertical: 10,
     gap: 6,
   },
   toggleBtnActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#3b82f6',
-  },
-  toggleBtnActiveRose: {
-    backgroundColor: '#e11d48',
-    borderColor: '#f43f5e',
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a',
   },
   toggleBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: '#64748b',
   },
   toggleBtnTextActive: {
     color: '#ffffff',
     fontWeight: 'bold',
   },
-  sitioScroll: {
-    flexDirection: 'row',
-    marginTop: 2,
-  },
-  sitioPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#090d16',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 8,
-    gap: 4,
-  },
-  sitioPillActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#3b82f6',
-  },
-  sitioPillText: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '600',
-  },
-  sitioPillTextActive: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  passwordRequirementsBox: {
-    backgroundColor: '#0d1527',
-    borderWidth: 1,
-    borderColor: '#1e3a8a',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
-  },
-  passwordRequirementsTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#93c5fd',
-    marginLeft: 6,
-  },
-  checklistGrid: {
-    marginTop: 6,
-    gap: 4,
-  },
-  checklistItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  checklistText: {
-    fontSize: 11,
-    color: '#94a3b8',
-  },
-  checklistTextValid: {
-    color: '#34d399',
-    fontWeight: '600',
-  },
-  matchStatusRow: {
-    marginTop: 6,
-  },
-  matchValidBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  matchValidText: {
-    fontSize: 11,
-    color: '#34d399',
-    fontWeight: '600',
-  },
-  matchInvalidBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  matchInvalidText: {
-    fontSize: 11,
-    color: '#f87171',
-  },
   privacyPolicyContainer: {
-    marginTop: 8,
-    marginBottom: 18,
-    backgroundColor: '#090d16',
+    marginTop: 4,
+    marginBottom: 14,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 12,
+    padding: 10,
   },
   checkboxTouchable: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#64748b',
-    backgroundColor: '#1e293b',
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   checkboxChecked: {
-    backgroundColor: '#2563eb',
-    borderColor: '#3b82f6',
+    backgroundColor: '#1e3a8a',
+    borderColor: '#1e3a8a',
   },
   privacyPolicyLabel: {
     flex: 1,
     fontSize: 11,
-    color: '#cbd5e1',
+    color: '#475569',
     lineHeight: 16,
   },
   privacyPolicyLink: {
-    color: '#60a5fa',
+    color: '#1e3a8a',
     fontWeight: 'bold',
     textDecorationLine: 'underline',
   },
-  primaryBtn: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  primaryBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
+  otpInputText: {
+    textAlign: 'center',
+    fontSize: 20,
     fontWeight: 'bold',
-  },
-  helperTipBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    gap: 6,
-  },
-  helperTipText: {
-    fontSize: 11,
-    color: '#64748b',
+    letterSpacing: 6,
+    fontFamily: 'monospace',
   },
   otpActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 14,
   },
   resendBtn: {
     paddingVertical: 6,
   },
   resendBtnText: {
-    color: '#60a5fa',
+    color: '#1e3a8a',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -2072,24 +1875,97 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   backBtnText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 12,
+  },
+  alertHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  successBox: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  successTitle: {
+    color: '#065f46',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  successText: {
+    color: '#047857',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  infoBox: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  infoTitle: {
+    color: '#1e40af',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  infoText: {
+    color: '#1d4ed8',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  errorBox: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  lockedBox: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+  },
+  errorTitle: {
+    color: '#9f1239',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  errorText: {
+    color: '#be123c',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#131c2e',
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#e2e8f0',
     width: '100%',
     maxHeight: '80%',
     padding: 20,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2097,7 +1973,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#f1f5f9',
   },
   modalHeaderLeft: {
     flexDirection: 'row',
@@ -2107,26 +1983,26 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#1e293b',
   },
   modalBody: {
-    marginVertical: 14,
+    marginVertical: 12,
   },
   modalSectionTitle: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#60a5fa',
+    color: '#1e3a8a',
     marginTop: 8,
     marginBottom: 4,
   },
   modalText: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     lineHeight: 16,
     marginBottom: 8,
   },
   modalCloseBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#1e3a8a',
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
