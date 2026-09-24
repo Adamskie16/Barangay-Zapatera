@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import {
+  ArrowLeft,
   Eye,
   EyeOff,
   CheckCircle2,
