@@ -228,8 +228,8 @@ export default function ReceiveRequestView({
     // Setup Document Generator Initial Values with Applicant info
     setGenName(updatedReq.resident_name || '');
     setGenAddress(updatedReq.resident_address || 'Barangay Zapatera, Cebu City');
-    setGenDob(updatedReq.resident_birth_date || '');
-    setGenContact(updatedReq.resident_phone || '');
+    setGenDob(updatedReq.resident_birth_date || updatedReq.date_of_birth || updatedReq.dob || updatedReq.birthdate || '');
+    setGenContact(updatedReq.resident_phone || updatedReq.phone || updatedReq.contact_no || '');
     setGenYearsInBarangay(updatedReq.years_in_barangay || '5 years');
     setGenPurpose(updatedReq.purpose || 'Local Employment Application');
 
@@ -882,7 +882,7 @@ export default function ReceiveRequestView({
                       {/* 1. Document Title */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          1. Document Title <span className="text-blue-600 font-mono font-normal">{"{documentTitle}"}</span>
+                          1. Document Title
                         </label>
                         <input
                           type="text"
@@ -896,7 +896,7 @@ export default function ReceiveRequestView({
                       {/* 2. Applicant Name */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          2. Resident Applicant Name <span className="text-blue-600 font-mono font-normal">{"{name}"}</span>
+                          2. Resident Applicant Name
                         </label>
                         <input
                           type="text"
@@ -910,7 +910,7 @@ export default function ReceiveRequestView({
                       {/* 3. Address */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          3. Address <span className="text-blue-600 font-mono font-normal">{"{address}"}</span>
+                          3. Address
                         </label>
                         <input
                           type="text"
@@ -925,10 +925,9 @@ export default function ReceiveRequestView({
                         <div>
                           <label className="block font-bold text-slate-700 mb-1">4. Date of Birth</label>
                           <input
-                            type="text"
+                            type="date"
                             value={genDob}
                             onChange={(e) => setGenDob(e.target.value)}
-                            placeholder="e.g. Jan 15, 1995"
                             className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                           />
                         </div>
@@ -969,7 +968,7 @@ export default function ReceiveRequestView({
                       {/* 7. Purpose */}
                       <div>
                         <label className="block font-bold text-slate-700 mb-1">
-                          7. Purpose <span className="text-blue-600 font-mono font-normal">{"{purpose}"}</span>
+                          7. Purpose
                         </label>
                         <input
                           type="text"

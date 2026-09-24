@@ -25,9 +25,15 @@ export default function DocumentTemplate({
 }) {
   const formattedDate = formatIssuedDateOrdinal(issuedDate);
 
+  const formattedDob = dateOfBirth ? (
+    /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)
+      ? new Date(dateOfBirth + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : dateOfBirth
+  ) : '____________________';
+
   const finalSignatoryName = signatoryName || config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE';
   const finalSignatoryTitle = signatoryTitle || config?.signatory_title || 'Punong Barangay';
-  const finalLogoUrl = logoUrl || config?.seal_url || '/logo.jpg';
+  const finalLogoUrl = logoUrl || config?.seal_url || '/zapatera_seal.png';
   const finalBarangayName = config?.barangay_name || 'Barangay Zapatera';
   const finalHallAddress = config?.hall_address || '197 D. Jakosalem St., Cebu City';
   const finalContactPhone = config?.contact_phone || '(032)503-6465';
@@ -36,7 +42,7 @@ export default function DocumentTemplate({
   return (
     <div className="document-a4-page bg-white text-slate-900 font-serif leading-normal select-text shadow-xl print:shadow-none border border-slate-300 print:border-none mx-auto relative box-border overflow-hidden">
       <div className="document-inner-content flex flex-col justify-between h-full p-[15mm] sm:p-[18mm] bg-white">
-        
+
         {/* TOP HEADER SECTION */}
         <div className="relative pb-4">
           <div className="flex items-center justify-between">
@@ -47,7 +53,7 @@ export default function DocumentTemplate({
                 alt={`${finalBarangayName} Seal`}
                 className="w-22 h-22 object-contain"
                 onError={(e) => {
-                  e.target.src = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSC7-ggP-CV3i2oxM8blZUURu7etDHFsTflESouTQ7D9IHX-_OvA0oDIPs&s=10';
+                  e.target.src = '/logo.jpg';
                 }}
               />
             </div>
@@ -68,20 +74,28 @@ export default function DocumentTemplate({
               </p>
             </div>
 
-            {/* Top-Right: Bagong Pilipinas Emblem / PH Gov Seal */}
-            <div className="w-24 h-24 flex flex-col items-center justify-center shrink-0">
-              <svg className="w-20 h-14" viewBox="0 0 120 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Bagong Pilipinas stylized wings */}
-                <path d="M10 35 C 30 10, 60 5, 110 8 C 80 20, 50 28, 20 42 Z" fill="#0038A8" />
-                <path d="M15 42 C 35 25, 65 22, 105 24 C 75 34, 45 42, 25 54 Z" fill="#CE1126" />
-                <path d="M25 54 C 45 40, 75 38, 100 40 C 70 48, 45 54, 30 62 Z" fill="#FCD116" />
-                {/* Sun element */}
-                <circle cx="28" cy="22" r="8" fill="#FCD116" />
-                <path d="M28 10 L28 14 M28 30 L28 34 M16 22 L20 22 M36 22 L40 22 M19 13 L22 16 M34 28 L37 31 M19 31 L22 28 M34 16 L37 13" stroke="#FCD116" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <span className="text-[9px] font-black uppercase tracking-widest text-slate-900 font-sans mt-0.5">
-                BAGONG PILIPINAS
-              </span>
+            {/* Top-Right: Official City of Cebu Seal & Bagong Pilipinas Logo */}
+            <div className="flex items-center space-x-2 shrink-0">
+              <div className="w-16 h-16 sm:w-18 sm:h-18 flex items-center justify-center">
+                <img
+                  src="/cebu_city_seal.png"
+                  alt="City of Cebu Seal"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="w-16 h-16 sm:w-18 sm:h-18 flex items-center justify-center">
+                <img
+                  src="/bagong_pilipinas.png"
+                  alt="Bagong Pilipinas"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -102,7 +116,7 @@ export default function DocumentTemplate({
         </div>
 
         {/* STRUCTURED KEY-VALUE RESIDENT INFORMATION TABLE */}
-        <div className="my-3 font-sans text-sm sm:text-base space-y-2 px-2">
+        <div className="my-3 font-sans text-sm sm:text-base space-y-2.5 px-2">
           <div className="grid grid-cols-12 items-baseline">
             <span className="col-span-4 font-bold text-slate-900">Name</span>
             <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
@@ -123,7 +137,7 @@ export default function DocumentTemplate({
             <span className="col-span-4 font-bold text-slate-900">Date of Birth</span>
             <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
             <span className="col-span-7 font-medium text-slate-900">
-              {dateOfBirth || '____________________'}
+              {formattedDob}
             </span>
           </div>
 

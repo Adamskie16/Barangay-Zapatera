@@ -260,7 +260,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             {/* Variable: documentTitle */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                1. Document Title <span className="text-blue-600 font-mono font-normal">{"{documentTitle}"}</span>
+                1. Document Title
               </label>
               <input
                 type="text"
@@ -277,10 +277,11 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               <div className="flex items-center justify-between mb-1">
                 <label className="font-bold text-slate-700 flex items-center gap-1">
                   <User size={13} className="text-blue-600" />
-                  <span>2. Name</span>
-                  <span className="text-blue-600 font-mono font-normal">{"{name}"}</span>
+                  <span>2. Resident Name</span>
                 </label>
-                <span className="text-[10px] text-slate-400 font-medium">{residents.length} in database</span>
+                <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-semibold border border-blue-200">
+                  {residents.length} Registered Residents
+                </span>
               </div>
 
               <div className="relative">
@@ -333,7 +334,6 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
                 <MapPin size={13} className="text-blue-600" />
                 <span>3. Address</span>
-                <span className="text-blue-600 font-mono font-normal">{"{address}"}</span>
               </label>
               <input
                 type="text"
@@ -352,10 +352,9 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                   <span>4. Date of Birth</span>
                 </label>
                 <input
-                  type="text"
+                  type="date"
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  placeholder="e.g. Jan 15, 1995"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                 />
               </div>
@@ -415,7 +414,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-bold text-slate-700">
-                  7. Purpose <span className="text-blue-600 font-mono font-normal">{"{purpose}"}</span>
+                  7. Purpose
                 </label>
               </div>
               <input
@@ -450,7 +449,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             {/* Variable: issuedLocation */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                9. Issued Location <span className="text-blue-600 font-mono font-normal">{"{issuedLocation}"}</span>
+                9. Issued Location
               </label>
               <input
                 type="text"
