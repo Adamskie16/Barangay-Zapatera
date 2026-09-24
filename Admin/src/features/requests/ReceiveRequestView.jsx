@@ -789,7 +789,7 @@ export default function ReceiveRequestView({
                       <span>Decline Request</span>
                     </button>
 
-                    {/* Proceed to Print Document Button */}
+                    {/* Proceed to Official Document Generator Button */}
                     <button
                       type="button"
                       onClick={() => setActiveStep(2)}
@@ -801,7 +801,7 @@ export default function ReceiveRequestView({
                       }`}
                     >
                       <Printer className="w-4 h-4" />
-                      <span>Proceed to Print Document</span>
+                      <span>Proceed to Official Document Generator</span>
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </button>
                   </div>
@@ -817,10 +817,10 @@ export default function ReceiveRequestView({
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <FileBadge className="w-4 h-4 text-blue-400" />
-                      <span>Official Document Generator & Print</span>
+                      <span>Official Document Generator</span>
                     </h3>
                     <p className="text-[11px] text-slate-300 mt-0.5">
-                      Printing this document will officially approve the resident application and update status to Approved.
+                      Generate official barangay certificate, review live preview, and print to officially approve resident application.
                     </p>
                   </div>
 
@@ -1049,6 +1049,7 @@ export default function ReceiveRequestView({
                           bodyText={genBodyText}
                           signatoryName={genSignatoryName}
                           signatoryTitle={genSignatoryTitle}
+                          config={config}
                         />
                       </div>
                     </div>
@@ -1214,6 +1215,7 @@ export default function ReceiveRequestView({
           bodyText={genBodyText}
           signatoryName={genSignatoryName}
           signatoryTitle={genSignatoryTitle}
+          config={config}
         />
       </div>
     </div>

@@ -20,7 +20,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'receive_request', label: 'Document Requests', icon: Inbox },
     { id: 'approved_documents', label: 'Approved Documents', icon: FileCheck2 },
-    { id: 'doc_info', label: 'Document Information', icon: FileText },
+    { id: 'doc_info', label: 'Official Document Generator', icon: Printer },
     { id: 'news', label: 'News & Bulletins', icon: Newspaper },
     { id: 'events', label: 'Barangay Events', icon: Calendar },
     { id: 'reports', label: 'Processing Reports', icon: BarChart2 },

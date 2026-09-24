@@ -8,7 +8,7 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import DocumentManagement from './DocumentManagement';
 
-export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode }) {
+export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode, config = {} }) {
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'templates'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
@@ -233,7 +233,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           }`}
         >
           <Printer size={16} />
-          <span>Document Generator & Print</span>
+          <span>Official Document Generator & Print</span>
         </button>
 
         <button
@@ -249,7 +249,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         </button>
       </div>
 
-      {subTab === 'generator' && <DocumentManagement docTypes={docTypes} />}
+      {subTab === 'generator' && <DocumentManagement docTypes={docTypes} config={config} />}
 
       {subTab === 'templates' && (
         <>

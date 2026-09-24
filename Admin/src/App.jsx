@@ -94,7 +94,7 @@ export default function App() {
     dashboard: 'Barangay Admin Operations Dashboard',
     receive_request: 'Document Application Requests Management',
     approved_documents: 'Approved Documents & Claiming Registry',
-    doc_info: 'Document Guidelines & Information',
+    doc_info: 'Official Document Generator & Guidelines',
     news: 'Barangay News & Public Bulletins',
     events: 'Barangay Events & Community Notices',
     reports: 'Operational Processing Reports',
@@ -154,6 +154,7 @@ export default function App() {
               onSaveDocType={handleSaveDocType}
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
+              config={config}
             />
           )}
 

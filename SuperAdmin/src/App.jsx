@@ -125,7 +125,7 @@ export default function App() {
   // Tab Titles Map
   const tabTitles = {
     dashboard: 'Super Admin System Dashboard',
-    documents: 'Document Templates & Information Management',
+    documents: 'Official Document Generator & Guidelines',
     news: 'Barangay News & Bulletin Management',
     events: 'Community Events & Announcements',
     users: 'User Account Provisioning & Roles',
@@ -178,6 +178,7 @@ export default function App() {
               onSaveDocType={handleSaveDocType}
               onDeleteDocType={handleDeleteDocType}
               currentUser={currentUser}
+              config={config}
             />
           )}
 
