@@ -11,13 +11,16 @@ export default function ConfigView({ config, onSaveConfig }) {
     e.preventDefault();
     const updated = {
       ...formData,
-      barangay_name: sanitizeInput(formData.barangay_name),
-      municipality: sanitizeInput(formData.municipality),
-      province: sanitizeInput(formData.province),
-      office_hours: sanitizeInput(formData.office_hours),
-      contact_email: sanitizeInput(formData.contact_email),
-      contact_phone: sanitizeInput(formData.contact_phone),
-      doc_prefix: sanitizeInput(formData.doc_prefix),
+      barangay_name: sanitizeInput(formData.barangay_name || 'Barangay Zapatera'),
+      municipality: sanitizeInput(formData.municipality || 'Cebu City'),
+      province: sanitizeInput(formData.province || 'Cebu'),
+      punong_barangay: sanitizeInput(formData.punong_barangay || 'HON. DAVID M. AGRAVANTE'),
+      signatory_title: sanitizeInput(formData.signatory_title || 'Punong Barangay'),
+      hall_address: sanitizeInput(formData.hall_address || '197 D. Jakosalem St., Cebu City'),
+      office_hours: sanitizeInput(formData.office_hours || 'Mon - Fri: 8:00 AM - 5:00 PM'),
+      contact_email: sanitizeInput(formData.contact_email || 'zapatera.lnb24@gmail.com'),
+      contact_phone: sanitizeInput(formData.contact_phone || '(032)503-6465'),
+      doc_prefix: sanitizeInput(formData.doc_prefix || 'BRGY-2026'),
     };
     onSaveConfig(updated);
     setIsSaved(true);
@@ -55,7 +58,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <input
                 type="text"
                 required
-                value={formData.barangay_name}
+                value={formData.barangay_name || ''}
                 onChange={(e) => setFormData({ ...formData, barangay_name: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
               />
@@ -65,7 +68,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <input
                 type="text"
                 required
-                value={formData.municipality}
+                value={formData.municipality || ''}
                 onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -75,7 +78,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <input
                 type="text"
                 required
-                value={formData.province}
+                value={formData.province || ''}
                 onChange={(e) => setFormData({ ...formData, province: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -83,11 +86,22 @@ export default function ConfigView({ config, onSaveConfig }) {
           </div>
 
           <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Barangay Hall Physical Address</label>
+            <input
+              type="text"
+              value={formData.hall_address || ''}
+              onChange={(e) => setFormData({ ...formData, hall_address: e.target.value })}
+              placeholder="e.g. 197 D. Jakosalem St., Cebu City"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-medium"
+            />
+          </div>
+
+          <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Official Seal Image URL</label>
             <div className="flex items-center space-x-3">
               <input
                 type="text"
-                value={formData.seal_url}
+                value={formData.seal_url || ''}
                 onChange={(e) => setFormData({ ...formData, seal_url: e.target.value })}
                 className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
               />
@@ -98,6 +112,37 @@ export default function ConfigView({ config, onSaveConfig }) {
                   className="w-10 h-10 rounded-full border border-slate-200 object-cover"
                 />
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Official Document Signatory Settings */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
+            <Shield className="w-5 h-5 text-blue-600" />
+            <h3 className="font-bold text-slate-800 text-sm uppercase tracking-wider">Official Document Signatory</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Punong Barangay / Signatory Full Name</label>
+              <input
+                type="text"
+                value={formData.punong_barangay || ''}
+                onChange={(e) => setFormData({ ...formData, punong_barangay: e.target.value })}
+                placeholder="e.g. HON. DAVID M. AGRAVANTE"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Signatory Title / Designation</label>
+              <input
+                type="text"
+                value={formData.signatory_title || ''}
+                onChange={(e) => setFormData({ ...formData, signatory_title: e.target.value })}
+                placeholder="e.g. Punong Barangay"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
             </div>
           </div>
         </div>
@@ -114,7 +159,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <label className="block text-xs font-bold text-slate-700 mb-1">Office Hours</label>
               <input
                 type="text"
-                value={formData.office_hours}
+                value={formData.office_hours || ''}
                 onChange={(e) => setFormData({ ...formData, office_hours: e.target.value })}
                 placeholder="Mon - Fri: 8:00 AM - 5:00 PM"
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -124,7 +169,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <label className="block text-xs font-bold text-slate-700 mb-1">Contact Email</label>
               <input
                 type="email"
-                value={formData.contact_email}
+                value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -133,7 +178,7 @@ export default function ConfigView({ config, onSaveConfig }) {
               <label className="block text-xs font-bold text-slate-700 mb-1">Hotline / Phone</label>
               <input
                 type="text"
-                value={formData.contact_phone}
+                value={formData.contact_phone || ''}
                 onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />

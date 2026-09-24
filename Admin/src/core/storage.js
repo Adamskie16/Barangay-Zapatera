@@ -755,7 +755,11 @@ export const StorageService = {
   // SYSTEM CONFIG
   getConfig: () => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(DEFAULT_CONFIG));
+      const stored = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      if (stored) {
+        return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      }
+      return DEFAULT_CONFIG;
     } catch {
       return DEFAULT_CONFIG;
     }
@@ -766,8 +770,9 @@ export const StorageService = {
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
         if (data && !error) {
-          localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(data));
-          return data;
+          const merged = { ...DEFAULT_CONFIG, ...data };
+          localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(merged));
+          return merged;
         }
       }
     } catch {
@@ -777,8 +782,10 @@ export const StorageService = {
   },
 
   saveConfig: async (config) => {
-    const updated = { ...config, updated_at: new Date().toISOString() };
+    const current = StorageService.getConfig();
+    const updated = { ...current, ...config, updated_at: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
+    window.dispatchEvent(new Event('zapatera_config_updated'));
 
     try {
       if (isSupabaseConfigured()) {
@@ -792,7 +799,7 @@ export const StorageService = {
       user_email: 'admin@zapatera.gov.ph',
       action: 'Updated System Settings',
       feature: 'System Configuration',
-      details: 'Updated global system parameters and login design settings.',
+      details: 'Updated global system parameters and document settings.',
       level: 'info',
     });
 
