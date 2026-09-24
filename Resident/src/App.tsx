@@ -498,7 +498,7 @@ export default function App() {
   if (!currentUser) {
     return (
       <SafeAreaView style={styles.authContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#090d16" />
+        <StatusBar barStyle="dark-content" backgroundColor="#eff2fc" />
         <ResidentAuthPage onLoginSuccess={handleLoginSuccess} />
       </SafeAreaView>
     );
@@ -628,7 +628,7 @@ export default function App() {
 const styles = StyleSheet.create({
   authContainer: {
     flex: 1,
-    backgroundColor: '#090d16',
+    backgroundColor: '#eff2fc',
   },
   appContainer: {
     flex: 1,
