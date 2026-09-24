@@ -17,10 +17,13 @@ import {
   Cake,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import { StorageService } from '../../core/storage';
 import { documentTemplates, formatIssuedDateOrdinal } from './documentTemplates';
 import DocumentTemplate from './DocumentTemplate';
 
-export default function DocumentManagement({ docTypes = [] }) {
+export default function DocumentManagement({ docTypes = [], config = {} }) {
+  const currentConfig = config && Object.keys(config).length > 0 ? config : StorageService.getConfig();
+
   // 1. Template selection state
   const templateKeys = Object.keys(documentTemplates);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('barangayCertification');
@@ -42,8 +45,17 @@ export default function DocumentManagement({ docTypes = [] }) {
   });
   const [issuedLocation, setIssuedLocation] = useState('Barangay Zapatera, Cebu City, Philippines');
   const [bodyText, setBodyText] = useState(documentTemplates.barangayCertification.defaultBody);
-  const [signatoryName, setSignatoryName] = useState('HON. DAVID M. AGRAVANTE');
-  const [signatoryTitle, setSignatoryTitle] = useState('Punong Barangay');
+  const [signatoryName, setSignatoryName] = useState(currentConfig?.punong_barangay || currentConfig?.signatory_name || 'HON. DAVID M. AGRAVANTE');
+  const [signatoryTitle, setSignatoryTitle] = useState(currentConfig?.signatory_title || 'Punong Barangay');
+
+  useEffect(() => {
+    if (currentConfig?.punong_barangay || currentConfig?.signatory_name) {
+      setSignatoryName(currentConfig.punong_barangay || currentConfig.signatory_name);
+    }
+    if (currentConfig?.signatory_title) {
+      setSignatoryTitle(currentConfig.signatory_title);
+    }
+  }, [currentConfig]);
 
   // 3. Supabase Residents State
   const [residents, setResidents] = useState([]);
@@ -530,6 +542,7 @@ export default function DocumentManagement({ docTypes = [] }) {
                 bodyText={bodyText}
                 signatoryName={signatoryName}
                 signatoryTitle={signatoryTitle}
+                config={currentConfig}
               />
             </div>
           </div>
@@ -552,6 +565,7 @@ export default function DocumentManagement({ docTypes = [] }) {
           bodyText={bodyText}
           signatoryName={signatoryName}
           signatoryTitle={signatoryTitle}
+          config={currentConfig}
         />
       </div>
     </div>

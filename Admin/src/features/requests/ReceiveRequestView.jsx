@@ -93,8 +93,17 @@ export default function ReceiveRequestView({
   });
   const [genIssuedLocation, setGenIssuedLocation] = useState('Barangay Zapatera, Cebu City, Philippines');
   const [genBodyText, setGenBodyText] = useState(documentTemplates.barangayCertification.defaultBody);
-  const [genSignatoryName, setGenSignatoryName] = useState('HON. DAVID M. AGRAVANTE');
-  const [genSignatoryTitle, setGenSignatoryTitle] = useState('Punong Barangay');
+  const [genSignatoryName, setGenSignatoryName] = useState(config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE');
+  const [genSignatoryTitle, setGenSignatoryTitle] = useState(config?.signatory_title || 'Punong Barangay');
+
+  useEffect(() => {
+    if (config?.punong_barangay || config?.signatory_name) {
+      setGenSignatoryName(config.punong_barangay || config.signatory_name);
+    }
+    if (config?.signatory_title) {
+      setGenSignatoryTitle(config.signatory_title);
+    }
+  }, [config]);
 
   // Filter requests: Active operational queue (Pending, Processing, Declined)
   // Approved and issued documents are automatically transferred to the Approved Documents registry
@@ -151,7 +160,7 @@ export default function ReceiveRequestView({
         name: fileObj.requirement_name || `Requirement #${idx + 1}`,
         fileName: fileObj.file_name || `attachment_${idx + 1}.pdf`,
         fileType: fileObj.file_type || 'image/jpeg',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+        uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: fileObj.status || 'pending',
       }));
     }
@@ -170,7 +179,7 @@ export default function ReceiveRequestView({
           name: typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`),
           fileName: typeof item === 'string' ? `${item.toLowerCase().replace(/[^a-z0-9]/g, '_')}_scan.pdf` : (item.fileName || 'attachment.pdf'),
           fileType: 'application/pdf',
-          uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+          uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
           status: 'pending',
         }));
       }
@@ -182,7 +191,7 @@ export default function ReceiveRequestView({
         name: reqTitle,
         fileName: `${reqTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_document.pdf`,
         fileType: 'application/pdf',
-        uploadDate: req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026',
+        uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: 'pending',
       }));
     }
@@ -473,7 +482,7 @@ export default function ReceiveRequestView({
 
                       {/* Date Submitted */}
                       <td className="p-4 text-slate-500 font-medium">
-                        {req.created_at ? formatDate(req.created_at) : 'Sep 7, 2026, 07:29 PM'}
+                        {req.created_at ? formatDate(req.created_at) : formatDate(new Date())}
                       </td>
 
                       {/* Actions: Blue Process Button */}

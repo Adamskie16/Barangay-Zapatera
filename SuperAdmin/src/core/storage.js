@@ -20,6 +20,8 @@ const DEFAULT_CONFIG = {
   barangay_name: 'Barangay Zapatera',
   municipality: 'Cebu City',
   province: 'Cebu',
+  punong_barangay: 'HON. DAVID M. AGRAVANTE',
+  signatory_title: 'Punong Barangay',
   seal_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80',
   office_hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
   contact_email: 'info@barangayzapatera.gov.ph',

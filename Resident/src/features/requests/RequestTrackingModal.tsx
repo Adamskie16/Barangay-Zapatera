@@ -52,7 +52,7 @@ export default function RequestTrackingModal({
 
   const declineReasonText = request.declined_reason || request.rejection_reason || 'Missing valid proof of residency.';
   const declineDetailsText = request.declined_details || '';
-  const dateDeclinedFormatted = request.declined_at || request.rejected_at || request.updated_at ? new Date(request.declined_at || request.rejected_at || request.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 8, 2026';
+  const dateDeclinedFormatted = request.declined_at || request.rejected_at || request.updated_at ? new Date(request.declined_at || request.rejected_at || request.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const processedByAdmin = request.processed_by || 'Barangay Administrator';
 
   // Default timeline steps if not populated

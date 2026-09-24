@@ -184,7 +184,7 @@ export default function MyRequestsView({
             const isDeclined = req.status === 'declined' || req.status === 'rejected';
             const isApproved = (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
             const declineReasonText = req.declined_details || req.declined_reason || req.rejection_reason || 'Missing required residency documents or incomplete attachments.';
-            const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 8, 2026';
+            const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
             const adminProcessor = req.processed_by || 'Barangay Administrator';
 
             return (

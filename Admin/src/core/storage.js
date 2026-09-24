@@ -18,6 +18,8 @@ const DEFAULT_CONFIG = {
   barangay_name: 'Barangay Zapatera',
   municipality: 'Cebu City',
   province: 'Cebu',
+  punong_barangay: 'HON. DAVID M. AGRAVANTE',
+  signatory_title: 'Punong Barangay',
   seal_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80',
   office_hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
   contact_email: 'info@barangayzapatera.gov.ph',
@@ -91,7 +93,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.DOC_TYPES) || '[]');
     } catch {
-      return INITIAL_DOC_TYPES;
+      return [];
     }
   },
 
@@ -355,7 +357,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.EVENTS) || '[]');
     } catch {
-      return INITIAL_EVENTS;
+      return [];
     }
   },
 
@@ -467,20 +469,12 @@ export const StorageService = {
     }
   },
 
-  getConfig: () => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(INITIAL_CONFIG));
-    } catch {
-      return INITIAL_CONFIG;
-    }
-  },
-
   // NEWS & ANNOUNCEMENTS (Maps to public.news and public.events)
   getNews: () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.NEWS) || '[]');
     } catch {
-      return INITIAL_NEWS;
+      return [];
     }
   },
 
@@ -597,7 +591,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
     } catch {
-      return INITIAL_LOGS;
+      return [];
     }
   },
 
@@ -653,7 +647,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]');
     } catch {
-      return INITIAL_NOTIFICATIONS;
+      return [];
     }
   },
 
@@ -760,9 +754,9 @@ export const StorageService = {
   // SYSTEM CONFIG
   getConfig: () => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(INITIAL_CONFIG));
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || JSON.stringify(DEFAULT_CONFIG));
     } catch {
-      return INITIAL_CONFIG;
+      return DEFAULT_CONFIG;
     }
   },
 
@@ -808,9 +802,9 @@ export const StorageService = {
   getLoginDesigns: () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.LOGIN_DESIGNS);
-      return stored ? JSON.parse(stored) : INITIAL_LOGIN_DESIGNS;
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_LOGIN_DESIGNS;
+      return [];
     }
   },
 

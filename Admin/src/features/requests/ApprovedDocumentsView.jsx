@@ -274,7 +274,7 @@ export default function ApprovedDocumentsView({
 
                       {/* Date Approved */}
                       <td className="p-4 text-slate-500 font-medium">
-                        {req.approved_at ? formatDate(req.approved_at) : req.updated_at ? formatDate(req.updated_at) : 'Sep 8, 2026'}
+                        {req.approved_at ? formatDate(req.approved_at) : req.updated_at ? formatDate(req.updated_at) : formatDate(new Date())}
                       </td>
 
                       {/* Claim Status Badge */}

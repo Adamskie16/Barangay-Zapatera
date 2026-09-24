@@ -17,11 +17,22 @@ export default function DocumentTemplate({
   issuedDate = '',
   issuedLocation = 'Barangay Zapatera, Cebu City, Philippines',
   bodyText = 'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.',
-  signatoryName = 'HON. DAVID M. AGRAVANTE',
-  signatoryTitle = 'Punong Barangay',
-  logoUrl = '/logo.jpg',
+  signatoryName = '',
+  signatoryTitle = '',
+  logoUrl = '',
+  config = {},
 }) {
   const formattedDate = formatIssuedDateOrdinal(issuedDate);
+
+  const finalSignatoryName = signatoryName || config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE';
+  const finalSignatoryTitle = signatoryTitle || config?.signatory_title || 'Punong Barangay';
+  const finalLogoUrl = logoUrl || config?.seal_url || '/logo.jpg';
+  const finalBarangayName = config?.barangay_name || 'Barangay Zapatera';
+  const finalMunicipality = config?.municipality || 'City of Cebu';
+  const finalProvince = config?.province || 'Cebu';
+  const finalHallAddress = config?.hall_address || '197 D. Jakosalem St., Cebu City';
+  const finalContactPhone = config?.contact_phone || '(032) 253-1234';
+  const finalContactEmail = config?.contact_email || 'info@barangayzapatera.gov.ph';
 
   return (
     <div className="document-a4-page bg-white text-slate-900 font-serif leading-normal select-text shadow-xl print:shadow-none border border-slate-200 print:border-none mx-auto relative box-border overflow-hidden">
@@ -32,8 +43,8 @@ export default function DocumentTemplate({
           {/* Logo */}
           <div className="absolute left-0 top-0 w-20 h-20 flex items-center justify-center">
             <img
-              src={logoUrl}
-              alt="Barangay Zapatera Seal"
+              src={finalLogoUrl}
+              alt={`${finalBarangayName} Seal`}
               className="w-18 h-18 object-contain rounded-full border border-slate-300"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -46,87 +57,72 @@ export default function DocumentTemplate({
               Republic of the Philippines
             </p>
             <p className="text-sm font-bold uppercase tracking-wider text-slate-800">
-              City of Cebu
+              {finalMunicipality}, {finalProvince}
             </p>
             <p className="text-lg font-extrabold uppercase tracking-wide text-blue-900 font-sans">
-              Barangay Zapatera
+              {finalBarangayName}
             </p>
           </div>
 
           <div className="text-[11px] text-slate-600 font-sans space-y-0.5 pt-1">
-            <p>197 D. Jakosalem St., Cebu City</p>
-            <p>(032)503-6465 • email add: zapatera.lnb24@gmail.com</p>
+            <p>{finalHallAddress}</p>
+            <p>{finalContactPhone} • email add: {finalContactEmail}</p>
           </div>
 
           <div className="pt-2">
-            <p className="text-xs font-bold font-sans tracking-widest text-slate-900 uppercase">
-              OFFICE OF THE PUNONG BARANGAY
-            </p>
+            <span className="inline-block text-xs font-bold uppercase tracking-wider px-3 py-0.5 bg-blue-900 text-white rounded font-sans">
+              Office of the Punong Barangay
+            </span>
           </div>
         </div>
 
         {/* DOCUMENT TITLE */}
-        <div className="my-6 text-center">
-          <h1 className="text-xl sm:text-2xl font-black uppercase tracking-[0.18em] font-sans text-slate-900 underline underline-offset-8 decoration-2 decoration-slate-900">
-            {documentTitle || 'BARANGAY CERTIFICATION'}
+        <div className="text-center my-6">
+          <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-wider text-slate-950 underline decoration-2 underline-offset-8">
+            {documentTitle}
           </h1>
         </div>
 
-        {/* RESIDENT INFORMATION TABLE */}
-        <div className="my-4 bg-slate-50/60 print:bg-transparent rounded-lg p-4 print:p-0 border border-slate-200 print:border-none">
-          <div className="space-y-2.5 text-xs sm:text-sm text-slate-800">
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Name :</span>
-              <span className="font-bold underline decoration-slate-400 underline-offset-2 uppercase flex-1 break-words">
-                {name || '________________________________________'}
-              </span>
-            </div>
-
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Address :</span>
-              <span className="flex-1 break-words">
-                {address || 'Barangay Zapatera, Cebu City'}
-              </span>
-            </div>
-
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Date of Birth :</span>
-              <span className="flex-1">
-                {dateOfBirth || '____________________'}
-              </span>
-            </div>
-
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Contact No. :</span>
-              <span className="flex-1 font-mono">
-                {contactNo || '____________________'}
-              </span>
-            </div>
-
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Years in Barangay :</span>
-              <span className="flex-1">
-                {yearsInBarangay ? `${yearsInBarangay}` : '____________________'}
-              </span>
-            </div>
-
-            <div className="flex">
-              <span className="w-40 font-bold font-sans text-slate-900 shrink-0">Purpose :</span>
-              <span className="font-bold underline decoration-slate-400 underline-offset-2 flex-1 break-words text-slate-900">
-                {purpose || '________________________________________'}
-              </span>
-            </div>
-          </div>
+        {/* RECIPIENT SALUTATION */}
+        <div className="space-y-1">
+          <p className="font-bold text-sm sm:text-base uppercase tracking-wide text-slate-900">
+            TO WHOM IT MAY CONCERN:
+          </p>
         </div>
 
-        {/* CERTIFICATION BODY PARAGRAPH */}
-        <div className="my-6 space-y-4 text-xs sm:text-sm text-slate-800 leading-relaxed text-justify">
-          <p className="indent-10">
-            {bodyText ||
-              'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.'}
+        {/* BODY PARAGRAPHS */}
+        <div className="space-y-4 text-justify text-sm sm:text-base indent-8">
+          <p>
+            This is to certify that{' '}
+            <span className="font-bold uppercase text-slate-950 underline decoration-1">
+              {name || '________________________'}
+            </span>
+            , of legal age, Filipino, residing at{' '}
+            <span className="font-bold text-slate-950">
+              {address || '________________________'}
+            </span>
+            {yearsInBarangay ? (
+              <span>
+                , has been a bona fide resident of this Barangay for{' '}
+                <span className="font-bold text-slate-950">{yearsInBarangay}</span>
+              </span>
+            ) : null}
+            .
           </p>
 
-          <p className="indent-10">
+          <p>
+            {bodyText}
+          </p>
+
+          <p>
+            This certification is issued upon the request of the above-named person for the purpose of:{' '}
+            <span className="font-bold text-slate-950 uppercase underline decoration-1">
+              {purpose || 'ANY LEGAL PURPOSE'}
+            </span>
+            .
+          </p>
+
+          <p>
             Issued and signed this <span className="font-bold text-slate-950">{formattedDate}</span> at{' '}
             <span className="font-bold text-slate-950">{issuedLocation}</span>.
           </p>
@@ -148,10 +144,10 @@ export default function DocumentTemplate({
           <div className="text-center min-w-[240px]">
             <div className="h-10"></div>
             <p className="text-sm sm:text-base font-black text-slate-950 uppercase font-sans tracking-wide border-b-2 border-slate-900 pb-1">
-              {signatoryName}
+              {finalSignatoryName}
             </p>
             <p className="text-xs font-bold text-slate-600 uppercase font-sans mt-1">
-              {signatoryTitle}
+              {finalSignatoryTitle}
             </p>
           </div>
         </div>
