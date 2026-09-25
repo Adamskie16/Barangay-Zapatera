@@ -318,7 +318,7 @@ export default function ApprovedDocumentsView({
                           <button
                             onClick={() => setDeleteConfirmReq(req)}
                             className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
-                            title="Delete Approved Record from Database"
+                            title="Delete Record from Barangay Registry"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Delete</span>
@@ -351,7 +351,7 @@ export default function ApprovedDocumentsView({
                   Are you sure you want to delete tracking record <strong className="font-mono bg-red-100 px-1.5 py-0.5 rounded border border-red-300">{deleteConfirmReq.tracking_number}</strong> for <strong className="text-red-950">{deleteConfirmReq.resident_name || 'Resident'}</strong>?
                 </p>
                 <p className="mt-2 text-[11px] text-red-700 font-semibold">
-                  ⚠️ This action will permanently remove this record from Supabase and the system database.
+                  ⚠️ This action will permanently remove this record from the official barangay document registry.
                 </p>
               </div>
             </div>

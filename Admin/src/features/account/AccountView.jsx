@@ -240,7 +240,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       setProfile(updatedPayload);
 
       if (onUserUpdated) onUserUpdated(updatedUser);
-      showNotification('Profile updated successfully in system & database!');
+      showNotification('Profile updated successfully!');
     } catch (err) {
       console.error('Error updating profile:', err);
       showNotification('Failed to update profile. Please try again.', 'error');
@@ -328,7 +328,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       if (onUserUpdated) onUserUpdated(updatedUser);
 
       setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setPasswordSuccess('Account security credentials updated successfully in system & database!');
+      setPasswordSuccess('Account security credentials updated successfully!');
       showNotification('Password updated successfully!');
     } catch (err) {
       console.error('Password change error:', err);
@@ -485,7 +485,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
                   if (result.success && result.url) {
                     setProfile((prev) => ({ ...prev, avatar_url: result.url }));
-                    setSuccessMessage('Avatar uploaded to Supabase Storage. Click "Save Profile Changes" to save.');
+                    setSuccessMessage('Profile photo uploaded. Click "Save Profile Changes" to save.');
                   } else {
                     setErrorMessage(result.error || 'Avatar upload failed.');
                   }
@@ -531,7 +531,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           <div>
             <h2 className="text-lg font-bold">Profile Details & Personal Information</h2>
             <p className="text-xs mt-0.5 text-slate-500">
-              Manage your personal details, phone number, username, and profile image. Synchronizes directly with system database.
+              Manage your official administrator details, contact number, and profile photo.
             </p>
           </div>
           <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
@@ -681,7 +681,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               <span>Security Settings & Password Authentication</span>
             </h2>
             <p className="text-xs mt-0.5 text-slate-500">
-              Update your account password. Changes synchronize with database & active session credentials.
+              Update your account password and security credentials.
             </p>
           </div>
           <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
@@ -809,7 +809,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           <div className="flex-1 space-y-1">
             <h3 className="text-base font-bold text-rose-600">Danger Zone</h3>
             <p className="text-xs text-slate-600">
-              Deleting your account profile is a permanent action. This will remove your profile data from database and revoke administrative access.
+              Deleting your account is a permanent action. This will remove your administrator account and revoke all access permissions.
             </p>
 
             <div className="pt-3">

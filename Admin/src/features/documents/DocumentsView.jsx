@@ -158,7 +158,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     setIsSaving(true);
     setIsProcessing(true);
     setProcessingTitle(editingDoc ? 'Updating Document Info...' : 'Adding Document Type...');
-    setProcessingMessage('Verifying credentials & saving document information to database...');
+    setProcessingMessage('Verifying credentials and saving document service details...');
 
     try {
       if (onSaveDocType && pendingDocPayload) {
@@ -193,7 +193,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     setIsDeleting(true);
     setIsProcessing(true);
     setProcessingTitle('Removing Document Info...');
-    setProcessingMessage(`Deleting "${deletingDoc.title}" from system records...`);
+    setProcessingMessage(`Deleting "${deletingDoc.title}" from official services...`);
 
     try {
       if (onDeleteDocType) {
@@ -222,7 +222,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900">{processingTitle || 'Processing Action...'}</h3>
-              <p className="text-xs text-slate-500 mt-1">{processingMessage || 'Synchronizing changes with system database...'}</p>
+              <p className="text-xs text-slate-500 mt-1">{processingMessage || 'Saving changes to official barangay services...'}</p>
             </div>
             <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
               <div className="bg-blue-600 h-full w-2/3 animate-pulse rounded-full"></div>

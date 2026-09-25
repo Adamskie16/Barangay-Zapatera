@@ -229,7 +229,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
     };
 
     setLoading(false);
-    setSuccessMessage('Registration successful! Profile saved to Supabase database.');
+    setSuccessMessage('Registration successful! Your resident profile has been created.');
 
     setTimeout(() => {
       onRegisterSuccess(newUser);

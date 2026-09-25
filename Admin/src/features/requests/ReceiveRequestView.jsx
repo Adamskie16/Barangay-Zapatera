@@ -1359,7 +1359,7 @@ export default function ReceiveRequestView({
             <div>
               <h4 className="font-bold text-rose-900 text-sm">Delete Document Request?</h4>
               <p className="text-rose-800 text-xs mt-1 leading-relaxed">
-                Are you sure you want to delete this document request{reqToDelete?.tracking_number ? ` (${reqToDelete.tracking_number})` : ''}? This action will permanently remove the record from Supabase.
+                Are you sure you want to delete this document request{reqToDelete?.tracking_number ? ` (${reqToDelete.tracking_number})` : ''}? This action will permanently remove this record from the official barangay document registry.
               </p>
             </div>
           </div>

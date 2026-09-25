@@ -248,7 +248,7 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
     setIsSaving(true);
     setIsProcessing(true);
     setProcessingTitle(editingEvent ? 'Updating Barangay Event...' : 'Publishing Barangay Event...');
-    setProcessingMessage('Verifying credentials & syncing event details with Supabase database...');
+    setProcessingMessage('Verifying credentials and publishing barangay notice...');
 
     try {
       if (onSaveEvent && pendingEventPayload) {
@@ -284,7 +284,7 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
     setIsDeleting(true);
     setIsProcessing(true);
     setProcessingTitle('Removing Barangay Event...');
-    setProcessingMessage('Deleting event announcement and updating system database...');
+    setProcessingMessage('Removing announcement from barangay bulletin...');
 
     try {
       if (onDeleteEvent) {
@@ -324,7 +324,7 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900">{processingTitle || 'Processing Action...'}</h3>
-              <p className="text-xs text-slate-500 mt-1">{processingMessage || 'Synchronizing event records with database...'}</p>
+              <p className="text-xs text-slate-500 mt-1">{processingMessage || 'Updating barangay bulletin...'}</p>
             </div>
             <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
               <div className="bg-blue-600 h-full w-2/3 animate-pulse rounded-full"></div>
@@ -338,7 +338,7 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
         <div>
           <h2 className="text-xl font-bold text-slate-900">Barangay Events & Community Notices</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Post announcements, community assemblies, and public notices synced with Supabase.
+            Post announcements, community assemblies, and official public notices for Zapatera residents.
           </p>
         </div>
         <button
@@ -606,7 +606,7 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingEvent ? 'Edit Announcement' : 'Publish Announcement to Supabase'}
+        title={editingEvent ? 'Edit Announcement' : 'Publish Public Notice'}
       >
         <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
           <div>

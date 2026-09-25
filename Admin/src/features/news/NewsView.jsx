@@ -255,7 +255,7 @@ export default function NewsView({ currentUser }) {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Total Bulletins</p>
             <h3 className="text-2xl font-extrabold text-slate-900 mt-1">{totalCount}</h3>
-            <p className="text-xs text-slate-600 mt-0.5">Active records in database</p>
+            <p className="text-xs text-slate-600 mt-0.5">Published barangay bulletins</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
             <Newspaper className="w-6 h-6" />
@@ -349,7 +349,7 @@ export default function NewsView({ currentUser }) {
       {loading ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-600">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="font-semibold text-sm">Loading announcements from Supabase database...</p>
+          <p className="font-semibold text-sm">Loading official announcements...</p>
         </div>
       ) : filteredNews.length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
