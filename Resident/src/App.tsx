@@ -300,14 +300,27 @@ export default function App() {
           if (!error && Array.isArray(data)) {
             const formatted: DocumentRequest[] = data.map((req: any) => {
               const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
+              const rawYears = req.years_in_barangay !== undefined && req.years_in_barangay !== null && req.years_in_barangay !== ''
+                ? req.years_in_barangay
+                : (user.years_in_barangay || 5);
+              const formattedYears = String(rawYears).toLowerCase().includes('year') ? String(rawYears) : `${rawYears} years`;
+              const normStatus = (req.status || 'pending').toLowerCase();
+              const isDeclined = normStatus === 'declined' || normStatus === 'rejected';
+              const isClaimed = normStatus === 'completed' || normStatus === 'issued' || Boolean(req.is_claimed) || Boolean(req.claimed_at);
+              const isReady = (normStatus === 'ready_for_pickup' || normStatus === 'approved') && !isClaimed && !isDeclined;
+              const isUnderReview = normStatus === 'under_review' || normStatus === 'processing';
+
               return {
                 id: req.id,
                 tracking_number: req.tracking_number,
                 resident_id: req.resident_id,
                 resident_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
                 resident_email: user.email,
-                resident_phone: user.phone || '',
-                resident_address: user.address || user.sitio || 'Barangay Zapatera, Cebu City',
+                resident_phone: user.phone || req.resident_phone || '',
+                resident_address: user.address || user.sitio || req.resident_address || 'Barangay Zapatera, Cebu City',
+                resident_birth_date: user.birth_date || user.birthdate || req.resident_birth_date || '',
+                civil_status: user.civil_status || req.civil_status || 'Single',
+                years_in_barangay: formattedYears,
                 document_type_id: req.document_type_id,
                 document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
                 fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
@@ -321,38 +334,40 @@ export default function App() {
                 status: req.status || 'pending',
                 notes: req.notes || '',
                 rejection_reason: req.rejection_reason || '',
-                timeline: req.timeline || [
+                declined_reason: req.declined_reason || req.rejection_reason || '',
+                declined_details: req.declined_details || '',
+                timeline: [
                   {
                     status: 'pending',
                     label: 'Request Submitted',
-                    description: 'Document request registered in system queue.',
-                    timestamp: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    description: 'Document request received online and entered in the barangay records queue.',
+                    timestamp: req.created_at ? new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Submitted',
                     is_completed: true,
-                    is_current: req.status === 'pending',
+                    is_current: normStatus === 'pending',
                   },
                   {
                     status: 'under_review',
                     label: 'Under Review',
-                    description: 'Barangay records clerk is validating details and clearance.',
-                    timestamp: req.status === 'under_review' || req.status === 'processing' || req.status === 'approved' || req.status === 'completed' ? 'Reviewed' : 'Pending',
-                    is_completed: ['under_review', 'processing', 'approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
-                    is_current: req.status === 'under_review' || req.status === 'processing',
+                    description: 'Barangay staff is reviewing resident information and verifying submitted documents.',
+                    timestamp: isUnderReview || isReady || isClaimed || isDeclined ? 'Under Review' : 'Pending Review',
+                    is_completed: isUnderReview || isReady || isClaimed || isDeclined,
+                    is_current: isUnderReview && !isDeclined,
                   },
                   {
                     status: 'ready_for_pickup',
-                    label: 'Ready for Pickup',
-                    description: `Document ready for collection at Express Window 2.`,
-                    timestamp: req.pickup_date ? `${req.pickup_date} (${req.pickup_time_slot || 'Window 2'})` : 'To be scheduled',
-                    is_completed: ['approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
-                    is_current: req.status === 'approved' || req.status === 'ready_for_pickup',
+                    label: isDeclined ? 'Request Declined' : 'Ready for Pick up',
+                    description: isDeclined ? (req.declined_reason || 'Application declined due to incomplete or invalid requirements.') : `Document printed, sealed, and approved for pickup at Express Window (${req.pickup_time_slot || 'Window 2'}).`,
+                    timestamp: isReady || isClaimed || isDeclined ? (isDeclined ? 'Declined' : (req.pickup_date ? `${req.pickup_date}` : 'Approved')) : `Scheduled for ${req.pickup_date || 'Pickup'}`,
+                    is_completed: isReady || isClaimed || isDeclined,
+                    is_current: isReady || isDeclined,
                   },
                   {
                     status: 'completed',
                     label: 'Completed',
-                    description: 'Document claimed and released to resident.',
-                    timestamp: req.status === 'completed' || req.status === 'issued' ? 'Released' : 'Pending Release',
-                    is_completed: req.status === 'completed' || req.status === 'issued',
-                    is_current: req.status === 'completed' || req.status === 'issued',
+                    description: 'Official document claimed and successfully released to resident.',
+                    timestamp: isClaimed ? (req.claimed_at || req.issued_at ? new Date(req.claimed_at || req.issued_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Claimed') : 'Pending Release',
+                    is_completed: isClaimed,
+                    is_current: isClaimed,
                   },
                 ],
                 created_at: req.created_at,
@@ -499,10 +514,16 @@ export default function App() {
           if (dRec?.id) docTypeId = dRec.id;
         }
 
+        const parsedYears = newReq.years_in_barangay
+          ? (parseInt(String(newReq.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5)
+          : (user.years_in_barangay ? (parseInt(String(user.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5) : 5);
+
         const payload = {
           tracking_number: newReq.tracking_number,
           resident_id: authUserId,
           document_type_id: docTypeId,
+          document_title: newReq.document_title,
+          fee: newReq.fee || 0,
           purpose: newReq.purpose,
           requirements_attached: newReq.requirements_attached || [],
           uploaded_files: newReq.uploaded_files || [],
@@ -510,12 +531,24 @@ export default function App() {
           pickup_time_slot: newReq.pickup_time_slot,
           pickup_location: newReq.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
           pickup_instructions: newReq.pickup_instructions || '',
+          years_in_barangay: parsedYears,
+          resident_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+          resident_email: user.email,
+          resident_phone: user.phone || '',
+          resident_address: user.address || user.sitio || 'Barangay Zapatera, Cebu City',
+          resident_birth_date: user.birth_date || user.birthdate || null,
+          civil_status: user.civil_status || 'Single',
           status: 'pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
         await supabase.from('document_requests').insert([payload]);
+
+        // Keep profile years_in_barangay in sync
+        if (parsedYears && authUserId) {
+          supabase.from('profiles').update({ years_in_barangay: parsedYears }).eq('id', authUserId).catch(() => {});
+        }
 
         // Insert in notifications table
         await supabase.from('notifications').insert([{

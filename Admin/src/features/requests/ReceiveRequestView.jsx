@@ -214,7 +214,10 @@ export default function ReceiveRequestView({
     const resAddress = req.resident_address || req.profiles?.address || req.address || (req.profiles?.sitio ? `${req.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
     const resDob = req.resident_birth_date || req.date_of_birth || req.dob || req.birthdate || req.profiles?.birth_date || '';
     const resContact = req.resident_phone || req.phone || req.contact_no || req.profiles?.phone || '';
-    const resYears = req.years_in_barangay || req.profiles?.years_in_barangay || '5 years';
+    const rawYears = req.years_in_barangay !== undefined && req.years_in_barangay !== null && req.years_in_barangay !== ''
+      ? req.years_in_barangay
+      : (req.profiles?.years_in_barangay !== undefined && req.profiles?.years_in_barangay !== null && req.profiles?.years_in_barangay !== '' ? req.profiles.years_in_barangay : '5');
+    const resYears = String(rawYears).toLowerCase().includes('year') ? String(rawYears) : `${rawYears} years`;
     const resPurpose = req.purpose || 'Local Employment Application';
 
     setGenName(resName);
@@ -383,7 +386,10 @@ export default function ReceiveRequestView({
   const residentAddress = selectedReq?.resident_address || selectedReq?.profiles?.address || selectedReq?.address || (selectedReq?.profiles?.sitio ? `${selectedReq.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
   const residentDob = selectedReq?.resident_birth_date || selectedReq?.date_of_birth || selectedReq?.dob || selectedReq?.birthdate || selectedReq?.profiles?.birth_date || 'Not specified';
   const residentCivilStatus = selectedReq?.civil_status || selectedReq?.profiles?.civil_status || 'Single';
-  const residentYears = selectedReq?.years_in_barangay || selectedReq?.profiles?.years_in_barangay || '5 years';
+  const rawResidentYears = selectedReq?.years_in_barangay !== undefined && selectedReq?.years_in_barangay !== null && selectedReq?.years_in_barangay !== ''
+    ? selectedReq.years_in_barangay
+    : (selectedReq?.profiles?.years_in_barangay !== undefined && selectedReq?.profiles?.years_in_barangay !== null && selectedReq?.profiles?.years_in_barangay !== '' ? selectedReq.profiles.years_in_barangay : '5');
+  const residentYears = String(rawResidentYears).toLowerCase().includes('year') ? String(rawResidentYears) : `${rawResidentYears} years`;
 
   return (
     <div className="space-y-6">
