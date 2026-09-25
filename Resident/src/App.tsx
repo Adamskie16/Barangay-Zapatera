@@ -97,20 +97,33 @@ export default function App() {
           .order('title', { ascending: true });
 
         if (!error && data && data.length > 0) {
-          const formatted: DocumentType[] = data.map((d: any) => ({
-            id: d.id,
-            code: d.code,
-            title: d.title,
-            description: d.description,
-            fee: Number(d.fee) || 0,
-            processing_days: Number(d.processing_days) || 1,
-            requirements: Array.isArray(d.requirements)
-              ? d.requirements
-              : typeof d.requirements === 'string'
-              ? JSON.parse(d.requirements)
-              : [],
-            is_active: d.is_active !== false,
-          }));
+          const formatted: DocumentType[] = data.map((d: any) => {
+            const text = `${d.code || ''} ${d.title || ''} ${d.description || ''}`.toLowerCase();
+            let inferredCategory = d.category;
+            if (!inferredCategory) {
+              if (text.includes('clearance')) inferredCategory = 'Clearance';
+              else if (text.includes('indigency') || text.includes('financial')) inferredCategory = 'Indigency';
+              else if (text.includes('permit') || text.includes('business')) inferredCategory = 'Permit';
+              else if (text.includes('certificate') || text.includes('certification') || text.includes('residency') || text.includes('moral') || text.includes('jobseeker')) inferredCategory = 'Certificate';
+              else inferredCategory = 'General';
+            }
+
+            return {
+              id: d.id,
+              code: d.code,
+              title: d.title,
+              category: inferredCategory,
+              description: d.description,
+              fee: Number(d.fee) || 0,
+              processing_days: Number(d.processing_days) || 1,
+              requirements: Array.isArray(d.requirements)
+                ? d.requirements
+                : typeof d.requirements === 'string'
+                ? JSON.parse(d.requirements)
+                : [],
+              is_active: d.is_active !== false,
+            };
+          });
           setDocTypes(formatted);
         }
       }

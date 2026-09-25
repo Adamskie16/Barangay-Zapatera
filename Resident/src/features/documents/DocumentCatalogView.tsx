@@ -1,5 +1,5 @@
 // Resident/src/features/documents/DocumentCatalogView.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ import {
   ArrowRight,
   Info,
   CheckCircle,
+  ArrowUpDown,
+  Filter,
 } from 'lucide-react';
 import { DocumentType } from '../../types';
 import { formatCurrency } from '../../core/security';
@@ -31,7 +33,42 @@ interface DocumentCatalogViewProps {
   onViewRequirements: (doc: DocumentType) => void;
 }
 
-const CATEGORIES = ['All', 'Clearance', 'Certificate', 'Indigency', 'Permit', 'General'];
+const CATEGORIES = ['All', 'Clearance', 'Certificate', 'Indigency', 'Permit'];
+
+// Helper to determine the accurate functional category of any document
+export const getDocumentCategory = (doc: DocumentType): string => {
+  if (doc.category && doc.category.trim()) {
+    const rawCat = doc.category.trim().toLowerCase();
+    if (rawCat.includes('clearance')) return 'Clearance';
+    if (rawCat.includes('indigency') || rawCat.includes('financial')) return 'Indigency';
+    if (rawCat.includes('permit') || rawCat.includes('business')) return 'Permit';
+    if (
+      rawCat.includes('certificate') ||
+      rawCat.includes('certification') ||
+      rawCat.includes('residency') ||
+      rawCat.includes('moral') ||
+      rawCat.includes('jobseeker')
+    ) {
+      return 'Certificate';
+    }
+  }
+
+  const combined = `${doc.code || ''} ${doc.title || ''} ${doc.description || ''}`.toLowerCase();
+  if (combined.includes('clearance')) return 'Clearance';
+  if (combined.includes('indigency') || combined.includes('financial') || combined.includes('calamity')) return 'Indigency';
+  if (combined.includes('permit') || combined.includes('business') || combined.includes('building') || combined.includes('construction')) return 'Permit';
+  if (
+    combined.includes('certificate') ||
+    combined.includes('certification') ||
+    combined.includes('residency') ||
+    combined.includes('moral') ||
+    combined.includes('jobseeker')
+  ) {
+    return 'Certificate';
+  }
+
+  return 'Certificate';
+};
 
 export default function DocumentCatalogView({
   docTypes,
@@ -40,37 +77,59 @@ export default function DocumentCatalogView({
 }: DocumentCatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [sortBy, setSortBy] = useState<'name' | 'fee' | 'time'>('name');
 
-  const filteredDocs = docTypes.filter((doc) => {
-    const matchesSearch =
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.category || '').toLowerCase().includes(searchQuery.toLowerCase());
+  // Compute category counts
+  const categoryCounts = useMemo(() => {
+    const counts: { [key: string]: number } = { All: docTypes.length };
+    CATEGORIES.forEach((cat) => {
+      if (cat !== 'All') {
+        counts[cat] = docTypes.filter((doc) => getDocumentCategory(doc) === cat).length;
+      }
+    });
+    return counts;
+  }, [docTypes]);
 
-    const matchesCategory =
-      selectedCategory === 'All' ||
-      (doc.category || 'General').toLowerCase() === selectedCategory.toLowerCase();
+  // Filter & Sort
+  const filteredDocs = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase().trim();
 
-    return matchesSearch && matchesCategory;
-  });
+    return docTypes
+      .filter((doc) => {
+        const docCat = getDocumentCategory(doc);
+
+        const matchesSearch =
+          !searchLower ||
+          doc.title.toLowerCase().includes(searchLower) ||
+          doc.description.toLowerCase().includes(searchLower) ||
+          docCat.toLowerCase().includes(searchLower) ||
+          (doc.code || '').toLowerCase().includes(searchLower);
+
+        const matchesCategory =
+          selectedCategory === 'All' || docCat.toLowerCase() === selectedCategory.toLowerCase();
+
+        return matchesSearch && matchesCategory;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'fee') {
+          return a.fee - b.fee;
+        }
+        if (sortBy === 'time') {
+          return (a.processing_days || 1) - (b.processing_days || 1);
+        }
+        // Default: Sort by title A-Z
+        return a.title.localeCompare(b.title);
+      });
+  }, [docTypes, searchQuery, selectedCategory, sortBy]);
 
   const renderIcon = (doc: DocumentType) => {
-    switch (doc.icon) {
-      case 'ShieldCheck':
-        return <ShieldCheck size={22} color="#1d4ed8" />;
-      case 'Home':
-        return <Home size={22} color="#0284c7" />;
-      case 'HeartHandshake':
-        return <HeartHandshake size={22} color="#059669" />;
-      case 'Briefcase':
-        return <Briefcase size={22} color="#7c3aed" />;
-      case 'Award':
-        return <Award size={22} color="#d97706" />;
-      case 'Sparkles':
-        return <Sparkles size={22} color="#0d9488" />;
-      default:
-        return <FileText size={22} color="#1d4ed8" />;
-    }
+    const text = `${doc.code || ''} ${doc.title || ''}`.toLowerCase();
+    if (text.includes('clearance')) return <ShieldCheck size={22} color="#1d4ed8" />;
+    if (text.includes('residency')) return <Home size={22} color="#0284c7" />;
+    if (text.includes('indigency')) return <HeartHandshake size={22} color="#059669" />;
+    if (text.includes('jobseeker') || text.includes('business')) return <Briefcase size={22} color="#7c3aed" />;
+    if (text.includes('moral')) return <Award size={22} color="#d97706" />;
+    return <FileText size={22} color="#1d4ed8" />;
   };
 
   return (
@@ -91,111 +150,182 @@ export default function DocumentCatalogView({
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+              <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        {/* Category Pills */}
+        {/* Category Filter Pills with Item Count */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryPill,
-                selectedCategory === cat && styles.categoryPillActive,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
+          {CATEGORIES.map((cat) => {
+            const count = categoryCounts[cat] || 0;
+            const isSelected = selectedCategory === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
                 style={[
-                  styles.categoryPillText,
-                  selectedCategory === cat && styles.categoryPillTextActive,
+                  styles.categoryPill,
+                  isSelected && styles.categoryPillActive,
                 ]}
+                onPress={() => setSelectedCategory(cat)}
               >
-                {cat}
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    isSelected && styles.categoryPillTextActive,
+                  ]}
+                >
+                  {cat} {count > 0 ? `(${count})` : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Quick Sorting Toolbar */}
+        <View style={styles.sortBar}>
+          <View style={styles.sortBarLeft}>
+            <ArrowUpDown size={12} color="#64748b" />
+            <Text style={styles.sortBarLabel}>Sort by:</Text>
+          </View>
+          <View style={styles.sortOptionsRow}>
+            <TouchableOpacity
+              style={[styles.sortPill, sortBy === 'name' && styles.sortPillActive]}
+              onPress={() => setSortBy('name')}
+            >
+              <Text style={[styles.sortPillText, sortBy === 'name' && styles.sortPillTextActive]}>
+                Name (A-Z)
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.sortPill, sortBy === 'fee' && styles.sortPillActive]}
+              onPress={() => setSortBy('fee')}
+            >
+              <Text style={[styles.sortPillText, sortBy === 'fee' && styles.sortPillTextActive]}>
+                Fee (Lowest First)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sortPill, sortBy === 'time' && styles.sortPillActive]}
+              onPress={() => setSortBy('time')}
+            >
+              <Text style={[styles.sortPillText, sortBy === 'time' && styles.sortPillTextActive]}>
+                Processing Time
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* Documents List */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.resultsCount}>
-          Available Documents ({filteredDocs.length})
-        </Text>
+        <View style={styles.resultsRow}>
+          <Text style={styles.resultsCount}>
+            Available Documents ({filteredDocs.length})
+          </Text>
+          {selectedCategory !== 'All' && (
+            <TouchableOpacity onPress={() => setSelectedCategory('All')}>
+              <Text style={styles.clearFilterText}>Reset filter</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-        {filteredDocs.map((doc) => (
-          <View key={doc.id} style={styles.docCard}>
-            <View style={styles.docCardTop}>
-              <View style={styles.iconCircle}>{renderIcon(doc)}</View>
-              <View style={styles.docCardInfo}>
-                <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitle}>{doc.title}</Text>
-                  <View style={[styles.feeBadge, doc.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid]}>
-                    <Text style={[styles.feeBadgeText, doc.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid]}>
-                      {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.docDesc}>{doc.description}</Text>
-
-                <View style={styles.metaRow}>
-                  <View style={styles.metaItem}>
-                    <Clock size={12} color="#64748b" />
-                    <Text style={styles.metaText}>Processing: {doc.processing_days} {doc.processing_days === 1 ? 'Day' : 'Days'}</Text>
-                  </View>
-                  {doc.validity && (
-                    <View style={styles.metaItem}>
-                      <ShieldCheck size={12} color="#64748b" />
-                      <Text style={styles.metaText}>Validity: {doc.validity}</Text>
+        {filteredDocs.map((doc) => {
+          const docCategory = getDocumentCategory(doc);
+          return (
+            <View key={doc.id} style={styles.docCard}>
+              <View style={styles.docCardTop}>
+                <View style={styles.iconCircle}>{renderIcon(doc)}</View>
+                <View style={styles.docCardInfo}>
+                  <View style={styles.docTitleRow}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.docTitle}>{doc.title}</Text>
+                      <Text style={styles.docCategoryBadge}>{docCategory}</Text>
                     </View>
-                  )}
+                    <View style={[styles.feeBadge, doc.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid]}>
+                      <Text style={[styles.feeBadgeText, doc.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid]}>
+                        {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.docDesc}>{doc.description}</Text>
+
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaItem}>
+                      <Clock size={12} color="#64748b" />
+                      <Text style={styles.metaText}>Processing: {doc.processing_days} {Number(doc.processing_days) === 1 ? 'Day' : 'Days'}</Text>
+                    </View>
+                    {doc.validity && (
+                      <View style={styles.metaItem}>
+                        <ShieldCheck size={12} color="#64748b" />
+                        <Text style={styles.metaText}>Validity: {doc.validity}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
 
-            {/* Requirements Snippet */}
-            <View style={styles.requirementsBox}>
-              <Text style={styles.requirementsTitle}>Core Requirements:</Text>
-              {doc.requirements.slice(0, 2).map((req, i) => (
-                <View key={i} style={styles.reqRow}>
-                  <CheckCircle size={12} color="#10b981" />
-                  <Text style={styles.reqItemText} numberOfLines={1}>{req}</Text>
+              {/* Requirements Snippet */}
+              {doc.requirements && doc.requirements.length > 0 && (
+                <View style={styles.requirementsBox}>
+                  <Text style={styles.requirementsTitle}>Core Requirements:</Text>
+                  {doc.requirements.slice(0, 2).map((req, i) => (
+                    <View key={i} style={styles.reqRow}>
+                      <CheckCircle size={12} color="#10b981" />
+                      <Text style={styles.reqItemText} numberOfLines={1}>{req}</Text>
+                    </View>
+                  ))}
+                  {doc.requirements.length > 2 && (
+                    <Text style={styles.reqMoreText}>+{doc.requirements.length - 2} more requirement(s)</Text>
+                  )}
                 </View>
-              ))}
-              {doc.requirements.length > 2 && (
-                <Text style={styles.reqMoreText}>+{doc.requirements.length - 2} more requirement(s)</Text>
               )}
-            </View>
 
-            {/* Action Buttons */}
-            <View style={styles.cardActions}>
-              <TouchableOpacity
-                style={styles.reqDetailsBtn}
-                onPress={() => onViewRequirements(doc)}
-              >
-                <Info size={14} color="#1d4ed8" />
-                <Text style={styles.reqDetailsBtnText}>Requirements Guide</Text>
-              </TouchableOpacity>
+              {/* Action Buttons */}
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={styles.reqDetailsBtn}
+                  onPress={() => onViewRequirements(doc)}
+                >
+                  <Info size={14} color="#1d4ed8" />
+                  <Text style={styles.reqDetailsBtnText}>Requirements Guide</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.requestNowBtn}
-                onPress={() => onSelectDocument(doc)}
-              >
-                <Text style={styles.requestNowBtnText}>Request Online</Text>
-                <ArrowRight size={14} color="#ffffff" />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.requestNowBtn}
+                  onPress={() => onSelectDocument(doc)}
+                >
+                  <Text style={styles.requestNowBtnText}>Request Online</Text>
+                  <ArrowRight size={14} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         {filteredDocs.length === 0 && (
           <View style={styles.emptySearchBox}>
             <Search size={36} color="#94a3b8" />
             <Text style={styles.emptySearchTitle}>No matching documents found</Text>
             <Text style={styles.emptySearchSubtitle}>
-              Try searching with another keyword like "clearance", "residency", or "indigency".
+              {selectedCategory !== 'All'
+                ? `No documents found in the "${selectedCategory}" category.`
+                : 'Try searching with another keyword like "clearance", "residency", or "indigency".'}
             </Text>
+            <TouchableOpacity
+              style={styles.resetBtn}
+              onPress={() => {
+                setSelectedCategory('All');
+                setSearchQuery('');
+              }}
+            >
+              <Text style={styles.resetBtnText}>View All Documents</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -453,5 +583,89 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     marginTop: 4,
+  },
+  sortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sortBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sortBarLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  sortOptionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  sortPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sortPillActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#93c5fd',
+  },
+  sortPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  sortPillTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '700',
+  },
+  resultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  clearFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  docCategoryBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563eb',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  resetBtn: {
+    marginTop: 14,
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  resetBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
