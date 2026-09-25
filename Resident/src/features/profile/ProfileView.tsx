@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { ResidentUser, BarangayConfig } from '../../types';
 import { uploadUserAvatar } from '../../core/storageService';
+import ActionModal from '../../components/ActionModal';
 
 interface ProfileViewProps {
   currentUser: ResidentUser;
@@ -57,6 +58,22 @@ export default function ProfileView({
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Feedback ActionModal State
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    type?: 'success' | 'error' | 'confirmation' | 'info';
+    title: string;
+    message?: string;
+    confirmText?: string;
+    cancelText?: string;
+    buttonText?: string;
+    onConfirm?: () => void;
+    onClose?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+  });
 
   // Edit form state
   const [editFirstName, setEditFirstName] = useState(currentUser.first_name || currentUser.full_name?.split(' ')[0] || '');
@@ -81,20 +98,37 @@ export default function ProfileView({
   const [passSuccess, setPassSuccess] = useState('');
 
   const handleSaveProfile = () => {
-    const cleanFull = `${editLastName.trim() ? editLastName.trim() + ', ' : ''}${editFirstName.trim()}`;
-    onUpdateProfile({
-      first_name: editFirstName.trim(),
-      last_name: editLastName.trim(),
-      full_name: cleanFull || currentUser.full_name,
-      phone: editPhone.trim(),
-      address: editAddress.trim(),
-      civil_status: editCivilStatus,
-    });
-    setSaveSuccessMsg('Profile information updated successfully!');
-    setTimeout(() => {
-      setSaveSuccessMsg('');
+    try {
+      const cleanFull = `${editLastName.trim() ? editLastName.trim() + ', ' : ''}${editFirstName.trim()}`;
+      onUpdateProfile({
+        first_name: editFirstName.trim(),
+        last_name: editLastName.trim(),
+        full_name: cleanFull || currentUser.full_name,
+        phone: editPhone.trim(),
+        address: editAddress.trim(),
+        civil_status: editCivilStatus,
+      });
       setIsEditModalOpen(false);
-    }, 1500);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Profile Updated Successfully',
+        message: 'Your profile information has been updated.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false, title: '' }),
+      });
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Unable to update your profile information. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false, title: '' }),
+      });
+    }
   };
 
   const handleSavePassword = () => {
@@ -112,14 +146,20 @@ export default function ProfileView({
       setPassError('New passwords do not match.');
       return;
     }
-    setPassSuccess('Account password updated successfully.');
-    setTimeout(() => {
-      setIsPasswordModalOpen(false);
-      setCurrentPass('');
-      setNewPass('');
-      setConfirmPass('');
-      setPassSuccess('');
-    }, 1500);
+
+    setIsPasswordModalOpen(false);
+    setCurrentPass('');
+    setNewPass('');
+    setConfirmPass('');
+
+    setActionModal({
+      isOpen: true,
+      type: 'success',
+      title: 'Password Updated Successfully',
+      message: 'Your account security credentials have been updated.',
+      buttonText: 'OK',
+      onClose: () => setActionModal({ isOpen: false, title: '' }),
+    });
   };
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -139,11 +179,33 @@ export default function ProfileView({
         const result = await uploadUserAvatar(currentUser.id || 'resident', file, file.name);
         if (result.success && result.fileUrl) {
           onUpdateProfile({ avatar_url: result.fileUrl });
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Photo Updated Successfully',
+            message: 'Your official resident profile picture has been updated.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false, title: '' }),
+          });
         } else {
-          setAvatarError(result.error || 'Failed to upload photo.');
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Photo Upload Failed',
+            message: 'We could not upload your photo. Please try another image.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false, title: '' }),
+          });
         }
       } catch (err: any) {
-        setAvatarError(err?.message || 'Upload error');
+        setActionModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Photo Upload Failed',
+          message: 'An error occurred while uploading. Please try again.',
+          buttonText: 'Close',
+          onClose: () => setActionModal({ isOpen: false, title: '' }),
+        });
       } finally {
         setUploadingAvatar(false);
       }
@@ -589,6 +651,19 @@ export default function ProfileView({
           </View>
         </View>
       </Modal>
+
+      {/* Action Feedback & Confirmation Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false, title: '' }))}
+      />
     </ScrollView>
   );
 }

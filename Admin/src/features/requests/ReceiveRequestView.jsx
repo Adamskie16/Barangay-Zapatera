@@ -37,6 +37,7 @@ import {
   FileCheck,
   Trash2
 } from 'lucide-react';
+import ActionModal from '../../components/ActionModal';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
 import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documentTemplates';
@@ -71,15 +72,25 @@ export default function ReceiveRequestView({
   const [verificationMap, setVerificationMap] = useState({});
   const [processingNotes, setProcessingNotes] = useState('');
 
-  // Confirmation / Decline Modals
+  // Reusable Feedback & Confirmation ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    isDestructive: false,
+    isProcessing: false,
+  });
+
+  // Decline Modal State
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState('Missing required document');
   const [declineDetails, setDeclineDetails] = useState('');
   const [declineError, setDeclineError] = useState('');
-
-  // Delete Request Confirmation Modal State
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [reqToDelete, setReqToDelete] = useState(null);
 
   // File Preview Modal
   const [previewFile, setPreviewFile] = useState(null);
@@ -290,37 +301,74 @@ export default function ReceiveRequestView({
   };
 
   // When admin clicks Process:
-  // Immediately change request status from Pending -> Under Review and populate all resident details into generator
+  // Shows confirmation modal, then updates status to under_review, shows success modal, and opens workspace
   const handleStartProcess = (req) => {
-    let updatedReq = { ...req };
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Process Request?',
+      message: 'Are you sure you want to start processing this document request?',
+      confirmText: 'Process Request',
+      cancelText: 'Cancel',
+      isDestructive: false,
+      isProcessing: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isProcessing: true }));
+        try {
+          let updatedReq = { ...req };
 
-    if (req.status === 'pending') {
-      updatedReq.status = 'under_review';
-      updatedReq.processed_at = new Date().toISOString();
-      updatedReq.updated_at = new Date().toISOString();
-      if (onProcessRequest) {
-        onProcessRequest(updatedReq);
-      }
-    }
+          if (req.status === 'pending') {
+            updatedReq.status = 'under_review';
+            updatedReq.processed_at = new Date().toISOString();
+            updatedReq.updated_at = new Date().toISOString();
+            if (onProcessRequest) {
+              await onProcessRequest(updatedReq);
+            }
+          }
 
-    const reqList = getRequirementList(updatedReq);
-    const initialMap = {};
-    reqList.forEach((item) => {
-      if (updatedReq.requirements_status && updatedReq.requirements_status[item.name]) {
-        initialMap[item.name] = updatedReq.requirements_status[item.name];
-      } else {
-        initialMap[item.name] = 'verified';
-      }
+          const reqList = getRequirementList(updatedReq);
+          const initialMap = {};
+          reqList.forEach((item) => {
+            if (updatedReq.requirements_status && updatedReq.requirements_status[item.name]) {
+              initialMap[item.name] = updatedReq.requirements_status[item.name];
+            } else {
+              initialMap[item.name] = 'verified';
+            }
+          });
+
+          setVerificationMap(initialMap);
+          setProcessingNotes(updatedReq.notes || '');
+
+          // Auto-fill resident details into generator
+          populateGeneratorFromResident(updatedReq);
+          setGeneratorTab('variables');
+
+          // Show Success Modal
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Request Processed Successfully',
+            message: 'The document request is now under review.',
+            buttonText: 'OK',
+            onClose: () => {
+              setActionModal({ isOpen: false });
+              setSelectedReq(updatedReq);
+            },
+          });
+        } catch (err) {
+          console.error('Error starting request processing:', err);
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Processing Failed',
+            message: 'We could not process this request. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
     });
-
-    setVerificationMap(initialMap);
-    setProcessingNotes(updatedReq.notes || '');
-
-    // Auto-fill all resident information into the Official Document Generator
-    populateGeneratorFromResident(updatedReq);
-
-    setGeneratorTab('variables');
-    setSelectedReq(updatedReq);
   };
 
   const handleSelectTemplate = (key) => {
@@ -353,32 +401,67 @@ export default function ReceiveRequestView({
   const canProceedToPrint = !hasRequirements || (totalReqCount > 0 && verifiedCount === totalReqCount && !hasInvalidOrMissing);
 
   // When admin clicks Print Document:
-  // Automatically mark the request as Approved and trigger window.print()
+  // Show confirmation modal -> mark as Approved -> browser print -> success modal
   const handlePrintAndApprove = () => {
     if (!selectedReq) return;
 
-    const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
-    const updatedPayload = {
-      ...selectedReq,
-      status: 'approved',
-      approved_at: new Date().toISOString(),
-      processed_by: adminName,
-      notes: sanitizeInput(processingNotes),
-      requirements_status: verificationMap,
-      rejection_reason: '',
-      declined_reason: '',
-      declined_details: '',
-      updated_at: new Date().toISOString(),
-    };
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Approve Request?',
+      message: 'Are you sure you want to approve this document request? After approval, the resident will be notified that the document is ready for pick up.',
+      confirmText: 'Approve Request',
+      cancelText: 'Cancel',
+      isDestructive: false,
+      isProcessing: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isProcessing: true }));
+        try {
+          const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
+          const updatedPayload = {
+            ...selectedReq,
+            status: 'approved',
+            approved_at: new Date().toISOString(),
+            processed_by: adminName,
+            notes: sanitizeInput(processingNotes),
+            requirements_status: verificationMap,
+            rejection_reason: '',
+            declined_reason: '',
+            declined_details: '',
+            updated_at: new Date().toISOString(),
+          };
 
-    if (onProcessRequest) {
-      onProcessRequest(updatedPayload);
-    }
+          if (onProcessRequest) {
+            await onProcessRequest(updatedPayload);
+          }
 
-    setSelectedReq(null);
+          setSelectedReq(null);
 
-    // Trigger browser print
-    window.print();
+          // Trigger browser print
+          window.print();
+
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Request Approved',
+            message: 'The document is now ready for pick up.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        } catch (err) {
+          console.error('Error approving request:', err);
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Approval Failed',
+            message: 'The request could not be approved. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   };
 
   // Decline Document Request:
@@ -389,40 +472,102 @@ export default function ReceiveRequestView({
     setShowDeclineModal(true);
   };
 
-  const handleConfirmDecline = (e) => {
+  const handleConfirmDecline = async (e) => {
     e?.preventDefault();
     if (!selectedReq) return;
 
     if (!declineReason || !declineReason.trim()) {
-      setDeclineError('Please select a reason for declining this request.');
+      setDeclineError('Please provide a reason before declining the request.');
       return;
     }
 
-    const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
-    const fullExplanation = declineDetails.trim()
-      ? `${declineReason}: ${declineDetails.trim()}`
-      : declineReason;
+    try {
+      const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
+      const fullExplanation = declineDetails.trim()
+        ? `${declineReason}: ${declineDetails.trim()}`
+        : declineReason;
 
-    const updatedPayload = {
-      ...selectedReq,
-      status: 'declined',
-      rejection_reason: fullExplanation,
-      declined_reason: declineReason,
-      declined_details: declineDetails.trim(),
-      rejected_at: new Date().toISOString(),
-      declined_at: new Date().toISOString(),
-      processed_by: adminName,
-      notes: sanitizeInput(processingNotes),
-      requirements_status: verificationMap,
-      updated_at: new Date().toISOString(),
-    };
+      const updatedPayload = {
+        ...selectedReq,
+        status: 'declined',
+        rejection_reason: fullExplanation,
+        declined_reason: declineReason,
+        declined_details: declineDetails.trim(),
+        rejected_at: new Date().toISOString(),
+        declined_at: new Date().toISOString(),
+        processed_by: adminName,
+        notes: sanitizeInput(processingNotes),
+        requirements_status: verificationMap,
+        updated_at: new Date().toISOString(),
+      };
 
-    if (onProcessRequest) {
-      onProcessRequest(updatedPayload);
+      if (onProcessRequest) {
+        await onProcessRequest(updatedPayload);
+      }
+
+      setShowDeclineModal(false);
+      setSelectedReq(null);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Request Declined',
+        message: 'The resident has been notified that the request was declined.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.error('Error declining request:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Decline Failed',
+        message: 'The request could not be declined. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     }
+  };
 
-    setShowDeclineModal(false);
-    setSelectedReq(null);
+  // Delete Request with confirmation
+  const handlePromptDelete = (req) => {
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Delete Document Request?',
+      message: 'Are you sure you want to delete this request? This action cannot be undone.',
+      confirmText: 'Delete Request',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      isProcessing: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isProcessing: true }));
+        try {
+          if (onDeleteRequest) {
+            await onDeleteRequest(req.id, req.tracking_number);
+          }
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Request Deleted',
+            message: 'The document request has been removed successfully.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        } catch (err) {
+          console.error('Error deleting document request:', err);
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Delete Failed',
+            message: 'The request could not be deleted. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   };
 
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
@@ -578,12 +723,10 @@ export default function ReceiveRequestView({
                             <span>Process</span>
                           </button>
                           <button
-                            onClick={() => {
-                              setReqToDelete(req);
-                              setShowDeleteModal(true);
-                            }}
+                            onClick={() => handlePromptDelete(req)}
                             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
                             title="Delete Request"
+                            aria-label={`Delete Request ${req.tracking_number || ''}`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1288,20 +1431,22 @@ export default function ReceiveRequestView({
           </div>
 
           {declineError && (
-            <div className="p-2.5 bg-rose-100 border border-rose-300 text-rose-800 rounded-lg font-bold">
+            <div id="decline-error-msg" role="alert" className="p-2.5 bg-rose-100 border border-rose-300 text-rose-800 rounded-lg font-bold">
               {declineError}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1.5">
-              Reason for Declining <span className="text-rose-600">*</span>
+            <label htmlFor="decline-reason-select" className="block text-xs font-bold text-slate-800 mb-1.5">
+              Reason for Declining <span className="text-rose-600" aria-hidden="true">*</span>
             </label>
             <select
+              id="decline-reason-select"
               value={declineReason}
               onChange={(e) => setDeclineReason(e.target.value)}
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none font-medium text-slate-800"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none font-medium text-slate-800 cursor-pointer"
               required
+              aria-required="true"
             >
               {DECLINE_REASONS.map((reason) => (
                 <option key={reason} value={reason}>
@@ -1312,15 +1457,17 @@ export default function ReceiveRequestView({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1.5">
+            <label htmlFor="decline-details-text" className="block text-xs font-bold text-slate-800 mb-1.5">
               Additional Details / Explanation <span className="text-slate-400 font-normal">(Visible to Resident)</span>
             </label>
             <textarea
+              id="decline-details-text"
               rows={4}
               value={declineDetails}
               onChange={(e) => setDeclineDetails(e.target.value)}
               placeholder="e.g. Your submitted proof of residency is not valid. Please submit a current barangay certificate or other accepted proof of residency."
-              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-none bg-slate-50/50"
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-none bg-slate-50/50 cursor-text"
+              aria-describedby={declineError ? "decline-error-msg" : undefined}
             />
           </div>
 
@@ -1343,55 +1490,20 @@ export default function ReceiveRequestView({
         </form>
       </Modal>
 
-      {/* Delete Request Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => {
-          setShowDeleteModal(false);
-          setReqToDelete(null);
-        }}
-        title="Delete Request?"
-        maxWidth="max-w-md"
-      >
-        <div className="space-y-4 text-xs">
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-bold text-rose-900 text-sm">Delete Document Request?</h4>
-              <p className="text-rose-800 text-xs mt-1 leading-relaxed">
-                Are you sure you want to delete this document request{reqToDelete?.tracking_number ? ` (${reqToDelete.tracking_number})` : ''}? This action will permanently remove this record from the official barangay document registry.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setShowDeleteModal(false);
-                setReqToDelete(null);
-              }}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                if (reqToDelete && onDeleteRequest) {
-                  await onDeleteRequest(reqToDelete.id, reqToDelete.tracking_number);
-                }
-                setShowDeleteModal(false);
-                setReqToDelete(null);
-              }}
-              className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5 cursor-pointer active:scale-95"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete</span>
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Accessible Reusable Action Feedback / Confirmation Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isProcessing}
+      />
 
       {/* Requirement File Preview Modal with Supabase Storage Support */}
       <FilePreviewModal

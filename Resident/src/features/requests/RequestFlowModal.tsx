@@ -42,6 +42,7 @@ import {
 import { formatCurrency, generateTrackingNumber } from '../../core/security';
 import { APPOINTMENT_TIME_SLOTS } from '../../core/portalData';
 import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/storageService';
+import ActionModal from '../../components/ActionModal';
 
 interface RequestFlowModalProps {
   visible: boolean;
@@ -82,6 +83,21 @@ export default function RequestFlowModal({
   const [selectedDocId, setSelectedDocId] = useState<string>(initialDoc?.id || docTypes[0]?.id || 'dt-001');
   const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
   const [customPurpose, setCustomPurpose] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    type?: 'success' | 'error' | 'confirmation' | 'info';
+    title: string;
+    message?: string;
+    confirmText?: string;
+    cancelText?: string;
+    buttonText?: string;
+    onConfirm?: () => void;
+    onClose?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+  });
 
   useEffect(() => {
     if (initialDoc?.id) {
@@ -257,72 +273,109 @@ export default function RequestFlowModal({
     }
   };
 
-  const handleFinalSubmit = () => {
-    const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
-    const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
+  const handleFinalSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    const newRequest: DocumentRequest = {
-      id: `req-${Date.now()}`,
-      tracking_number: trackingNo,
-      resident_id: currentUser.id || 'res-user',
-      resident_name: currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`,
-      resident_email: currentUser.email,
-      resident_phone: currentUser.phone || '0917-000-0000',
-      resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
-      resident_birth_date: currentUser.birth_date || currentUser.birthdate,
-      years_in_barangay: yearsInBarangay.trim(),
-      document_type_id: selectedDoc.id,
-      document_title: selectedDoc.title,
-      fee: selectedDoc.fee,
-      purpose: finalPurpose,
-      requirements_attached: Object.keys(uploadedFiles),
-      uploaded_files: Object.values(uploadedFiles),
-      pickup_date: selectedDate,
-      pickup_time_slot: selectedSlot,
-      status: 'pending',
-      pickup_location: 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
-      pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
-      timeline: [
-        {
-          status: 'pending',
-          label: 'Request Submitted',
-          description: 'Document request submitted online and registered into the records queue.',
-          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          is_completed: true,
-          is_current: true,
-        },
-        {
-          status: 'under_review',
-          label: 'Under Review',
-          description: 'Barangay administrative staff is reviewing details and verifying clearance.',
-          timestamp: 'Pending Staff Review',
-          is_completed: false,
-          is_current: false,
-        },
-        {
-          status: 'ready_for_pickup',
-          label: 'Ready for Pick up',
-          description: `Document printed, sealed, and approved for collection on ${selectedDate} at Express Window (${selectedSlot}).`,
-          timestamp: 'Scheduled for ' + selectedDate,
-          is_completed: false,
-          is_current: false,
-        },
-        {
-          status: 'completed',
-          label: 'Completed',
-          description: 'Official document claimed and successfully released to resident.',
-          timestamp: 'Pending Release',
-          is_completed: false,
-          is_current: false,
-        },
-      ],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
+      const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
 
-    onRequestSubmitted(newRequest);
-    setSubmittedReq(newRequest);
-    setCurrentStep(6);
+      const newRequest: DocumentRequest = {
+        id: `req-${Date.now()}`,
+        tracking_number: trackingNo,
+        resident_id: currentUser.id || 'res-user',
+        resident_name: currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`,
+        resident_email: currentUser.email,
+        resident_phone: currentUser.phone || '0917-000-0000',
+        resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+        resident_birth_date: currentUser.birth_date || currentUser.birthdate,
+        years_in_barangay: yearsInBarangay.trim(),
+        document_type_id: selectedDoc.id,
+        document_title: selectedDoc.title,
+        fee: selectedDoc.fee,
+        purpose: finalPurpose,
+        requirements_attached: Object.keys(uploadedFiles),
+        uploaded_files: Object.values(uploadedFiles),
+        pickup_date: selectedDate,
+        pickup_time_slot: selectedSlot,
+        status: 'pending',
+        pickup_location: 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
+        timeline: [
+          {
+            status: 'pending',
+            label: 'Request Submitted',
+            description: 'Document request submitted online and registered into the records queue.',
+            timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            is_completed: true,
+            is_current: true,
+          },
+          {
+            status: 'under_review',
+            label: 'Under Review',
+            description: 'Barangay administrative staff is reviewing details and verifying clearance.',
+            timestamp: 'Pending Staff Review',
+            is_completed: false,
+            is_current: false,
+          },
+          {
+            status: 'ready_for_pickup',
+            label: 'Ready for Pick up',
+            description: `Document printed, sealed, and approved for collection on ${selectedDate} at Express Window (${selectedSlot}).`,
+            timestamp: 'Scheduled for ' + selectedDate,
+            is_completed: false,
+            is_current: false,
+          },
+          {
+            status: 'completed',
+            label: 'Completed',
+            description: 'Official document claimed and successfully released to resident.',
+            timestamp: 'Pending Release',
+            is_completed: false,
+            is_current: false,
+          },
+        ],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (onRequestSubmitted) {
+        await onRequestSubmitted(newRequest);
+      }
+      setSubmittedReq(newRequest);
+
+      // Show Success Feedback Modal
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Request Submitted Successfully',
+        message: 'Your document request has been submitted and is now waiting for review.',
+        confirmText: 'View Request',
+        cancelText: 'Done',
+        onConfirm: () => {
+          setActionModal({ isOpen: false, title: '' });
+          onTrackSubmittedRequest(newRequest);
+          resetForm();
+        },
+        onClose: () => {
+          setActionModal({ isOpen: false, title: '' });
+          setCurrentStep(6);
+        },
+      });
+    } catch (err) {
+      console.error('Submission failed:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Request Submission Failed',
+        message: 'We could not submit your document request. Please check your information and try again.',
+        buttonText: 'Try Again',
+        onClose: () => setActionModal({ isOpen: false, title: '' }),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
@@ -330,6 +383,7 @@ export default function RequestFlowModal({
     setUploadedFiles({});
     setUploadError('');
     setSubmittedReq(null);
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -921,18 +975,43 @@ export default function RequestFlowModal({
               )}
 
               <TouchableOpacity
-                style={styles.nextBtn}
+                style={[styles.nextBtn, isSubmitting && { opacity: 0.6 }]}
                 onPress={handleNextStep}
+                disabled={isSubmitting}
+                accessibilityRole="button"
+                accessibilityLabel={isSubmitting ? 'Submitting Request...' : (currentStep === 5 ? 'Submit Application' : 'Next Step')}
               >
-                <Text style={styles.nextBtnText}>
-                  {currentStep === 5 ? 'Submit Application' : 'Next Step'}
-                </Text>
-                <ArrowRight size={16} color="#ffffff" />
+                {isSubmitting ? (
+                  <>
+                    <ActivityIndicator size="small" color="#ffffff" />
+                    <Text style={styles.nextBtnText}>Submitting Request...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.nextBtnText}>
+                      {currentStep === 5 ? 'Submit Application' : 'Next Step'}
+                    </Text>
+                    <ArrowRight size={16} color="#ffffff" />
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
         </View>
       </View>
+
+      {/* Action Feedback & Confirmation Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false, title: '' }))}
+      />
     </Modal>
   );
 }

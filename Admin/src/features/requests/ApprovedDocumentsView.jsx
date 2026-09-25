@@ -1,6 +1,7 @@
 // Admin/src/features/requests/ApprovedDocumentsView.jsx
 import React, { useState } from 'react';
 import Modal from '../../components/Modal';
+import ActionModal from '../../components/ActionModal';
 import {
   FileCheck2,
   PackageCheck,
@@ -25,8 +26,21 @@ export default function ApprovedDocumentsView({
   const [searchTerm, setSearchTerm] = useState('');
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [sortBy, setSortBy] = useState('date_desc'); // 'date_desc' | 'date_asc' | 'name_asc' | 'name_desc' | 'status'
-  const [deleteConfirmReq, setDeleteConfirmReq] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Action feedback / confirmation modal state
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Filter only approved, issued, or completed requests
   const approvedRequests = requests.filter(
@@ -47,23 +61,154 @@ export default function ApprovedDocumentsView({
   const claimedCount = approvedRequests.filter((r) => isClaimed(r)).length;
   const unclaimedCount = approvedRequests.filter((r) => !isClaimed(r)).length;
 
-  // Toggle Claimed / Unclaimed status
-  const handleToggleClaimStatus = (req) => {
+  // Prompt Toggle Claimed / Unclaimed status with Confirmation & Feedback
+  const handlePromptToggleClaim = (req) => {
     const currentlyClaimed = isClaimed(req);
     const newStatus = currentlyClaimed ? 'approved' : 'completed';
     const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
 
-    const updated = {
-      ...req,
-      status: newStatus,
-      is_claimed: !currentlyClaimed,
-      issued_at: !currentlyClaimed ? new Date().toISOString() : null,
-      claimed_at: !currentlyClaimed ? new Date().toISOString() : null,
-      claimed_by_admin: adminName,
-      updated_at: new Date().toISOString(),
-    };
+    if (!currentlyClaimed) {
+      // Mark as Claimed confirmation
+      setActionModal({
+        isOpen: true,
+        type: 'confirmation',
+        title: 'Mark Document as Claimed?',
+        message: 'Confirm that the resident has received the document.',
+        confirmText: 'Mark as Claimed',
+        cancelText: 'Cancel',
+        isDestructive: false,
+        isLoading: false,
+        onConfirm: async () => {
+          setActionModal((prev) => ({ ...prev, isLoading: true }));
+          try {
+            const updated = {
+              ...req,
+              status: 'completed',
+              is_claimed: true,
+              issued_at: new Date().toISOString(),
+              claimed_at: new Date().toISOString(),
+              claimed_by_admin: adminName,
+              updated_at: new Date().toISOString(),
+            };
 
-    onUpdateRequestStatus(updated);
+            if (onUpdateRequestStatus) {
+              await onUpdateRequestStatus(updated);
+            }
+
+            setActionModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Document Marked as Claimed',
+              message: 'The request has been completed successfully.',
+              buttonText: 'OK',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+          } catch (err) {
+            console.error('Error updating claim status:', err);
+            setActionModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Unable to Update Status',
+              message: 'Something went wrong while updating the document claim status. Please try again.',
+              buttonText: 'Close',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+          }
+        },
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } else {
+      // Mark as Unclaimed confirmation
+      setActionModal({
+        isOpen: true,
+        type: 'confirmation',
+        title: 'Mark as Unclaimed?',
+        message: 'Change document status back to approved and awaiting pickup?',
+        confirmText: 'Mark Unclaimed',
+        cancelText: 'Cancel',
+        isDestructive: false,
+        isLoading: false,
+        onConfirm: async () => {
+          setActionModal((prev) => ({ ...prev, isLoading: true }));
+          try {
+            const updated = {
+              ...req,
+              status: 'approved',
+              is_claimed: false,
+              issued_at: null,
+              claimed_at: null,
+              claimed_by_admin: null,
+              updated_at: new Date().toISOString(),
+            };
+
+            if (onUpdateRequestStatus) {
+              await onUpdateRequestStatus(updated);
+            }
+
+            setActionModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Document Status Updated',
+              message: 'The document is now marked as awaiting resident pickup.',
+              buttonText: 'OK',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+          } catch (err) {
+            console.error('Error updating claim status:', err);
+            setActionModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Unable to Update Status',
+              message: 'Something went wrong while updating the status. Please try again.',
+              buttonText: 'Close',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+          }
+        },
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    }
+  };
+
+  // Prompt Delete Request with confirmation
+  const handlePromptDelete = (req) => {
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Delete Document Request?',
+      message: 'Are you sure you want to delete this request? This action cannot be undone.',
+      confirmText: 'Delete Request',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isLoading: true }));
+        try {
+          if (onDeleteRequest) {
+            await onDeleteRequest(req.id, req.tracking_number);
+          }
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Request Deleted',
+            message: 'The document request has been removed successfully.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        } catch (err) {
+          console.error('Error deleting document request:', err);
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Delete Failed',
+            message: 'The request could not be deleted. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   };
 
   // Filter & Search
@@ -294,13 +439,14 @@ export default function ApprovedDocumentsView({
                       <td className="p-4 text-right">
                         <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
                           <button
-                            onClick={() => handleToggleClaimStatus(req)}
+                            onClick={() => handlePromptToggleClaim(req)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
                               claimed
                                 ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                                 : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
                             }`}
                             title={claimed ? 'Mark as Unclaimed' : 'Mark as Claimed / Released'}
+                            aria-label={claimed ? `Mark request ${req.tracking_number} as unclaimed` : `Mark request ${req.tracking_number} as claimed`}
                           >
                             {claimed ? (
                               <>
@@ -316,9 +462,10 @@ export default function ApprovedDocumentsView({
                           </button>
 
                           <button
-                            onClick={() => setDeleteConfirmReq(req)}
+                            onClick={() => handlePromptDelete(req)}
                             className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold inline-flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
                             title="Delete Record from Barangay Registry"
+                            aria-label={`Delete Record ${req.tracking_number || ''}`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Delete</span>
@@ -334,61 +481,20 @@ export default function ApprovedDocumentsView({
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmReq && (
-        <Modal
-          isOpen={!!deleteConfirmReq}
-          onClose={() => !isDeleting && setDeleteConfirmReq(null)}
-          title="Confirm Delete Document Record"
-          maxWidth="max-w-md"
-        >
-          <div className="space-y-4">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-900 flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-sm text-red-950">Permanent Deletion Warning</p>
-                <p className="mt-1 leading-relaxed text-red-800">
-                  Are you sure you want to delete tracking record <strong className="font-mono bg-red-100 px-1.5 py-0.5 rounded border border-red-300">{deleteConfirmReq.tracking_number}</strong> for <strong className="text-red-950">{deleteConfirmReq.resident_name || 'Resident'}</strong>?
-                </p>
-                <p className="mt-2 text-[11px] text-red-700 font-semibold">
-                  ⚠️ This action will permanently remove this record from the official barangay document registry.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={() => setDeleteConfirmReq(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={async () => {
-                  try {
-                    setIsDeleting(true);
-                    const reqToDelete = deleteConfirmReq;
-                    if (onDeleteRequest) {
-                      await onDeleteRequest(reqToDelete.id, reqToDelete.tracking_number);
-                    }
-                  } finally {
-                    setIsDeleting(false);
-                    setDeleteConfirmReq(null);
-                  }
-                }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs inline-flex items-center space-x-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isDeleting ? 'Deleting...' : 'Delete Permanently'}</span>
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Accessible Action Feedback / Confirmation Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }
