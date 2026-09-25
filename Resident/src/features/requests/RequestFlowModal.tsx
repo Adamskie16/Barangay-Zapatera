@@ -209,8 +209,9 @@ export default function RequestFlowModal({
   // Validate step transitions
   const handleNextStep = () => {
     if (currentStep === 1) {
-      if (purpose === 'Other Official Purpose' && !customPurpose.trim()) {
-        setUploadError('Please specify the purpose for requesting this document.');
+      const activePurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '');
+      if (!activePurpose) {
+        setUploadError('Please enter or select your purpose for requesting this document.');
         return;
       }
       setUploadError('');
@@ -248,7 +249,7 @@ export default function RequestFlowModal({
 
   const handleFinalSubmit = () => {
     const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
-    const finalPurpose = purpose === 'Other Official Purpose' ? customPurpose.trim() : purpose;
+    const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
 
     const newRequest: DocumentRequest = {
       id: `req-${Date.now()}`,
@@ -390,9 +391,9 @@ export default function RequestFlowModal({
             {/* STEP 1: SELECT DOCUMENT & PURPOSE */}
             {currentStep === 1 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Select Document & Purpose</Text>
+                <Text style={styles.stepTitle}>Document & Request Purpose</Text>
                 <Text style={styles.stepSubtitle}>
-                  Choose the official document you wish to request from Barangay Zapatera.
+                  Please review your requested document and provide the official purpose of this application.
                 </Text>
 
                 {/* Selected Document Card Preview */}
@@ -404,66 +405,60 @@ export default function RequestFlowModal({
                     </Text>
                   </View>
                   <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
-                </View>
-
-                {/* Document Selector Pills */}
-                <Text style={styles.inputLabel}>Change Document Type:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docPillScroll}>
-                  {docTypes.map((d) => (
-                    <TouchableOpacity
-                      key={d.id}
-                      style={[
-                        styles.docPill,
-                        selectedDocId === d.id && styles.docPillActive,
-                      ]}
-                      onPress={() => setSelectedDocId(d.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.docPillText,
-                          selectedDocId === d.id && styles.docPillTextActive,
-                        ]}
-                      >
-                        {d.title}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                {/* Purpose of Request */}
-                <Text style={[styles.inputLabel, { marginTop: 16 }]}>Purpose of Request *</Text>
-                <View style={styles.purposeOptionsList}>
-                  {COMMON_PURPOSES.map((p) => (
-                    <TouchableOpacity
-                      key={p}
-                      style={[
-                        styles.purposeOption,
-                        purpose === p && styles.purposeOptionActive,
-                      ]}
-                      onPress={() => setPurpose(p)}
-                    >
-                      <View style={[styles.radioCircle, purpose === p && styles.radioCircleActive]}>
-                        {purpose === p && <View style={styles.radioDot} />}
-                      </View>
-                      <Text style={[styles.purposeOptionText, purpose === p && styles.purposeOptionTextActive]}>
-                        {p}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {purpose === 'Other Official Purpose' && (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={styles.inputLabel}>Please specify specific purpose:</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="e.g. For Overseas Employment, PhilHealth Claim..."
-                      placeholderTextColor="#94a3b8"
-                      value={customPurpose}
-                      onChangeText={setCustomPurpose}
-                    />
+                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Clock size={12} color="#1d4ed8" />
+                    <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
+                      Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
+                    </Text>
                   </View>
-                )}
+                </View>
+
+                {/* Purpose of Request - Manual Text Input Field */}
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.inputLabel}>Purpose of Request (Manual Input / Specific Reason) *</Text>
+                  <TextInput
+                    style={[styles.textInput, { fontSize: 13, minHeight: 44 }]}
+                    placeholder="Enter purpose (e.g. Local Employment, Bank Account Opening, Scholarship...)"
+                    placeholderTextColor="#94a3b8"
+                    value={customPurpose || (purpose !== 'Other Official Purpose' ? purpose : '')}
+                    onChangeText={(txt) => {
+                      setCustomPurpose(txt);
+                      setPurpose('Other Official Purpose');
+                    }}
+                  />
+                </View>
+
+                {/* Quick Selection Presets */}
+                <Text style={[styles.inputLabel, { marginTop: 14 }]}>Or choose from common purposes:</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {COMMON_PURPOSES.filter((p) => p !== 'Other Official Purpose').map((p) => {
+                    const isSelected = (customPurpose ? customPurpose === p : purpose === p);
+                    return (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.docPill,
+                          isSelected && styles.docPillActive,
+                          { paddingHorizontal: 12, paddingVertical: 6 }
+                        ]}
+                        onPress={() => {
+                          setPurpose(p);
+                          setCustomPurpose(p);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.docPillText,
+                            isSelected && styles.docPillTextActive,
+                            { fontSize: 11 }
+                          ]}
+                        >
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             )}
 

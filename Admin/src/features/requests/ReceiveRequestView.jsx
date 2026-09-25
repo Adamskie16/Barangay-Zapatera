@@ -32,7 +32,9 @@ import {
   Cake,
   RotateCcw,
   RefreshCw,
-  Info
+  Info,
+  Layers,
+  FileCheck
 } from 'lucide-react';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
@@ -63,7 +65,7 @@ export default function ReceiveRequestView({
 
   // Main Document Processing Workspace Modal State
   const [selectedReq, setSelectedReq] = useState(null);
-  const [activeStep, setActiveStep] = useState(1); // 1: Verification, 2: Document Generator
+  const [generatorTab, setGeneratorTab] = useState('variables'); // 'variables' | 'preview'
   const [verificationMap, setVerificationMap] = useState({});
   const [processingNotes, setProcessingNotes] = useState('');
 
@@ -204,8 +206,41 @@ export default function ReceiveRequestView({
     return [];
   };
 
+  // Synchronize resident profile details directly into generator dynamic variables
+  const populateGeneratorFromResident = (req) => {
+    if (!req) return;
+
+    const resName = req.resident_name || req.profiles?.full_name || req.user_metadata?.full_name || '';
+    const resAddress = req.resident_address || req.profiles?.address || req.address || (req.profiles?.sitio ? `${req.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
+    const resDob = req.resident_birth_date || req.date_of_birth || req.dob || req.birthdate || req.profiles?.birth_date || '';
+    const resContact = req.resident_phone || req.phone || req.contact_no || req.profiles?.phone || '';
+    const resYears = req.years_in_barangay || req.profiles?.years_in_barangay || '5 years';
+    const resPurpose = req.purpose || 'Local Employment Application';
+
+    setGenName(resName);
+    setGenAddress(resAddress);
+    setGenDob(resDob);
+    setGenContact(resContact);
+    setGenYearsInBarangay(resYears);
+    setGenPurpose(resPurpose);
+
+    // Auto-select matching template based on document title
+    const titleLower = (req.document_title || '').toLowerCase();
+    let matchedKey = 'barangayCertification';
+    if (titleLower.includes('clearance')) matchedKey = 'barangayClearance';
+    else if (titleLower.includes('residency')) matchedKey = 'certificateOfResidency';
+    else if (titleLower.includes('moral')) matchedKey = 'certificateOfGoodMoralCharacter';
+    else if (titleLower.includes('indigency')) matchedKey = 'certificateOfIndigency';
+    else if (titleLower.includes('jobseeker')) matchedKey = 'firstTimeJobseeker';
+
+    setSelectedTemplateKey(matchedKey);
+    const tmpl = documentTemplates[matchedKey] || documentTemplates.barangayCertification;
+    setGenDocTitle(req.document_title ? req.document_title.toUpperCase() : tmpl.title);
+    setGenBodyText(tmpl.defaultBody);
+  };
+
   // When admin clicks Process:
-  // Immediately change request status from Pending -> Processing and save to storage so resident side updates
+  // Immediately change request status from Pending -> Processing and populate all resident details into generator
   const handleStartProcess = (req) => {
     let updatedReq = { ...req };
 
@@ -223,36 +258,17 @@ export default function ReceiveRequestView({
       if (updatedReq.requirements_status && updatedReq.requirements_status[item.name]) {
         initialMap[item.name] = updatedReq.requirements_status[item.name];
       } else {
-        initialMap[item.name] = updatedReq.status === 'approved' ? 'verified' : 'verified';
+        initialMap[item.name] = 'verified';
       }
     });
 
     setVerificationMap(initialMap);
     setProcessingNotes(updatedReq.notes || '');
 
-    // Setup Document Generator Initial Values with Applicant info
-    setGenName(updatedReq.resident_name || '');
-    setGenAddress(updatedReq.resident_address || 'Barangay Zapatera, Cebu City');
-    setGenDob(updatedReq.resident_birth_date || updatedReq.date_of_birth || updatedReq.dob || updatedReq.birthdate || '');
-    setGenContact(updatedReq.resident_phone || updatedReq.phone || updatedReq.contact_no || '');
-    setGenYearsInBarangay(updatedReq.years_in_barangay || '5 years');
-    setGenPurpose(updatedReq.purpose || 'Local Employment Application');
+    // Auto-fill all resident information into the Official Document Generator
+    populateGeneratorFromResident(updatedReq);
 
-    // Auto-select matching template based on document title
-    const titleLower = (updatedReq.document_title || '').toLowerCase();
-    let matchedKey = 'barangayCertification';
-    if (titleLower.includes('clearance')) matchedKey = 'barangayClearance';
-    else if (titleLower.includes('residency')) matchedKey = 'certificateOfResidency';
-    else if (titleLower.includes('moral')) matchedKey = 'certificateOfGoodMoralCharacter';
-    else if (titleLower.includes('indigency')) matchedKey = 'certificateOfIndigency';
-    else if (titleLower.includes('jobseeker')) matchedKey = 'firstTimeJobseeker';
-
-    setSelectedTemplateKey(matchedKey);
-    const tmpl = documentTemplates[matchedKey] || documentTemplates.barangayCertification;
-    setGenDocTitle(updatedReq.document_title ? updatedReq.document_title.toUpperCase() : tmpl.title);
-    setGenBodyText(tmpl.defaultBody);
-
-    setActiveStep(1); // Start at verification review
+    setGeneratorTab('variables');
     setSelectedReq(updatedReq);
   };
 
@@ -359,6 +375,15 @@ export default function ReceiveRequestView({
   };
 
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
+
+  // Extract resident details helper for modal
+  const residentFullName = selectedReq?.resident_name || selectedReq?.profiles?.full_name || selectedReq?.user_metadata?.full_name || 'Resident Applicant';
+  const residentEmail = selectedReq?.resident_email || selectedReq?.profiles?.email || selectedReq?.email || 'N/A';
+  const residentPhone = selectedReq?.resident_phone || selectedReq?.phone || selectedReq?.contact_no || selectedReq?.profiles?.phone || 'Not provided';
+  const residentAddress = selectedReq?.resident_address || selectedReq?.profiles?.address || selectedReq?.address || (selectedReq?.profiles?.sitio ? `${selectedReq.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
+  const residentDob = selectedReq?.resident_birth_date || selectedReq?.date_of_birth || selectedReq?.dob || selectedReq?.birthdate || selectedReq?.profiles?.birth_date || 'Not specified';
+  const residentCivilStatus = selectedReq?.civil_status || selectedReq?.profiles?.civil_status || 'Single';
+  const residentYears = selectedReq?.years_in_barangay || selectedReq?.profiles?.years_in_barangay || '5 years';
 
   return (
     <div className="space-y-6">
@@ -510,136 +535,207 @@ export default function ReceiveRequestView({
         </div>
       </div>
 
-      {/* 3. Document Processing Workspace Modal with Multi-Step Generator */}
+      {/* 3. Document Processing Workspace Modal — Side-by-Side (50% Review & Verification / 50% Generator & Print) */}
       <Modal
         isOpen={!!selectedReq}
         onClose={() => setSelectedReq(null)}
-        title={`Document Processing Workspace — ${selectedReq?.tracking_number}`}
-        maxWidth="max-w-6xl"
+        title={`Document Processing Workspace — ${selectedReq?.tracking_number || ''}`}
+        maxWidth="max-w-[96vw] 2xl:max-w-[1550px]"
       >
         {selectedReq && (
-          <div className="space-y-6 text-xs max-h-[85vh] overflow-y-auto pr-1">
-            {/* Step Navigation Bar */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center space-x-2">
+          <div className="space-y-5 text-xs max-h-[85vh] overflow-y-auto pr-1">
+            
+            {/* Top Operational Bar */}
+            <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-blue-600/30 border border-blue-500/40 rounded-xl">
+                  <FileBadge className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono font-bold text-xs bg-white/10 px-2 py-0.5 rounded border border-white/15">
+                      {selectedReq.tracking_number}
+                    </span>
+                    <Badge variant={selectedReq.status}>
+                      {selectedReq.status?.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-1">
+                    Processing: {selectedReq.document_title}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
                 <button
                   type="button"
-                  onClick={() => setActiveStep(1)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 cursor-pointer transition-all ${
-                    activeStep === 1
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                  onClick={() => populateGeneratorFromResident(selectedReq)}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-semibold rounded-xl border border-white/15 inline-flex items-center space-x-1.5 transition-all cursor-pointer"
+                  title="Reload & sync resident info into generator fields"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>1. Review & Verification</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Sync Resident Info</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (canProceedToPrint) setActiveStep(2);
-                  }}
+                  onClick={handlePrintAndApprove}
                   disabled={!canProceedToPrint}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all ${
-                    activeStep === 2
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : canProceedToPrint
-                      ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
+                  className={`px-5 py-2 text-xs font-bold rounded-xl shadow-md inline-flex items-center space-x-1.5 transition-all ${
+                    canProceedToPrint
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/30 cursor-pointer active:scale-95'
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                   }`}
                 >
                   <Printer className="w-4 h-4" />
-                  <span>2. Official Document Generator & Print</span>
+                  <span>Print Document & Set Approved</span>
                 </button>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <span className="text-slate-400 font-medium">Status:</span>
-                <Badge variant={selectedReq.status}>
-                  {selectedReq.status?.replace('_', ' ')}
-                </Badge>
               </div>
             </div>
 
-            {/* STEP 1: REVIEW & VERIFICATION */}
-            {activeStep === 1 && (
-              <div className="space-y-5">
-                {/* Request Details Grid */}
-                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* SIDE-BY-SIDE 50% / 50% SPLIT LAYOUT */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* ========================================================================= */}
+              {/* LEFT HALF (50%): REVIEW & VERIFICATION DESK */}
+              {/* ========================================================================= */}
+              <div className="lg:col-span-6 space-y-4">
+                
+                {/* Section Header */}
+                <div className="flex items-center justify-between bg-blue-50/70 border border-blue-200/80 px-4 py-2.5 rounded-xl text-blue-900">
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    <span className="font-bold text-xs">Review & Resident Verification</span>
+                  </div>
+                  <span className="text-[11px] font-medium text-blue-700">Resident Details & Requirements</span>
+                </div>
+
+                {/* 1. Complete Resident Profile Card */}
+                <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3.5">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Resident Applicant Profile</h4>
+                        <p className="text-[10px] text-slate-500">Official registered citizen details</p>
+                      </div>
+                    </div>
+
+                    <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Fee: {selectedReq.fee > 0 ? formatCurrency(selectedReq.fee) : 'Free of Charge'}
+                    </span>
+                  </div>
+
+                  {/* Resident Info Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resident Applicant</p>
-                      <p className="text-sm font-bold text-slate-900 mt-0.5">{selectedReq.resident_name}</p>
-                      <p className="text-slate-500 text-[11px] flex items-center mt-0.5">
-                        <Mail className="w-3 h-3 mr-1 text-slate-400" />
-                        {selectedReq.resident_email}
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Legal Name</p>
+                      <p className="text-xs font-bold text-slate-900 mt-0.5">{residentFullName}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contact Phone</p>
+                      <p className="text-xs font-mono font-semibold text-slate-800 mt-0.5 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        {residentPhone}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Residential Address / Sitio</p>
+                      <p className="text-xs text-slate-800 mt-0.5 flex items-center gap-1 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        {residentAddress}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Document Requested & Fee</p>
-                      <p className="text-sm font-bold text-blue-800 mt-0.5">{selectedReq.document_title}</p>
-                      <p className="text-emerald-700 font-bold text-[11px]">
-                        Fee: {selectedReq.fee > 0 ? formatCurrency(selectedReq.fee) : 'Free of Charge'}
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date of Birth</p>
+                      <p className="text-xs text-slate-800 mt-0.5 flex items-center gap-1 font-medium">
+                        <Cake className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        {residentDob}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pick-up Time Slot & Date</p>
-                      <p className="font-mono font-bold text-slate-800 text-xs mt-0.5">
-                        Slot: <span className="text-blue-700 bg-white px-2 py-0.5 rounded border border-slate-200">{selectedReq.pickup_time_slot || '9:00 AM - 9:30 AM'}</span>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Years in Barangay</p>
+                      <p className="text-xs text-slate-800 mt-0.5 font-medium">{residentYears}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</p>
+                      <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1 truncate" title={residentEmail}>
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        {residentEmail}
                       </p>
-                      <p className="text-slate-500 text-[11px] mt-1 flex items-center">
-                        <Calendar className="w-3 h-3 mr-1 text-slate-400" />
-                        Submitted: {formatDate(selectedReq.created_at)}
-                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Civil Status</p>
+                      <p className="text-xs text-slate-800 mt-0.5 font-medium">{residentCivilStatus}</p>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-200">
+                  {/* Purpose of Request Box */}
+                  <div className="pt-3 border-t border-slate-200">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Purpose of Request</p>
-                    <p className="text-xs text-slate-800 font-medium mt-1 bg-white p-2.5 rounded-lg border border-slate-200">
-                      {selectedReq.purpose || 'Local Employment Application'}
-                    </p>
+                    <div className="mt-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-start space-x-2 shadow-2xs">
+                      <FileText className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{selectedReq.purpose || 'Local Employment Application'}</span>
+                    </div>
+                  </div>
+
+                  {/* Pick-up and Submission Details */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] text-slate-500 border-t border-slate-100">
+                    <div>
+                      <span className="font-semibold text-slate-600">Pick-up Slot: </span>
+                      <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                        {selectedReq.pickup_time_slot || '9:00 AM - 9:30 AM'}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-semibold text-slate-600">Submitted: </span>
+                      <span>{formatDate(selectedReq.created_at)}</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Submitted Requirements Verification Desk (ONLY IF REQUIREMENTS EXIST) */}
-                {hasRequirements ? (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                          <ShieldCheck className="w-4 h-4 text-blue-600" />
-                          <span>Submitted Verification Requirements</span>
-                        </h4>
-                        <p className="text-[11px] text-slate-500">
-                          Review and verify resident attachments based on document requirements.
-                        </p>
-                      </div>
-
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                          canProceedToPrint
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : hasInvalidOrMissing
-                            ? 'bg-rose-50 text-rose-800 border-rose-300'
-                            : 'bg-amber-50 text-amber-800 border-amber-300'
-                        }`}
-                      >
-                        {verifiedCount} of {totalReqCount} Verified
-                      </span>
+                {/* 2. Submitted Verification Requirements */}
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Submitted Verification Requirements</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-500">
+                        Review uploaded proof documents & verify compliance.
+                      </p>
                     </div>
 
-                    {/* Requirement Cards List */}
-                    <div className="space-y-3">
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                        canProceedToPrint
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : hasInvalidOrMissing
+                          ? 'bg-rose-50 text-rose-800 border-rose-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                      }`}
+                    >
+                      {verifiedCount} of {totalReqCount} Verified
+                    </span>
+                  </div>
+
+                  {hasRequirements ? (
+                    <div className="space-y-2.5">
                       {currentReqList.map((item, idx) => {
                         const currentStatus = verificationMap[item.name] || 'verified';
                         return (
                           <div
                             key={item.id || idx}
-                            className={`p-4 rounded-xl border transition-all ${
+                            className={`p-3 rounded-xl border transition-all ${
                               currentStatus === 'verified'
                                 ? 'bg-white border-emerald-200 shadow-2xs'
                                 : currentStatus === 'invalid'
@@ -647,10 +743,10 @@ export default function ReceiveRequestView({
                                 : 'bg-amber-50/40 border-amber-300 shadow-2xs'
                             }`}
                           >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div className="flex items-start space-x-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-start space-x-2.5">
                                 <div
-                                  className={`p-2.5 rounded-lg ${
+                                  className={`p-2 rounded-lg shrink-0 ${
                                     currentStatus === 'verified'
                                       ? 'bg-emerald-100 text-emerald-700'
                                       : currentStatus === 'invalid'
@@ -658,20 +754,20 @@ export default function ReceiveRequestView({
                                       : 'bg-amber-100 text-amber-700'
                                   }`}
                                 >
-                                  <FileText className="w-5 h-5" />
+                                  <FileText className="w-4 h-4" />
                                 </div>
                                 <div>
                                   <p className="font-bold text-slate-900 text-xs">{item.name}</p>
-                                  <p className="font-mono text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                                    <span>File: {item.fileName}</span>
+                                  <p className="font-mono text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
+                                    <span>{item.fileName}</span>
                                     <span className="text-slate-300">•</span>
-                                    <span>Uploaded: {item.uploadDate}</span>
+                                    <span>{item.uploadDate}</span>
                                   </p>
                                 </div>
                               </div>
 
-                              {/* File Action Buttons */}
-                              <div className="flex items-center space-x-2">
+                              {/* Action Buttons */}
+                              <div className="flex items-center space-x-1.5 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -682,13 +778,13 @@ export default function ReceiveRequestView({
                                       file_size: item.file_size,
                                       file_url: item.file_url,
                                       storage_path: item.storage_path,
-                                      residentName: selectedReq.resident_name,
+                                      residentName: residentFullName,
                                     })
                                   }
-                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold inline-flex items-center space-x-1 cursor-pointer"
                                 >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>View / Preview</span>
+                                  <Eye className="w-3 h-3" />
+                                  <span>Preview</span>
                                 </button>
 
                                 <button
@@ -702,22 +798,22 @@ export default function ReceiveRequestView({
                                       alert(`Downloading verification file: ${item.fileName}`);
                                     }
                                   }}
-                                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold inline-flex items-center space-x-1 cursor-pointer"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
+                                  <Download className="w-3 h-3" />
                                   <span>Download</span>
                                 </button>
                               </div>
                             </div>
 
-                            {/* Verification Status Selector Buttons without emoji icons */}
-                            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold text-slate-500">Requirement Verification:</span>
-                              <div className="flex items-center space-x-1.5">
+                            {/* Status Selector */}
+                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-bold text-slate-500">Status:</span>
+                              <div className="flex items-center space-x-1">
                                 <button
                                   type="button"
                                   onClick={() => handleSetVerification(item.name, 'verified')}
-                                  className={`px-3.5 py-1 rounded-lg text-xs font-bold inline-flex items-center cursor-pointer transition-all ${
+                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
                                     currentStatus === 'verified'
                                       ? 'bg-emerald-600 text-white shadow-xs'
                                       : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
@@ -729,7 +825,7 @@ export default function ReceiveRequestView({
                                 <button
                                   type="button"
                                   onClick={() => handleSetVerification(item.name, 'invalid')}
-                                  className={`px-3.5 py-1 rounded-lg text-xs font-bold inline-flex items-center cursor-pointer transition-all ${
+                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
                                     currentStatus === 'invalid'
                                       ? 'bg-rose-600 text-white shadow-xs'
                                       : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
@@ -741,7 +837,7 @@ export default function ReceiveRequestView({
                                 <button
                                   type="button"
                                   onClick={() => handleSetVerification(item.name, 'missing')}
-                                  className={`px-3.5 py-1 rounded-lg text-xs font-bold inline-flex items-center cursor-pointer transition-all ${
+                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
                                     currentStatus === 'missing'
                                       ? 'bg-amber-500 text-white shadow-xs'
                                       : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
@@ -755,300 +851,318 @@ export default function ReceiveRequestView({
                         );
                       })}
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center space-x-3 text-blue-900">
-                    <Info className="w-5 h-5 text-blue-600 shrink-0" />
-                    <div>
-                      <p className="font-bold text-xs">No Verification Attachments Required</p>
-                      <p className="text-[11px] text-blue-700 mt-0.5">
-                        This certificate type ({selectedReq.document_title}) does not require resident supporting document uploads. You may proceed directly to document generation and printing.
+                  ) : (
+                    <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center space-x-2.5 text-blue-900">
+                      <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                      <p className="text-[11px] text-blue-800 leading-relaxed">
+                        This certificate type ({selectedReq.document_title}) does not require resident supporting document uploads.
                       </p>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Processing Notes */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                {/* 3. Administrative Notes & Decline Action */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">
                     Administrative Notes / Internal Processing Log (Optional)
                   </label>
                   <textarea
                     rows={2}
                     value={processingNotes}
                     onChange={(e) => setProcessingNotes(e.target.value)}
-                    placeholder="Add verification notes (e.g. Identity verified with Barangay Masterlist)..."
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="Add internal notes (e.g. Verified with Barangay Masterlist)..."
+                    className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
-                </div>
 
-                {/* Step 1 Footer: Only Decline Request | Proceed to Print Document */}
-                <div className="pt-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedReq(null)}
-                    className="w-full sm:w-auto px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                  >
-                    Close Window
-                  </button>
+                  <div className="pt-2 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedReq(null)}
+                      className="px-3.5 py-1.5 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer text-xs"
+                    >
+                      Close Window
+                    </button>
 
-                  <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2.5">
-                    {/* Decline Request Button */}
                     <button
                       type="button"
                       onClick={handleOpenDeclineModal}
-                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5 cursor-pointer active:scale-95"
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5 cursor-pointer active:scale-95 text-xs"
                     >
-                      <XCircle className="w-4 h-4" />
+                      <XCircle className="w-3.5 h-3.5" />
                       <span>Decline Request</span>
                     </button>
+                  </div>
+                </div>
 
-                    {/* Proceed to Official Document Generator Button */}
+              </div>
+
+              {/* ========================================================================= */}
+              {/* RIGHT HALF (50%): OFFICIAL DOCUMENT GENERATOR & LIVE PRINT PREVIEW */}
+              {/* ========================================================================= */}
+              <div className="lg:col-span-6 space-y-4">
+                
+                {/* Section Header with Mode Tabs */}
+                <div className="flex items-center justify-between bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                  <div className="flex items-center space-x-1.5">
                     <button
                       type="button"
-                      onClick={() => setActiveStep(2)}
-                      disabled={!canProceedToPrint}
-                      className={`px-5 py-2 font-bold rounded-lg shadow-sm transition-all inline-flex items-center space-x-1.5 ${
-                        canProceedToPrint
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95'
-                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      onClick={() => setGeneratorTab('variables')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-all ${
+                        generatorTab === 'variables'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      <Printer className="w-4 h-4" />
-                      <span>Proceed to Official Document Generator</span>
-                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>1. Dynamic Certificate Variables</span>
                     </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* STEP 2: OFFICIAL DOCUMENT GENERATOR (Full SuperAdmin Document Management Template) */}
-            {activeStep === 2 && (
-              <div className="space-y-6">
-                {/* Generator Header & Action Bar */}
-                <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <FileBadge className="w-4 h-4 text-blue-400" />
-                      <span>Official Document Generator</span>
-                    </h3>
-                    <p className="text-[11px] text-slate-300 mt-0.5">
-                      Generate official barangay certificate, review live preview, and print to officially approve resident application.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      onClick={handlePrintAndApprove}
-                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-900/30 inline-flex items-center space-x-1.5 cursor-pointer active:scale-95 transition-all"
+                      onClick={() => setGeneratorTab('preview')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-all ${
+                        generatorTab === 'preview'
+                          ? 'bg-white text-blue-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
                     >
-                      <Printer className="w-4 h-4" />
-                      <span>Print Document & Set Approved</span>
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>2. Live A4 Preview & Print</span>
                     </button>
+                  </div>
+
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pr-2 hidden sm:inline">
+                    Auto-Populated
+                  </span>
+                </div>
+
+                {/* Template Quick Switcher */}
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                  <label className="text-[11px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-blue-600" />
+                    <span>Select Certificate Template</span>
+                  </label>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {templateKeys.map((k) => {
+                      const tmpl = documentTemplates[k];
+                      const isActive = selectedTemplateKey === k;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => handleSelectTemplate(k)}
+                          className={`p-2 rounded-xl text-left border transition-all text-[11px] cursor-pointer ${
+                            isActive
+                              ? 'border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs'
+                              : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="truncate">{tmpl.title}</span>
+                            {isActive && <Check size={12} className="text-blue-600 shrink-0 ml-1" />}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* 2-Column Document Generator Layout */}
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                  
-                  {/* LEFT COLUMN: Template Config & Dynamic Variables */}
-                  <div className="xl:col-span-5 space-y-4">
-                    {/* Template Quick Switch */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
-                      <label className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles size={13} className="text-blue-600" />
-                        <span>Select Certificate Template</span>
-                      </label>
+                {/* TAB 1: DYNAMIC VARIABLES FORM */}
+                {generatorTab === 'variables' && (
+                  <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <h4 className="font-bold text-slate-900 text-xs">
+                        Certificate Details & Values (Auto-Filled)
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => populateGeneratorFromResident(selectedReq)}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw size={11} />
+                        <span>Reset from Applicant</span>
+                      </button>
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {templateKeys.map((k) => {
-                          const tmpl = documentTemplates[k];
-                          const isActive = selectedTemplateKey === k;
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => handleSelectTemplate(k)}
-                              className={`p-2 rounded-lg text-left border transition-all text-[11px] cursor-pointer ${
-                                isActive
-                                  ? 'border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="truncate">{tmpl.title}</span>
-                                {isActive && <Check size={12} className="text-blue-600 shrink-0 ml-1" />}
-                              </div>
-                            </button>
-                          );
-                        })}
+                    {/* 1. Document Title */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                        1. Document Title
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={genDocTitle}
+                        onChange={(e) => setGenDocTitle(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold tracking-wide uppercase text-slate-900"
+                      />
+                    </div>
+
+                    {/* 2. Applicant Name */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                        2. Resident Applicant Name
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={genName}
+                        onChange={(e) => setGenName(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
+                      />
+                    </div>
+
+                    {/* 3. Address */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                        3. Address
+                      </label>
+                      <input
+                        type="text"
+                        value={genAddress}
+                        onChange={(e) => setGenAddress(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                      />
+                    </div>
+
+                    {/* 4 & 5. Date of Birth & Contact */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">4. Date of Birth</label>
+                        <input
+                          type="date"
+                          value={genDob}
+                          onChange={(e) => setGenDob(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">5. Contact No.</label>
+                        <input
+                          type="text"
+                          value={genContact}
+                          onChange={(e) => setGenContact(e.target.value)}
+                          placeholder="e.g. 09171234567"
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-900"
+                        />
                       </div>
                     </div>
 
-                    {/* Dynamic Fields Form */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3 text-xs">
-                      <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b border-slate-100 pb-1.5">
-                        Dynamic Certificate Variables
-                      </h4>
-
-                      {/* 1. Document Title */}
+                    {/* 6 & 8. Years in Barangay & Issued Date */}
+                    <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">
-                          1. Document Title
-                        </label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">6. Years in Barangay</label>
                         <input
                           type="text"
-                          required
-                          value={genDocTitle}
-                          onChange={(e) => setGenDocTitle(e.target.value.toUpperCase())}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold tracking-wide uppercase text-slate-900"
+                          value={genYearsInBarangay}
+                          onChange={(e) => setGenYearsInBarangay(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                         />
                       </div>
-
-                      {/* 2. Applicant Name */}
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">
-                          2. Resident Applicant Name
-                        </label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">8. Issued Date</label>
+                        <input
+                          type="date"
+                          value={genIssuedDate}
+                          onChange={(e) => setGenIssuedDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 7. Purpose */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                        7. Purpose of Request
+                      </label>
+                      <input
+                        type="text"
+                        value={genPurpose}
+                        onChange={(e) => setGenPurpose(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
+                      />
+                    </div>
+
+                    {/* Body Text */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-700 text-[11px]">Certification Body Text</label>
+                        <button
+                          type="button"
+                          onClick={() => setGenBodyText(currentTemplateConfig.defaultBody)}
+                          className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw size={10} />
+                          <span>Reset text</span>
+                        </button>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={genBodyText}
+                        onChange={(e) => setGenBodyText(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 leading-relaxed text-xs"
+                      />
+                    </div>
+
+                    {/* Signatory Names */}
+                    <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">Signatory Name</label>
                         <input
                           type="text"
-                          required
-                          value={genName}
-                          onChange={(e) => setGenName(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
+                          value={genSignatoryName}
+                          onChange={(e) => setGenSignatoryName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold"
                         />
                       </div>
-
-                      {/* 3. Address */}
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1">
-                          3. Address
-                        </label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">Signatory Title</label>
                         <input
                           type="text"
-                          value={genAddress}
-                          onChange={(e) => setGenAddress(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                          value={genSignatoryTitle}
+                          onChange={(e) => setGenSignatoryTitle(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
                         />
                       </div>
+                    </div>
 
-                      {/* 4 & 5. Date of Birth & Contact */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">4. Date of Birth</label>
-                          <input
-                            type="date"
-                            value={genDob}
-                            onChange={(e) => setGenDob(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">5. Contact No.</label>
-                          <input
-                            type="text"
-                            value={genContact}
-                            onChange={(e) => setGenContact(e.target.value)}
-                            placeholder="e.g. 09171234567"
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-900"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 6 & 8. Years in Barangay & Issued Date */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">6. Years in Barangay</label>
-                          <input
-                            type="text"
-                            value={genYearsInBarangay}
-                            onChange={(e) => setGenYearsInBarangay(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">8. Issued Date</label>
-                          <input
-                            type="date"
-                            value={genIssuedDate}
-                            onChange={(e) => setGenIssuedDate(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-                          />
-                        </div>
-                      </div>
-
-                      {/* 7. Purpose */}
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">
-                          7. Purpose
-                        </label>
-                        <input
-                          type="text"
-                          value={genPurpose}
-                          onChange={(e) => setGenPurpose(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
-                        />
-                      </div>
-
-                      {/* Body Text */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="font-bold text-slate-700">Certification Body Text</label>
-                          <button
-                            type="button"
-                            onClick={() => setGenBodyText(currentTemplateConfig.defaultBody)}
-                            className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                          >
-                            <RotateCcw size={10} />
-                            <span>Reset text</span>
-                          </button>
-                        </div>
-                        <textarea
-                          rows={3}
-                          value={genBodyText}
-                          onChange={(e) => setGenBodyText(e.target.value)}
-                          className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 leading-relaxed text-xs"
-                        />
-                      </div>
-
-                      {/* Signatory Names */}
-                      <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Signatory Name</label>
-                          <input
-                            type="text"
-                            value={genSignatoryName}
-                            onChange={(e) => setGenSignatoryName(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Signatory Title</label>
-                          <input
-                            type="text"
-                            value={genSignatoryTitle}
-                            onChange={(e) => setGenSignatoryTitle(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
-                          />
-                        </div>
-                      </div>
+                    {/* Switch to Live Preview Button */}
+                    <div className="pt-2 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setGeneratorTab('preview')}
+                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs inline-flex items-center justify-center space-x-1.5 cursor-pointer transition-all"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Preview Live Certificate Template</span>
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  {/* RIGHT COLUMN: Live A4 Printable Preview */}
-                  <div className="xl:col-span-7 bg-slate-100 rounded-2xl p-4 sm:p-6 border border-slate-200 flex flex-col items-center justify-start min-h-[600px] overflow-hidden">
-                    <div className="w-full flex items-center justify-between mb-3 px-1">
+                {/* TAB 2: LIVE A4 PRINTABLE PREVIEW */}
+                {generatorTab === 'preview' && (
+                  <div className="bg-slate-100 rounded-2xl p-4 border border-slate-200 flex flex-col items-center justify-start min-h-[520px] overflow-hidden space-y-3">
+                    <div className="w-full flex items-center justify-between px-1">
                       <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                         <span>Live A4 Document Preview</span>
                       </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setGeneratorTab('variables')}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <SlidersHorizontal size={12} />
+                        <span>Edit Variables</span>
+                      </button>
                     </div>
 
                     {/* Scaled Preview Template Box */}
                     <div className="w-full overflow-x-auto flex justify-center py-1">
-                      <div className="transform scale-[0.78] sm:scale-[0.84] origin-top transition-transform duration-200">
+                      <div className="transform scale-[0.62] sm:scale-[0.70] origin-top transition-transform duration-200">
                         <DocumentTemplate
                           documentTitle={genDocTitle}
                           name={genName}
@@ -1067,31 +1181,28 @@ export default function ReceiveRequestView({
                       </div>
                     </div>
                   </div>
+                )}
 
-                </div>
-
-                {/* Step 2 Bottom Navigation */}
-                <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setActiveStep(1)}
-                    className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer flex items-center space-x-1"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Verification Review</span>
-                  </button>
-
+                {/* Primary Action Button Bar */}
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={handlePrintAndApprove}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-900/20 inline-flex items-center space-x-2 cursor-pointer active:scale-95 transition-all"
+                    disabled={!canProceedToPrint}
+                    className={`w-full py-2.5 font-bold rounded-xl shadow-md inline-flex items-center justify-center space-x-2 transition-all ${
+                      canProceedToPrint
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/20 cursor-pointer active:scale-95'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    }`}
                   >
                     <Printer className="w-4 h-4" />
                     <span>Print Document & Set Approved</span>
                   </button>
                 </div>
+
               </div>
-            )}
+
+            </div>
           </div>
         )}
       </Modal>
