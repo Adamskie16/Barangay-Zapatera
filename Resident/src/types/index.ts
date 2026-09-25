@@ -163,6 +163,9 @@ export interface BarangayConfig {
   province: string;
   hall_address?: string;
   seal_url?: string;
+  logo_url?: string;
+  punong_barangay?: string;
+  signatory_title?: string;
   office_hours?: string;
   contact_email?: string;
   contact_phone?: string;

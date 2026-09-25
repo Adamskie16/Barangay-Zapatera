@@ -33,13 +33,13 @@ export default function Navbar({
       <View style={styles.headerLeft}>
         <Image
           source={{
-            uri: config.seal_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80',
+            uri: config.seal_url || config.logo_url || '/zapatera_seal.png',
           }}
           style={styles.sealLogo}
         />
         <View>
           <View style={styles.titleRow}>
-            <Text style={styles.barangayName}>{config.barangay_name.toUpperCase()}</Text>
+            <Text style={styles.barangayName}>{(config.barangay_name || 'Barangay Zapatera').toUpperCase()}</Text>
           </View>
           <Text style={styles.portalTagline}>Resident Digital Services</Text>
         </View>

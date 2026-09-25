@@ -89,7 +89,13 @@ export default function ResidentDashboard({
           <Text style={styles.greetingSubtitle}>How can we help you today with your official barangay documents?</Text>
         </View>
         <View style={styles.sealCircle}>
-          <ShieldCheck size={28} color="#1d4ed8" />
+          <Image
+            source={{
+              uri: config?.seal_url || config?.logo_url || '/zapatera_seal.png',
+            }}
+            style={styles.sealLogoImage}
+            resizeMode="cover"
+          />
         </View>
       </View>
 
@@ -352,19 +358,28 @@ export default function ResidentDashboard({
       {/* Barangay Hall Office Information Footer */}
       <View style={styles.infoFooterCard}>
         <View style={styles.infoFooterHeader}>
-          <Info size={16} color="#1d4ed8" />
-          <Text style={styles.infoFooterTitle}>Barangay Hall Office Hours</Text>
+          <Image
+            source={{
+              uri: config?.seal_url || config?.logo_url || '/zapatera_seal.png',
+            }}
+            style={styles.infoFooterSeal}
+            resizeMode="cover"
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoFooterTitle}>{config.barangay_name || 'Barangay Zapatera'}</Text>
+            <Text style={styles.infoFooterTagline}>Official Resident Services Portal</Text>
+          </View>
         </View>
         <Text style={styles.infoFooterText}>
           {config.office_hours || 'Monday – Friday: 8:00 AM – 5:00 PM (No Noon Break)'}
         </Text>
         <View style={styles.infoFooterRow}>
           <MapPin size={13} color="#64748b" />
-          <Text style={styles.infoFooterSub}>{config.hall_address || 'Rahmann St., Barangay Zapatera, Cebu City'}</Text>
+          <Text style={styles.infoFooterSub}>{config.hall_address || '197 D. Jakosalem St., Cebu City'}</Text>
         </View>
         <View style={styles.infoFooterRow}>
           <Phone size={13} color="#64748b" />
-          <Text style={styles.infoFooterSub}>Hotline: {config.contact_phone || '(032) 255-4819'}</Text>
+          <Text style={styles.infoFooterSub}>Hotline: {config.contact_phone || '(032) 503-6465'}</Text>
         </View>
       </View>
     </ScrollView>
@@ -412,14 +427,24 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   sealCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#eff6ff',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#bfdbfe',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    overflow: 'hidden',
+    shadowColor: '#1d4ed8',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  sealLogoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   emergencyAlert: {
     flexDirection: 'row',
@@ -746,13 +771,26 @@ const styles = StyleSheet.create({
   infoFooterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 10,
+    marginBottom: 4,
+  },
+  infoFooterSeal: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
   },
   infoFooterTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#1d4ed8',
+  },
+  infoFooterTagline: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '500',
   },
   infoFooterText: {
     fontSize: 12,

@@ -43,7 +43,7 @@ export default function App() {
   const [requests, setRequests] = useState<DocumentRequest[]>([]);
   const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
   const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
-  const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
+  const [config, setConfig] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
   const [notifications, setNotifications] = useState<ResidentNotification[]>([]);
 
   // Modals state
@@ -61,8 +61,41 @@ export default function App() {
 
   useEffect(() => {
     loadResidentSession();
+    fetchSystemConfig();
     fetchDocTypes();
     fetchAnnouncements();
+
+    // Subscribe to live system configuration updates from SuperAdmin
+    let configChannel: any = null;
+    if (isSupabaseConfigured()) {
+      try {
+        configChannel = supabase
+          .channel('resident-system-config')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'system_config' },
+            (payload: any) => {
+              if (payload.new) {
+                setConfig((prev) => ({
+                  ...prev,
+                  ...payload.new,
+                  seal_url: payload.new.seal_url || payload.new.logo_url || prev.seal_url || '/zapatera_seal.png',
+                  logo_url: payload.new.logo_url || payload.new.seal_url || prev.logo_url || '/zapatera_seal.png',
+                }));
+              }
+            }
+          )
+          .subscribe();
+      } catch {
+        // Handled
+      }
+    }
+
+    return () => {
+      if (configChannel) {
+        supabase.removeChannel(configChannel);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -199,6 +232,47 @@ export default function App() {
       const stored = await MobileStorage.getItem('zapatera_news_db');
       if (stored) {
         setAnnouncements(JSON.parse(stored));
+      }
+    } catch {
+      // fallback
+    }
+  };
+
+  const fetchSystemConfig = async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('system_config')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (data && !error) {
+          const formattedConfig: BarangayConfig = {
+            ...DEFAULT_BARANGAY_CONFIG,
+            ...data,
+            seal_url: data.seal_url || data.logo_url || DEFAULT_BARANGAY_CONFIG.seal_url || '/zapatera_seal.png',
+            logo_url: data.logo_url || data.seal_url || DEFAULT_BARANGAY_CONFIG.logo_url || '/zapatera_seal.png',
+          };
+          setConfig(formattedConfig);
+          await MobileStorage.setItem('zapatera_system_config_db', JSON.stringify(formattedConfig));
+          return;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    try {
+      const stored = await MobileStorage.getItem('zapatera_system_config_db');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setConfig({
+          ...DEFAULT_BARANGAY_CONFIG,
+          ...parsed,
+          seal_url: parsed.seal_url || parsed.logo_url || DEFAULT_BARANGAY_CONFIG.seal_url,
+          logo_url: parsed.logo_url || parsed.seal_url || DEFAULT_BARANGAY_CONFIG.logo_url,
+        });
       }
     } catch {
       // fallback
