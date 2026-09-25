@@ -72,6 +72,25 @@ export default function UnlockAccountModal({
     return () => clearInterval(interval);
   }, [timerActive, countdown]);
 
+  // Auto-dismiss error & success messages after 20 seconds
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage('');
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
