@@ -40,7 +40,7 @@ import ProfileView from './features/profile/ProfileView';
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
-  const [requests, setRequests] = useState<DocumentRequest[]>(SAMPLE_REQUESTS);
+  const [requests, setRequests] = useState<DocumentRequest[]>([]);
   const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
   const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
@@ -66,8 +66,11 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchResidentRequests();
-      fetchResidentNotifications();
+      fetchResidentRequests(currentUser);
+      fetchResidentNotifications(currentUser);
+    } else {
+      setRequests([]);
+      setNotifications([]);
     }
   }, [currentUser]);
 
@@ -75,7 +78,8 @@ export default function App() {
     try {
       const stored = await MobileStorage.getItem('zapatera_resident_session');
       if (stored) {
-        setCurrentUser(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        setCurrentUser(parsed);
       }
     } catch {
       // Ignore
@@ -187,26 +191,46 @@ export default function App() {
     }
   };
 
-  const fetchResidentNotifications = async () => {
-    if (!currentUser) return;
+  const fetchResidentNotifications = async (targetUser?: ResidentUser | null) => {
+    const user = targetUser !== undefined ? targetUser : currentUser;
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    let authUserId = user.id;
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          authUserId = authData.user.id;
+        }
+      } catch {
+        // use user.id
+      }
+    }
+
+    const userNotifsKey = `zapatera_notifications_db_${authUserId || user.email}`;
+
     try {
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && authUserId) {
         let query = supabase
           .from('notifications')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
-          query = query.or(`user_id.eq.${currentUser.id},role_target.eq.resident,role_target.is.null`);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId);
+        if (isUuid) {
+          query = query.or(`user_id.eq.${authUserId},role_target.eq.resident,and(user_id.is.null,role_target.is.null)`);
         } else {
-          query = query.or(`role_target.eq.resident,role_target.is.null`);
+          query = query.or(`role_target.eq.resident,and(user_id.is.null,role_target.is.null)`);
         }
 
         const { data, error } = await query;
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           const formatted: ResidentNotification[] = data.map((n: any) => ({
             id: n.id,
-            user_id: n.user_id || currentUser.id || 'res-user',
+            user_id: n.user_id || authUserId,
             title: n.title,
             message: n.message,
             type: n.type || 'info',
@@ -215,113 +239,154 @@ export default function App() {
             created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           }));
           setNotifications(formatted);
-        }
-      }
-    } catch {
-      // Handled silently
-    }
-  };
-
-  const fetchResidentRequests = async () => {
-    if (!currentUser) return;
-    try {
-      if (isSupabaseConfigured()) {
-        const isUuid = currentUser.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
-        
-        let query = supabase
-          .from('document_requests')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (isUuid) {
-          query = query.eq('resident_id', currentUser.id);
-        }
-
-        const { data, error } = await query;
-
-        if (!error && data && data.length > 0) {
-          const formatted: DocumentRequest[] = data.map((req: any) => {
-            const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
-            return {
-              id: req.id,
-              tracking_number: req.tracking_number,
-              resident_id: req.resident_id,
-              resident_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim(),
-              resident_email: currentUser.email,
-              resident_phone: currentUser.phone || '',
-              resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
-              document_type_id: req.document_type_id,
-              document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
-              fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
-            purpose: req.purpose,
-            requirements_attached: Array.isArray(req.requirements_attached) ? req.requirements_attached : [],
-            uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
-            pickup_date: req.pickup_date || 'To be scheduled',
-            pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
-            pickup_location: req.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
-            pickup_instructions: req.pickup_instructions || '',
-            status: req.status || 'pending',
-            notes: req.notes || '',
-            rejection_reason: req.rejection_reason || '',
-            timeline: req.timeline || [
-              {
-                status: 'pending',
-                label: 'Request Submitted',
-                description: 'Document request registered in system queue.',
-                timestamp: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                is_completed: true,
-                is_current: req.status === 'pending',
-              },
-              {
-                status: 'under_review',
-                label: 'Under Review',
-                description: 'Barangay records clerk is validating details and clearance.',
-                timestamp: req.status === 'under_review' || req.status === 'processing' || req.status === 'approved' || req.status === 'completed' ? 'Reviewed' : 'Pending',
-                is_completed: ['under_review', 'processing', 'approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
-                is_current: req.status === 'under_review' || req.status === 'processing',
-              },
-              {
-                status: 'ready_for_pickup',
-                label: 'Ready for Pickup',
-                description: `Document ready for collection at Express Window 2.`,
-                timestamp: req.pickup_date ? `${req.pickup_date} (${req.pickup_time_slot || 'Window 2'})` : 'To be scheduled',
-                is_completed: ['approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
-                is_current: req.status === 'approved' || req.status === 'ready_for_pickup',
-              },
-              {
-                status: 'completed',
-                label: 'Completed',
-                description: 'Document claimed and released to resident.',
-                timestamp: req.status === 'completed' || req.status === 'issued' ? 'Released' : 'Pending Release',
-                is_completed: req.status === 'completed' || req.status === 'issued',
-                is_current: req.status === 'completed' || req.status === 'issued',
-              },
-            ],
-            created_at: req.created_at,
-            updated_at: req.updated_at,
-          };
-        });
-
-        setRequests(formatted);
-          await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(formatted));
+          await MobileStorage.setItem(userNotifsKey, JSON.stringify(formatted));
           return;
         }
       }
     } catch {
-      // Handled silently
+      // Fallback to user-scoped storage only
     }
 
     try {
-      const stored = await MobileStorage.getItem('zapatera_requests_db');
+      const stored = await MobileStorage.getItem(userNotifsKey);
       if (stored) {
-        setRequests(JSON.parse(stored));
+        setNotifications(JSON.parse(stored));
+      } else {
+        setNotifications([]);
       }
     } catch {
-      // Keep sample requests
+      setNotifications([]);
+    }
+  };
+
+  const fetchResidentRequests = async (targetUser?: ResidentUser | null) => {
+    const user = targetUser !== undefined ? targetUser : currentUser;
+    if (!user) {
+      setRequests([]);
+      return;
+    }
+
+    let authUserId = user.id;
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user?.id) {
+          authUserId = authData.user.id;
+        }
+      } catch {
+        // use user.id
+      }
+    }
+
+    if (!authUserId) {
+      setRequests([]);
+      return;
+    }
+
+    const userRequestsKey = `zapatera_requests_db_${authUserId || user.email}`;
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId);
+        
+        // Strict Account Scoping: If user is authenticated with UUID, query matching resident_id
+        if (isUuid) {
+          const { data, error } = await supabase
+            .from('document_requests')
+            .select('*')
+            .eq('resident_id', authUserId)
+            .order('created_at', { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            const formatted: DocumentRequest[] = data.map((req: any) => {
+              const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
+              return {
+                id: req.id,
+                tracking_number: req.tracking_number,
+                resident_id: req.resident_id,
+                resident_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+                resident_email: user.email,
+                resident_phone: user.phone || '',
+                resident_address: user.address || user.sitio || 'Barangay Zapatera, Cebu City',
+                document_type_id: req.document_type_id,
+                document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
+                fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
+                purpose: req.purpose,
+                requirements_attached: Array.isArray(req.requirements_attached) ? req.requirements_attached : [],
+                uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
+                pickup_date: req.pickup_date || 'To be scheduled',
+                pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
+                pickup_location: req.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+                pickup_instructions: req.pickup_instructions || '',
+                status: req.status || 'pending',
+                notes: req.notes || '',
+                rejection_reason: req.rejection_reason || '',
+                timeline: req.timeline || [
+                  {
+                    status: 'pending',
+                    label: 'Request Submitted',
+                    description: 'Document request registered in system queue.',
+                    timestamp: new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    is_completed: true,
+                    is_current: req.status === 'pending',
+                  },
+                  {
+                    status: 'under_review',
+                    label: 'Under Review',
+                    description: 'Barangay records clerk is validating details and clearance.',
+                    timestamp: req.status === 'under_review' || req.status === 'processing' || req.status === 'approved' || req.status === 'completed' ? 'Reviewed' : 'Pending',
+                    is_completed: ['under_review', 'processing', 'approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
+                    is_current: req.status === 'under_review' || req.status === 'processing',
+                  },
+                  {
+                    status: 'ready_for_pickup',
+                    label: 'Ready for Pickup',
+                    description: `Document ready for collection at Express Window 2.`,
+                    timestamp: req.pickup_date ? `${req.pickup_date} (${req.pickup_time_slot || 'Window 2'})` : 'To be scheduled',
+                    is_completed: ['approved', 'ready_for_pickup', 'completed', 'issued'].includes(req.status),
+                    is_current: req.status === 'approved' || req.status === 'ready_for_pickup',
+                  },
+                  {
+                    status: 'completed',
+                    label: 'Completed',
+                    description: 'Document claimed and released to resident.',
+                    timestamp: req.status === 'completed' || req.status === 'issued' ? 'Released' : 'Pending Release',
+                    is_completed: req.status === 'completed' || req.status === 'issued',
+                    is_current: req.status === 'completed' || req.status === 'issued',
+                  },
+                ],
+                created_at: req.created_at,
+                updated_at: req.updated_at,
+              };
+            });
+
+            setRequests(formatted);
+            await MobileStorage.setItem(userRequestsKey, JSON.stringify(formatted));
+            return;
+          }
+        }
+      }
+    } catch {
+      // Fallback to user-scoped storage only
+    }
+
+    try {
+      const stored = await MobileStorage.getItem(userRequestsKey);
+      if (stored) {
+        setRequests(JSON.parse(stored));
+      } else {
+        setRequests([]);
+      }
+    } catch {
+      setRequests([]);
     }
   };
 
   const handleLoginSuccess = async (user: ResidentUser) => {
+    // 1. Immediately wipe previous user state
+    setRequests([]);
+    setNotifications([]);
+    
     try {
       await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(user));
     } catch {
@@ -329,6 +394,10 @@ export default function App() {
     }
     setCurrentUser(user);
     setActiveTab('home');
+
+    // 2. Fetch fresh, account-scoped data for newly authenticated resident
+    await fetchResidentRequests(user);
+    await fetchResidentNotifications(user);
   };
 
   const handleLogout = async () => {
@@ -341,6 +410,8 @@ export default function App() {
       // Ignore
     }
     setCurrentUser(null);
+    setRequests([]);
+    setNotifications([]);
     setActiveTab('home');
   };
 
@@ -372,13 +443,32 @@ export default function App() {
   };
 
   const handleRequestSubmitted = async (newReq: DocumentRequest) => {
-    const updatedList = [newReq, ...requests];
+    if (!currentUser) return;
+
+    let authUserId = currentUser.id;
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          authUserId = user.id;
+        }
+      } catch {
+        // fallback to currentUser.id
+      }
+    }
+
+    const reqWithOwner: DocumentRequest = {
+      ...newReq,
+      resident_id: authUserId,
+    };
+
+    const updatedList = [reqWithOwner, ...requests];
     setRequests(updatedList);
 
     // Add in-app notification
     const newNotif: ResidentNotification = {
       id: `notif-${Date.now()}`,
-      user_id: currentUser?.id || 'res-user',
+      user_id: authUserId || 'res-user',
       title: 'Request Submitted Successfully',
       message: `Your request for ${newReq.document_title} (Ref: ${newReq.tracking_number}) has been queued.`,
       type: 'status_update',
@@ -388,16 +478,16 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
 
+    const userRequestsKey = `zapatera_requests_db_${authUserId || currentUser.email}`;
     try {
-      if (isSupabaseConfigured() && currentUser?.id) {
-        const isDocTypeUuid = newReq.document_type_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newReq.document_type_id);
-        const isResidentUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id);
+      await MobileStorage.setItem(userRequestsKey, JSON.stringify(updatedList));
+    } catch {
+      // Handled
+    }
 
-        let residentProfileId = currentUser.id;
-        if (!isResidentUuid) {
-          const { data: p } = await supabase.from('profiles').select('id').eq('email', currentUser.email).maybeSingle();
-          if (p?.id) residentProfileId = p.id;
-        }
+    try {
+      if (isSupabaseConfigured() && authUserId) {
+        const isDocTypeUuid = newReq.document_type_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newReq.document_type_id);
 
         let docTypeId = isDocTypeUuid ? newReq.document_type_id : null;
         if (!docTypeId && (newReq.document_type_id || newReq.document_title)) {
@@ -411,7 +501,7 @@ export default function App() {
 
         const payload = {
           tracking_number: newReq.tracking_number,
-          resident_id: residentProfileId,
+          resident_id: authUserId,
           document_type_id: docTypeId,
           purpose: newReq.purpose,
           requirements_attached: newReq.requirements_attached || [],
@@ -429,7 +519,7 @@ export default function App() {
 
         // Insert in notifications table
         await supabase.from('notifications').insert([{
-          user_id: residentProfileId,
+          user_id: authUserId,
           title: 'Request Submitted Successfully 📄',
           message: `Your application for ${newReq.document_title} (Tracking: ${newReq.tracking_number}) was received.`,
           type: 'status_update',
@@ -438,14 +528,8 @@ export default function App() {
           created_at: new Date().toISOString(),
         }]);
       }
-    } catch {
-      // Handled silently
-    }
-
-    try {
-      await MobileStorage.setItem('zapatera_requests_db', JSON.stringify(updatedList));
-    } catch {
-      // Handled
+    } catch (e) {
+      console.error('Error recording document request:', e);
     }
   };
 

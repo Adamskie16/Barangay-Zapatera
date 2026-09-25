@@ -277,8 +277,10 @@ CREATE POLICY "Doc Types Admin Manage" ON public.document_types FOR ALL USING (
 );
 
 -- Document Requests Policies
-CREATE POLICY "Resident Read Own Requests" ON public.document_requests FOR SELECT USING (auth.uid() = resident_id);
-CREATE POLICY "Resident Create Request" ON public.document_requests FOR INSERT WITH CHECK (auth.uid() = resident_id);
+CREATE POLICY "Resident Read Own Requests" ON public.document_requests FOR SELECT USING (auth.uid() = resident_id OR public.is_admin_or_superadmin(auth.uid()));
+CREATE POLICY "Resident Create Request" ON public.document_requests FOR INSERT WITH CHECK (auth.uid() = resident_id OR public.is_admin_or_superadmin(auth.uid()));
+CREATE POLICY "Resident Update Own Request" ON public.document_requests FOR UPDATE USING (auth.uid() = resident_id OR public.is_admin_or_superadmin(auth.uid())) WITH CHECK (auth.uid() = resident_id OR public.is_admin_or_superadmin(auth.uid()));
+CREATE POLICY "Resident Delete Own Request" ON public.document_requests FOR DELETE USING (auth.uid() = resident_id OR public.is_admin_or_superadmin(auth.uid()));
 CREATE POLICY "Admin All Requests" ON public.document_requests FOR ALL USING (
     public.is_admin_or_superadmin(auth.uid())
 );
@@ -296,10 +298,28 @@ CREATE POLICY "Config SuperAdmin Manage" ON public.system_config FOR ALL USING (
 );
 
 -- Notifications Policies
-CREATE POLICY "Notifications Read All" ON public.notifications FOR SELECT USING (true);
-CREATE POLICY "Notifications Insert All" ON public.notifications FOR INSERT WITH CHECK (true);
-CREATE POLICY "Notifications Update All" ON public.notifications FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "Notifications Delete All" ON public.notifications FOR DELETE USING (true);
+CREATE POLICY "Resident Read Own Notifications" ON public.notifications FOR SELECT USING (
+    auth.uid() = user_id
+    OR (role_target = 'resident' AND user_id IS NULL)
+    OR (user_id IS NULL AND role_target IS NULL)
+    OR public.is_admin_or_superadmin(auth.uid())
+);
+CREATE POLICY "Notifications Insert Policy" ON public.notifications FOR INSERT WITH CHECK (
+    auth.uid() = user_id
+    OR public.is_admin_or_superadmin(auth.uid())
+    OR auth.uid() IS NOT NULL
+);
+CREATE POLICY "Resident Update Own Notifications" ON public.notifications FOR UPDATE USING (
+    auth.uid() = user_id
+    OR public.is_admin_or_superadmin(auth.uid())
+) WITH CHECK (
+    auth.uid() = user_id
+    OR public.is_admin_or_superadmin(auth.uid())
+);
+CREATE POLICY "Resident Delete Own Notifications" ON public.notifications FOR DELETE USING (
+    auth.uid() = user_id
+    OR public.is_admin_or_superadmin(auth.uid())
+);
 
 -- Activity Logs Policies
 CREATE POLICY "Activity Logs Read All" ON public.activity_logs FOR SELECT USING (true);
