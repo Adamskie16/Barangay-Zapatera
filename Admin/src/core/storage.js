@@ -202,14 +202,32 @@ export const StorageService = {
           const normalized = reqData.map((req) => {
             const profile = profilesMap.get(req.resident_id) || {};
             const docType = docTypesMap.get(req.document_type_id) || {};
+            
+            // Extract accurate years in barangay
+            let yearsVal = req.years_in_barangay;
+            if (yearsVal === undefined || yearsVal === null || yearsVal === '') {
+              yearsVal = profile.years_in_barangay;
+            }
+            const formattedYears = yearsVal !== undefined && yearsVal !== null && yearsVal !== ''
+              ? (String(yearsVal).toLowerCase().includes('year') ? String(yearsVal) : `${yearsVal} years`)
+              : '5 years';
+
+            const formattedAddress = req.resident_address || profile.address || (profile.sitio ? `${profile.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
+            const formattedDob = req.resident_birth_date || req.date_of_birth || profile.birth_date || profile.birthdate || '';
+            const formattedPhone = req.resident_phone || profile.phone || req.phone || '';
+            const formattedCivilStatus = req.civil_status || profile.civil_status || 'Single';
+
             return {
               ...req,
               profiles: profile,
               document_types: docType,
               resident_name: profile.full_name || req.resident_name || 'Resident User',
               resident_email: profile.email || req.resident_email,
-              resident_phone: profile.phone || req.resident_phone,
-              resident_address: profile.address || profile.sitio || req.resident_address,
+              resident_phone: formattedPhone,
+              resident_address: formattedAddress,
+              resident_birth_date: formattedDob,
+              years_in_barangay: formattedYears,
+              civil_status: formattedCivilStatus,
               document_title: docType.title || req.document_title || 'Barangay Document',
               fee: docType.fee !== undefined ? docType.fee : (req.fee || 0),
               pickup_date: req.pickup_date || 'To be scheduled',

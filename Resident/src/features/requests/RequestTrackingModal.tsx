@@ -45,9 +45,11 @@ export default function RequestTrackingModal({
 }: RequestTrackingModalProps) {
   if (!request) return null;
 
-  const isClaimed = request.status === 'issued' || request.status === 'completed' || !!request.is_claimed;
-  const isRejected = request.status === 'rejected' || request.status === 'declined';
-  const isReady = (request.status === 'ready_for_pickup' || request.status === 'approved') && !isClaimed;
+  const normStatus = (request.status || 'pending').toLowerCase();
+  const isClaimed = normStatus === 'completed' || normStatus === 'issued' || Boolean(request.is_claimed) || Boolean(request.claimed_at);
+  const isRejected = normStatus === 'rejected' || normStatus === 'declined';
+  const isReady = (normStatus === 'ready_for_pickup' || normStatus === 'approved') && !isClaimed && !isRejected;
+  const isUnderReview = normStatus === 'under_review' || normStatus === 'processing';
   const isCompleted = isClaimed;
 
   const declineReasonText = request.declined_reason || request.rejection_reason || 'Missing valid proof of residency.';
@@ -55,37 +57,43 @@ export default function RequestTrackingModal({
   const dateDeclinedFormatted = request.declined_at || request.rejected_at || request.updated_at ? new Date(request.declined_at || request.rejected_at || request.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const processedByAdmin = request.processed_by || 'Barangay Administrator';
 
-  // Default timeline steps if not populated
-  const timelineSteps = request.timeline || [
+  // 4-Stage Official Tracking Timeline
+  const timelineSteps = [
     {
       status: 'pending',
       label: 'Request Submitted',
-      description: 'Request received online and entered in the barangay review queue.',
+      description: 'Document request received online and registered in the barangay records queue.',
       timestamp: request.created_at ? new Date(request.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Submitted',
       is_completed: true,
-      is_current: request.status === 'pending',
+      is_current: normStatus === 'pending',
     },
     {
-      status: 'processing',
-      label: 'Processing & Requirements Verification',
-      description: 'Barangay Administrator is verifying resident identification and attached documents.',
-      timestamp: request.status !== 'pending' ? 'Verified' : 'In Progress',
-      is_completed: request.status !== 'pending',
-      is_current: request.status === 'processing' || request.status === 'under_review',
+      status: 'under_review',
+      label: 'Under Review',
+      description: 'Barangay staff is reviewing resident information and verifying submitted documents.',
+      timestamp: (isUnderReview || isReady || isCompleted || isRejected) ? (request.updated_at ? new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'In Review') : 'Pending Staff Review',
+      is_completed: isUnderReview || isReady || isCompleted || isRejected,
+      is_current: isUnderReview && !isRejected,
     },
     {
-      status: 'approved',
-      label: isRejected ? 'Request Declined' : 'Approved & Ready for Pickup',
-      description: isRejected ? 'Application declined due to incomplete or invalid requirements.' : `Available at Express Counter on ${request.pickup_date || 'scheduled date'} (${request.pickup_time_slot || '9:00 AM - 9:30 AM'}).`,
-      timestamp: isReady || isCompleted || isRejected ? (isRejected ? 'Declined' : 'Approved') : 'Scheduled',
+      status: 'ready_for_pickup',
+      label: isRejected ? 'Request Declined' : 'Ready for Pick up',
+      description: isRejected
+        ? (request.declined_reason || 'Application declined due to incomplete or invalid requirements.')
+        : `Document printed, sealed, and approved for pickup at Express Window (${request.pickup_time_slot || 'Regular Office Hours'}).`,
+      timestamp: (isReady || isCompleted || isRejected)
+        ? (isRejected ? 'Declined' : (request.approved_at ? new Date(request.approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : (request.pickup_date || 'Approved')))
+        : `Scheduled for ${request.pickup_date || 'Pickup'}`,
       is_completed: isReady || isCompleted || isRejected,
       is_current: isReady || isRejected,
     },
     {
       status: 'completed',
-      label: 'Document Released',
-      description: isCompleted ? 'Official document claimed and released to resident.' : 'Official document signed and handed over to resident.',
-      timestamp: isCompleted ? 'Claimed' : 'Pending Pickup',
+      label: 'Completed',
+      description: isCompleted ? 'Official document claimed and successfully released to resident.' : 'Official document claimed and handed over to resident.',
+      timestamp: isCompleted
+        ? (request.claimed_at || request.issued_at ? new Date(request.claimed_at || request.issued_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Claimed & Released')
+        : 'Pending Release',
       is_completed: isCompleted,
       is_current: isCompleted,
     },
