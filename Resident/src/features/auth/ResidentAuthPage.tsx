@@ -326,14 +326,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
-    if (isAccountLocked(loginEmail.trim())) {
+    const cleanEmail = loginEmail.toLowerCase().trim();
+
+    // 1. Pre-auth Account Lockout Check (directly verified against Supabase database)
+    const locked = await isAccountLocked(cleanEmail);
+    if (locked) {
       setIsLocked(true);
-      setErrorMessage('Your account is temporarily locked due to multiple consecutive failed login attempts.');
+      setErrorMessage('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
       return;
     }
 
     setLoading(true);
-    const cleanEmail = loginEmail.toLowerCase().trim();
 
     try {
       if (isSupabaseConfigured()) {
@@ -341,12 +344,12 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           .from('profiles')
           .select('*')
           .eq('email', cleanEmail)
-          .single();
+          .maybeSingle();
 
         if (profileData && profileData.is_locked) {
           setIsLocked(true);
           setLoading(false);
-          setErrorMessage('Account Locked: Please unlock your account via Gmail verification code.');
+          setErrorMessage('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
           return;
         }
 
@@ -364,18 +367,18 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             return;
           }
 
-          const failedInfo = recordFailedAttempt(cleanEmail);
-          if (failedInfo.isLocked) {
+          const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
+          if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
             setIsLocked(true);
-            setErrorMessage('Security Alert: Account locked due to 5 consecutive failed attempts.');
+            setErrorMessage('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
           } else {
-            setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 5.`);
+            setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 3. (${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
           }
           setLoading(false);
           return;
         }
 
-        resetFailedAttempts(cleanEmail);
+        await resetFailedAttempts(cleanEmail);
 
         const currentProfile = profileData || {
           id: authData.user.id,
@@ -432,18 +435,18 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       const resident = residents.find((r) => r.email.toLowerCase() === cleanEmail);
 
       if (!resident || resident.password !== loginPassword) {
-        const failedInfo = recordFailedAttempt(cleanEmail);
-        if (failedInfo.isLocked) {
+        const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
+        if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
           setIsLocked(true);
-          setErrorMessage('Security Alert: Account locked due to 5 consecutive failed attempts.');
+          setErrorMessage('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
         } else {
-          setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 5.`);
+          setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 3. (${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
         }
         setLoading(false);
         return;
       }
 
-      resetFailedAttempts(cleanEmail);
+      await resetFailedAttempts(cleanEmail);
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(otpCode);
       setPendingUser(resident);
