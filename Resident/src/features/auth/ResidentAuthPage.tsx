@@ -189,6 +189,35 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     }
   }, [loginEmail]);
 
+  // Auto-dismiss error & banner messages after 20 seconds
+  useEffect(() => {
+    if (errorMessage || authError) {
+      const timer = setTimeout(() => {
+        setErrorMessage('');
+        setAuthError(null);
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage, authError]);
+
+  useEffect(() => {
+    if (successBanner) {
+      const timer = setTimeout(() => {
+        setSuccessBanner('');
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [successBanner]);
+
+  useEffect(() => {
+    if (infoBanner) {
+      const timer = setTimeout(() => {
+        setInfoBanner('');
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [infoBanner]);
+
   // Live password strength indicator for register
   const passwordStrength = checkPasswordStrength(regData.password);
   const passwordsMatch = regData.password.length > 0 && regData.confirmPassword.length > 0 && regData.password === regData.confirmPassword;
@@ -534,6 +563,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   };
 
   const handleForgotPasswordSubmit = async () => {
+    setAuthError(null);
     setErrorMessage('');
     setSuccessBanner('');
     setInfoBanner('');
@@ -545,22 +575,30 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     setLoading(true);
     const cleanEmail = forgotEmail.trim().toLowerCase();
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${window.location.pathname}`
+        : undefined;
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: redirectUrl,
         });
+        if (resetErr) {
+          console.error('Password reset request error:', resetErr);
+        }
       }
-    } catch {
-      // Ignore
+    } catch (err: any) {
+      console.error('Password reset request error:', err);
     } finally {
       setLoading(false);
-      setSuccessBanner(`Password reset instructions dispatched to (${cleanEmail}). Please check your Gmail inbox and click the reset link.`);
+      setSuccessBanner(`Password recovery instructions dispatched to (${cleanEmail}). Please check your Gmail inbox and click the reset link.`);
     }
   };
 
   const handleResetPasswordSubmit = async () => {
+    setAuthError(null);
     setErrorMessage('');
     setSuccessBanner('');
     setInfoBanner('');
@@ -578,7 +616,10 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setLoading(true);
     try {
       if (isSupabaseConfigured()) {
-        const { data } = await supabase.auth.updateUser({ password: resetNewPassword });
+        const { data, error: updateErr } = await supabase.auth.updateUser({ password: resetNewPassword });
+        if (updateErr) {
+          console.error('Supabase updateUser error:', updateErr);
+        }
         const targetEmail = (data?.user?.email || forgotEmail || loginEmail || '').toLowerCase().trim();
         if (targetEmail) {
           await supabase
@@ -590,7 +631,26 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               updated_at: new Date().toISOString(),
             })
             .eq('email', targetEmail);
+
+          await resetFailedAttempts(targetEmail);
         }
+      }
+
+      // Also update local storage db fallback
+      try {
+        const storedDb = await MobileStorage.getItem('zapatera_residents_db');
+        if (storedDb) {
+          const residents: ResidentUser[] = JSON.parse(storedDb);
+          const targetEmail = (forgotEmail || loginEmail || '').toLowerCase().trim();
+          const updated = residents.map((r) =>
+            r.email.toLowerCase() === targetEmail ? { ...r, password: resetNewPassword, is_locked: false, failed_attempts: 0 } : r
+          );
+          await MobileStorage.setItem('zapatera_residents_db', JSON.stringify(updated));
+        }
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
       }
 
       setLoading(false);
@@ -601,7 +661,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         setResetNewPassword('');
         setResetConfirmPassword('');
       }, 2000);
-    } catch {
+    } catch (err: any) {
+      console.error('Password reset error:', err);
       setLoading(false);
       setErrorMessage('Failed to update password. Please try requesting a new reset link.');
     }
