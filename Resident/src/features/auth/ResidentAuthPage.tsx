@@ -93,6 +93,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   const [authStep, setAuthStep] = useState<'credentials' | 'otp' | 'forgot_password' | 'reset_password'>('credentials');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string>('');
   const [infoBanner, setInfoBanner] = useState<string>('');
 
@@ -315,6 +316,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   // LOGIN FLOW HANDLERS
   // ==========================================================================
   const handleCredentialsSubmit = async () => {
+    setAuthError(null);
     setErrorMessage('');
     setSuccessBanner('');
     setInfoBanner('');
@@ -322,7 +324,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setIsLocked(false);
 
     if (!loginEmail.trim() || !loginPassword) {
-      setErrorMessage('Please enter both your registered Gmail and password.');
+      setAuthError('Please enter both your registered Gmail and password.');
       return;
     }
 
@@ -332,7 +334,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
-      setErrorMessage('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
+      setAuthError('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
       return;
     }
 
@@ -341,6 +343,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     try {
       let isPasswordValid = false;
       let profileData: any = null;
+      let supabaseErrorMessage = '';
 
       if (isSupabaseConfigured()) {
         const { data: pData } = await supabase
@@ -354,7 +357,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         if (profileData && profileData.is_locked) {
           setIsLocked(true);
           setLoading(false);
-          setErrorMessage('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
+          setAuthError('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
           return;
         }
 
@@ -366,11 +369,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         if (!authErr && authData?.user) {
           isPasswordValid = true;
         } else if (authErr) {
-          const errMsg = (authErr.message || '').toLowerCase();
-          const isEmailNotConfirmed = errMsg.includes('email not confirmed') || errMsg.includes('confirm') || (authErr as any)?.code === 'email_not_confirmed';
+          console.error('Supabase authentication error:', authErr);
+          supabaseErrorMessage = authErr.message || '';
+          const errMsg = supabaseErrorMessage.toLowerCase();
+          const isEmailNotConfirmed =
+            errMsg.includes('email not confirmed') ||
+            errMsg.includes('confirm') ||
+            (authErr as any)?.code === 'email_not_confirmed';
+
           if (isEmailNotConfirmed) {
             setShowResendConfirmation(true);
-            setErrorMessage('Email Verification Pending: Your account has been registered, but your Gmail has not been confirmed yet. Please check your Gmail and click the confirmation link before logging in.');
+            setAuthError(authErr.message || 'Email not confirmed. Please check your Gmail inbox and verify your account.');
             setLoading(false);
             return;
           }
@@ -391,14 +400,15 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         isPasswordValid = true;
       }
 
-      // If credentials do not match anywhere -> record failed attempt
+      // If credentials do not match anywhere -> record failed attempt & show actual Supabase error
       if (!isPasswordValid) {
         const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
         if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
           setIsLocked(true);
-          setErrorMessage('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
+          setAuthError('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
         } else {
-          setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 3. (${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
+          const displayMsg = supabaseErrorMessage || 'Invalid login credentials';
+          setAuthError(`${displayMsg}. (Attempt ${failedInfo.attempts} of 3 - ${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
         }
         setLoading(false);
         return;
@@ -451,9 +461,10 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       setLoading(false);
       setAuthStep('otp');
       setInfoBanner(`Two-Factor Authentication: A 6-digit security OTP was sent to ${cleanEmail}. Please check your Gmail inbox.`);
-    } catch {
+    } catch (err: any) {
+      console.error('Supabase authentication error:', err);
       setLoading(false);
-      setErrorMessage('Login failed. Please check your internet connection and try again.');
+      setAuthError(err?.message || 'Unable to sign in. Please try again.');
     }
   };
 
@@ -806,13 +817,15 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           </View>
         ) : null}
 
-        {errorMessage ? (
+        {(authError || errorMessage) ? (
           <View style={[styles.errorBox, isLocked && styles.lockedBox]}>
             <View style={styles.alertHeaderRow}>
               {isLocked ? <Lock size={16} color="#dc2626" /> : <AlertTriangle size={16} color="#dc2626" />}
-              <Text style={styles.errorTitle}>{isLocked ? 'Account Security Lockout' : 'Notice'}</Text>
+              <Text style={styles.errorTitle}>
+                {isLocked ? 'Account Security Lockout' : authError ? 'Login Failed' : 'Notice'}
+              </Text>
             </View>
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <Text style={styles.errorText}>{authError || errorMessage}</Text>
             {isLocked ? (
               <TouchableOpacity
                 style={[styles.primaryBtn, { marginTop: 10, paddingVertical: 10, backgroundColor: '#dc2626' }]}
