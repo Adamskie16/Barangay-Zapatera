@@ -206,18 +206,59 @@ export default function ReceiveRequestView({
     return [];
   };
 
+  // Robust universal extractors for resident applicant information
+  const extractYearsInBarangay = (r) => {
+    if (!r) return '5 years';
+    const val = (r.years_in_barangay !== undefined && r.years_in_barangay !== null && r.years_in_barangay !== '')
+      ? r.years_in_barangay
+      : ((r.yearsInBarangay !== undefined && r.yearsInBarangay !== null && r.yearsInBarangay !== '')
+        ? r.yearsInBarangay
+        : (r.profiles?.years_in_barangay !== undefined && r.profiles?.years_in_barangay !== null && r.profiles?.years_in_barangay !== ''
+          ? r.profiles.years_in_barangay
+          : (r.profiles?.yearsInBarangay || '5')));
+    const str = String(val).trim();
+    return str.toLowerCase().includes('year') ? str : `${str} years`;
+  };
+
+  const extractResidentName = (r) => {
+    if (!r) return 'Resident Applicant';
+    return r.resident_name || r.residentName || r.profiles?.full_name || r.user_metadata?.full_name || 'Resident Applicant';
+  };
+
+  const extractResidentAddress = (r) => {
+    if (!r) return 'Barangay Zapatera, Cebu City';
+    return r.resident_address || r.address || r.profiles?.address || (r.profiles?.sitio ? `${r.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
+  };
+
+  const extractResidentDob = (r) => {
+    if (!r) return '';
+    return r.resident_birth_date || r.birth_date || r.date_of_birth || r.dob || r.birthdate || r.profiles?.birth_date || r.profiles?.birthdate || '';
+  };
+
+  const extractResidentPhone = (r) => {
+    if (!r) return 'Not provided';
+    return r.resident_phone || r.phone || r.contact_no || r.profiles?.phone || 'Not provided';
+  };
+
+  const extractResidentEmail = (r) => {
+    if (!r) return 'N/A';
+    return r.resident_email || r.email || r.profiles?.email || 'N/A';
+  };
+
+  const extractCivilStatus = (r) => {
+    if (!r) return 'Single';
+    return r.civil_status || r.civilStatus || r.profiles?.civil_status || 'Single';
+  };
+
   // Synchronize resident profile details directly into generator dynamic variables
   const populateGeneratorFromResident = (req) => {
     if (!req) return;
 
-    const resName = req.resident_name || req.profiles?.full_name || req.user_metadata?.full_name || '';
-    const resAddress = req.resident_address || req.profiles?.address || req.address || (req.profiles?.sitio ? `${req.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
-    const resDob = req.resident_birth_date || req.date_of_birth || req.dob || req.birthdate || req.profiles?.birth_date || '';
-    const resContact = req.resident_phone || req.phone || req.contact_no || req.profiles?.phone || '';
-    const rawYears = req.years_in_barangay !== undefined && req.years_in_barangay !== null && req.years_in_barangay !== ''
-      ? req.years_in_barangay
-      : (req.profiles?.years_in_barangay !== undefined && req.profiles?.years_in_barangay !== null && req.profiles?.years_in_barangay !== '' ? req.profiles.years_in_barangay : '5');
-    const resYears = String(rawYears).toLowerCase().includes('year') ? String(rawYears) : `${rawYears} years`;
+    const resName = extractResidentName(req);
+    const resAddress = extractResidentAddress(req);
+    const resDob = extractResidentDob(req);
+    const resContact = extractResidentPhone(req);
+    const resYears = extractYearsInBarangay(req);
     const resPurpose = req.purpose || 'Local Employment Application';
 
     setGenName(resName);
@@ -380,16 +421,13 @@ export default function ReceiveRequestView({
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
 
   // Extract resident details helper for modal
-  const residentFullName = selectedReq?.resident_name || selectedReq?.profiles?.full_name || selectedReq?.user_metadata?.full_name || 'Resident Applicant';
-  const residentEmail = selectedReq?.resident_email || selectedReq?.profiles?.email || selectedReq?.email || 'N/A';
-  const residentPhone = selectedReq?.resident_phone || selectedReq?.phone || selectedReq?.contact_no || selectedReq?.profiles?.phone || 'Not provided';
-  const residentAddress = selectedReq?.resident_address || selectedReq?.profiles?.address || selectedReq?.address || (selectedReq?.profiles?.sitio ? `${selectedReq.profiles.sitio}, Barangay Zapatera, Cebu City` : 'Barangay Zapatera, Cebu City');
-  const residentDob = selectedReq?.resident_birth_date || selectedReq?.date_of_birth || selectedReq?.dob || selectedReq?.birthdate || selectedReq?.profiles?.birth_date || 'Not specified';
-  const residentCivilStatus = selectedReq?.civil_status || selectedReq?.profiles?.civil_status || 'Single';
-  const rawResidentYears = selectedReq?.years_in_barangay !== undefined && selectedReq?.years_in_barangay !== null && selectedReq?.years_in_barangay !== ''
-    ? selectedReq.years_in_barangay
-    : (selectedReq?.profiles?.years_in_barangay !== undefined && selectedReq?.profiles?.years_in_barangay !== null && selectedReq?.profiles?.years_in_barangay !== '' ? selectedReq.profiles.years_in_barangay : '5');
-  const residentYears = String(rawResidentYears).toLowerCase().includes('year') ? String(rawResidentYears) : `${rawResidentYears} years`;
+  const residentFullName = extractResidentName(selectedReq);
+  const residentEmail = extractResidentEmail(selectedReq);
+  const residentPhone = extractResidentPhone(selectedReq);
+  const residentAddress = extractResidentAddress(selectedReq);
+  const residentDob = extractResidentDob(selectedReq) || 'Not specified';
+  const residentCivilStatus = extractCivilStatus(selectedReq);
+  const residentYears = extractYearsInBarangay(selectedReq);
 
   return (
     <div className="space-y-6">

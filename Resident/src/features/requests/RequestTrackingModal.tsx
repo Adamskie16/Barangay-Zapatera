@@ -309,31 +309,79 @@ export default function RequestTrackingModal({
               })}
             </View>
 
-            {/* REQUEST DETAILS SUMMARY */}
-            <Text style={[styles.timelineHeading, { marginTop: 16 }]}>Application Summary</Text>
+            {/* RESIDENT DATA & APPLICATION SUMMARY */}
+            <Text style={[styles.timelineHeading, { marginTop: 18 }]}>Resident Information & Application Details</Text>
             <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Applicant Name:</Text>
-                <Text style={styles.summaryVal}>{request.resident_name}</Text>
+                <Text style={styles.summaryVal}>{request.resident_name || 'Resident Applicant'}</Text>
               </View>
+
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Registered Address:</Text>
-                <Text style={styles.summaryVal}>{request.resident_address || 'Barangay Zapatera'}</Text>
+                <Text style={styles.summaryVal}>{request.resident_address || 'Barangay Zapatera, Cebu City'}</Text>
               </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Years in Barangay:</Text>
+                <Text style={[styles.summaryVal, { fontWeight: '700', color: '#1e293b' }]}>
+                  {request.years_in_barangay
+                    ? (String(request.years_in_barangay).toLowerCase().includes('year') ? String(request.years_in_barangay) : `${request.years_in_barangay} years`)
+                    : '5 years'}
+                </Text>
+              </View>
+
+              {request.resident_birth_date ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Date of Birth:</Text>
+                  <Text style={styles.summaryVal}>{request.resident_birth_date}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Contact Number:</Text>
                 <Text style={styles.summaryVal}>{request.resident_phone || '0917-000-0000'}</Text>
               </View>
+
+              {request.resident_email ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Email Address:</Text>
+                  <Text style={styles.summaryVal}>{request.resident_email}</Text>
+                </View>
+              ) : null}
+
+              {request.civil_status ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Civil Status:</Text>
+                  <Text style={styles.summaryVal}>{request.civil_status}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Fee:</Text>
-                <Text style={[styles.summaryVal, { color: '#1d4ed8', fontWeight: '800' }]}>
-                  {request.fee === 0 ? 'FREE' : formatCurrency(request.fee)}
+                <Text style={styles.summaryLabel}>Purpose of Request:</Text>
+                <Text style={[styles.summaryVal, { color: '#0f172a', fontWeight: '600' }]}>
+                  {request.purpose || 'Local Employment Application'}
                 </Text>
               </View>
+
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Attached Files:</Text>
+                <Text style={styles.summaryLabel}>Document Fee:</Text>
+                <Text style={[styles.summaryVal, { color: '#15803d', fontWeight: '800' }]}>
+                  {request.fee === 0 ? 'FREE (₱0.00)' : formatCurrency(request.fee)}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Pick-up Schedule:</Text>
                 <Text style={styles.summaryVal}>
-                  {request.requirements_attached?.length || 0} document(s) uploaded
+                  {request.pickup_date || 'Scheduled Date'} ({request.pickup_time_slot || 'Regular Hours'})
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Attached Documents:</Text>
+                <Text style={styles.summaryVal}>
+                  {request.uploaded_files?.length || request.requirements_attached?.length || 0} file(s) attached
                 </Text>
               </View>
             </View>
