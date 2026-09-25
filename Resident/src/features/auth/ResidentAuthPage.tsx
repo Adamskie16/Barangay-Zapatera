@@ -23,6 +23,7 @@ import {
   X,
   CheckSquare,
   Square,
+  Calendar,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
 import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts } from '../../core/security';
@@ -1232,17 +1233,32 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 <Text style={styles.inputLabel}>
                   Date of Birth <Text style={styles.requiredAsterisk}>*</Text>
                 </Text>
-                <TextInput
+                <View
                   style={[
-                    styles.modernInput,
+                    styles.dateInputWrapper,
                     fieldErrors.birth_date ? styles.inputErrorBorder : (regData.birth_date.trim() ? styles.inputSuccessBorder : null),
                   ]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#94a3b8"
-                  value={regData.birth_date}
-                  onChangeText={(txt) => handleFieldChange('birth_date', txt)}
-                  maxLength={10}
-                />
+                >
+                  <input
+                    type="date"
+                    required
+                    max={new Date().toISOString().split('T')[0]}
+                    value={regData.birth_date}
+                    onChange={(e) => handleFieldChange('birth_date', e.target.value)}
+                    style={{
+                      width: '100%',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      padding: '11px 12px',
+                      fontSize: '13px',
+                      color: regData.birth_date ? '#0f172a' : '#94a3b8',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <Calendar size={18} color="#64748b" style={{ marginRight: 10, pointerEvents: 'none', flexShrink: 0 }} />
+                </View>
                 {fieldErrors.birth_date ? (
                   <Text style={styles.fieldErrorText}>{fieldErrors.birth_date}</Text>
                 ) : null}
@@ -1622,6 +1638,16 @@ const styles = StyleSheet.create({
   },
   inputSuccessBorder: {
     borderColor: '#10b981',
+  },
+  dateInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingRight: 6,
+    overflow: 'hidden',
   },
   passwordWrapper: {
     flexDirection: 'row',
