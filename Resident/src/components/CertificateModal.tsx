@@ -30,12 +30,12 @@ export default function CertificateModal({ visible, onClose, request, config }: 
               {/* Header Seal & Title */}
               <View style={styles.certHeader}>
                 <Image
-                  source={{ uri: config.seal_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=300&q=80' }}
+                  source={{ uri: config.seal_url || config.logo_url || '/zapatera_seal.png' }}
                   style={styles.sealImage}
                 />
                 <Text style={styles.republicText}>Republic of the Philippines</Text>
                 <Text style={styles.provinceText}>{config.province}, {config.municipality}</Text>
-                <Text style={styles.barangayTitle}>{config.barangay_name.toUpperCase()}</Text>
+                <Text style={styles.barangayTitle}>{(config.barangay_name || 'Barangay Zapatera').toUpperCase()}</Text>
                 <Text style={styles.officeTitle}>OFFICE OF THE BARANGAY CAPTAIN</Text>
               </View>
 
