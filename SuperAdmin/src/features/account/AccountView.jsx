@@ -23,10 +23,12 @@ import {
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
+import { uploadSuperAdminAvatar } from '../../core/storageService';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Profile Form State (Including Account Role)
   const [profile, setProfile] = useState({
@@ -451,7 +453,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             }`}
           >
         <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
-          {/* Avatar Preview */}
+          {/* Avatar Preview & Upload */}
           <div className="relative group">
             <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-blue-500/40 bg-slate-800 shadow-xl flex items-center justify-center shrink-0">
               {profile.avatar_url ? (
@@ -468,9 +470,36 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                 <User className="w-12 h-12 text-slate-400" />
               )}
             </div>
-            <div className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 rounded-lg text-white text-[10px] font-bold shadow-md">
-              <Sparkles className="w-3 h-3" />
-            </div>
+
+            <label
+              className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-[10px] font-bold shadow-md cursor-pointer transition-transform hover:scale-105"
+              title="Upload New Profile Picture"
+            >
+              {uploadingAvatar ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ImageIcon className="w-3.5 h-3.5" />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingAvatar}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingAvatar(true);
+                  const result = await uploadSuperAdminAvatar(profile.id || currentUser?.id || 'superadmin', file);
+                  if (result.success && result.url) {
+                    setProfile((prev) => ({ ...prev, avatar_url: result.url }));
+                    setSuccessMessage('Avatar uploaded to Supabase Storage. Click "Save Profile Changes" to save.');
+                  } else {
+                    setErrorMessage(result.error || 'Avatar upload failed.');
+                  }
+                  setUploadingAvatar(false);
+                }}
+              />
+            </label>
           </div>
 
           {/* User Info Overview */}

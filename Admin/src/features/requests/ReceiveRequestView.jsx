@@ -38,6 +38,8 @@ import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
 import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documentTemplates';
 import DocumentTemplate from '../documents/DocumentTemplate';
+import FilePreviewModal from '../../components/FilePreviewModal';
+import { downloadStoredAttachment } from '../../core/storageService';
 
 const DECLINE_REASONS = [
   'Missing required document',
@@ -160,6 +162,9 @@ export default function ReceiveRequestView({
         name: fileObj.requirement_name || `Requirement #${idx + 1}`,
         fileName: fileObj.file_name || `attachment_${idx + 1}.pdf`,
         fileType: fileObj.file_type || 'image/jpeg',
+        file_size: fileObj.file_size,
+        file_url: fileObj.file_url,
+        storage_path: fileObj.storage_path,
         uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: fileObj.status || 'pending',
       }));
@@ -674,6 +679,9 @@ export default function ReceiveRequestView({
                                       name: item.name,
                                       fileName: item.fileName,
                                       fileType: item.fileType,
+                                      file_size: item.file_size,
+                                      file_url: item.file_url,
+                                      storage_path: item.storage_path,
                                       residentName: selectedReq.resident_name,
                                     })
                                   }
@@ -686,7 +694,13 @@ export default function ReceiveRequestView({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    alert(`Downloading verification file: ${item.fileName}`);
+                                    if (item.storage_path) {
+                                      downloadStoredAttachment(item.storage_path, item.fileName);
+                                    } else if (item.file_url) {
+                                      window.open(item.file_url, '_blank');
+                                    } else {
+                                      alert(`Downloading verification file: ${item.fileName}`);
+                                    }
                                   }}
                                   className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center space-x-1 cursor-pointer"
                                 >
@@ -1155,49 +1169,12 @@ export default function ReceiveRequestView({
         </form>
       </Modal>
 
-      {/* Requirement File Preview Modal */}
-      <Modal
+      {/* Requirement File Preview Modal with Supabase Storage Support */}
+      <FilePreviewModal
         isOpen={!!previewFile}
+        file={previewFile}
         onClose={() => setPreviewFile(null)}
-        title={`Attachment Preview — ${previewFile?.name}`}
-      >
-        {previewFile && (
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-              <div>
-                <p className="font-bold text-slate-800">{previewFile.name}</p>
-                <p className="font-mono text-slate-500 text-[11px]">{previewFile.fileName}</p>
-              </div>
-              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200 text-[11px]">
-                {previewFile.fileType}
-              </span>
-            </div>
-
-            <div className="bg-slate-900 rounded-2xl p-6 text-center text-white space-y-4 shadow-inner">
-              <div className="w-20 h-20 mx-auto rounded-full bg-slate-800 border-2 border-blue-500 flex items-center justify-center">
-                <FileCheck2 className="w-10 h-10 text-blue-400" />
-              </div>
-              <div>
-                <h4 className="font-bold text-base text-white">Barangay Zapatera Verification Document</h4>
-                <p className="text-slate-400 text-xs mt-1">
-                  Applicant: <span className="text-white font-semibold">{previewFile.residentName}</span>
-                </p>
-                <p className="text-slate-400 text-xs">File Reference: {previewFile.fileName}</p>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setPreviewFile(null)}
-                className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      />
 
       {/* HIDDEN PRINT ROOT for Direct Browser Printing */}
       <div id="printable-document-root" className="hidden print:block">

@@ -9,6 +9,7 @@ import {
   ScrollView,
   Modal,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import {
   X,
@@ -40,6 +41,7 @@ import {
 } from '../../types';
 import { formatCurrency, generateTrackingNumber } from '../../core/security';
 import { APPOINTMENT_TIME_SLOTS } from '../../core/portalData';
+import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/storageService';
 
 interface RequestFlowModalProps {
   visible: boolean;
@@ -86,6 +88,7 @@ export default function RequestFlowModal({
 
   // Step 3 Uploads State
   const [uploadedFiles, setUploadedFiles] = useState<{ [reqKey: string]: UploadedRequirementFile }>({});
+  const [uploadingMap, setUploadingMap] = useState<{ [reqKey: string]: boolean }>({});
   const [uploadError, setUploadError] = useState<string>('');
 
   // Step 4 Schedule State
@@ -127,7 +130,7 @@ export default function RequestFlowModal({
       })
     : (selectedDoc?.requirement_items || []);
 
-  // Real browser/device file and camera upload handler
+  // Real browser/device file and camera upload handler using Supabase Storage
   const handleRealFileUpload = (reqName: string, mode: 'camera' | 'photo' | 'document' = 'photo') => {
     if (typeof document === 'undefined') return;
 
@@ -143,51 +146,59 @@ export default function RequestFlowModal({
       input.accept = 'application/pdf,image/*';
     }
 
-    input.onchange = (e: any) => {
+    input.onchange = async (e: any) => {
       const file = e.target?.files?.[0];
       if (!file) return;
 
-      const fileSize = file.size < 1024 * 1024
-        ? `${(file.size / 1024).toFixed(0)} KB`
-        : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      setUploadingMap((prev) => ({ ...prev, [reqName]: true }));
+      setUploadError('');
 
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-      const isImage = file.type.startsWith('image/') || (!isPdf);
+      try {
+        const result = await uploadResidentRequirementFile(
+          currentUser.id || 'resident',
+          reqName,
+          file,
+          file.name
+        );
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
+        if (!result.success) {
+          setUploadError(result.error || `Failed to upload ${file.name}`);
+          setUploadingMap((prev) => ({ ...prev, [reqName]: false }));
+          return;
+        }
+
+        const isPdf = result.fileType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
         const newFile: UploadedRequirementFile = {
           requirement_name: reqName,
-          file_name: file.name,
-          file_type: isPdf ? 'application/pdf' : 'image/jpeg',
-          file_size: fileSize,
-          file_url: isImage ? dataUrl : undefined,
+          file_name: result.fileName,
+          file_type: result.fileType || (isPdf ? 'application/pdf' : 'image/jpeg'),
+          file_size: result.fileSizeFormatted,
+          file_url: result.fileUrl || result.signedUrl,
+          storage_path: result.storagePath,
+          bucket: result.bucket,
+          signed_url: result.signedUrl,
           status: 'uploaded',
+          uploaded_at: new Date().toISOString(),
         };
-        setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
-        setUploadError('');
-      };
 
-      if (isImage) {
-        reader.readAsDataURL(file);
-      } else {
-        const newFile: UploadedRequirementFile = {
-          requirement_name: reqName,
-          file_name: file.name,
-          file_type: 'application/pdf',
-          file_size: fileSize,
-          status: 'uploaded',
-        };
         setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
         setUploadError('');
+      } catch (err: any) {
+        setUploadError(err?.message || 'Upload error occurred.');
+      } finally {
+        setUploadingMap((prev) => ({ ...prev, [reqName]: false }));
       }
     };
 
     input.click();
   };
 
-  const handleRemoveFile = (reqName: string) => {
+  const handleRemoveFile = async (reqName: string) => {
+    const existing = uploadedFiles[reqName];
+    if (existing?.storage_path) {
+      deleteStoredFile('documents', existing.storage_path).catch(() => {});
+    }
     setUploadedFiles((prev) => {
       const updated = { ...prev };
       delete updated[reqName];
@@ -573,7 +584,14 @@ export default function RequestFlowModal({
                             </View>
                           </View>
 
-                          {uploaded ? (
+                          {uploadingMap[item.name] ? (
+                            <View style={[styles.uploadedFileContainer, { paddingVertical: 14, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 }]}>
+                              <ActivityIndicator size="small" color="#1d4ed8" />
+                              <Text style={{ fontSize: 12, color: '#1d4ed8', fontWeight: '600' }}>
+                                Uploading securely to Barangay Storage...
+                              </Text>
+                            </View>
+                          ) : uploaded ? (
                             <View style={styles.uploadedFileContainer}>
                               <View style={styles.uploadedFileRow}>
                                 {uploaded.file_url ? (
