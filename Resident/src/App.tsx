@@ -49,6 +49,7 @@ export default function App() {
   // Modals state
   const [isRequestFlowOpen, setIsRequestFlowOpen] = useState<boolean>(false);
   const [selectedDocForRequest, setSelectedDocForRequest] = useState<DocumentType | null>(null);
+  const [showDocSelectorInFlow, setShowDocSelectorInFlow] = useState<boolean>(false);
 
   const [isRequirementsModalOpen, setIsRequirementsModalOpen] = useState<boolean>(false);
   const [selectedDocForRequirements, setSelectedDocForRequirements] = useState<DocumentType | null>(null);
@@ -574,7 +575,7 @@ export default function App() {
     setIsRequirementsModalOpen(true);
   };
 
-  const handleOpenRequestFlow = (doc?: DocumentType | string) => {
+  const handleOpenRequestFlow = (doc?: DocumentType | string, fromRequestsPage = false) => {
     let targetDoc = docTypes[0];
     if (typeof doc === 'string') {
       targetDoc = docTypes.find((d) => d.id === doc) || docTypes[0];
@@ -582,6 +583,7 @@ export default function App() {
       targetDoc = doc;
     }
     setSelectedDocForRequest(targetDoc);
+    setShowDocSelectorInFlow(fromRequestsPage);
     setIsRequestFlowOpen(true);
   };
 
@@ -666,7 +668,7 @@ export default function App() {
           <MyRequestsView
             requests={requests}
             onViewRequestDetails={handleViewRequestDetails}
-            onRequestNew={() => handleOpenRequestFlow()}
+            onRequestNew={() => handleOpenRequestFlow(undefined, true)}
           />
         )}
 
@@ -711,6 +713,7 @@ export default function App() {
         docTypes={docTypes}
         currentUser={currentUser}
         config={config}
+        showDocSelector={showDocSelectorInFlow}
         onClose={() => setIsRequestFlowOpen(false)}
         onRequestSubmitted={handleRequestSubmitted}
         onTrackSubmittedRequest={(req) => {

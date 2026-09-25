@@ -1,5 +1,5 @@
 // Resident/src/features/requests/RequestFlowModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -49,6 +49,7 @@ interface RequestFlowModalProps {
   docTypes: DocumentType[];
   currentUser: ResidentUser;
   config: BarangayConfig;
+  showDocSelector?: boolean;
   onClose: () => void;
   onRequestSubmitted: (req: DocumentRequest) => void;
   onTrackSubmittedRequest: (req: DocumentRequest) => void;
@@ -71,6 +72,7 @@ export default function RequestFlowModal({
   docTypes,
   currentUser,
   config,
+  showDocSelector = false,
   onClose,
   onRequestSubmitted,
   onTrackSubmittedRequest,
@@ -80,6 +82,14 @@ export default function RequestFlowModal({
   const [selectedDocId, setSelectedDocId] = useState<string>(initialDoc?.id || docTypes[0]?.id || 'dt-001');
   const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
   const [customPurpose, setCustomPurpose] = useState<string>('');
+
+  useEffect(() => {
+    if (initialDoc?.id) {
+      setSelectedDocId(initialDoc.id);
+    } else if (docTypes.length > 0 && !selectedDocId) {
+      setSelectedDocId(docTypes[0].id);
+    }
+  }, [initialDoc, docTypes]);
 
   // Step 2 Resident Info State
   const [yearsInBarangay, setYearsInBarangay] = useState<string>(
@@ -383,27 +393,93 @@ export default function RequestFlowModal({
             {/* STEP 1: SELECT DOCUMENT & PURPOSE */}
             {currentStep === 1 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Document & Request Purpose</Text>
+                <Text style={styles.stepTitle}>
+                  {showDocSelector ? 'Select Document & Purpose' : 'Document & Request Purpose'}
+                </Text>
                 <Text style={styles.stepSubtitle}>
-                  Please review your requested document and provide the official purpose of this application.
+                  {showDocSelector
+                    ? 'Select from available barangay clearance certificates and provide the official purpose of this application.'
+                    : 'Please review your requested document and provide the official purpose of this application.'}
                 </Text>
 
-                {/* Selected Document Card Preview */}
-                <View style={styles.selectedDocCard}>
-                  <View style={styles.selectedDocHeader}>
-                    <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
-                    <Text style={styles.selectedDocFee}>
-                      {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
-                    </Text>
+                {/* Available Document Selection (When opened from Requests Page) */}
+                {showDocSelector ? (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={styles.inputLabel}>Available Documents *</Text>
+                    <View style={{ gap: 8, marginTop: 6 }}>
+                      {docTypes.map((dt) => {
+                        const isSelected = selectedDoc.id === dt.id;
+                        return (
+                          <TouchableOpacity
+                            key={dt.id}
+                            style={[
+                              styles.docSelectCard,
+                              isSelected && styles.docSelectCardActive,
+                            ]}
+                            onPress={() => setSelectedDocId(dt.id)}
+                            activeOpacity={0.8}
+                          >
+                            <View style={styles.docSelectCardLeft}>
+                              <View
+                                style={[
+                                  styles.radioOuter,
+                                  isSelected && styles.radioOuterActive,
+                                ]}
+                              >
+                                {isSelected && <View style={styles.radioInner} />}
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={[
+                                    styles.docSelectTitle,
+                                    isSelected && styles.docSelectTitleActive,
+                                  ]}
+                                >
+                                  {dt.title}
+                                </Text>
+                                {dt.description ? (
+                                  <Text style={styles.docSelectDesc} numberOfLines={2}>
+                                    {dt.description}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+                            <View style={styles.docSelectCardRight}>
+                              <Text
+                                style={[
+                                  styles.docSelectFee,
+                                  isSelected && styles.docSelectFeeActive,
+                                ]}
+                              >
+                                {dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)}
+                              </Text>
+                              <Text style={styles.docSelectTime}>
+                                {dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
-                  <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
-                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Clock size={12} color="#1d4ed8" />
-                    <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
-                      Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
-                    </Text>
+                ) : (
+                  /* Single Pre-Selected Document Card (When opened from Dashboard or Catalog) */
+                  <View style={styles.selectedDocCard}>
+                    <View style={styles.selectedDocHeader}>
+                      <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
+                      <Text style={styles.selectedDocFee}>
+                        {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
+                      </Text>
+                    </View>
+                    <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
+                    <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Clock size={12} color="#1d4ed8" />
+                      <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
+                        Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
 
                 {/* Purpose of Request - Manual Text Input Field */}
                 <View style={{ marginTop: 14 }}>
@@ -1539,5 +1615,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  docSelectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  docSelectCardActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  docSelectCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterActive: {
+    borderColor: '#2563eb',
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#2563eb',
+  },
+  docSelectTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  docSelectTitleActive: {
+    color: '#1d4ed8',
+  },
+  docSelectDesc: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  docSelectCardRight: {
+    alignItems: 'flex-end',
+    minWidth: 65,
+  },
+  docSelectFee: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  docSelectFeeActive: {
+    color: '#15803d',
+  },
+  docSelectTime: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2,
   },
 });
