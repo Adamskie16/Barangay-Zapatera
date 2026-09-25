@@ -7,6 +7,7 @@ import { Calendar, Plus, MapPin, Users, Edit2, Trash2, CheckCircle, Upload, Imag
 import { formatDate, sanitizeInput } from '../../core/security';
 import { supabase, isSupabaseConfigured } from "../../core/supabase";
 import { StorageService } from '../../core/storage';
+import ActionModal from '../../components/ActionModal';
 
 export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, currentUser, isDarkMode }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -14,6 +15,21 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
   const [selectedDate, setSelectedDate] = useState(null);
   const [displayEvents, setDisplayEvents] = useState(events);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Reusable ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Security Verification Modal State (Save/Create/Edit)
   const [isSaveSecurityModalOpen, setIsSaveSecurityModalOpen] = useState(false);
@@ -256,15 +272,30 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
       }
       await fetchSupabaseEvents();
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       setIsSaveSecurityModalOpen(false);
       setIsModalOpen(false);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: editingEvent ? 'Event Updated Successfully' : 'Event Published Successfully',
+        message: `The event announcement "${pendingEventPayload.title}" has been saved to the calendar.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+
       setPendingEventPayload(null);
       setSavePasswordInput('');
     } catch (err) {
       console.error("Error submitting event:", err);
-      setSaveAuthError("An error occurred while publishing the event.");
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Save Failed',
+        message: 'Something went wrong while publishing the event. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsSaving(false);
       setIsProcessing(false);
@@ -292,13 +323,28 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
       }
       await fetchSupabaseEvents();
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       setIsDeleteModalOpen(false);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Event Removed',
+        message: 'The event announcement has been deleted from the calendar.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+
       setDeletingEventId(null);
     } catch (err) {
       console.error("Error deleting event:", err);
-      setDeleteAuthError("Failed to delete event announcement.");
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Delete Failed',
+        message: 'Failed to delete event announcement. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsDeleting(false);
       setIsProcessing(false);
@@ -749,6 +795,21 @@ export default function EventsView({ events = [], onSaveEvent, onDeleteEvent, cu
           </div>
         </form>
       </Modal>
+
+      {/* Accessible Reusable Action Feedback Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }
