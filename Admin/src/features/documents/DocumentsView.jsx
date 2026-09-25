@@ -20,11 +20,27 @@ import {
 import { formatCurrency, sanitizeInput } from '../../core/security';
 import { StorageService } from '../../core/storage';
 import DocumentManagement from './DocumentManagement';
+import ActionModal from '../../components/ActionModal';
 
 export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode, config = {} }) {
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'info'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
+
+  // Reusable ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Security Verification Modal State (Save/Create/Edit)
   const [isSaveSecurityModalOpen, setIsSaveSecurityModalOpen] = useState(false);
@@ -165,15 +181,30 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         await onSaveDocType(pendingDocPayload);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       setIsSaveSecurityModalOpen(false);
       setIsModalOpen(false);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Document Service Saved',
+        message: `The document service "${pendingDocPayload.title}" has been saved successfully.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+
       setPendingDocPayload(null);
       setSavePasswordInput('');
     } catch (err) {
       console.error('Error saving document type:', err);
-      setSaveAuthError('An error occurred while saving.');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Save Failed',
+        message: 'Something went wrong while saving the document service. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsSaving(false);
       setIsProcessing(false);
@@ -199,12 +230,28 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       if (onDeleteDocType) {
         await onDeleteDocType(deletingDoc.id || deletingDoc.code);
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
       setIsDeleteModalOpen(false);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Document Service Removed',
+        message: `The document type "${deletingDoc.title}" has been removed from official services.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+
       setDeletingDoc(null);
     } catch (err) {
       console.error('Error deleting document type:', err);
-      setDeleteAuthError('Failed to remove document type.');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Delete Failed',
+        message: 'Failed to remove document service. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsDeleting(false);
       setIsProcessing(false);
@@ -645,6 +692,21 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           </Modal>
         </>
       )}
+
+      {/* Accessible Reusable Action Feedback Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }

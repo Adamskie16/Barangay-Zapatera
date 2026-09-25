@@ -27,6 +27,7 @@ import {
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import { StorageService } from '../../core/storage';
+import ActionModal from '../../components/ActionModal';
 
 const CATEGORIES = [
   'All',
@@ -44,6 +45,21 @@ export default function NewsView({ currentUser }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [filterEmergencyOnly, setFilterEmergencyOnly] = useState(false);
+
+  // Reusable Feedback ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Modals
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -160,25 +176,68 @@ export default function NewsView({ currentUser }) {
       const saved = await StorageService.saveNews(payload, currentUser);
       setIsFormModalOpen(false);
       await loadNews();
-      showToast(editingItem ? 'News bulletin updated successfully!' : 'New article published to Resident Portal!');
+      
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: editingItem ? 'Announcement Updated' : 'Announcement Published',
+        message: editingItem
+          ? 'Your announcement has been updated successfully.'
+          : 'Your announcement has been published to the resident portal.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } catch (err) {
       setFormError('Failed to save news bulletin. Please try again.');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Publish Failed',
+        message: 'Something went wrong while publishing the announcement. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await StorageService.deleteNews(deletingId);
-      setIsDeleteModalOpen(false);
-      setDeletingId(null);
-      await loadNews();
-      showToast('Article deleted successfully.');
-    } catch (err) {
-      showToast('Error deleting article.');
-    }
+  const handlePromptDeleteNews = (item) => {
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Delete Announcement?',
+      message: `Are you sure you want to delete "${item.title}"? This action cannot be undone.`,
+      confirmText: 'Delete Announcement',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await StorageService.deleteNews(item.id);
+          await loadNews();
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Announcement Deleted',
+            message: 'The announcement has been removed from the portal.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        } catch (err) {
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Delete Failed',
+            message: 'Unable to delete the announcement. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   };
 
   const handleTogglePublish = async (item) => {
@@ -494,11 +553,9 @@ export default function NewsView({ currentUser }) {
                     </button>
 
                     <button
-                      onClick={() => {
-                        setDeletingId(item.id);
-                        setIsDeleteModalOpen(true);
-                      }}
+                      onClick={() => handlePromptDeleteNews(item)}
                       title="Delete bulletin"
+                      aria-label={`Delete bulletin ${item.title}`}
                       className="p-1.5 text-rose-800 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -787,6 +844,21 @@ export default function NewsView({ currentUser }) {
           </div>
         </Modal>
       )}
+
+      {/* Accessible Reusable Action Feedback Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }

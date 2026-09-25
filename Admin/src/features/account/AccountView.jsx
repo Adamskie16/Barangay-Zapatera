@@ -24,11 +24,27 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
 import { uploadAdminAvatar } from '../../core/storageService';
+import ActionModal from '../../components/ActionModal';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // ActionModal Feedback State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Profile Form State (Including Account Role)
   const [profile, setProfile] = useState({
@@ -240,10 +256,24 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       setProfile(updatedPayload);
 
       if (onUserUpdated) onUserUpdated(updatedUser);
-      showNotification('Profile updated successfully!');
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Profile Updated Successfully',
+        message: 'Your profile information has been saved.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } catch (err) {
       console.error('Error updating profile:', err);
-      showNotification('Failed to update profile. Please try again.', 'error');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update profile. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setSaving(false);
     }
@@ -329,10 +359,26 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
       setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordSuccess('Account security credentials updated successfully!');
-      showNotification('Password updated successfully!');
+      
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Password Updated Successfully',
+        message: 'Your account security password has been changed.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } catch (err) {
       console.error('Password change error:', err);
       setPasswordError('Failed to update account security password.');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Password Update Failed',
+        message: 'Something went wrong while updating your password. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setUpdatingPassword(false);
     }
@@ -485,9 +531,23 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
                   if (result.success && result.url) {
                     setProfile((prev) => ({ ...prev, avatar_url: result.url }));
-                    setSuccessMessage('Profile photo uploaded. Click "Save Profile Changes" to save.');
+                    setActionModal({
+                      isOpen: true,
+                      type: 'success',
+                      title: 'Profile Photo Uploaded',
+                      message: 'Your photo has been uploaded. Click "Save Profile Changes" to persist your updates.',
+                      buttonText: 'OK',
+                      onClose: () => setActionModal({ isOpen: false }),
+                    });
                   } else {
-                    setErrorMessage(result.error || 'Avatar upload failed.');
+                    setActionModal({
+                      isOpen: true,
+                      type: 'error',
+                      title: 'Upload Failed',
+                      message: 'Unable to upload photo. Please check the image file and try again.',
+                      buttonText: 'Close',
+                      onClose: () => setActionModal({ isOpen: false }),
+                    });
                   }
                   setUploadingAvatar(false);
                 }}
@@ -890,6 +950,21 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           </div>
         </div>
       )}
+
+      {/* Accessible Reusable Feedback ActionModal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }

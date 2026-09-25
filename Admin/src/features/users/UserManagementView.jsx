@@ -25,12 +25,28 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { unlockUserAccount, lockUserAccount, formatDate } from '../../core/security';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton } from '../../components/SkeletonLoader';
+import ActionModal from '../../components/ActionModal';
 
 export default function UserManagementView({ currentUser }) {
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'locked'
   const [search, setSearch] = useState('');
+
+  // Reusable Feedback / Confirmation ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
 
   // Credentials Detail Modal State
   const [viewingUser, setViewingUser] = useState(null);
@@ -189,11 +205,30 @@ export default function UserManagementView({ currentUser }) {
       }
 
       await fetchUsers();
+      setIsSecurityModalOpen(false);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: actionType === 'unlock' ? 'Account Unlocked Successfully' : 'Account Locked Successfully',
+        message: actionType === 'unlock'
+          ? `Access has been restored for ${targetUser.full_name || targetUser.email}.`
+          : `Account access has been locked for ${targetUser.full_name || targetUser.email}.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } catch (err) {
       console.warn('Security action error:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Action Failed',
+        message: 'Something went wrong while updating the account status. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsProcessing(false);
-      setIsSecurityModalOpen(false);
       setTargetUser(null);
       setAdminPassword('');
     }
@@ -576,6 +611,21 @@ export default function UserManagementView({ currentUser }) {
           </div>
         </Modal>
       )}
+
+      {/* Accessible Reusable Action Feedback Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }
