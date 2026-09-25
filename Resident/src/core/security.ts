@@ -145,17 +145,7 @@ export const checkRateLimit = async (identifier: string, maxAttempts: number = 5
  */
 export const isAccountLocked = async (email: string): Promise<boolean> => {
   const cleanEmail = String(email).toLowerCase().trim();
-
-  let localLocked = false;
-  if (typeof localStorage !== 'undefined') {
-    if (localStorage.getItem(`zapatera_locked_${cleanEmail}`) === 'true') {
-      localLocked = true;
-    }
-    const localAttempts = parseInt(localStorage.getItem(`zapatera_failed_${cleanEmail}`) || '0', 10);
-    if (localAttempts >= 3) {
-      localLocked = true;
-    }
-  }
+  if (!cleanEmail) return false;
 
   try {
     if (isSupabaseConfigured()) {
@@ -166,11 +156,11 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
         .maybeSingle();
 
       if (profile) {
-        const isDbLocked = profile.is_locked === true || (profile.failed_attempts || 0) >= 3 || profile.is_active === false;
+        const isDbLocked = profile.is_locked === true || (Number(profile.failed_attempts) || 0) >= 3;
         if (isDbLocked) {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, profile.failed_attempts || 3)));
+            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, Number(profile.failed_attempts) || 3)));
           }
           return true;
         } else {
@@ -183,6 +173,17 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
       }
     }
   } catch (err) {}
+
+  let localLocked = false;
+  if (typeof localStorage !== 'undefined') {
+    if (localStorage.getItem(`zapatera_locked_${cleanEmail}`) === 'true') {
+      localLocked = true;
+    }
+    const localAttempts = parseInt(localStorage.getItem(`zapatera_failed_${cleanEmail}`) || '0', 10);
+    if (localAttempts >= 3) {
+      localLocked = true;
+    }
+  }
 
   return localLocked;
 };
