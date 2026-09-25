@@ -339,12 +339,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setLoading(true);
 
     try {
+      let isPasswordValid = false;
+      let profileData: any = null;
+
       if (isSupabaseConfigured()) {
-        const { data: profileData } = await supabase
+        const { data: pData } = await supabase
           .from('profiles')
           .select('*')
           .eq('email', cleanEmail)
           .maybeSingle();
+
+        profileData = pData;
 
         if (profileData && profileData.is_locked) {
           setIsLocked(true);
@@ -358,83 +363,36 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           password: loginPassword,
         });
 
-        if (authErr) {
-          const isEmailNotConfirmed = authErr.message?.toLowerCase().includes('email not confirmed');
+        if (!authErr && authData?.user) {
+          isPasswordValid = true;
+        } else if (authErr) {
+          const errMsg = (authErr.message || '').toLowerCase();
+          const isEmailNotConfirmed = errMsg.includes('email not confirmed') || errMsg.includes('confirm') || (authErr as any)?.code === 'email_not_confirmed';
           if (isEmailNotConfirmed) {
             setShowResendConfirmation(true);
-            setErrorMessage('Email Verification Pending: Please verify your Gmail address by clicking the link sent to your inbox.');
+            setErrorMessage('Email Verification Pending: Your account has been registered, but your Gmail has not been confirmed yet. Please check your Gmail and click the confirmation link before logging in.');
             setLoading(false);
             return;
           }
 
-          const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
-          if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
-            setIsLocked(true);
-            setErrorMessage('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
-          } else {
-            setErrorMessage(`Invalid email or password. Attempt ${failedInfo.attempts} of 3. (${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
+          // Check if password matches stored profile or local db
+          if (profileData && profileData.password === loginPassword) {
+            isPasswordValid = true;
           }
-          setLoading(false);
-          return;
         }
-
-        await resetFailedAttempts(cleanEmail);
-
-        const currentProfile = profileData || {
-          id: authData.user.id,
-          email: cleanEmail,
-          full_name: authData.user.user_metadata?.full_name || 'Barangay Zapatera Resident',
-          role: 'resident',
-        };
-
-        const residentUser: ResidentUser = {
-          id: currentProfile.id || authData.user.id,
-          email: cleanEmail,
-          full_name: currentProfile.full_name || 'Resident',
-          first_name: currentProfile.first_name || '',
-          last_name: currentProfile.last_name || '',
-          middle_initial: currentProfile.middle_initial || '',
-          birth_date: currentProfile.birth_date || '',
-          civil_status: currentProfile.civil_status || 'Single',
-          role: 'resident',
-          sitio: currentProfile.sitio || SAMPLE_SITIOS[0],
-          phone: currentProfile.phone || '',
-          voter_status: currentProfile.voter_status || 'Registered Voter',
-          is_active: true,
-          is_locked: false,
-          failed_attempts: 0,
-        };
-
-        // Dispatch 2FA OTP
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedOtp(otpCode);
-        setPendingUser(residentUser);
-
-        try {
-          await supabase.auth.signInWithOtp({
-            email: cleanEmail,
-            options: { shouldCreateUser: false },
-          });
-        } catch {
-          // Fallback
-        }
-
-        setLoading(false);
-        setAuthStep('otp');
-        setInfoBanner(`Two-Factor Authentication: A 6-digit security OTP was sent to ${cleanEmail}.`);
-        return;
       }
-    } catch {
-      // Local fallback
-    }
 
-    // Local Fallback Check
-    try {
+      // Check local database fallback
       const storedDb = await MobileStorage.getItem('zapatera_residents_db');
       const residents: ResidentUser[] = storedDb ? JSON.parse(storedDb) : [];
       const resident = residents.find((r) => r.email.toLowerCase() === cleanEmail);
 
-      if (!resident || resident.password !== loginPassword) {
+      if (!isPasswordValid && resident && resident.password === loginPassword) {
+        isPasswordValid = true;
+      }
+
+      // If credentials do not match anywhere -> record failed attempt
+      if (!isPasswordValid) {
         const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
         if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
           setIsLocked(true);
@@ -446,13 +404,53 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         return;
       }
 
+      // Valid Password -> Reset failed attempts and dispatch 2FA OTP
       await resetFailedAttempts(cleanEmail);
+
+      const currentProfile = profileData || resident || {
+        id: `res-${Date.now()}`,
+        email: cleanEmail,
+        full_name: 'Barangay Zapatera Resident',
+        role: 'resident',
+      };
+
+      const residentUser: ResidentUser = {
+        id: currentProfile.id || `res-${Date.now()}`,
+        email: cleanEmail,
+        full_name: currentProfile.full_name || 'Resident',
+        first_name: currentProfile.first_name || '',
+        last_name: currentProfile.last_name || '',
+        middle_initial: currentProfile.middle_initial || '',
+        birth_date: currentProfile.birth_date || '',
+        civil_status: currentProfile.civil_status || 'Single',
+        role: 'resident',
+        sitio: currentProfile.sitio || SAMPLE_SITIOS[0],
+        phone: currentProfile.phone || '',
+        voter_status: currentProfile.voter_status || 'Registered Voter',
+        is_active: true,
+        is_locked: false,
+        failed_attempts: 0,
+      };
+
+      // Dispatch 2FA OTP Code
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(otpCode);
-      setPendingUser(resident);
+      setPendingUser(residentUser);
+
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.auth.signInWithOtp({
+            email: cleanEmail,
+            options: { shouldCreateUser: false },
+          });
+        } catch {
+          // Fallback to generated code
+        }
+      }
+
       setLoading(false);
       setAuthStep('otp');
-      setInfoBanner(`A 6-digit authentication code has been sent to ${cleanEmail}.`);
+      setInfoBanner(`Two-Factor Authentication: A 6-digit security OTP was sent to ${cleanEmail}. Please check your Gmail inbox.`);
     } catch {
       setLoading(false);
       setErrorMessage('Login failed. Please check your internet connection and try again.');
