@@ -26,6 +26,7 @@ export interface ResidentUser {
   role: UserRole;
   phone?: string;
   address?: string;
+  avatar_url?: string;
   id_type?: string;
   id_number?: string;
   is_active?: boolean;

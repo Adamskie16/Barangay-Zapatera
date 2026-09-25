@@ -9,6 +9,8 @@ import {
   ScrollView,
   Modal,
   Switch,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import {
   User,
@@ -31,8 +33,10 @@ import {
   ChevronRight,
   AlertCircle,
   ExternalLink,
+  Camera,
 } from 'lucide-react';
 import { ResidentUser, BarangayConfig } from '../../types';
+import { uploadUserAvatar } from '../../core/storageService';
 
 interface ProfileViewProps {
   currentUser: ResidentUser;
@@ -118,15 +122,75 @@ export default function ProfileView({
     }, 1500);
   };
 
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+
+  const handleUploadAvatar = () => {
+    if (typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      setUploadingAvatar(true);
+      setAvatarError('');
+      try {
+        const result = await uploadUserAvatar(currentUser.id || 'resident', file, file.name);
+        if (result.success && result.fileUrl) {
+          onUpdateProfile({ avatar_url: result.fileUrl });
+        } else {
+          setAvatarError(result.error || 'Failed to upload photo.');
+        }
+      } catch (err: any) {
+        setAvatarError(err?.message || 'Upload error');
+      } finally {
+        setUploadingAvatar(false);
+      }
+    };
+    input.click();
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
       {/* Profile Header Card */}
       <View style={styles.profileHeaderCard}>
-        <View style={styles.avatarLarge}>
-          <Text style={styles.avatarLargeText}>
-            {currentUser.full_name?.charAt(0) || 'R'}
-          </Text>
+        <View style={{ position: 'relative', alignSelf: 'center' }}>
+          <View style={styles.avatarLarge}>
+            {currentUser.avatar_url ? (
+              <Image source={{ uri: currentUser.avatar_url }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+            ) : (
+              <Text style={styles.avatarLargeText}>
+                {currentUser.full_name?.charAt(0) || 'R'}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              backgroundColor: '#1d4ed8',
+              padding: 6,
+              borderRadius: 20,
+              borderWidth: 2,
+              borderColor: '#ffffff',
+            }}
+            onPress={handleUploadAvatar}
+            disabled={uploadingAvatar}
+            title="Upload Profile Picture"
+          >
+            {uploadingAvatar ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Camera size={14} color="#ffffff" />
+            )}
+          </TouchableOpacity>
         </View>
+
+        {avatarError ? (
+          <Text style={{ color: '#ef4444', fontSize: 11, textAlign: 'center', marginTop: 4 }}>{avatarError}</Text>
+        ) : null}
 
         <Text style={styles.profileName}>{currentUser.full_name}</Text>
         <Text style={styles.profileEmail}>{currentUser.email}</Text>
