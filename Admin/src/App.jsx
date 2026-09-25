@@ -150,6 +150,7 @@ export default function App() {
               docTypes={docTypes}
               config={config}
               onProcessRequest={handleUpdateRequestStatus}
+              onDeleteRequest={handleDeleteRequest}
               currentUser={currentUser}
             />
           )}

@@ -212,12 +212,34 @@ export default function RequestTrackingModal({
               </View>
             )}
 
+            {/* UNDER REVIEW ACTIVE CARD */}
+            {isUnderReview && !isRejected && (
+              <View style={[styles.readyPassCard, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+                <View style={styles.readyPassHeader}>
+                  <Clock size={20} color="#1d4ed8" />
+                  <Text style={[styles.readyPassTitle, { color: '#1e40af' }]}>APPLICATION UNDER REVIEW</Text>
+                </View>
+                <Text style={[styles.readyPassDoc, { color: '#1e3a8a' }]}>{request.document_title}</Text>
+                <View style={[styles.claimNoticeBox, { backgroundColor: '#dbeafe', borderColor: '#93c5fd' }]}>
+                  <Info size={16} color="#1d4ed8" />
+                  <Text style={[styles.claimNoticeText, { color: '#1e40af' }]}>
+                    Your request is currently under review by the Barangay staff. Requirements and residency are being validated.
+                  </Text>
+                </View>
+                {request.updated_at && (
+                  <Text style={{ fontSize: 11, color: '#3b82f6', fontWeight: '600', marginTop: 4 }}>
+                    Processing started: {new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                )}
+              </View>
+            )}
+
             {/* READY FOR PICKUP PASS CARD (NO QR CODE) */}
             {isReady && (
               <View style={styles.readyPassCard}>
                 <View style={styles.readyPassHeader}>
                   <ShieldCheck size={20} color="#15803d" />
-                  <Text style={styles.readyPassTitle}>OFFICIAL CLAIMING PASS</Text>
+                  <Text style={styles.readyPassTitle}>OFFICIAL CLAIMING PASS — READY FOR PICK UP</Text>
                 </View>
                 <Text style={styles.readyPassDoc}>{request.document_title}</Text>
 
@@ -243,7 +265,7 @@ export default function RequestTrackingModal({
                 <View style={styles.claimNoticeBox}>
                   <Info size={16} color="#15803d" />
                   <Text style={styles.claimNoticeText}>
-                    Present Tracking No. <Text style={{ fontWeight: '800', fontFamily: 'monospace' }}>{request.tracking_number}</Text> and your valid ID at the Barangay Hall Express Counter to claim your document.
+                    Your document is ready for pick up. Please visit the Barangay office to claim your document. Present Tracking No. <Text style={{ fontWeight: '800', fontFamily: 'monospace' }}>{request.tracking_number}</Text> and your valid ID.
                   </Text>
                 </View>
 
@@ -309,81 +331,112 @@ export default function RequestTrackingModal({
               })}
             </View>
 
-            {/* RESIDENT DATA & APPLICATION SUMMARY */}
-            <Text style={[styles.timelineHeading, { marginTop: 18 }]}>Resident Information & Application Details</Text>
+            {/* 1. RESIDENT INFORMATION SECTION */}
+            <Text style={[styles.timelineHeading, { marginTop: 18 }]}>Resident Information</Text>
             <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Applicant Name:</Text>
-                <Text style={styles.summaryVal}>{request.resident_name || 'Resident Applicant'}</Text>
+                <Text style={styles.summaryLabel}>Full Name:</Text>
+                <Text style={[styles.summaryVal, { fontWeight: '700', color: '#0f172a' }]}>
+                  {request.resident_name || 'Resident Applicant'}
+                </Text>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Registered Address:</Text>
-                <Text style={styles.summaryVal}>{request.resident_address || 'Barangay Zapatera, Cebu City'}</Text>
+                <Text style={styles.summaryLabel}>Email:</Text>
+                <Text style={styles.summaryVal}>{request.resident_email || 'N/A'}</Text>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Years in Barangay:</Text>
-                <Text style={[styles.summaryVal, { fontWeight: '700', color: '#1e293b' }]}>
+                <Text style={styles.summaryLabel}>Contact Number:</Text>
+                <Text style={styles.summaryVal}>{request.resident_phone || '09123456789'}</Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Address:</Text>
+                <Text style={styles.summaryVal}>{request.resident_address || 'Barangay Zapatera'}</Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Sitio:</Text>
+                <Text style={styles.summaryVal}>
+                  {request.sitio || (request.resident_address?.toLowerCase().includes('sitio') ? request.resident_address : 'Barangay Zapatera')}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Years in the Barangay:</Text>
+                <Text style={[styles.summaryVal, { fontWeight: '700', color: '#1d4ed8' }]}>
                   {request.years_in_barangay
                     ? (String(request.years_in_barangay).toLowerCase().includes('year') ? String(request.years_in_barangay) : `${request.years_in_barangay} years`)
                     : '5 years'}
                 </Text>
               </View>
+            </View>
 
-              {request.resident_birth_date ? (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Date of Birth:</Text>
-                  <Text style={styles.summaryVal}>{request.resident_birth_date}</Text>
-                </View>
-              ) : null}
-
+            {/* 2. REQUEST INFORMATION SECTION */}
+            <Text style={[styles.timelineHeading, { marginTop: 16 }]}>Request Information</Text>
+            <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Contact Number:</Text>
-                <Text style={styles.summaryVal}>{request.resident_phone || '0917-000-0000'}</Text>
+                <Text style={styles.summaryLabel}>Request ID / Tracking:</Text>
+                <Text style={[styles.summaryVal, { fontFamily: 'monospace', fontWeight: '700' }]}>
+                  {request.tracking_number}
+                </Text>
               </View>
 
-              {request.resident_email ? (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Email Address:</Text>
-                  <Text style={styles.summaryVal}>{request.resident_email}</Text>
-                </View>
-              ) : null}
-
-              {request.civil_status ? (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Civil Status:</Text>
-                  <Text style={styles.summaryVal}>{request.civil_status}</Text>
-                </View>
-              ) : null}
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Document Requested:</Text>
+                <Text style={[styles.summaryVal, { fontWeight: '700', color: '#1e3a8a' }]}>
+                  {request.document_title}
+                </Text>
+              </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Purpose of Request:</Text>
-                <Text style={[styles.summaryVal, { color: '#0f172a', fontWeight: '600' }]}>
+                <Text style={styles.summaryLabel}>Purpose:</Text>
+                <Text style={[styles.summaryVal, { color: '#334155', fontWeight: '500' }]}>
                   {request.purpose || 'Local Employment Application'}
                 </Text>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Document Fee:</Text>
-                <Text style={[styles.summaryVal, { color: '#15803d', fontWeight: '800' }]}>
-                  {request.fee === 0 ? 'FREE (₱0.00)' : formatCurrency(request.fee)}
+                <Text style={styles.summaryLabel}>Date Requested:</Text>
+                <Text style={styles.summaryVal}>
+                  {request.created_at ? new Date(request.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'September 25, 2026'}
                 </Text>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Pick-up Schedule:</Text>
-                <Text style={styles.summaryVal}>
-                  {request.pickup_date || 'Scheduled Date'} ({request.pickup_time_slot || 'Regular Hours'})
+                <Text style={styles.summaryLabel}>Current Status:</Text>
+                <Text style={[styles.summaryVal, { fontWeight: '700', color: normStatus === 'approved' ? '#15803d' : normStatus === 'completed' ? '#7e22ce' : normStatus === 'under_review' ? '#1d4ed8' : '#64748b' }]}>
+                  {normStatus === 'approved' ? 'Ready for Pick Up' : normStatus === 'under_review' ? 'Under Review' : normStatus === 'completed' ? 'Completed' : normStatus === 'declined' ? 'Declined' : 'Request Submitted'}
                 </Text>
               </View>
 
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Attached Documents:</Text>
-                <Text style={styles.summaryVal}>
-                  {request.uploaded_files?.length || request.requirements_attached?.length || 0} file(s) attached
-                </Text>
-              </View>
+              {request.approved_at ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Approved Date:</Text>
+                  <Text style={styles.summaryVal}>
+                    {new Date(request.approved_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+              ) : null}
+
+              {request.claimed_at || request.issued_at ? (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Claimed Date:</Text>
+                  <Text style={styles.summaryVal}>
+                    {new Date(request.claimed_at || request.issued_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </View>
+              ) : null}
+
+              {isRejected && (request.declined_reason || request.rejection_reason) ? (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: '#b91c1c' }]}>Decline Reason:</Text>
+                  <Text style={[styles.summaryVal, { color: '#b91c1c', fontWeight: '700' }]}>
+                    {request.declined_reason || request.rejection_reason}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </ScrollView>
 

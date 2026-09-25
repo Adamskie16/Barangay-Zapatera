@@ -265,30 +265,61 @@ export const StorageService = {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id);
         const adminId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
 
+        let dbStatus = req.status || 'pending';
+        if (dbStatus === 'processing') dbStatus = 'under_review';
+        if (dbStatus === 'ready_for_pickup') dbStatus = 'approved';
+        if (dbStatus === 'rejected') dbStatus = 'declined';
+
         const payload = {
-          status: req.status,
+          status: dbStatus,
           notes: req.notes || '',
-          rejection_reason: req.rejection_reason || '',
+          rejection_reason: req.rejection_reason || req.declined_reason || '',
           pickup_date: req.pickup_date || null,
           pickup_time_slot: req.pickup_time_slot || null,
-          processed_by: adminId,
           updated_at: new Date().toISOString(),
         };
 
-        if (req.status === 'approved' || req.status === 'ready_for_pickup') {
-          payload.approved_at = req.approved_at || new Date().toISOString();
-          if (req.is_claimed === false) {
-            payload.issued_at = null;
-          }
-        }
-        if (req.status === 'completed' || req.status === 'issued') {
-          payload.issued_at = req.issued_at || req.claimed_at || new Date().toISOString();
+        if (adminId) {
+          payload.processed_by = adminId;
         }
 
+        if (dbStatus === 'under_review') {
+          payload.processed_at = req.processed_at || new Date().toISOString();
+        }
+        if (dbStatus === 'approved') {
+          payload.approved_at = req.approved_at || new Date().toISOString();
+          payload.is_claimed = false;
+        }
+        if (dbStatus === 'completed' || dbStatus === 'issued') {
+          payload.issued_at = req.issued_at || req.claimed_at || new Date().toISOString();
+          payload.claimed_at = req.claimed_at || req.issued_at || new Date().toISOString();
+          payload.is_claimed = true;
+        }
+        if (dbStatus === 'declined') {
+          payload.decline_reason = req.decline_reason || req.declined_reason || req.rejection_reason || 'Incomplete requirements';
+        }
+
+        let updateRes;
         if (isUuid) {
-          await supabase.from('document_requests').update(payload).eq('id', req.id);
+          updateRes = await supabase.from('document_requests').update(payload).eq('id', req.id);
         } else if (req.tracking_number) {
-          await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+          updateRes = await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+        }
+
+        if (updateRes?.error) {
+          console.warn('Supabase document_requests update error (will retry with minimal payload):', updateRes.error);
+          // Retry with core columns in case processed_at or decline_reason columns are still migrating
+          const minimalPayload = {
+            status: dbStatus,
+            notes: req.notes || '',
+            rejection_reason: req.rejection_reason || req.declined_reason || '',
+            updated_at: new Date().toISOString(),
+          };
+          if (isUuid) {
+            await supabase.from('document_requests').update(minimalPayload).eq('id', req.id);
+          } else if (req.tracking_number) {
+            await supabase.from('document_requests').update(minimalPayload).eq('tracking_number', req.tracking_number);
+          }
         }
 
         // Automatic user-specific Notification creation in public.notifications

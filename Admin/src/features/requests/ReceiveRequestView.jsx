@@ -34,7 +34,8 @@ import {
   RefreshCw,
   Info,
   Layers,
-  FileCheck
+  FileCheck,
+  Trash2
 } from 'lucide-react';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
@@ -57,6 +58,7 @@ export default function ReceiveRequestView({
   docTypes = [],
   config = {},
   onProcessRequest,
+  onDeleteRequest,
   currentUser,
   loading = false,
 }) {
@@ -74,6 +76,10 @@ export default function ReceiveRequestView({
   const [declineReason, setDeclineReason] = useState('Missing required document');
   const [declineDetails, setDeclineDetails] = useState('');
   const [declineError, setDeclineError] = useState('');
+
+  // Delete Request Confirmation Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [reqToDelete, setReqToDelete] = useState(null);
 
   // File Preview Modal
   const [previewFile, setPreviewFile] = useState(null);
@@ -284,12 +290,13 @@ export default function ReceiveRequestView({
   };
 
   // When admin clicks Process:
-  // Immediately change request status from Pending -> Processing and populate all resident details into generator
+  // Immediately change request status from Pending -> Under Review and populate all resident details into generator
   const handleStartProcess = (req) => {
     let updatedReq = { ...req };
 
     if (req.status === 'pending') {
-      updatedReq.status = 'processing';
+      updatedReq.status = 'under_review';
+      updatedReq.processed_at = new Date().toISOString();
       updatedReq.updated_at = new Date().toISOString();
       if (onProcessRequest) {
         onProcessRequest(updatedReq);
@@ -559,16 +566,28 @@ export default function ReceiveRequestView({
                         {req.created_at ? formatDate(req.created_at) : formatDate(new Date())}
                       </td>
 
-                      {/* Actions: Blue Process Button */}
+                      {/* Actions: Process and Delete Buttons */}
                       <td className="p-4 text-right">
-                        <button
-                          onClick={() => handleStartProcess(req)}
-                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold inline-flex items-center space-x-1.5 transition-colors shadow-xs cursor-pointer active:scale-95"
-                          title="Process Document Request"
-                        >
-                          <SlidersHorizontal className="w-3.5 h-3.5" />
-                          <span>Process</span>
-                        </button>
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            onClick={() => handleStartProcess(req)}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold inline-flex items-center space-x-1.5 transition-colors shadow-xs cursor-pointer active:scale-95"
+                            title="Process Document Request"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Process</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setReqToDelete(req);
+                              setShowDeleteModal(true);
+                            }}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                            title="Delete Request"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1322,6 +1341,56 @@ export default function ReceiveRequestView({
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Request Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setReqToDelete(null);
+        }}
+        title="Delete Request?"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-rose-900 text-sm">Delete Document Request?</h4>
+              <p className="text-rose-800 text-xs mt-1 leading-relaxed">
+                Are you sure you want to delete this document request{reqToDelete?.tracking_number ? ` (${reqToDelete.tracking_number})` : ''}? This action will permanently remove the record from Supabase.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeleteModal(false);
+                setReqToDelete(null);
+              }}
+              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (reqToDelete && onDeleteRequest) {
+                  await onDeleteRequest(reqToDelete.id, reqToDelete.tracking_number);
+                }
+                setShowDeleteModal(false);
+                setReqToDelete(null);
+              }}
+              className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5 cursor-pointer active:scale-95"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Requirement File Preview Modal with Supabase Storage Support */}

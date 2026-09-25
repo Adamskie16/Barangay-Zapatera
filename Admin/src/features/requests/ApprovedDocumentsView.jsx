@@ -50,7 +50,7 @@ export default function ApprovedDocumentsView({
   // Toggle Claimed / Unclaimed status
   const handleToggleClaimStatus = (req) => {
     const currentlyClaimed = isClaimed(req);
-    const newStatus = currentlyClaimed ? 'approved' : 'issued';
+    const newStatus = currentlyClaimed ? 'approved' : 'completed';
     const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
 
     const updated = {
