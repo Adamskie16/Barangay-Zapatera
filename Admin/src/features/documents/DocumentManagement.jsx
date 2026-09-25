@@ -196,10 +196,10 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             onClick={fetchResidentsFromSupabase}
             disabled={loadingResidents}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-            title="Reload Residents from Supabase"
+            title="Refresh Registered Residents"
           >
             <RefreshCw size={14} className={loadingResidents ? 'animate-spin text-blue-600' : ''} />
-            <span>{loadingResidents ? 'Syncing...' : 'Sync Residents'}</span>
+            <span>{loadingResidents ? 'Refreshing...' : 'Refresh Residents'}</span>
           </button>
 
           <button

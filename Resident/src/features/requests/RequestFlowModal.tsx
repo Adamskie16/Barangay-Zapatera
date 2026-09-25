@@ -1,5 +1,5 @@
 // Resident/src/features/requests/RequestFlowModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -42,6 +42,7 @@ import {
 import { formatCurrency, generateTrackingNumber } from '../../core/security';
 import { APPOINTMENT_TIME_SLOTS } from '../../core/portalData';
 import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/storageService';
+import ActionModal from '../../components/ActionModal';
 
 interface RequestFlowModalProps {
   visible: boolean;
@@ -49,6 +50,7 @@ interface RequestFlowModalProps {
   docTypes: DocumentType[];
   currentUser: ResidentUser;
   config: BarangayConfig;
+  showDocSelector?: boolean;
   onClose: () => void;
   onRequestSubmitted: (req: DocumentRequest) => void;
   onTrackSubmittedRequest: (req: DocumentRequest) => void;
@@ -71,6 +73,7 @@ export default function RequestFlowModal({
   docTypes,
   currentUser,
   config,
+  showDocSelector = false,
   onClose,
   onRequestSubmitted,
   onTrackSubmittedRequest,
@@ -80,6 +83,29 @@ export default function RequestFlowModal({
   const [selectedDocId, setSelectedDocId] = useState<string>(initialDoc?.id || docTypes[0]?.id || 'dt-001');
   const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
   const [customPurpose, setCustomPurpose] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    type?: 'success' | 'error' | 'confirmation' | 'info';
+    title: string;
+    message?: string;
+    confirmText?: string;
+    cancelText?: string;
+    buttonText?: string;
+    onConfirm?: () => void;
+    onClose?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+  });
+
+  useEffect(() => {
+    if (initialDoc?.id) {
+      setSelectedDocId(initialDoc.id);
+    } else if (docTypes.length > 0 && !selectedDocId) {
+      setSelectedDocId(docTypes[0].id);
+    }
+  }, [initialDoc, docTypes]);
 
   // Step 2 Resident Info State
   const [yearsInBarangay, setYearsInBarangay] = useState<string>(
@@ -247,72 +273,109 @@ export default function RequestFlowModal({
     }
   };
 
-  const handleFinalSubmit = () => {
-    const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
-    const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
+  const handleFinalSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
-    const newRequest: DocumentRequest = {
-      id: `req-${Date.now()}`,
-      tracking_number: trackingNo,
-      resident_id: currentUser.id || 'res-user',
-      resident_name: currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`,
-      resident_email: currentUser.email,
-      resident_phone: currentUser.phone || '0917-000-0000',
-      resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
-      resident_birth_date: currentUser.birth_date || currentUser.birthdate,
-      years_in_barangay: yearsInBarangay.trim(),
-      document_type_id: selectedDoc.id,
-      document_title: selectedDoc.title,
-      fee: selectedDoc.fee,
-      purpose: finalPurpose,
-      requirements_attached: Object.keys(uploadedFiles),
-      uploaded_files: Object.values(uploadedFiles),
-      pickup_date: selectedDate,
-      pickup_time_slot: selectedSlot,
-      status: 'pending',
-      pickup_location: 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
-      pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
-      timeline: [
-        {
-          status: 'pending',
-          label: 'Request Submitted',
-          description: 'Document request submitted online and registered into the records queue.',
-          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          is_completed: true,
-          is_current: true,
-        },
-        {
-          status: 'under_review',
-          label: 'Under Review',
-          description: 'Barangay administrative staff is reviewing details and verifying clearance.',
-          timestamp: 'Pending Staff Review',
-          is_completed: false,
-          is_current: false,
-        },
-        {
-          status: 'ready_for_pickup',
-          label: 'Ready for Pick up',
-          description: `Document printed, sealed, and approved for collection on ${selectedDate} at Express Window (${selectedSlot}).`,
-          timestamp: 'Scheduled for ' + selectedDate,
-          is_completed: false,
-          is_current: false,
-        },
-        {
-          status: 'completed',
-          label: 'Completed',
-          description: 'Official document claimed and successfully released to resident.',
-          timestamp: 'Pending Release',
-          is_completed: false,
-          is_current: false,
-        },
-      ],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
+      const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
 
-    onRequestSubmitted(newRequest);
-    setSubmittedReq(newRequest);
-    setCurrentStep(6);
+      const newRequest: DocumentRequest = {
+        id: `req-${Date.now()}`,
+        tracking_number: trackingNo,
+        resident_id: currentUser.id || 'res-user',
+        resident_name: currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`,
+        resident_email: currentUser.email,
+        resident_phone: currentUser.phone || '0917-000-0000',
+        resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+        resident_birth_date: currentUser.birth_date || currentUser.birthdate,
+        years_in_barangay: yearsInBarangay.trim(),
+        document_type_id: selectedDoc.id,
+        document_title: selectedDoc.title,
+        fee: selectedDoc.fee,
+        purpose: finalPurpose,
+        requirements_attached: Object.keys(uploadedFiles),
+        uploaded_files: Object.values(uploadedFiles),
+        pickup_date: selectedDate,
+        pickup_time_slot: selectedSlot,
+        status: 'pending',
+        pickup_location: 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
+        timeline: [
+          {
+            status: 'pending',
+            label: 'Request Submitted',
+            description: 'Document request submitted online and registered into the records queue.',
+            timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            is_completed: true,
+            is_current: true,
+          },
+          {
+            status: 'under_review',
+            label: 'Under Review',
+            description: 'Barangay administrative staff is reviewing details and verifying clearance.',
+            timestamp: 'Pending Staff Review',
+            is_completed: false,
+            is_current: false,
+          },
+          {
+            status: 'ready_for_pickup',
+            label: 'Ready for Pick up',
+            description: `Document printed, sealed, and approved for collection on ${selectedDate} at Express Window (${selectedSlot}).`,
+            timestamp: 'Scheduled for ' + selectedDate,
+            is_completed: false,
+            is_current: false,
+          },
+          {
+            status: 'completed',
+            label: 'Completed',
+            description: 'Official document claimed and successfully released to resident.',
+            timestamp: 'Pending Release',
+            is_completed: false,
+            is_current: false,
+          },
+        ],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (onRequestSubmitted) {
+        await onRequestSubmitted(newRequest);
+      }
+      setSubmittedReq(newRequest);
+
+      // Show Success Feedback Modal
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Request Submitted Successfully',
+        message: 'Your document request has been submitted and is now waiting for review.',
+        confirmText: 'View Request',
+        cancelText: 'Done',
+        onConfirm: () => {
+          setActionModal({ isOpen: false, title: '' });
+          onTrackSubmittedRequest(newRequest);
+          resetForm();
+        },
+        onClose: () => {
+          setActionModal({ isOpen: false, title: '' });
+          setCurrentStep(6);
+        },
+      });
+    } catch (err) {
+      console.error('Submission failed:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Request Submission Failed',
+        message: 'We could not submit your document request. Please check your information and try again.',
+        buttonText: 'Try Again',
+        onClose: () => setActionModal({ isOpen: false, title: '' }),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
@@ -320,6 +383,7 @@ export default function RequestFlowModal({
     setUploadedFiles({});
     setUploadError('');
     setSubmittedReq(null);
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -383,27 +447,93 @@ export default function RequestFlowModal({
             {/* STEP 1: SELECT DOCUMENT & PURPOSE */}
             {currentStep === 1 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Document & Request Purpose</Text>
+                <Text style={styles.stepTitle}>
+                  {showDocSelector ? 'Select Document & Purpose' : 'Document & Request Purpose'}
+                </Text>
                 <Text style={styles.stepSubtitle}>
-                  Please review your requested document and provide the official purpose of this application.
+                  {showDocSelector
+                    ? 'Select from available barangay clearance certificates and provide the official purpose of this application.'
+                    : 'Please review your requested document and provide the official purpose of this application.'}
                 </Text>
 
-                {/* Selected Document Card Preview */}
-                <View style={styles.selectedDocCard}>
-                  <View style={styles.selectedDocHeader}>
-                    <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
-                    <Text style={styles.selectedDocFee}>
-                      {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
-                    </Text>
+                {/* Available Document Selection (When opened from Requests Page) */}
+                {showDocSelector ? (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={styles.inputLabel}>Available Documents *</Text>
+                    <View style={{ gap: 8, marginTop: 6 }}>
+                      {docTypes.map((dt) => {
+                        const isSelected = selectedDoc.id === dt.id;
+                        return (
+                          <TouchableOpacity
+                            key={dt.id}
+                            style={[
+                              styles.docSelectCard,
+                              isSelected && styles.docSelectCardActive,
+                            ]}
+                            onPress={() => setSelectedDocId(dt.id)}
+                            activeOpacity={0.8}
+                          >
+                            <View style={styles.docSelectCardLeft}>
+                              <View
+                                style={[
+                                  styles.radioOuter,
+                                  isSelected && styles.radioOuterActive,
+                                ]}
+                              >
+                                {isSelected && <View style={styles.radioInner} />}
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={[
+                                    styles.docSelectTitle,
+                                    isSelected && styles.docSelectTitleActive,
+                                  ]}
+                                >
+                                  {dt.title}
+                                </Text>
+                                {dt.description ? (
+                                  <Text style={styles.docSelectDesc} numberOfLines={2}>
+                                    {dt.description}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+                            <View style={styles.docSelectCardRight}>
+                              <Text
+                                style={[
+                                  styles.docSelectFee,
+                                  isSelected && styles.docSelectFeeActive,
+                                ]}
+                              >
+                                {dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)}
+                              </Text>
+                              <Text style={styles.docSelectTime}>
+                                {dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
-                  <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
-                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Clock size={12} color="#1d4ed8" />
-                    <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
-                      Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
-                    </Text>
+                ) : (
+                  /* Single Pre-Selected Document Card (When opened from Dashboard or Catalog) */
+                  <View style={styles.selectedDocCard}>
+                    <View style={styles.selectedDocHeader}>
+                      <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
+                      <Text style={styles.selectedDocFee}>
+                        {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
+                      </Text>
+                    </View>
+                    <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
+                    <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Clock size={12} color="#1d4ed8" />
+                      <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
+                        Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
 
                 {/* Purpose of Request - Manual Text Input Field */}
                 <View style={{ marginTop: 14 }}>
@@ -845,18 +975,43 @@ export default function RequestFlowModal({
               )}
 
               <TouchableOpacity
-                style={styles.nextBtn}
+                style={[styles.nextBtn, isSubmitting && { opacity: 0.6 }]}
                 onPress={handleNextStep}
+                disabled={isSubmitting}
+                accessibilityRole="button"
+                accessibilityLabel={isSubmitting ? 'Submitting Request...' : (currentStep === 5 ? 'Submit Application' : 'Next Step')}
               >
-                <Text style={styles.nextBtnText}>
-                  {currentStep === 5 ? 'Submit Application' : 'Next Step'}
-                </Text>
-                <ArrowRight size={16} color="#ffffff" />
+                {isSubmitting ? (
+                  <>
+                    <ActivityIndicator size="small" color="#ffffff" />
+                    <Text style={styles.nextBtnText}>Submitting Request...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.nextBtnText}>
+                      {currentStep === 5 ? 'Submit Application' : 'Next Step'}
+                    </Text>
+                    <ArrowRight size={16} color="#ffffff" />
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
         </View>
       </View>
+
+      {/* Action Feedback & Confirmation Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false, title: '' }))}
+      />
     </Modal>
   );
 }
@@ -1539,5 +1694,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  docSelectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  docSelectCardActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  docSelectCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterActive: {
+    borderColor: '#2563eb',
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#2563eb',
+  },
+  docSelectTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  docSelectTitleActive: {
+    color: '#1d4ed8',
+  },
+  docSelectDesc: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  docSelectCardRight: {
+    alignItems: 'flex-end',
+    minWidth: 65,
+  },
+  docSelectFee: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  docSelectFeeActive: {
+    color: '#15803d',
+  },
+  docSelectTime: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2,
   },
 });

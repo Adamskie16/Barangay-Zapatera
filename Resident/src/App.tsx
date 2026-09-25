@@ -49,6 +49,7 @@ export default function App() {
   // Modals state
   const [isRequestFlowOpen, setIsRequestFlowOpen] = useState<boolean>(false);
   const [selectedDocForRequest, setSelectedDocForRequest] = useState<DocumentType | null>(null);
+  const [showDocSelectorInFlow, setShowDocSelectorInFlow] = useState<boolean>(false);
 
   const [isRequirementsModalOpen, setIsRequirementsModalOpen] = useState<boolean>(false);
   const [selectedDocForRequirements, setSelectedDocForRequirements] = useState<DocumentType | null>(null);
@@ -96,20 +97,33 @@ export default function App() {
           .order('title', { ascending: true });
 
         if (!error && data && data.length > 0) {
-          const formatted: DocumentType[] = data.map((d: any) => ({
-            id: d.id,
-            code: d.code,
-            title: d.title,
-            description: d.description,
-            fee: Number(d.fee) || 0,
-            processing_days: Number(d.processing_days) || 1,
-            requirements: Array.isArray(d.requirements)
-              ? d.requirements
-              : typeof d.requirements === 'string'
-              ? JSON.parse(d.requirements)
-              : [],
-            is_active: d.is_active !== false,
-          }));
+          const formatted: DocumentType[] = data.map((d: any) => {
+            const text = `${d.code || ''} ${d.title || ''} ${d.description || ''}`.toLowerCase();
+            let inferredCategory = d.category;
+            if (!inferredCategory) {
+              if (text.includes('clearance')) inferredCategory = 'Clearance';
+              else if (text.includes('indigency') || text.includes('financial')) inferredCategory = 'Indigency';
+              else if (text.includes('permit') || text.includes('business')) inferredCategory = 'Permit';
+              else if (text.includes('certificate') || text.includes('certification') || text.includes('residency') || text.includes('moral') || text.includes('jobseeker')) inferredCategory = 'Certificate';
+              else inferredCategory = 'General';
+            }
+
+            return {
+              id: d.id,
+              code: d.code,
+              title: d.title,
+              category: inferredCategory,
+              description: d.description,
+              fee: Number(d.fee) || 0,
+              processing_days: Number(d.processing_days) || 1,
+              requirements: Array.isArray(d.requirements)
+                ? d.requirements
+                : typeof d.requirements === 'string'
+                ? JSON.parse(d.requirements)
+                : [],
+              is_active: d.is_active !== false,
+            };
+          });
           setDocTypes(formatted);
         }
       }
@@ -516,7 +530,9 @@ export default function App() {
 
         const parsedYears = newReq.years_in_barangay
           ? (parseInt(String(newReq.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5)
-          : (user.years_in_barangay ? (parseInt(String(user.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5) : 5);
+          : (currentUser?.years_in_barangay ? (parseInt(String(currentUser.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5) : 5);
+
+        const residentFullName = currentUser?.full_name || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 'Resident Applicant';
 
         const payload = {
           tracking_number: newReq.tracking_number,
@@ -532,12 +548,12 @@ export default function App() {
           pickup_location: newReq.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
           pickup_instructions: newReq.pickup_instructions || '',
           years_in_barangay: parsedYears,
-          resident_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
-          resident_email: user.email,
-          resident_phone: user.phone || '',
-          resident_address: user.address || user.sitio || 'Barangay Zapatera, Cebu City',
-          resident_birth_date: user.birth_date || user.birthdate || null,
-          civil_status: user.civil_status || 'Single',
+          resident_name: residentFullName,
+          resident_email: currentUser?.email || '',
+          resident_phone: currentUser?.phone || '',
+          resident_address: currentUser?.address || currentUser?.sitio || 'Barangay Zapatera, Cebu City',
+          resident_birth_date: currentUser?.birth_date || currentUser?.birthdate || null,
+          civil_status: currentUser?.civil_status || 'Single',
           status: 'pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -572,7 +588,7 @@ export default function App() {
     setIsRequirementsModalOpen(true);
   };
 
-  const handleOpenRequestFlow = (doc?: DocumentType | string) => {
+  const handleOpenRequestFlow = (doc?: DocumentType | string, fromRequestsPage = false) => {
     let targetDoc = docTypes[0];
     if (typeof doc === 'string') {
       targetDoc = docTypes.find((d) => d.id === doc) || docTypes[0];
@@ -580,6 +596,7 @@ export default function App() {
       targetDoc = doc;
     }
     setSelectedDocForRequest(targetDoc);
+    setShowDocSelectorInFlow(fromRequestsPage);
     setIsRequestFlowOpen(true);
   };
 
@@ -664,7 +681,7 @@ export default function App() {
           <MyRequestsView
             requests={requests}
             onViewRequestDetails={handleViewRequestDetails}
-            onRequestNew={() => handleOpenRequestFlow()}
+            onRequestNew={() => handleOpenRequestFlow(undefined, true)}
           />
         )}
 
@@ -709,6 +726,7 @@ export default function App() {
         docTypes={docTypes}
         currentUser={currentUser}
         config={config}
+        showDocSelector={showDocSelectorInFlow}
         onClose={() => setIsRequestFlowOpen(false)}
         onRequestSubmitted={handleRequestSubmitted}
         onTrackSubmittedRequest={(req) => {

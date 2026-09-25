@@ -437,7 +437,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         window.history.replaceState(null, '', window.location.pathname);
       }
 
-      setResetSuccess('Your password has been successfully updated in the database! Redirecting to login...');
+      setResetSuccess('Your password has been successfully updated! Redirecting to login...');
       setTimeout(() => {
         setStep(1);
         setResetSuccess('');
