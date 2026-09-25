@@ -516,7 +516,9 @@ export default function App() {
 
         const parsedYears = newReq.years_in_barangay
           ? (parseInt(String(newReq.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5)
-          : (user.years_in_barangay ? (parseInt(String(user.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5) : 5);
+          : (currentUser?.years_in_barangay ? (parseInt(String(currentUser.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5) : 5);
+
+        const residentFullName = currentUser?.full_name || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 'Resident Applicant';
 
         const payload = {
           tracking_number: newReq.tracking_number,
@@ -532,12 +534,12 @@ export default function App() {
           pickup_location: newReq.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
           pickup_instructions: newReq.pickup_instructions || '',
           years_in_barangay: parsedYears,
-          resident_name: user.full_name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
-          resident_email: user.email,
-          resident_phone: user.phone || '',
-          resident_address: user.address || user.sitio || 'Barangay Zapatera, Cebu City',
-          resident_birth_date: user.birth_date || user.birthdate || null,
-          civil_status: user.civil_status || 'Single',
+          resident_name: residentFullName,
+          resident_email: currentUser?.email || '',
+          resident_phone: currentUser?.phone || '',
+          resident_address: currentUser?.address || currentUser?.sitio || 'Barangay Zapatera, Cebu City',
+          resident_birth_date: currentUser?.birth_date || currentUser?.birthdate || null,
+          civil_status: currentUser?.civil_status || 'Single',
           status: 'pending',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
