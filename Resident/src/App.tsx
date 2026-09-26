@@ -22,6 +22,7 @@ import {
   SAMPLE_ANNOUNCEMENTS,
   SAMPLE_REQUESTS,
 } from './core/portalData';
+import { registerDeviceSession, checkCurrentSessionActive } from './core/deviceTelemetry';
 
 // Component Views
 import Navbar from './components/Navbar';
@@ -99,13 +100,57 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let deviceChannel: any = null;
+
     if (currentUser) {
       fetchResidentRequests(currentUser);
       fetchResidentNotifications(currentUser);
+
+      // Register device telemetry & session
+      registerDeviceSession(currentUser);
+
+      // Check if session has been terminated by administrator
+      checkCurrentSessionActive(currentUser.id).then((isActive) => {
+        if (!isActive) {
+          handleLogout();
+        }
+      });
+
+      // Realtime listener for remote session termination
+      if (isSupabaseConfigured() && currentUser.id) {
+        try {
+          deviceChannel = supabase
+            .channel(`resident-device-check-${currentUser.id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'user_devices',
+                filter: `user_id=eq.${currentUser.id}`,
+              },
+              (payload: any) => {
+                if (payload.new && payload.new.is_active === false) {
+                  // Admin terminated this session!
+                  handleLogout();
+                }
+              }
+            )
+            .subscribe();
+        } catch {
+          // Handled
+        }
+      }
     } else {
       setRequests([]);
       setNotifications([]);
     }
+
+    return () => {
+      if (deviceChannel) {
+        supabase.removeChannel(deviceChannel);
+      }
+    };
   }, [currentUser]);
 
   const loadResidentSession = async () => {

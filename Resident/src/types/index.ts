@@ -35,7 +35,31 @@ export interface ResidentUser {
   biometric_enabled?: boolean;
   two_factor_enabled?: boolean;
   notification_preferences?: ResidentNotificationPreferences;
+  app_version?: string;
+  device_os?: string;
+  device_model?: string;
+  push_token?: string;
+  push_token_status?: 'active' | 'denied' | 'unregistered' | string;
+  last_active_at?: string;
   created_at?: string;
+}
+
+export interface UserDeviceSession {
+  id: string;
+  user_id: string;
+  device_id: string;
+  device_name?: string;
+  device_model?: string;
+  os_name?: string;
+  os_version?: string;
+  app_version?: string;
+  push_token?: string;
+  push_token_status?: 'active' | 'denied' | 'unregistered' | string;
+  is_active: boolean;
+  ip_address?: string;
+  last_login_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DocumentRequirementItem {

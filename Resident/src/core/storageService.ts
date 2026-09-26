@@ -237,33 +237,51 @@ export async function uploadUserAvatar(
   }
 
   try {
-    const { data, error } = await supabase.storage
-      .from('public_assets')
-      .upload(storagePath, file, {
+    // Try dedicated 'avatars' bucket first
+    let bucketName = 'avatars';
+    let targetPath = `${userId}/${sanitized}`;
+    
+    let { data, error } = await supabase.storage
+      .from('avatars')
+      .upload(targetPath, file, {
         contentType: file.type || 'image/jpeg',
         upsert: true,
       });
 
+    // If 'avatars' bucket fails (e.g. not created yet), fallback to 'public_assets'
     if (error) {
+      bucketName = 'public_assets';
+      targetPath = `avatars/${userId}/${sanitized}`;
+      const fallbackRes = await supabase.storage
+        .from('public_assets')
+        .upload(targetPath, file, {
+          contentType: file.type || 'image/jpeg',
+          upsert: true,
+        });
+      data = fallbackRes.data;
+      error = fallbackRes.error;
+    }
+
+    if (error || !data) {
       return {
         success: false,
-        bucket: 'public_assets',
+        bucket: bucketName,
         storagePath: '',
         fileName: originalFileName,
         fileType: file.type || 'image/jpeg',
         fileSize: file.size,
         fileSizeFormatted: formatFileSize(file.size),
-        error: error.message || 'Failed to upload avatar.',
+        error: error?.message || 'Failed to upload avatar.',
       };
     }
 
     const { data: publicUrlData } = supabase.storage
-      .from('public_assets')
+      .from(bucketName)
       .getPublicUrl(data.path);
 
     return {
       success: true,
-      bucket: 'public_assets',
+      bucket: bucketName,
       storagePath: data.path,
       fileName: originalFileName,
       fileType: file.type || 'image/jpeg',
