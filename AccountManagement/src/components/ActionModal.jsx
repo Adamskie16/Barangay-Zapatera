@@ -1,4 +1,4 @@
-// AccountManagement/src/components/ActionModal.jsx
+// SuperAdmin/src/components/ActionModal.jsx
 import React, { useEffect, useRef } from 'react';
 import {
   CheckCircle2,
@@ -103,8 +103,8 @@ export default function ActionModal({
           };
         }
         return {
-          icon: <AlertTriangle className="w-8 h-8 text-amber-500" aria-hidden="true" />,
-          bg: isDarkMode ? 'bg-amber-950/40 border-amber-800/80' : 'bg-amber-50 border-amber-200',
+          icon: <HelpCircle className="w-8 h-8 text-blue-500" aria-hidden="true" />,
+          bg: isDarkMode ? 'bg-blue-950/40 border-blue-800/80' : 'bg-blue-50 border-blue-200',
         };
       case 'info':
       default:
@@ -115,103 +115,110 @@ export default function ActionModal({
     }
   };
 
-  const config = getIconConfig();
-  const isInteractive = type === 'confirmation' || type === 'warning' && Boolean(onConfirm);
+  const iconConfig = getIconConfig();
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity motion-reduce:transition-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="action-modal-title"
-      aria-describedby="action-modal-description"
+      aria-describedby="action-modal-desc"
     >
       <div
         ref={modalRef}
-        className={`w-full ${maxWidth} rounded-2xl border shadow-2xl p-6 relative transform transition-all scale-100 duration-200 ${
-          isDarkMode
-            ? 'bg-slate-900 border-slate-800 text-slate-100'
-            : 'bg-white border-slate-200 text-slate-800'
+        className={`rounded-2xl shadow-2xl border w-full ${maxWidth} overflow-hidden transform transition-all motion-reduce:transform-none scale-100 animate-in fade-in zoom-in-95 duration-200 ${
+          isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
         }`}
       >
-        {/* Close Button */}
-        {onClose && !isProcessing && (
-          <button
-            onClick={onClose}
-            className={`absolute top-4 right-4 p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isDarkMode
-                ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-            }`}
-            aria-label="Close modal"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Content Body */}
-        <div className="flex flex-col items-center text-center">
-          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 border shadow-inner ${config.bg}`}>
-            {config.icon}
-          </div>
-
-          <h3
-            id="action-modal-title"
-            className="text-lg font-bold tracking-tight mb-2"
-          >
-            {title}
-          </h3>
-
-          {message && (
-            <p
-              id="action-modal-description"
-              className={`text-xs leading-relaxed mb-6 max-w-sm ${
-                isDarkMode ? 'text-slate-400' : 'text-slate-500'
+        {!isProcessing && (
+          <div className="flex justify-end p-3 pb-0">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close modal"
+              title="Close modal"
+              className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
               }`}
             >
-              {message}
-            </p>
-          )}
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-center gap-3 w-full">
-            {isInteractive ? (
+        <div className="px-6 pt-2 pb-6 text-center space-y-4">
+          <div className="flex justify-center">
+            <div className={`w-16 h-16 rounded-2xl border flex items-center justify-center shadow-xs ${iconConfig.bg}`}>
+              {iconConfig.icon}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <h3
+              id="action-modal-title"
+              className={`text-lg font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
+            >
+              {title}
+            </h3>
+            <div
+              id="action-modal-desc"
+              className={`text-xs leading-relaxed max-w-sm mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}
+              role={type === 'error' ? 'alert' : type === 'success' ? 'status' : undefined}
+            >
+              {message}
+            </div>
+          </div>
+
+          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            {type === 'confirmation' || type === 'warning' ? (
               <>
                 <button
                   ref={cancelBtnRef}
                   type="button"
-                  onClick={onClose}
                   disabled={isProcessing}
-                  className={`w-1/2 py-2.5 px-4 rounded-xl text-xs font-semibold border transition-colors cursor-pointer disabled:opacity-50 ${
+                  onClick={onClose}
+                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 ${
                     isDarkMode
-                      ? 'border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200'
-                      : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
+                      ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {cancelText}
                 </button>
-
                 <button
                   ref={confirmBtnRef}
                   type="button"
-                  onClick={onConfirm}
                   disabled={isProcessing}
-                  className={`w-1/2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  onClick={onConfirm}
+                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-75 inline-flex items-center justify-center space-x-2 ${
                     isDestructive
-                      ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/30'
-                      : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/30'
+                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-900/20'
+                      : 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20'
                   }`}
                 >
-                  {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{confirmText}</span>
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <span>{confirmText}</span>
+                  )}
                 </button>
               </>
             ) : (
               <button
                 ref={confirmBtnRef}
                 type="button"
-                onClick={onClose || onConfirm}
-                className="w-full py-2.5 px-6 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-900/20 transition-all cursor-pointer"
+                onClick={onClose}
+                className={`w-full sm:w-36 px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm cursor-pointer inline-flex items-center justify-center ${
+                  type === 'error'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : type === 'success'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
                 {buttonText}
               </button>
