@@ -153,6 +153,113 @@ export default function App() {
     };
   }, [currentUser]);
 
+  // -------------------------------------------------------------
+  // TWO-WAY RESIDENT PROFILE REALTIME SYNCHRONIZATION
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!currentUser?.id || !isSupabaseConfigured()) return;
+
+    let profileChannel: any = null;
+
+    // Fresh query cache invalidation & session refresh
+    const refreshProfileFromDatabase = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (!error && data) {
+          // If locked or deactivated by superadmin/admin, terminate session immediately
+          if (data.is_locked || data.is_active === false) {
+            handleLogout();
+            return;
+          }
+
+          setCurrentUser((prev: any) => {
+            if (!prev) return data;
+            const updated = {
+              ...prev,
+              ...data,
+              push_token: data.push_token || prev.push_token,
+            };
+            MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('Error refreshing resident profile:', err);
+      }
+    };
+
+    // 1. Supabase Realtime subscription on public.profiles for this resident
+    try {
+      profileChannel = supabase
+        .channel(`resident-profile-sync-${currentUser.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${currentUser.id}`,
+          },
+          (payload: any) => {
+            if (payload?.new) {
+              const updatedRow = payload.new;
+
+              // Check if account status has been locked or deactivated
+              if (updatedRow.is_locked || updatedRow.is_active === false) {
+                handleLogout();
+                return;
+              }
+
+              setCurrentUser((prev: any) => {
+                if (!prev) return updatedRow;
+                const updated = {
+                  ...prev,
+                  ...updatedRow,
+                  push_token: updatedRow.push_token || prev.push_token,
+                };
+                MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
+                return updated;
+              });
+            }
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Error creating profile realtime subscription:', err);
+    }
+
+    // 2. Query cache invalidation on screen focus / app resume
+    const handleFocus = () => {
+      refreshProfileFromDatabase();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        refreshProfileFromDatabase();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (profileChannel) {
+        supabase.removeChannel(profileChannel);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [currentUser?.id]);
+
   const loadResidentSession = async () => {
     try {
       const stored = await MobileStorage.getItem('zapatera_resident_session');

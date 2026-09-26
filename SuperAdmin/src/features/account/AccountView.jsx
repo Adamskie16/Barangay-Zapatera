@@ -24,6 +24,7 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
 import { uploadSuperAdminAvatar } from '../../core/storageService';
+import UserAvatar from '../../components/UserAvatar';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
   const [loading, setLoading] = useState(true);
@@ -113,7 +114,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               full_name: currentUser.full_name || 'Hon. Executive Officer',
               username: currentUser.username || currentUser.email?.split('@')[0] || 'superadmin',
               phone: currentUser.phone || '09171234567',
-              avatar_url: currentUser.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&q=80',
+              avatar_url: currentUser.avatar_url || '',
               created_at: currentUser.created_at || new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -138,7 +139,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               full_name: found.full_name || currentUser?.full_name || 'Super Admin',
               username: found.username || currentUser?.username || 'superadmin',
               phone: found.phone || currentUser?.phone || '09171234567',
-              avatar_url: found.avatar_url || currentUser?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&q=80',
+              avatar_url: found.avatar_url || currentUser?.avatar_url || '',
               created_at: found.created_at || new Date().toISOString(),
               updated_at: found.updated_at || new Date().toISOString(),
             });
@@ -455,21 +456,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
         <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
           {/* Avatar Preview & Upload */}
           <div className="relative group">
-            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-blue-500/40 bg-slate-800 shadow-xl flex items-center justify-center shrink-0">
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt={profile.full_name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&q=80';
-                  }}
-                />
-              ) : (
-                <User className="w-12 h-12 text-slate-400" />
-              )}
-            </div>
+            <UserAvatar
+              src={profile.avatar_url}
+              name={profile.full_name || profile.username || profile.email}
+              role={profile.role || 'super_admin'}
+              size="2xl"
+              isDarkMode={isDarkMode}
+              className="w-24 h-24 rounded-2xl text-2xl font-bold border-2 border-blue-500/40 shadow-xl"
+            />
 
             <label
               className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-[10px] font-bold shadow-md cursor-pointer transition-transform hover:scale-105"
@@ -673,7 +667,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   type="url"
                   value={profile.avatar_url}
                   onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="https://... or uploaded image URL"
                   className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all ${
                     isDarkMode
                       ? 'bg-slate-950 border-slate-800 text-white placeholder-slate-600'

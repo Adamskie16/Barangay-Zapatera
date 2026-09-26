@@ -1,5 +1,5 @@
 // Resident/src/features/profile/ProfileView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -92,6 +92,37 @@ export default function ProfileView({
   const [pushNotifs, setPushNotifs] = useState(currentUser.notification_preferences?.push ?? true);
   const [smsNotifs, setSmsNotifs] = useState(currentUser.notification_preferences?.sms ?? true);
   const [emailNotifs, setEmailNotifs] = useState(currentUser.notification_preferences?.email ?? true);
+
+  // Avatar error fallback state
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+
+  // Synchronize internal form states when currentUser is updated by Superadmin or Realtime
+  useEffect(() => {
+    setEditFirstName(currentUser.first_name || currentUser.full_name?.split(' ')[0] || '');
+    setEditLastName(currentUser.last_name || '');
+    setEditPhone(currentUser.phone || '');
+    setEditAddress(currentUser.address || currentUser.sitio || '');
+    setEditCivilStatus(currentUser.civil_status || 'Single');
+    setBiometricEnabled(currentUser.biometric_enabled ?? true);
+    setTwoFactorEnabled(currentUser.two_factor_enabled ?? true);
+    setPushNotifs(currentUser.notification_preferences?.push ?? true);
+    setSmsNotifs(currentUser.notification_preferences?.sms ?? true);
+    setEmailNotifs(currentUser.notification_preferences?.email ?? true);
+  }, [currentUser]);
+
+  // Reset image error state whenever avatar_url changes
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [currentUser.avatar_url]);
+
+  // Compute clean dynamic initials: "John Doe" -> "JD", "Maria Santos" -> "MS"
+  const getInitials = (name?: string) => {
+    if (!name) return 'R';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'R';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   // Password Modal State
   const [currentPass, setCurrentPass] = useState('');
@@ -222,11 +253,15 @@ export default function ProfileView({
       <View style={styles.profileHeaderCard}>
         <View style={{ position: 'relative', alignSelf: 'center' }}>
           <View style={styles.avatarLarge}>
-            {currentUser.avatar_url ? (
-              <Image source={{ uri: currentUser.avatar_url }} style={{ width: 80, height: 80, borderRadius: 40 }} />
+            {currentUser.avatar_url && !avatarLoadFailed ? (
+              <Image
+                source={{ uri: currentUser.avatar_url }}
+                style={{ width: 80, height: 80, borderRadius: 40 }}
+                onError={() => setAvatarLoadFailed(true)}
+              />
             ) : (
               <Text style={styles.avatarLargeText}>
-                {currentUser.full_name?.charAt(0) || 'R'}
+                {getInitials(currentUser.full_name || currentUser.first_name)}
               </Text>
             )}
           </View>
