@@ -1,5 +1,5 @@
 // Resident/src/components/Navbar.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,20 @@ export default function Navbar({
   onOpenProfile,
   onRequestDocument,
 }: NavbarProps) {
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [currentUser.avatar_url]);
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'R';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'R';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
   return (
     <View style={styles.header}>
       {/* Left Branding */}
@@ -68,9 +82,17 @@ export default function Navbar({
           activeOpacity={0.7}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {currentUser.first_name?.charAt(0) || currentUser.full_name?.charAt(0) || 'R'}
-            </Text>
+            {currentUser.avatar_url && !avatarError ? (
+              <Image
+                source={{ uri: currentUser.avatar_url }}
+                style={{ width: 33, height: 33, borderRadius: 16.5 }}
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {getInitials(currentUser.first_name || currentUser.full_name)}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
       </View>

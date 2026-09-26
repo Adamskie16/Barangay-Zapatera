@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
+import UserAvatar from '../../components/UserAvatar';
 import {
   Users,
   UserPlus,
@@ -829,31 +830,13 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                     }`}>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
-                          {u.avatar_url ? (
-                            <img
-                              src={u.avatar_url}
-                              alt={u.full_name || 'User avatar'}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                if (e.currentTarget.nextElementSibling) {
-                                  e.currentTarget.nextElementSibling.style.display = 'flex';
-                                }
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            style={{ display: u.avatar_url ? 'none' : 'flex' }}
-                            className={`w-9 h-9 rounded-full items-center justify-center font-bold text-xs ${
-                              u.role === 'super_admin'
-                                ? 'bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800'
-                                : u.role === 'admin'
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
-                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
-                            }`}
-                          >
-                            {(u.full_name || u.email || 'U').charAt(0).toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            src={u.avatar_url}
+                            name={u.full_name || u.email}
+                            role={u.role}
+                            size="md"
+                            isDarkMode={isDarkMode}
+                          />
                           <div>
                             <p className="font-bold text-slate-900 dark:text-white">{u.full_name || 'Unnamed Account'}</p>
                             <p className="text-[11px] text-slate-500 font-mono">{u.email}</p>
@@ -1374,37 +1357,15 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 : 'bg-gradient-to-br from-slate-50 to-blue-50/40 border-slate-200'
             }`}>
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  {viewingUser.avatar_url ? (
-                    <img
-                      src={viewingUser.avatar_url}
-                      alt={viewingUser.full_name || 'Profile'}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white dark:border-slate-800 shadow-md ring-2 ring-blue-500/20"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        if (e.currentTarget.nextElementSibling) {
-                          e.currentTarget.nextElementSibling.style.display = 'flex';
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    style={{ display: viewingUser.avatar_url ? 'none' : 'flex' }}
-                    className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-black text-2xl items-center justify-center shadow-md ring-2 ring-blue-500/20"
-                  >
-                    {(viewingUser.full_name || viewingUser.email || 'U').charAt(0).toUpperCase()}
-                  </div>
-                  <span
-                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 ${
-                      isDarkMode ? 'border-slate-900' : 'border-white'
-                    } ${
-                      viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
-                        ? 'bg-rose-500'
-                        : 'bg-emerald-500'
-                    }`}
-                    title={viewingUser.is_locked ? 'Locked' : 'Active'}
-                  />
-                </div>
+                <UserAvatar
+                  src={viewingUser.avatar_url}
+                  name={viewingUser.full_name || viewingUser.email}
+                  role={viewingUser.role}
+                  size="xl"
+                  isDarkMode={isDarkMode}
+                  showStatus={true}
+                  isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
+                />
 
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
