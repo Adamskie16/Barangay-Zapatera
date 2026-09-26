@@ -1,6 +1,7 @@
 // AccountManagement/src/components/Sidebar.jsx
 import React from 'react';
 import { Users, Image as ImageIcon, History, LogOut, Moon, Sun, UserCheck } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout, isDarkMode, onToggleDarkMode }) {
   const menuItems = [
@@ -51,9 +52,13 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
       {/* Footer Profile & Logout */}
       <div className="space-y-3 pt-4 border-t border-slate-800">
         <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
-            {currentUser?.full_name?.charAt(0) || 'A'}
-          </div>
+          <UserAvatar
+            src={currentUser?.avatar_url}
+            name={currentUser?.full_name || 'Admin User'}
+            role={currentUser?.role || 'admin'}
+            size="sm"
+            isDarkMode={true}
+          />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-white truncate">{currentUser?.full_name || 'Admin User'}</p>
             <p className="text-[10px] text-slate-400 truncate">{currentUser?.email || 'admin@zapatera.gov.ph'}</p>

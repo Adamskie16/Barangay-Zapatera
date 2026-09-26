@@ -2,6 +2,21 @@
 import React, { useState, useEffect } from 'react';
 
 /**
+ * Checks whether an avatar URL is a template, stock, or placeholder image.
+ * If true, the system does NOT display the template image and falls back to initials.
+ */
+export function isTemplateAvatar(url) {
+  if (!url || typeof url !== 'string') return true;
+  const clean = url.trim().toLowerCase();
+  if (!clean) return true;
+  if (clean.includes('photo-1472099645785')) return true;
+  if (clean.includes('photo-1534528741775')) return true;
+  if (clean.includes('default-avatar') || clean.includes('default_avatar') || clean.includes('placeholder')) return true;
+  if (clean.includes('silhouette') || clean.includes('user-template') || clean.includes('avatar-template') || clean.includes('anonymous')) return true;
+  return false;
+}
+
+/**
  * Computes dynamic initials:
  * - "John Doe" -> "JD"
  * - "Maria Santos Dela Cruz" -> "MC"
@@ -23,9 +38,9 @@ export function getInitials(name) {
 }
 
 /**
- * Reusable UserAvatar component:
- * - Renders high-res avatar if `src` is present and loads successfully.
- * - Smoothly falls back to dynamic initials badge if `src` is missing, NULL, or fails to load.
+ * Reusable UserAvatar component for Admin:
+ * - Renders high-res avatar if `src` is present, valid (not a template), and loads successfully.
+ * - Smoothly falls back to dynamic initials badge if `src` is missing, NULL, a template image, or fails to load.
  * - Eliminates all static placeholder silhouettes or stock asset URLs.
  */
 export default function UserAvatar({
@@ -73,10 +88,11 @@ export default function UserAvatar({
   };
 
   const initials = getInitials(name);
+  const hasValidUploadedAvatar = Boolean(src && !isTemplateAvatar(src) && !imageError);
 
   return (
     <div className={`relative inline-flex items-center justify-center shrink-0 ${className}`}>
-      {src && !imageError ? (
+      {hasValidUploadedAvatar ? (
         <img
           src={src}
           alt={name || 'User avatar'}

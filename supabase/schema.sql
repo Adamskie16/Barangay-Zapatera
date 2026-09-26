@@ -395,7 +395,7 @@ BEGIN
             COALESCE(NEW.raw_user_meta_data->>'address', 'Barangay Zapatera, Cebu City'),
             COALESCE(NEW.raw_user_meta_data->>'id_type', 'Barangay ID'),
             COALESCE(NEW.raw_user_meta_data->>'id_number', 'BZ-RESIDENT'),
-            COALESCE(NEW.raw_user_meta_data->>'avatar_url', 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&q=80'),
+            NULLIF(NEW.raw_user_meta_data->>'avatar_url', ''),
             NOW(),
             NOW()
         )

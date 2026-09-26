@@ -1,12 +1,34 @@
 // AccountManagement/src/components/UserAvatar.jsx
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, User as UserIcon, Lock } from 'lucide-react';
 
+/**
+ * Checks whether an avatar URL is a template, stock, or placeholder image.
+ * If true, the system does NOT display the template image and falls back to initials.
+ */
+export function isTemplateAvatar(url) {
+  if (!url || typeof url !== 'string') return true;
+  const clean = url.trim().toLowerCase();
+  if (!clean) return true;
+  if (clean.includes('photo-1472099645785')) return true;
+  if (clean.includes('photo-1534528741775')) return true;
+  if (clean.includes('default-avatar') || clean.includes('default_avatar') || clean.includes('placeholder')) return true;
+  if (clean.includes('silhouette') || clean.includes('user-template') || clean.includes('avatar-template') || clean.includes('anonymous')) return true;
+  return false;
+}
+
+/**
+ * Computes dynamic initials:
+ * - "John Doe" -> "JD"
+ * - "Maria Santos Dela Cruz" -> "MC"
+ * - "Juan" -> "JU"
+ * - "admin@zapatera.gov.ph" -> "A"
+ */
 export function getInitials(name) {
   if (!name || typeof name !== 'string') return 'U';
   const clean = name.trim();
-  if (clean.includes('@')) return clean.charAt(0).toUpperCase();
-
+  if (clean.includes('@') && !clean.includes(' ')) {
+    return clean.charAt(0).toUpperCase();
+  }
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'U';
   if (parts.length === 1) {
@@ -15,74 +37,86 @@ export function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+/**
+ * Reusable UserAvatar component for AccountManagement:
+ * - Renders high-res avatar if `src` is present, valid (not a template), and loads successfully.
+ * - Smoothly falls back to dynamic initials badge if `src` is missing, NULL, a template image, or fails to load.
+ * - Eliminates all static placeholder silhouettes or stock asset URLs.
+ */
 export default function UserAvatar({
   src,
   name,
   role = 'resident',
   size = 'md',
   className = '',
-  isDarkMode = false,
   showStatus = false,
   isLocked = false,
+  isDarkMode = false,
 }) {
   const [imageError, setImageError] = useState(false);
 
+  // Reset error state whenever the image source URL changes
   useEffect(() => {
     setImageError(false);
   }, [src]);
 
+  const sizeClasses = {
+    xs: 'w-7 h-7 text-[10px]',
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-9 h-9 text-xs',
+    lg: 'w-12 h-12 text-sm',
+    xl: 'w-16 h-16 text-xl',
+    '2xl': 'w-20 h-20 text-2xl',
+  };
+
+  const currentSize = sizeClasses[size] || sizeClasses.md;
+
+  const getRoleColors = () => {
+    if (role === 'super_admin') {
+      return isDarkMode
+        ? 'bg-purple-950/60 text-purple-300 border-purple-800'
+        : 'bg-purple-100 text-purple-700 border-purple-200';
+    }
+    if (role === 'admin') {
+      return isDarkMode
+        ? 'bg-blue-950/60 text-blue-300 border-blue-800'
+        : 'bg-blue-100 text-blue-700 border-blue-200';
+    }
+    return isDarkMode
+      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+      : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  };
+
   const initials = getInitials(name);
-
-  // Sizing tokens
-  const sizeMap = {
-    xs: { box: 'w-7 h-7 text-[10px]', badge: 'w-2 h-2 -bottom-0.5 -right-0.5' },
-    sm: { box: 'w-8 h-8 text-xs', badge: 'w-2.5 h-2.5 -bottom-0.5 -right-0.5' },
-    md: { box: 'w-10 h-10 text-sm font-bold', badge: 'w-3 h-3 -bottom-0.5 -right-0.5' },
-    lg: { box: 'w-12 h-12 text-base font-bold', badge: 'w-3.5 h-3.5 -bottom-1 -right-1' },
-    xl: { box: 'w-16 h-16 text-xl font-extrabold', badge: 'w-4 h-4 -bottom-1 -right-1' },
-    '2xl': { box: 'w-24 h-24 text-2xl font-black', badge: 'w-5 h-5 -bottom-1 -right-1' },
-  };
-
-  const currentSize = sizeMap[size] || sizeMap.md;
-
-  // Role color palette for fallback badges
-  const roleStyles = {
-    super_admin: isDarkMode
-      ? 'bg-purple-950/70 border-purple-500/40 text-purple-300'
-      : 'bg-purple-100 border-purple-300 text-purple-800',
-    admin: isDarkMode
-      ? 'bg-blue-950/70 border-blue-500/40 text-blue-300'
-      : 'bg-blue-100 border-blue-300 text-blue-800',
-    resident: isDarkMode
-      ? 'bg-slate-800 border-slate-700 text-slate-200'
-      : 'bg-slate-100 border-slate-300 text-slate-700',
-  };
-
-  const palette = roleStyles[role] || roleStyles.resident;
+  const hasValidUploadedAvatar = Boolean(src && !isTemplateAvatar(src) && !imageError);
 
   return (
-    <div className={`relative inline-flex shrink-0 ${className}`}>
-      <div
-        className={`${currentSize.box} rounded-2xl flex items-center justify-center overflow-hidden border shadow-xs select-none transition-all duration-200 ${palette}`}
-      >
-        {src && !imageError ? (
-          <img
-            src={src}
-            alt={name || 'User avatar'}
-            className="w-full h-full object-cover"
-            onError={() => setImageError(true)}
-            loading="lazy"
-          />
-        ) : (
-          <span className="tracking-tight uppercase">{initials}</span>
-        )}
-      </div>
+    <div className={`relative inline-flex items-center justify-center shrink-0 ${className}`}>
+      {hasValidUploadedAvatar ? (
+        <img
+          src={src}
+          alt={name || 'User avatar'}
+          className={`${currentSize} rounded-full object-cover border ${
+            isDarkMode ? 'border-slate-700' : 'border-slate-200'
+          } shadow-2xs`}
+          onError={() => setImageError(true)}
+        />
+      ) : (
+        <div
+          className={`${currentSize} rounded-full flex items-center justify-center font-bold tracking-wider border shadow-2xs transition-colors ${getRoleColors()}`}
+          title={name || 'User Profile'}
+        >
+          <span>{initials}</span>
+        </div>
+      )}
 
       {showStatus && (
         <span
-          className={`absolute rounded-full border-2 ${
+          className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 ${
             isDarkMode ? 'border-slate-900' : 'border-white'
-          } ${currentSize.badge} ${isLocked ? 'bg-rose-500' : 'bg-emerald-500'}`}
+          } ${size === 'xl' || size === '2xl' ? 'w-4 h-4' : 'w-2.5 h-2.5'} ${
+            isLocked ? 'bg-rose-500' : 'bg-emerald-500'
+          }`}
           title={isLocked ? 'Account Locked' : 'Active Account'}
         />
       )}
