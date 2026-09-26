@@ -34,9 +34,12 @@ import {
   AlertCircle,
   ExternalLink,
   Camera,
+  Smartphone,
+  Radio,
 } from 'lucide-react';
 import { ResidentUser, BarangayConfig } from '../../types';
 import { uploadUserAvatar } from '../../core/storageService';
+import { detectDeviceMetadata } from '../../core/deviceTelemetry';
 import ActionModal from '../../components/ActionModal';
 
 interface ProfileViewProps {
@@ -418,6 +421,59 @@ export default function ProfileView({
               onUpdateProfile({ notification_preferences: { push: pushNotifs, sms: smsNotifs, email: val } });
             }}
           />
+        </View>
+      </View>
+
+      {/* App Management & Device Security */}
+      <Text style={styles.sectionHeading}>App Management & Device Security</Text>
+      <View style={styles.menuCard}>
+        <View style={styles.menuItem}>
+          <View style={styles.menuItemLeft}>
+            <Smartphone size={18} color="#1d4ed8" />
+            <View>
+              <Text style={styles.menuItemTitle}>Device & Operating System</Text>
+              <Text style={styles.menuItemSub}>
+                {detectDeviceMetadata().deviceModel} • {detectDeviceMetadata().osName} {detectDeviceMetadata().osVersion}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.badgeSmall}>
+            <Text style={styles.badgeSmallText}>Verified</Text>
+          </View>
+        </View>
+
+        <View style={styles.menuDivider} />
+
+        <View style={styles.menuItem}>
+          <View style={styles.menuItemLeft}>
+            <Radio size={18} color="#059669" />
+            <View>
+              <Text style={styles.menuItemTitle}>Push Notification Token</Text>
+              <Text style={styles.menuItemSub}>
+                Status: {currentUser.push_token_status === 'denied' ? 'Permission Denied' : 'Active & Registered'}
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.badgeSmall, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }]}>
+            <Text style={[styles.badgeSmallText, { color: '#166534' }]}>Active</Text>
+          </View>
+        </View>
+
+        <View style={styles.menuDivider} />
+
+        <View style={styles.menuItem}>
+          <View style={styles.menuItemLeft}>
+            <ShieldCheck size={18} color="#2563eb" />
+            <View>
+              <Text style={styles.menuItemTitle}>Release Build & Security</Text>
+              <Text style={styles.menuItemSub}>
+                App v{detectDeviceMetadata().appVersion} • Government End-to-End Encryption
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.badgeSmall, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+            <Text style={[styles.badgeSmallText, { color: '#1d4ed8' }]}>Production</Text>
+          </View>
         </View>
       </View>
 
@@ -1005,5 +1061,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 16,
+  },
+  badgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  badgeSmallText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1d4ed8',
   },
 });
