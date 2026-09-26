@@ -33,6 +33,17 @@ export default function Navbar({
     setAvatarError(false);
   }, [currentUser.avatar_url]);
 
+  const isTemplateAvatar = (url?: string) => {
+    if (!url) return true;
+    const clean = url.trim().toLowerCase();
+    if (!clean) return true;
+    if (clean.includes('photo-1472099645785')) return true;
+    if (clean.includes('photo-1534528741775')) return true;
+    if (clean.includes('default-avatar') || clean.includes('default_avatar') || clean.includes('placeholder')) return true;
+    if (clean.includes('silhouette') || clean.includes('user-template') || clean.includes('avatar-template') || clean.includes('anonymous')) return true;
+    return false;
+  };
+
   const getInitials = (name?: string) => {
     if (!name) return 'R';
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -82,7 +93,7 @@ export default function Navbar({
           activeOpacity={0.7}
         >
           <View style={styles.avatar}>
-            {currentUser.avatar_url && !avatarError ? (
+            {currentUser.avatar_url && !isTemplateAvatar(currentUser.avatar_url) && !avatarError ? (
               <Image
                 source={{ uri: currentUser.avatar_url }}
                 style={{ width: 33, height: 33, borderRadius: 16.5 }}

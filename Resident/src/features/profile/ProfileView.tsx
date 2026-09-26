@@ -115,6 +115,18 @@ export default function ProfileView({
     setAvatarLoadFailed(false);
   }, [currentUser.avatar_url]);
 
+  // Checks whether an avatar URL is a template / stock placeholder
+  const isTemplateAvatar = (url?: string) => {
+    if (!url) return true;
+    const clean = url.trim().toLowerCase();
+    if (!clean) return true;
+    if (clean.includes('photo-1472099645785')) return true;
+    if (clean.includes('photo-1534528741775')) return true;
+    if (clean.includes('default-avatar') || clean.includes('default_avatar') || clean.includes('placeholder')) return true;
+    if (clean.includes('silhouette') || clean.includes('user-template') || clean.includes('avatar-template') || clean.includes('anonymous')) return true;
+    return false;
+  };
+
   // Compute clean dynamic initials: "John Doe" -> "JD", "Maria Santos" -> "MS"
   const getInitials = (name?: string) => {
     if (!name) return 'R';
@@ -253,7 +265,7 @@ export default function ProfileView({
       <View style={styles.profileHeaderCard}>
         <View style={{ position: 'relative', alignSelf: 'center' }}>
           <View style={styles.avatarLarge}>
-            {currentUser.avatar_url && !avatarLoadFailed ? (
+            {currentUser.avatar_url && !isTemplateAvatar(currentUser.avatar_url) && !avatarLoadFailed ? (
               <Image
                 source={{ uri: currentUser.avatar_url }}
                 style={{ width: 80, height: 80, borderRadius: 40 }}

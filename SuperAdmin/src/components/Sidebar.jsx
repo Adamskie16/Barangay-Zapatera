@@ -14,6 +14,7 @@ import {
   LogOut,
   User,
 } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout, isDarkMode }) {
   const menuItems = [
@@ -85,14 +86,14 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
       {/* User Profile Footer */}
       <div className="p-3.5 border-t border-slate-800/80 bg-slate-950/60 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-2.5 min-w-0 p-1.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-700 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-white/20 shadow-xs">
-              {currentUser?.avatar_url ? (
-                <img src={currentUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                currentUser?.full_name?.charAt(0) || 'S'
-              )}
-            </div>
+          <div className="flex items-center space-x-2.5 min-w-0 p-1.5 flex-1">
+            <UserAvatar
+              src={currentUser?.avatar_url}
+              name={currentUser?.full_name || 'Super Admin'}
+              role={currentUser?.role || 'super_admin'}
+              size="sm"
+              isDarkMode={true}
+            />
             <div className="truncate">
               <p className="text-xs font-bold text-white truncate leading-tight">{currentUser?.full_name || 'Super Admin'}</p>
               <p className="text-[10px] text-slate-400 truncate mt-0.5">{currentUser?.email}</p>

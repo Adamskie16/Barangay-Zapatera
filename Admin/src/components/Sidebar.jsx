@@ -15,6 +15,7 @@ import {
   User,
   Users,
 } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout }) {
   const menuItems = [
@@ -87,13 +88,13 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
             onClick={() => setActiveTab('account')}
             className="flex items-center space-x-2.5 min-w-0 text-left cursor-pointer p-1.5 rounded-xl hover:bg-slate-800/80 transition-colors flex-1"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-white/20 shadow-xs">
-              {currentUser?.avatar_url ? (
-                <img src={currentUser.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                currentUser?.full_name?.charAt(0) || 'A'
-              )}
-            </div>
+            <UserAvatar
+              src={currentUser?.avatar_url}
+              name={currentUser?.full_name || 'Barangay Admin'}
+              role={currentUser?.role || 'admin'}
+              size="sm"
+              isDarkMode={true}
+            />
             <div className="truncate">
               <p className="text-xs font-bold text-white truncate leading-tight">{currentUser?.full_name || 'Barangay Admin'}</p>
               <p className="text-[10px] text-slate-400 truncate mt-0.5">{currentUser?.email}</p>
