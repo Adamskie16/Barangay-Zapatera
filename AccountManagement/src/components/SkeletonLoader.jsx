@@ -1,4 +1,4 @@
-// AccountManagement/src/components/SkeletonLoader.jsx
+// SuperAdmin/src/components/SkeletonLoader.jsx
 import React from 'react';
 
 export function SkeletonBox({ className = '', isDarkMode = false }) {

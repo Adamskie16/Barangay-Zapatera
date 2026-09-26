@@ -52,6 +52,12 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const tabTitles = {
+    accounts: 'User Account Provisioning & Roles',
+    login_design: 'Login Screen Design & Themes',
+    logs: 'System Security Audit Trail',
+  };
+
   return (
     <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
       isDarkMode ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
@@ -63,19 +69,29 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
-        onToggleDarkMode={toggleDarkMode}
       />
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Navbar isDarkMode={isDarkMode} />
+        <Navbar
+          activeTitle={tabTitles[activeTab]}
+          notificationsCount={0}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={toggleDarkMode}
+        />
 
         <main className={`flex-1 overflow-y-auto p-6 transition-colors duration-200 ${
           isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
         }`}>
-          {activeTab === 'accounts' && <AccountCreationView currentUser={currentUser} isDarkMode={isDarkMode} />}
-          {activeTab === 'login_design' && <LoginDesignView currentUser={currentUser} isDarkMode={isDarkMode} />}
-          {activeTab === 'logs' && <ActivityLogsView currentUser={currentUser} isDarkMode={isDarkMode} />}
+          {activeTab === 'accounts' && (
+            <AccountCreationView currentUser={currentUser} isDarkMode={isDarkMode} />
+          )}
+          {activeTab === 'login_design' && (
+            <LoginDesignView currentUser={currentUser} isDarkMode={isDarkMode} />
+          )}
+          {activeTab === 'logs' && (
+            <ActivityLogsView currentUser={currentUser} isDarkMode={isDarkMode} />
+          )}
         </main>
       </div>
     </div>
