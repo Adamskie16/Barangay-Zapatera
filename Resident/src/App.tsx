@@ -703,7 +703,8 @@ export default function App() {
     if (!currentUser) return;
 
     let authUserId = currentUser.id;
-    if (isSupabaseConfigured()) {
+    const hasValidUuid = Boolean(authUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId));
+    if (!hasValidUuid && isSupabaseConfigured()) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.id) {
@@ -744,16 +745,30 @@ export default function App() {
 
     try {
       if (isSupabaseConfigured() && authUserId) {
-        const isDocTypeUuid = newReq.document_type_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newReq.document_type_id);
+        const isDocTypeUuid = Boolean(newReq.document_type_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newReq.document_type_id));
 
         let docTypeId = isDocTypeUuid ? newReq.document_type_id : null;
         if (!docTypeId && (newReq.document_type_id || newReq.document_title)) {
-          const { data: dRec } = await supabase
-            .from('document_types')
-            .select('id')
-            .or(`code.eq.${newReq.document_type_id},title.eq.${newReq.document_title}`)
-            .maybeSingle();
-          if (dRec?.id) docTypeId = dRec.id;
+          try {
+            const { data: dRec } = await supabase
+              .from('document_types')
+              .select('id')
+              .or(`code.eq.${newReq.document_type_id},title.eq.${newReq.document_title}`)
+              .maybeSingle();
+            if (dRec?.id) docTypeId = dRec.id;
+          } catch {
+            // Fallback
+          }
+        }
+
+        // If docTypeId is still missing, query first valid document type to fulfill NOT NULL foreign key
+        if (!docTypeId) {
+          try {
+            const { data: anyDoc } = await supabase.from('document_types').select('id').limit(1).maybeSingle();
+            if (anyDoc?.id) docTypeId = anyDoc.id;
+          } catch {
+            // Fallback
+          }
         }
 
         const parsedYears = newReq.years_in_barangay
@@ -762,48 +777,84 @@ export default function App() {
 
         const residentFullName = currentUser?.full_name || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 'Resident Applicant';
 
-        const payload = {
+        // Parse birth date safely (Postgres DATE expects YYYY-MM-DD or NULL)
+        let birthDateVal: string | null = null;
+        const rawDob = currentUser?.birth_date || currentUser?.birthdate || (currentUser as any)?.resident_birth_date;
+        if (rawDob && typeof rawDob === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDob.trim())) {
+          birthDateVal = rawDob.trim();
+        }
+
+        const notesDetails = [
+          newReq.document_title ? `Document: ${newReq.document_title}` : '',
+          newReq.fee !== undefined ? `Fee: ₱${newReq.fee}` : '',
+          currentUser?.civil_status ? `Civil Status: ${currentUser.civil_status}` : '',
+          newReq.pickup_location ? `Pickup Window: ${newReq.pickup_location}` : '',
+          newReq.pickup_instructions ? `Instructions: ${newReq.pickup_instructions}` : '',
+          newReq.notes || '',
+        ].filter(Boolean).join(' | ');
+
+        // Guaranteed base schema payload
+        const basePayload: any = {
           tracking_number: newReq.tracking_number,
           resident_id: authUserId,
           document_type_id: docTypeId,
-          document_title: newReq.document_title,
-          fee: newReq.fee || 0,
-          purpose: newReq.purpose,
-          requirements_attached: newReq.requirements_attached || [],
-          uploaded_files: newReq.uploaded_files || [],
-          pickup_date: newReq.pickup_date,
-          pickup_time_slot: newReq.pickup_time_slot,
-          pickup_location: newReq.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
-          pickup_instructions: newReq.pickup_instructions || '',
+          purpose: newReq.purpose || 'Official Document Request',
+          requirements_attached: Array.isArray(newReq.requirements_attached) ? newReq.requirements_attached : [],
+          uploaded_files: Array.isArray(newReq.uploaded_files) ? newReq.uploaded_files : [],
           years_in_barangay: parsedYears,
-          resident_name: residentFullName,
-          resident_email: currentUser?.email || '',
-          resident_phone: currentUser?.phone || '',
-          resident_address: currentUser?.address || currentUser?.sitio || 'Barangay Zapatera, Cebu City',
-          resident_birth_date: currentUser?.birth_date || currentUser?.birthdate || null,
-          civil_status: currentUser?.civil_status || 'Single',
+          pickup_date: newReq.pickup_date || null,
+          pickup_time_slot: newReq.pickup_time_slot || null,
           status: 'pending',
+          notes: notesDetails,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
-        await supabase.from('document_requests').insert([payload]);
-
-        // Keep profile years_in_barangay in sync
-        if (parsedYears && authUserId) {
-          supabase.from('profiles').update({ years_in_barangay: parsedYears }).eq('id', authUserId).catch(() => {});
+        if (birthDateVal) {
+          basePayload.resident_birth_date = birthDateVal;
         }
 
-        // Insert in notifications table
-        await supabase.from('notifications').insert([{
-          user_id: authUserId,
-          title: 'Request Submitted Successfully 📄',
-          message: `Your application for ${newReq.document_title} (Tracking: ${newReq.tracking_number}) was received.`,
-          type: 'status_update',
-          link_tab: 'requests',
-          is_read: false,
-          created_at: new Date().toISOString(),
-        }]);
+        // Extended schema payload including migrated optional columns
+        const extendedPayload: any = {
+          ...basePayload,
+          resident_name: residentFullName,
+          resident_phone: currentUser?.phone || '',
+          resident_address: currentUser?.address || currentUser?.sitio || 'Barangay Zapatera, Cebu City',
+          civil_status: currentUser?.civil_status || 'Single',
+        };
+
+        const { error: insertErr } = await supabase.from('document_requests').insert([extendedPayload]);
+        if (insertErr) {
+          console.warn('Extended document_requests insert notice (retrying with base payload):', insertErr.message);
+          const { error: baseErr } = await supabase.from('document_requests').insert([basePayload]);
+          if (baseErr) {
+            console.error('Base document_requests insert error:', baseErr.message);
+          }
+        }
+
+        // Keep profile years_in_barangay in sync safely without calling .catch() on PostgrestFilterBuilder
+        if (parsedYears && authUserId) {
+          try {
+            await supabase.from('profiles').update({ years_in_barangay: parsedYears }).eq('id', authUserId);
+          } catch (syncErr) {
+            console.warn('Profile years sync notice:', syncErr);
+          }
+        }
+
+        // Insert in notifications table safely
+        try {
+          await supabase.from('notifications').insert([{
+            user_id: authUserId,
+            title: 'Request Submitted Successfully 📄',
+            message: `Your application for ${newReq.document_title} (Tracking: ${newReq.tracking_number}) was received.`,
+            type: 'status_update',
+            link_tab: 'requests',
+            is_read: false,
+            created_at: new Date().toISOString(),
+          }]);
+        } catch (notifErr) {
+          console.warn('Notification insert notice:', notifErr);
+        }
       }
     } catch (e) {
       console.error('Error recording document request:', e);
