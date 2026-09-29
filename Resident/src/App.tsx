@@ -439,7 +439,8 @@ export default function App() {
     }
 
     let authUserId = user.id;
-    if (isSupabaseConfigured()) {
+    const hasValidUuid = Boolean(authUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId));
+    if (!hasValidUuid && isSupabaseConfigured()) {
       try {
         const { data: authData } = await supabase.auth.getUser();
         if (authData?.user?.id) {
@@ -507,7 +508,8 @@ export default function App() {
     }
 
     let authUserId = user.id;
-    if (isSupabaseConfigured()) {
+    const hasValidUuid = Boolean(authUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId));
+    if (!hasValidUuid && isSupabaseConfigured()) {
       try {
         const { data: authData } = await supabase.auth.getUser();
         if (authData?.user?.id) {
