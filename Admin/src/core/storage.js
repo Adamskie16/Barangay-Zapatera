@@ -419,7 +419,7 @@ export const StorageService = {
           .select('*, profiles:created_by(full_name, email)')
           .order('event_date', { ascending: true });
 
-        if (data && !error && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           const formatted = data.map((evt) => ({
             ...evt,
             created_by_name: evt.profiles?.full_name || evt.profiles?.email || evt.created_by_name || 'Admin',
@@ -510,7 +510,8 @@ export const StorageService = {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(eventId);
         if (isUuid) {
           await supabase.from('events').delete().eq('id', eventId);
-        } else if (target) {
+        }
+        if (target && target.title) {
           await supabase.from('events').delete().eq('title', target.title);
         }
       }
@@ -536,7 +537,7 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (data && !error && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(data));
           return data;
         }
@@ -619,7 +620,8 @@ export const StorageService = {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newsId);
         if (isUuid) {
           await supabase.from('news').delete().eq('id', newsId);
-        } else if (target) {
+        }
+        if (target && target.title) {
           await supabase.from('news').delete().eq('title', target.title);
         }
       }

@@ -331,28 +331,38 @@ export default function ResidentDashboard({
       </View>
 
       <View style={styles.announcementsList}>
-        {announcements.slice(0, 3).map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.announcementCard}
-            onPress={() => onViewAnnouncement(item)}
-            activeOpacity={0.8}
-          >
-            {item.banner_url && (
-              <Image source={{ uri: item.banner_url }} style={styles.announcementThumb} />
-            )}
-            <View style={styles.announcementBody}>
-              <View style={styles.announcementHeader}>
-                <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryBadgeText}>{item.category.toUpperCase()}</Text>
+        {announcements.length > 0 ? (
+          announcements.slice(0, 3).map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.announcementCard}
+              onPress={() => onViewAnnouncement(item)}
+              activeOpacity={0.8}
+            >
+              {item.banner_url && (
+                <Image source={{ uri: item.banner_url }} style={styles.announcementThumb} />
+              )}
+              <View style={styles.announcementBody}>
+                <View style={styles.announcementHeader}>
+                  <View style={styles.categoryBadge}>
+                    <Text style={styles.categoryBadgeText}>{item.category.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.announcementDate}>{item.date}</Text>
                 </View>
-                <Text style={styles.announcementDate}>{item.date}</Text>
+                <Text style={styles.announcementTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.announcementDesc} numberOfLines={2}>{item.description}</Text>
               </View>
-              <Text style={styles.announcementTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.announcementDesc} numberOfLines={2}>{item.description}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyAnnouncementsCard}>
+            <Megaphone size={28} color="#94a3b8" />
+            <Text style={styles.emptyAnnouncementsTitle}>No Bulletins or Events Posted</Text>
+            <Text style={styles.emptyAnnouncementsSub}>
+              There are currently no active public announcements or upcoming events scheduled.
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Barangay Hall Office Information Footer */}
@@ -709,6 +719,31 @@ const styles = StyleSheet.create({
   announcementsList: {
     gap: 10,
     marginBottom: 20,
+  },
+  emptyAnnouncementsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyAnnouncementsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  emptyAnnouncementsSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 16,
+    maxWidth: 280,
   },
   announcementCard: {
     backgroundColor: '#ffffff',
