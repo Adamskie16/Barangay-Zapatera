@@ -139,6 +139,17 @@ export default function RequestFlowModal({
 
   // Confirmation State
   const [submittedReq, setSubmittedReq] = useState<DocumentRequest | null>(null);
+  const [copiedTracking, setCopiedTracking] = useState<boolean>(false);
+
+  const handleCopyTracking = () => {
+    if (submittedReq?.tracking_number) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(submittedReq.tracking_number);
+      }
+      setCopiedTracking(true);
+      setTimeout(() => setCopiedTracking(false), 2500);
+    }
+  };
 
   const selectedDoc = docTypes.find((d) => d.id === selectedDocId) || initialDoc || docTypes[0];
 
@@ -344,25 +355,8 @@ export default function RequestFlowModal({
         await onRequestSubmitted(newRequest);
       }
       setSubmittedReq(newRequest);
-
-      // Show Success Feedback Modal
-      setActionModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Request Submitted Successfully',
-        message: 'Your document request has been submitted and is now waiting for review.',
-        confirmText: 'View Request',
-        cancelText: 'Done',
-        onConfirm: () => {
-          setActionModal({ isOpen: false, title: '' });
-          onTrackSubmittedRequest(newRequest);
-          resetForm();
-        },
-        onClose: () => {
-          setActionModal({ isOpen: false, title: '' });
-          setCurrentStep(6);
-        },
-      });
+      // Directly transition to Step 6 (Confirmation Screen)
+      setCurrentStep(6);
     } catch (err) {
       console.error('Submission failed:', err);
       setActionModal({
@@ -383,6 +377,7 @@ export default function RequestFlowModal({
     setUploadedFiles({});
     setUploadError('');
     setSubmittedReq(null);
+    setCopiedTracking(false);
     setIsSubmitting(false);
     onClose();
   };
@@ -396,12 +391,18 @@ export default function RequestFlowModal({
           {/* Header */}
           <View style={styles.modalHeader}>
             <View style={styles.headerLeft}>
-              <FileText size={20} color="#1d4ed8" />
-              <Text style={styles.modalTitle}>
-                {currentStep === 6 ? 'Request Filed' : `File Request: Step ${currentStep} of 5`}
+              {currentStep === 6 ? (
+                <View style={styles.headerSuccessBadge}>
+                  <CheckCircle2 size={18} color="#16a34a" />
+                </View>
+              ) : (
+                <FileText size={20} color="#1d4ed8" />
+              )}
+              <Text style={[styles.modalTitle, currentStep === 6 && { color: '#16a34a' }]}>
+                {currentStep === 6 ? 'Request Submitted' : `File Request: Step ${currentStep} of 5`}
               </Text>
             </View>
-            <TouchableOpacity onPress={resetForm} style={styles.closeBtn}>
+            <TouchableOpacity onPress={resetForm} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <X size={20} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -894,46 +895,145 @@ export default function RequestFlowModal({
             {/* STEP 6: CONFIRMATION SCREEN */}
             {currentStep === 6 && submittedReq && (
               <View style={styles.confirmationContent}>
-                <View style={styles.successIconCircle}>
-                  <CheckCircle2 size={44} color="#16a34a" />
+                {/* Glowing Concentric Success Circle */}
+                <View style={styles.successIconOuter}>
+                  <View style={styles.successIconInner}>
+                    <Check size={32} color="#ffffff" strokeWidth={3} />
+                  </View>
                 </View>
 
                 <Text style={styles.successTitle}>Request Submitted Successfully!</Text>
                 <Text style={styles.successSub}>
-                  Your application has been logged into the Barangay Zapatera queue.
+                  Your document request has been officially recorded and queued for Barangay Zapatera administration review.
                 </Text>
 
-                {/* Tracking Reference Box */}
+                {/* Tracking Reference Highlight Card */}
                 <View style={styles.trackingBox}>
-                  <Text style={styles.trackingLabel}>OFFICIAL TRACKING NUMBER</Text>
+                  <View style={styles.trackingHeaderRow}>
+                    <View style={styles.trackingHeaderLeft}>
+                      <ShieldCheck size={14} color="#1d4ed8" />
+                      <Text style={styles.trackingLabel}>OFFICIAL TRACKING NUMBER</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.copyPill, copiedTracking && styles.copyPillActive]}
+                      onPress={handleCopyTracking}
+                      activeOpacity={0.7}
+                    >
+                      {copiedTracking ? (
+                        <>
+                          <Check size={12} color="#16a34a" strokeWidth={2.5} />
+                          <Text style={styles.copyPillTextSuccess}>Copied!</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} color="#2563eb" />
+                          <Text style={styles.copyPillText}>Copy Code</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.trackingCode}>{submittedReq.tracking_number}</Text>
-                  <Text style={styles.trackingInstruction}>Save or take a screenshot of this tracking code.</Text>
+                  <Text style={styles.trackingInstruction}>
+                    Save or take a screenshot of this tracking code for verification upon claiming.
+                  </Text>
                 </View>
 
+                {/* Detailed Summary Card */}
                 <View style={styles.confirmDetailsCard}>
                   <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Document:</Text>
-                    <Text style={styles.confirmValue}>{submittedReq.document_title}</Text>
+                    <View style={styles.confirmLabelGroup}>
+                      <FileText size={14} color="#64748b" />
+                      <Text style={styles.confirmLabel}>Document:</Text>
+                    </View>
+                    <Text style={styles.confirmValueBold}>{submittedReq.document_title}</Text>
                   </View>
+
+                  <View style={styles.confirmDivider} />
+
                   <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Pickup Date:</Text>
-                    <Text style={styles.confirmValue}>{submittedReq.pickup_date}</Text>
+                    <View style={styles.confirmLabelGroup}>
+                      <User size={14} color="#64748b" />
+                      <Text style={styles.confirmLabel}>Applicant:</Text>
+                    </View>
+                    <Text style={styles.confirmValue}>{submittedReq.resident_name}</Text>
                   </View>
+
+                  <View style={styles.confirmDivider} />
+
                   <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Time Interval:</Text>
-                    <Text style={styles.confirmValue}>{submittedReq.pickup_time_slot}</Text>
+                    <View style={styles.confirmLabelGroup}>
+                      <Calendar size={14} color="#64748b" />
+                      <Text style={styles.confirmLabel}>Pickup Schedule:</Text>
+                    </View>
+                    <View style={styles.scheduleBadge}>
+                      <Text style={styles.scheduleBadgeText}>
+                        {submittedReq.pickup_date} • {submittedReq.pickup_time_slot}
+                      </Text>
+                    </View>
                   </View>
+
+                  <View style={styles.confirmDivider} />
+
                   <View style={styles.confirmRow}>
-                    <Text style={styles.confirmLabel}>Fee to Prepare:</Text>
-                    <Text style={[styles.confirmValue, { color: '#1d4ed8', fontWeight: '800' }]}>
-                      {submittedReq.fee === 0 ? 'FREE' : formatCurrency(submittedReq.fee)}
+                    <View style={styles.confirmLabelGroup}>
+                      <MapPin size={14} color="#64748b" />
+                      <Text style={styles.confirmLabel}>Claim Location:</Text>
+                    </View>
+                    <Text style={styles.confirmValue}>Barangay Zapatera Hall</Text>
+                  </View>
+
+                  <View style={styles.confirmDivider} />
+
+                  <View style={styles.confirmRow}>
+                    <View style={styles.confirmLabelGroup}>
+                      <Text style={styles.confirmLabel}>Document Fee:</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.feeBadge,
+                        submittedReq.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.feeBadgeText,
+                          submittedReq.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid,
+                        ]}
+                      >
+                        {submittedReq.fee === 0 ? 'FREE OF CHARGE' : `${formatCurrency(submittedReq.fee)} (Pay at Counter)`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Important Guidelines / Next Steps */}
+                <View style={styles.guideCard}>
+                  <Text style={styles.guideTitle}>📌 Next Steps & Guidelines</Text>
+                  <View style={styles.guideItem}>
+                    <Text style={styles.guideBullet}>•</Text>
+                    <Text style={styles.guideText}>
+                      Our barangay officers will review your application. Check status updates under the <Text style={{ fontWeight: '700', color: '#1d4ed8' }}>Requests</Text> tab.
+                    </Text>
+                  </View>
+                  <View style={styles.guideItem}>
+                    <Text style={styles.guideBullet}>•</Text>
+                    <Text style={styles.guideText}>
+                      Bring at least 1 valid government ID when claiming your physical document.
+                    </Text>
+                  </View>
+                  <View style={styles.guideItem}>
+                    <Text style={styles.guideBullet}>•</Text>
+                    <Text style={styles.guideText}>
+                      Present tracking code <Text style={{ fontWeight: '700', color: '#1e40af' }}>#{submittedReq.tracking_number}</Text> at the Releasing Counter.
                     </Text>
                   </View>
                 </View>
 
+                {/* Action Buttons */}
                 <View style={styles.confirmActions}>
                   <TouchableOpacity
                     style={styles.trackNowBtn}
+                    activeOpacity={0.85}
                     onPress={() => {
                       onTrackSubmittedRequest(submittedReq);
                       resetForm();
@@ -941,10 +1041,12 @@ export default function RequestFlowModal({
                   >
                     <Clock size={16} color="#ffffff" />
                     <Text style={styles.trackNowBtnText}>Track Request Timeline</Text>
+                    <ArrowRight size={16} color="#ffffff" />
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.doneBtn}
+                    activeOpacity={0.8}
                     onPress={resetForm}
                   >
                     <Text style={styles.doneBtnText}>Back to Dashboard</Text>
@@ -1552,41 +1654,76 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#334155',
   },
-  confirmationContent: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  successIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  headerSuccessBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+  },
+  confirmationContent: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  successIconOuter: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
+  },
+  successIconInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   successTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0f172a',
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   successSub: {
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: 16,
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
   trackingBox: {
     width: '100%',
     backgroundColor: '#eff6ff',
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#93c5fd',
-    marginBottom: 16,
+    marginBottom: 14,
+  },
+  trackingHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  trackingHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   trackingLabel: {
     fontSize: 10,
@@ -1594,43 +1731,153 @@ const styles = StyleSheet.create({
     color: '#1e40af',
     letterSpacing: 0.5,
   },
+  copyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  copyPillActive: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+  },
+  copyPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  copyPillTextSuccess: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+  },
   trackingCode: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
     fontFamily: 'monospace',
     color: '#1d4ed8',
-    marginVertical: 4,
+    marginVertical: 8,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
   trackingInstruction: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#64748b',
+    textAlign: 'center',
   },
   confirmDetailsCard: {
     width: '100%',
     backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 8,
-    marginBottom: 20,
+    marginBottom: 14,
   },
   confirmRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  confirmLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   confirmLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748b',
+    fontWeight: '500',
   },
   confirmValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  confirmValueBold: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 6,
+  },
+  scheduleBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  scheduleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#1d4ed8',
+  },
+  feeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  feeBadgeFree: {
+    backgroundColor: '#dcfce7',
+  },
+  feeBadgePaid: {
+    backgroundColor: '#eff6ff',
+  },
+  feeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  feeBadgeTextFree: {
+    color: '#15803d',
+  },
+  feeBadgeTextPaid: {
+    color: '#1d4ed8',
+  },
+  guideCard: {
+    width: '100%',
+    backgroundColor: '#fefce8',
+    borderColor: '#fef08a',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+  },
+  guideTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#854d0e',
+    marginBottom: 6,
+  },
+  guideItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+  },
+  guideBullet: {
+    fontSize: 12,
+    color: '#a16207',
+    fontWeight: '700',
+  },
+  guideText: {
+    fontSize: 11,
+    color: '#713f12',
+    flex: 1,
+    lineHeight: 16,
   },
   confirmActions: {
     width: '100%',
     gap: 10,
+    marginBottom: 8,
   },
   trackNowBtn: {
     flexDirection: 'row',
@@ -1638,8 +1885,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#1d4ed8',
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   trackNowBtnText: {
     fontSize: 13,
@@ -1647,10 +1899,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   doneBtn: {
-    paddingVertical: 12,
+    paddingVertical: 13,
     alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
   },
   doneBtnText: {
     fontSize: 13,
