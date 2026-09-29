@@ -68,6 +68,9 @@ export default function App() {
 
     // Subscribe to live system configuration updates from SuperAdmin
     let configChannel: any = null;
+    let newsChannel: any = null;
+    let eventsChannel: any = null;
+
     if (isSupabaseConfigured()) {
       try {
         configChannel = supabase
@@ -87,15 +90,39 @@ export default function App() {
             }
           )
           .subscribe();
-      } catch {
-        // Handled
+
+        // Real-time synchronization for News & Announcements
+        newsChannel = supabase
+          .channel('resident-news-live')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'news' },
+            () => {
+              fetchAnnouncements();
+            }
+          )
+          .subscribe();
+
+        // Real-time synchronization for Barangay Events
+        eventsChannel = supabase
+          .channel('resident-events-live')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'events' },
+            () => {
+              fetchAnnouncements();
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime subscription notice:', err);
       }
     }
 
     return () => {
-      if (configChannel) {
-        supabase.removeChannel(configChannel);
-      }
+      if (configChannel) supabase.removeChannel(configChannel);
+      if (newsChannel) supabase.removeChannel(newsChannel);
+      if (eventsChannel) supabase.removeChannel(eventsChannel);
     };
   }, []);
 
@@ -332,54 +359,57 @@ export default function App() {
             .order('created_at', { ascending: false }),
         ]);
 
-        const newsItems: BarangayAnnouncement[] = (newsRes.data || []).map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          category: (item.category as any) || 'Public Advisory',
-          date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          description: item.description,
-          content: item.content || item.description,
-          banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
-          location: item.location || 'Barangay Zapatera, Cebu City',
-          author: item.author || 'Barangay Administration',
-          is_important: !!item.is_important,
-          is_emergency: !!item.is_emergency,
-          created_at: item.created_at,
-        }));
+        // When Supabase responds without error, its result is the absolute source of truth
+        if (!newsRes.error && !eventsRes.error) {
+          const newsItems: BarangayAnnouncement[] = (newsRes.data || []).map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            category: (item.category as any) || 'Public Advisory',
+            date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            description: item.description,
+            content: item.content || item.description,
+            banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+            location: item.location || 'Barangay Zapatera, Cebu City',
+            author: item.author || 'Barangay Administration',
+            is_important: !!item.is_important,
+            is_emergency: !!item.is_emergency,
+            created_at: item.created_at,
+          }));
 
-        const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
-          id: evt.id,
-          title: evt.title,
-          category: 'Events',
-          date: evt.event_date
-            ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          description: evt.description,
-          content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
-          banner_url: evt.image_url || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
-          location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
-          author: evt.created_by_name || 'Barangay Office',
-          is_important: false,
-          is_emergency: false,
-          created_at: evt.created_at || evt.event_date,
-        }));
+          const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
+            id: evt.id,
+            title: evt.title,
+            category: 'Events',
+            date: evt.event_date
+              ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            description: evt.description,
+            content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
+            banner_url: evt.image_url || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+            location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
+            author: evt.created_by_name || 'Barangay Office',
+            is_important: false,
+            is_emergency: false,
+            created_at: evt.created_at || evt.event_date,
+          }));
 
-        const combined = [...newsItems, ...eventItems].sort((a, b) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          return timeB - timeA;
-        });
+          const combined = [...newsItems, ...eventItems].sort((a, b) => {
+            const timeA = new Date(a.created_at || 0).getTime();
+            const timeB = new Date(b.created_at || 0).getTime();
+            return timeB - timeA;
+          });
 
-        if (combined.length > 0) {
+          // Accurately update state and cache (even if empty because items were deleted)
           setAnnouncements(combined);
           await MobileStorage.setItem('zapatera_news_db', JSON.stringify(combined));
           return;
         }
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn('Live announcements fetch notice:', err);
     }
 
+    // Only fallback to local storage cache if offline or query threw an exception
     try {
       const stored = await MobileStorage.getItem('zapatera_news_db');
       if (stored) {
