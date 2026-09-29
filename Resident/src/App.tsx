@@ -793,8 +793,8 @@ export default function App() {
           newReq.notes || '',
         ].filter(Boolean).join(' | ');
 
-        // Guaranteed base schema payload
-        const basePayload: any = {
+        // Guaranteed schema payload matching public.document_requests table columns
+        const payload: any = {
           tracking_number: newReq.tracking_number,
           resident_id: authUserId,
           document_type_id: docTypeId,
@@ -811,33 +811,23 @@ export default function App() {
         };
 
         if (birthDateVal) {
-          basePayload.resident_birth_date = birthDateVal;
+          payload.resident_birth_date = birthDateVal;
         }
 
-        // Extended schema payload including migrated optional columns
-        const extendedPayload: any = {
-          ...basePayload,
-          resident_name: residentFullName,
-          resident_phone: currentUser?.phone || '',
-          resident_address: currentUser?.address || currentUser?.sitio || 'Barangay Zapatera, Cebu City',
-          civil_status: currentUser?.civil_status || 'Single',
-        };
-
-        const { error: insertErr } = await supabase.from('document_requests').insert([extendedPayload]);
+        const { error: insertErr } = await supabase.from('document_requests').insert([payload]);
         if (insertErr) {
-          console.warn('Extended document_requests insert notice (retrying with base payload):', insertErr.message);
-          const { error: baseErr } = await supabase.from('document_requests').insert([basePayload]);
-          if (baseErr) {
-            console.error('Base document_requests insert error:', baseErr.message);
-          }
+          console.error('Error inserting document_request:', insertErr.message);
         }
 
-        // Keep profile years_in_barangay in sync safely without calling .catch() on PostgrestFilterBuilder
-        if (parsedYears && authUserId) {
+        // Keep profile years_in_barangay and civil_status in sync on public.profiles
+        if (authUserId) {
           try {
-            await supabase.from('profiles').update({ years_in_barangay: parsedYears }).eq('id', authUserId);
+            const profileUpdates: any = { updated_at: new Date().toISOString() };
+            if (parsedYears) profileUpdates.years_in_barangay = parsedYears;
+            if (currentUser?.civil_status) profileUpdates.civil_status = currentUser.civil_status;
+            await supabase.from('profiles').update(profileUpdates).eq('id', authUserId);
           } catch (syncErr) {
-            console.warn('Profile years sync notice:', syncErr);
+            console.warn('Profile sync notice:', syncErr);
           }
         }
 
