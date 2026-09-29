@@ -1,5 +1,14 @@
 // Resident/src/components/ActionModal.tsx
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
 import {
   CheckCircle2,
   AlertCircle,
@@ -7,7 +16,6 @@ import {
   Info,
   HelpCircle,
   X,
-  Loader2,
 } from 'lucide-react';
 
 export type ActionModalType = 'success' | 'error' | 'confirmation' | 'warning' | 'info';
@@ -43,215 +51,247 @@ export default function ActionModal({
   onClose,
   isProcessing = false,
   isDestructive = false,
-  maxWidth = 'max-w-md',
   secondaryButton,
 }: ActionModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const confirmBtnRef = useRef<HTMLButtonElement>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isProcessing) {
-        onClose();
-      }
-
-      // Focus trap
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusableElements.length === 0) return;
-
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
-            lastElement.focus();
-            e.preventDefault();
-          }
-        } else {
-          if (document.activeElement === lastElement) {
-            firstElement.focus();
-            e.preventDefault();
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isProcessing, onClose]);
-
-  // Initial focus management
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        if (type === 'confirmation' && cancelBtnRef.current) {
-          cancelBtnRef.current.focus();
-        } else if (confirmBtnRef.current) {
-          confirmBtnRef.current.focus();
-        }
-      }, 50);
-    }
-  }, [isOpen, type]);
-
   if (!isOpen) return null;
 
-  const getIconConfig = () => {
+  const getTheme = () => {
     switch (type) {
       case 'success':
         return {
-          icon: <CheckCircle2 className="w-8 h-8 text-emerald-600" aria-hidden="true" />,
-          bg: 'bg-emerald-50 border-emerald-200',
+          icon: <CheckCircle2 size={32} color="#16a34a" />,
+          bgColor: '#dcfce7',
+          borderColor: '#bbf7d0',
+          btnBgColor: '#16a34a',
         };
       case 'error':
         return {
-          icon: <AlertCircle className="w-8 h-8 text-rose-600" aria-hidden="true" />,
-          bg: 'bg-rose-50 border-rose-200',
+          icon: <AlertCircle size={32} color="#e11d48" />,
+          bgColor: '#ffe4e6',
+          borderColor: '#fecdd3',
+          btnBgColor: '#e11d48',
         };
       case 'warning':
       case 'confirmation':
         if (isDestructive) {
           return {
-            icon: <AlertTriangle className="w-8 h-8 text-rose-600" aria-hidden="true" />,
-            bg: 'bg-rose-50 border-rose-200',
+            icon: <AlertTriangle size={32} color="#e11d48" />,
+            bgColor: '#ffe4e6',
+            borderColor: '#fecdd3',
+            btnBgColor: '#e11d48',
           };
         }
         return {
-          icon: <HelpCircle className="w-8 h-8 text-blue-600" aria-hidden="true" />,
-          bg: 'bg-blue-50 border-blue-200',
+          icon: <HelpCircle size={32} color="#2563eb" />,
+          bgColor: '#eff6ff',
+          borderColor: '#bfdbfe',
+          btnBgColor: '#2563eb',
         };
       case 'info':
       default:
         return {
-          icon: <Info className="w-8 h-8 text-blue-600" aria-hidden="true" />,
-          bg: 'bg-blue-50 border-blue-200',
+          icon: <Info size={32} color="#2563eb" />,
+          bgColor: '#eff6ff',
+          borderColor: '#bfdbfe',
+          btnBgColor: '#2563eb',
         };
     }
   };
 
-  const iconConfig = getIconConfig();
+  const theme = getTheme();
 
   return (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 transition-opacity motion-reduce:transition-none"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="resident-action-modal-title"
-      aria-describedby="resident-action-modal-desc"
-    >
-      <div
-        ref={modalRef}
-        className={`bg-white rounded-2xl shadow-2xl border border-slate-200 w-full ${maxWidth} overflow-hidden transform transition-all motion-reduce:transform-none scale-100 animate-in fade-in zoom-in-95 duration-200`}
-      >
-        {!isProcessing && (
-          <div className="flex justify-end p-3 pb-0">
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close modal"
-              title="Close modal"
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400"
+    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={isProcessing ? undefined : onClose}>
+        <Pressable style={styles.card} onPress={(e) => e.stopPropagation?.()}>
+          {!isProcessing && (
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
+              <X size={18} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
 
-        <div className="px-6 pt-2 pb-6 text-center space-y-4">
-          <div className="flex justify-center">
-            <div
-              className={`w-16 h-16 rounded-2xl border flex items-center justify-center shadow-xs ${iconConfig.bg}`}
+          <View style={styles.content}>
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: theme.bgColor, borderColor: theme.borderColor },
+              ]}
             >
-              {iconConfig.icon}
-            </div>
-          </div>
+              {theme.icon}
+            </View>
 
-          <div className="space-y-1.5">
-            <h3
-              id="resident-action-modal-title"
-              className="text-lg font-bold text-slate-900 tracking-tight cursor-text"
-            >
-              {title}
-            </h3>
-            <div
-              id="resident-action-modal-desc"
-              className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto cursor-text"
-              role={type === 'error' ? 'alert' : type === 'success' ? 'status' : undefined}
-              aria-live={type === 'error' ? 'assertive' : type === 'success' ? 'polite' : undefined}
-            >
-              {message}
-            </div>
-          </div>
+            <Text style={styles.title}>{title}</Text>
 
-          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-2.5">
-            {type === 'confirmation' || type === 'warning' ? (
-              <>
-                <button
-                  ref={cancelBtnRef}
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={onClose}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                >
-                  {cancelText}
-                </button>
-                <button
-                  ref={confirmBtnRef}
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={onConfirm}
-                  className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-75 inline-flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                    isDestructive
-                      ? 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500 shadow-rose-900/20'
-                      : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 shadow-blue-900/20'
-                  }`}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                      <span role="status" aria-live="polite">Processing...</span>
-                    </>
-                  ) : (
-                    <span>{confirmText}</span>
-                  )}
-                </button>
-              </>
+            {typeof message === 'string' ? (
+              <Text style={styles.message}>{message}</Text>
             ) : (
-              <div className="flex flex-col sm:flex-row gap-2 w-full justify-center">
-                {secondaryButton && (
-                  <button
-                    type="button"
-                    onClick={secondaryButton.onClick}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-                  >
-                    {secondaryButton.text}
-                  </button>
-                )}
-                <button
-                  ref={confirmBtnRef}
-                  type="button"
-                  onClick={onClose}
-                  className={`w-full sm:w-auto px-6 py-2.5 rounded-xl text-white text-xs font-bold transition-all shadow-sm cursor-pointer inline-flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                    type === 'error'
-                      ? 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500'
-                      : type === 'success'
-                      ? 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500'
-                      : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-                  }`}
-                >
-                  {buttonText}
-                </button>
-              </div>
+              <View style={styles.messageContainer}>{message}</View>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+
+            <View style={styles.actionsContainer}>
+              {type === 'confirmation' || type === 'warning' ? (
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.cancelBtn]}
+                    onPress={onClose}
+                    disabled={isProcessing}
+                  >
+                    <Text style={styles.cancelBtnText}>{cancelText}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, { backgroundColor: theme.btnBgColor }]}
+                    onPress={onConfirm}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.confirmBtnText}>{confirmText}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.buttonStack}>
+                  {secondaryButton && (
+                    <TouchableOpacity
+                      style={[styles.btn, styles.secondaryBtn]}
+                      onPress={secondaryButton.onClick}
+                      disabled={isProcessing}
+                    >
+                      <Text style={styles.secondaryBtnText}>{secondaryButton.text}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={[styles.btn, { backgroundColor: theme.btnBgColor }]}
+                    onPress={onClose}
+                    disabled={isProcessing}
+                  >
+                    <Text style={styles.confirmBtnText}>{buttonText}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+    position: 'relative',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  content: {
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  message: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
+  messageContainer: {
+    marginTop: 8,
+    width: '100%',
+  },
+  actionsContainer: {
+    width: '100%',
+    marginTop: 20,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  buttonStack: {
+    width: '100%',
+    gap: 10,
+  },
+  btn: {
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  cancelBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  secondaryBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+});
