@@ -1,11 +1,14 @@
-// Resident/src/App.tsx
-import React, { useState, useEffect } from 'react';
+import './index.css';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
+  Text,
+  TouchableOpacity,
   StatusBar,
   StyleSheet,
 } from 'react-native';
+import { AlertTriangle, Megaphone, X } from 'lucide-react';
 import {
   ResidentUser,
   DocumentRequest,
@@ -37,6 +40,13 @@ import MyRequestsView from './features/requests/MyRequestsView';
 import AnnouncementsView from './features/announcements/AnnouncementsView';
 import NotificationModal from './features/notifications/NotificationModal';
 import ProfileView from './features/profile/ProfileView';
+import SecurityNoticeModal from './components/SecurityNoticeModal';
+import UnlockAccountModal from './components/UnlockAccountModal';
+import {
+  initPhoneNotifications,
+  triggerCellphoneNotification,
+} from './core/phoneNotification';
+import PhoneNotificationPermissionBanner from './components/PhoneNotificationPermissionBanner';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
@@ -46,6 +56,7 @@ export default function App() {
   const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config, setConfig] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
   const [notifications, setNotifications] = useState<ResidentNotification[]>([]);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
 
   // Modals state
   const [isRequestFlowOpen, setIsRequestFlowOpen] = useState<boolean>(false);
@@ -59,8 +70,98 @@ export default function App() {
   const [selectedRequestForTracking, setSelectedRequestForTracking] = useState<DocumentRequest | null>(null);
 
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState<boolean>(false);
+  const [accountDeletedNotice, setAccountDeletedNotice] = useState<string | null>(null);
+  const [selectedAnnouncementForModal, setSelectedAnnouncementForModal] = useState<BarangayAnnouncement | null>(null);
+  const [activeAnnouncementBanner, setActiveAnnouncementBanner] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    type: 'warning' | 'announcement' | 'info';
+    announcement?: BarangayAnnouncement;
+  } | null>(null);
+
+  const currentUserRef = useRef<ResidentUser | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  // Set of recently notified announcement keys to prevent duplicated alerts
+  const notifiedAnnouncementIdsRef = useRef<Set<string>>(new Set());
+
+  // Master handler: Physically vibrates phone, plays melodic chime, triggers native OS cellphone notification & heads-up banner
+  const handleNotifyNewAnnouncement = (newsItem: any, source: string = 'realtime') => {
+    if (!newsItem || newsItem.is_published === false) return;
+    const itemKey = `${newsItem.id || newsItem.title}_${newsItem.updated_at || newsItem.created_at || ''}`;
+
+    if (notifiedAnnouncementIdsRef.current.has(itemKey)) {
+      return;
+    }
+    notifiedAnnouncementIdsRef.current.add(itemKey);
+    if (notifiedAnnouncementIdsRef.current.size > 100) {
+      const arr = Array.from(notifiedAnnouncementIdsRef.current);
+      notifiedAnnouncementIdsRef.current = new Set(arr.slice(arr.length - 50));
+    }
+
+    const isEmergency = !!newsItem.is_emergency;
+    const bannerTitle = isEmergency
+      ? `🚨 Emergency Advisory: ${newsItem.title}`
+      : `📢 New Announcement: ${newsItem.title}`;
+    const bannerMessage = newsItem.description || newsItem.content || 'Barangay Zapatera has published a new bulletin.';
+
+    // 1. Physically vibrate cellphone, play melodic chime, and trigger OS System notification tray alert
+    triggerCellphoneNotification({
+      id: newsItem.id,
+      title: newsItem.title,
+      message: bannerMessage,
+      isEmergency,
+      category: newsItem.category || 'Public Advisory',
+      banner_url: newsItem.banner_url,
+      author: newsItem.author,
+      url: '/?tab=announcements',
+    });
+
+    // 2. Display the sleek in-app mobile push banner at top of phone screen
+    setActiveAnnouncementBanner({
+      id: newsItem.id || `ann-${Date.now()}`,
+      title: bannerTitle,
+      message: bannerMessage,
+      type: isEmergency ? 'warning' : 'announcement',
+      announcement: {
+        id: newsItem.id,
+        title: newsItem.title,
+        category: newsItem.category || 'Public Advisory',
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        description: newsItem.description || '',
+        content: newsItem.content || newsItem.description || '',
+        banner_url: newsItem.banner_url || '',
+        location: newsItem.location || 'Barangay Zapatera, Cebu City',
+        author: newsItem.author || 'Barangay Administration',
+        is_important: !!newsItem.is_important,
+        is_emergency: !!newsItem.is_emergency,
+      },
+    });
+
+    // 3. Immediately refresh announcements & notifications
+    fetchAnnouncements();
+    if (currentUserRef.current) {
+      fetchResidentNotifications(currentUserRef.current);
+    }
+  };
+
+  // Auto-dismiss in-app announcement banner after 8 seconds
+  useEffect(() => {
+    if (activeAnnouncementBanner) {
+      const timer = setTimeout(() => {
+        setActiveAnnouncementBanner(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeAnnouncementBanner]);
 
   useEffect(() => {
+    // Initialize service worker and cellphone notification audio listener
+    initPhoneNotifications();
+
     loadResidentSession();
     fetchSystemConfig();
     fetchDocTypes();
@@ -70,6 +171,8 @@ export default function App() {
     let configChannel: any = null;
     let newsChannel: any = null;
     let eventsChannel: any = null;
+    let notifsChannel: any = null;
+    let broadcastChannel: BroadcastChannel | null = null;
 
     if (isSupabaseConfigured()) {
       try {
@@ -97,8 +200,15 @@ export default function App() {
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'news' },
-            () => {
-              fetchAnnouncements();
+            (payload: any) => {
+              if (payload?.new && payload.new.is_published !== false) {
+                handleNotifyNewAnnouncement(payload.new, 'supabase_realtime');
+              } else {
+                fetchAnnouncements();
+                if (currentUserRef.current) {
+                  fetchResidentNotifications(currentUserRef.current);
+                }
+              }
             }
           )
           .subscribe();
@@ -114,15 +224,122 @@ export default function App() {
             }
           )
           .subscribe();
+
+        // Real-time synchronization for Resident Notifications
+        notifsChannel = supabase
+          .channel('resident-notifications-live')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'notifications' },
+            () => {
+              if (currentUserRef.current) {
+                fetchResidentNotifications(currentUserRef.current);
+              }
+            }
+          )
+          .subscribe();
       } catch (err) {
         console.warn('Realtime subscription notice:', err);
       }
+    }
+
+    // Cross-tab BroadcastChannel listener for immediate news and notifications
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        broadcastChannel = new BroadcastChannel('zapatera_security_channel');
+        broadcastChannel.onmessage = (event) => {
+          if (event.data?.type === 'NEWS_PUBLISHED' && event.data?.news) {
+            handleNotifyNewAnnouncement(event.data.news, 'broadcast_channel');
+          } else if (event.data?.type === 'NOTIFICATION_SENT') {
+            fetchAnnouncements();
+            if (currentUserRef.current) {
+              fetchResidentNotifications(currentUserRef.current);
+            }
+          } else if (event.data?.type === 'NEWS_DELETED') {
+            fetchAnnouncements();
+          }
+        };
+      } catch (e) {}
+    }
+
+    // Storage event listener for cross-tab sync
+    const handleStorageChange = (e: StorageEvent) => {
+      if (
+        e.key === 'zapatera_notifications_db' ||
+        e.key?.startsWith('zapatera_notifications_db_') ||
+        e.key === 'zapatera_news_db'
+      ) {
+        fetchAnnouncements();
+        if (currentUserRef.current) {
+          fetchResidentNotifications(currentUserRef.current);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+    }
+
+    // Background polling & wake-up check for newly published announcements
+    const checkLatestAnnouncements = async () => {
+      try {
+        if (!isSupabaseConfigured()) return;
+        const { data } = await supabase
+          .from('news')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (data && data[0]) {
+          const latest = data[0];
+          const createdAt = new Date(latest.created_at).getTime();
+          const now = Date.now();
+          if (now - createdAt < 120000) {
+            handleNotifyNewAnnouncement(latest, 'poll');
+          }
+        }
+      } catch {}
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkLatestAnnouncements();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+    const bgPollInterval = setInterval(checkLatestAnnouncements, 20000);
+
+    // Listen to service worker click events
+    let handleSwMessage: any = null;
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      handleSwMessage = (event: any) => {
+        if (event.data?.type === 'OPEN_ANNOUNCEMENT_TAB') {
+          setActiveTab('announcements');
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
     }
 
     return () => {
       if (configChannel) supabase.removeChannel(configChannel);
       if (newsChannel) supabase.removeChannel(newsChannel);
       if (eventsChannel) supabase.removeChannel(eventsChannel);
+      if (notifsChannel) supabase.removeChannel(notifsChannel);
+      if (broadcastChannel) broadcastChannel.close();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageChange);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      clearInterval(bgPollInterval);
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && handleSwMessage) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
     };
   }, []);
 
@@ -181,86 +398,143 @@ export default function App() {
   }, [currentUser]);
 
   // -------------------------------------------------------------
-  // TWO-WAY RESIDENT PROFILE REALTIME SYNCHRONIZATION
+  // TWO-WAY RESIDENT PROFILE REALTIME SYNCHRONIZATION & DELETION LISTENER
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!currentUser?.id || !isSupabaseConfigured()) return;
+    if (!currentUser?.id) return;
 
     let profileChannel: any = null;
+    let broadcastChannel: BroadcastChannel | null = null;
+
+    const deletionNoticeText = 'Notice: Your resident account has been deleted by Barangay Zapatera administration. You have been logged out.';
 
     // Fresh query cache invalidation & session refresh
     const refreshProfileFromDatabase = async () => {
+      if (!isSupabaseConfigured()) return;
       try {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', currentUser.id)
-          .single();
+          .maybeSingle();
 
-        if (!error && data) {
-          // If locked or deactivated by superadmin/admin, terminate session immediately
-          if (data.is_locked || data.is_active === false) {
-            handleLogout();
-            return;
-          }
-
-          setCurrentUser((prev: any) => {
-            if (!prev) return data;
-            const updated = {
-              ...prev,
-              ...data,
-              push_token: data.push_token || prev.push_token,
-            };
-            MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
-            return updated;
-          });
+        // Check if explicitly marked inactive
+        if (data && data.is_active === false) {
+          handleLogout('Notice: Your resident account has been deactivated by Barangay Zapatera administration.');
+          return;
         }
+
+        // Check if locked
+        if (data && data.is_locked) {
+          handleLogout('Notice: Your resident account has been locked. Please unlock via Gmail.');
+          return;
+        }
+
+        // If profile record was deleted from Supabase
+        if (!data) {
+          handleLogout(deletionNoticeText);
+          return;
+        }
+
+        setCurrentUser((prev: any) => {
+          if (!prev) return data;
+          const updated = {
+            ...prev,
+            ...data,
+            push_token: data.push_token || prev.push_token,
+          };
+          MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
+          return updated;
+        });
       } catch (err) {
         console.warn('Error refreshing resident profile:', err);
       }
     };
 
-    // 1. Supabase Realtime subscription on public.profiles for this resident
-    try {
-      profileChannel = supabase
-        .channel(`resident-profile-sync-${currentUser.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${currentUser.id}`,
-          },
-          (payload: any) => {
-            if (payload?.new) {
-              const updatedRow = payload.new;
-
-              // Check if account status has been locked or deactivated
-              if (updatedRow.is_locked || updatedRow.is_active === false) {
-                handleLogout();
+    // 1. Supabase Realtime subscription on public.profiles for this resident (Both UPDATE and DELETE)
+    if (isSupabaseConfigured()) {
+      try {
+        profileChannel = supabase
+          .channel(`resident-profile-sync-${currentUser.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${currentUser.id}`,
+            },
+            (payload: any) => {
+              if (payload.eventType === 'DELETE') {
+                handleLogout(deletionNoticeText);
                 return;
               }
 
-              setCurrentUser((prev: any) => {
-                if (!prev) return updatedRow;
-                const updated = {
-                  ...prev,
-                  ...updatedRow,
-                  push_token: updatedRow.push_token || prev.push_token,
-                };
-                MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
-                return updated;
-              });
+              if (payload?.new) {
+                const updatedRow = payload.new;
+
+                // Check if account status has been locked or deactivated
+                if (updatedRow.is_locked || updatedRow.is_active === false) {
+                  handleLogout('Notice: Your resident account has been deactivated or locked by Barangay Zapatera administration.');
+                  return;
+                }
+
+                setCurrentUser((prev: any) => {
+                  if (!prev) return updatedRow;
+                  const updated = {
+                    ...prev,
+                    ...updatedRow,
+                    push_token: updatedRow.push_token || prev.push_token,
+                  };
+                  MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
+                  return updated;
+                });
+              }
             }
-          }
-        )
-        .subscribe();
-    } catch (err) {
-      console.warn('Error creating profile realtime subscription:', err);
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Error creating profile realtime subscription:', err);
+      }
     }
 
-    // 2. Query cache invalidation on screen focus / app resume
+    // 2. Cross-tab BroadcastChannel listener for immediate deletion notification from SuperAdmin / AccountManagement
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        broadcastChannel = new BroadcastChannel('zapatera_security_channel');
+        broadcastChannel.onmessage = (event) => {
+          if (event.data?.type === 'ACCOUNT_DELETED') {
+            const deletedId = event.data?.userId;
+            const deletedEmail = (event.data?.email || '').toLowerCase().trim();
+            const myEmail = (currentUser?.email || '').toLowerCase().trim();
+
+            if (deletedId === currentUser?.id || (deletedEmail && deletedEmail === myEmail)) {
+              handleLogout(deletionNoticeText);
+            }
+          }
+        };
+      }
+    } catch {}
+
+    // 3. Storage event listener (syncs across browser tabs on the same origin)
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'zapatera_account_deleted_event' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          const deletedEmail = (parsed.email || '').toLowerCase().trim();
+          const myEmail = (currentUser?.email || '').toLowerCase().trim();
+          if (parsed.userId === currentUser?.id || (deletedEmail && deletedEmail === myEmail)) {
+            handleLogout(deletionNoticeText);
+          }
+        } catch {}
+      }
+    };
+
+    // 4. Periodic heartbeat (every 15s) to guarantee deleted users cannot remain logged in
+    const heartbeatTimer = setInterval(() => {
+      refreshProfileFromDatabase();
+    }, 15000);
+
     const handleFocus = () => {
       refreshProfileFromDatabase();
     };
@@ -272,20 +546,26 @@ export default function App() {
     };
 
     if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageEvent);
       window.addEventListener('focus', handleFocus);
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
     return () => {
-      if (profileChannel) {
+      if (profileChannel && isSupabaseConfigured()) {
         supabase.removeChannel(profileChannel);
       }
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
+      clearInterval(heartbeatTimer);
       if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorageEvent);
         window.removeEventListener('focus', handleFocus);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.email]);
 
   const loadResidentSession = async () => {
     try {
@@ -506,7 +786,7 @@ export default function App() {
             message: n.message,
             type: n.type || 'info',
             is_read: n.is_read || false,
-            link_tab: (n.link_tab as any) || 'requests',
+            link_tab: (n.link_tab as any) || (n.type === 'announcement' || n.type === 'warning' ? 'announcements' : 'requests'),
             created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           }));
           setNotifications(formatted);
@@ -519,12 +799,26 @@ export default function App() {
     }
 
     try {
-      const stored = await MobileStorage.getItem(userNotifsKey);
-      if (stored) {
-        setNotifications(JSON.parse(stored));
-      } else {
-        setNotifications([]);
-      }
+      const [userStored, genStored] = await Promise.all([
+        MobileStorage.getItem(userNotifsKey),
+        MobileStorage.getItem('zapatera_notifications_db'),
+      ]);
+      const userList: ResidentNotification[] = userStored ? JSON.parse(userStored) : [];
+      const genList: ResidentNotification[] = genStored ? JSON.parse(genStored) : [];
+
+      const map = new Map<string, ResidentNotification>();
+      userList.forEach((n) => map.set(n.id, n));
+      genList.forEach((n) => {
+        if (!map.has(n.id)) {
+          map.set(n.id, n);
+        }
+      });
+      const combined = Array.from(map.values()).sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
+      setNotifications(combined);
     } catch {
       setNotifications([]);
     }
@@ -687,7 +981,7 @@ export default function App() {
     await fetchResidentNotifications(user);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (notice?: string) => {
     try {
       await MobileStorage.removeItem('zapatera_resident_session');
       if (isSupabaseConfigured()) {
@@ -700,6 +994,9 @@ export default function App() {
     setRequests([]);
     setNotifications([]);
     setActiveTab('home');
+    if (notice) {
+      setAccountDeletedNotice(notice);
+    }
   };
 
   const handleUpdateProfile = async (updatedFields: Partial<ResidentUser>) => {
@@ -904,18 +1201,71 @@ export default function App() {
     setIsTrackingModalOpen(true);
   };
 
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userNotifsKey = `zapatera_notifications_db_${authUserId || currentUser.email}`;
+    try {
+      const stored = await MobileStorage.getItem(userNotifsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) => (n.id === id ? { ...n, is_read: true } : n));
+        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      }
+      if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      }
+    } catch {}
   };
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userNotifsKey = `zapatera_notifications_db_${authUserId || currentUser.email}`;
+    try {
+      const stored = await MobileStorage.getItem(userNotifsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) => ({ ...n, is_read: true }));
+        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      }
+      if (isSupabaseConfigured() && authUserId) {
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .or(`user_id.eq.${authUserId},role_target.eq.resident`);
+      }
+    } catch {}
   };
 
   const handleNotificationClick = (notif: ResidentNotification) => {
     setIsNotificationModalOpen(false);
+
+    // If notification is an announcement or bulletin
+    if (notif.link_tab === 'announcements' || notif.type === 'announcement' || notif.type === 'warning') {
+      setActiveTab('announcements');
+
+      // Extract raw title
+      const cleanTitle = notif.title
+        .replace(/^(🚨\s*Emergency Advisory:\s*|📢\s*Important Announcement:\s*|📰\s*News Bulletin:\s*|📅\s*Upcoming Event:\s*)/i, '')
+        .trim()
+        .toLowerCase();
+
+      const matchedAnn = announcements.find((a) => {
+        const aTitle = (a.title || '').trim().toLowerCase();
+        return aTitle === cleanTitle || aTitle.includes(cleanTitle) || cleanTitle.includes(aTitle);
+      });
+
+      if (matchedAnn) {
+        setSelectedAnnouncementForModal(matchedAnn);
+      }
+      return;
+    }
+
     if (notif.link_tab) {
       setActiveTab(notif.link_tab);
     }
@@ -932,6 +1282,33 @@ export default function App() {
     return (
       <SafeAreaView style={styles.authContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#eff2fc" />
+        {/* Security Notice Modal (for Account Deletion, Deactivation, or Lockout) */}
+        <SecurityNoticeModal
+          visible={Boolean(accountDeletedNotice)}
+          type={
+            accountDeletedNotice?.toLowerCase().includes('lock')
+              ? 'locked'
+              : accountDeletedNotice?.toLowerCase().includes('deactivated')
+              ? 'inactive'
+              : 'deleted'
+          }
+          message={accountDeletedNotice || undefined}
+          onClose={() => setAccountDeletedNotice(null)}
+          onUnlock={() => {
+            setAccountDeletedNotice(null);
+            setIsUnlockModalOpen(true);
+          }}
+        />
+
+        {/* Global Unlock Account Modal */}
+        <UnlockAccountModal
+          visible={isUnlockModalOpen}
+          onClose={() => setIsUnlockModalOpen(false)}
+          onUnlocked={() => {
+            setIsUnlockModalOpen(false);
+          }}
+        />
+
         <ResidentAuthPage onLoginSuccess={handleLoginSuccess} />
       </SafeAreaView>
     );
@@ -950,6 +1327,78 @@ export default function App() {
         onOpenProfile={() => setActiveTab('profile')}
         onRequestDocument={() => handleOpenRequestFlow()}
       />
+
+      {/* Permission banner for phone notifications */}
+      <PhoneNotificationPermissionBanner />
+
+      {/* Top Real-Time Cellphone Push Announcement Banner */}
+      {activeAnnouncementBanner && (
+        <View
+          style={[
+            styles.floatingBanner,
+            activeAnnouncementBanner.type === 'warning'
+              ? styles.floatingBannerEmergency
+              : styles.floatingBannerNormal,
+          ]}
+        >
+          <View style={styles.floatingBannerTopHeader}>
+            <View style={styles.floatingBannerAppTag}>
+              <View
+                style={[
+                  styles.appDot,
+                  {
+                    backgroundColor:
+                      activeAnnouncementBanner.type === 'warning' ? '#ef4444' : '#3b82f6',
+                  },
+                ]}
+              />
+              <Text style={styles.floatingBannerAppLabel}>
+                BARANGAY ZAPATERA • CELLPHONE ALERT
+              </Text>
+            </View>
+            <Text style={styles.floatingBannerTime}>Just now</Text>
+          </View>
+          <View style={styles.floatingBannerMainRow}>
+            <View style={styles.floatingBannerIconCircle}>
+              {activeAnnouncementBanner.type === 'warning' ? (
+                <AlertTriangle size={18} color="#ffffff" />
+              ) : (
+                <Megaphone size={18} color="#ffffff" />
+              )}
+            </View>
+            <View style={styles.floatingBannerTextCol}>
+              <Text style={styles.floatingBannerTitle} numberOfLines={1}>
+                {activeAnnouncementBanner.title}
+              </Text>
+              <Text style={styles.floatingBannerMsg} numberOfLines={2}>
+                {activeAnnouncementBanner.message}
+              </Text>
+            </View>
+            <View style={styles.floatingBannerActions}>
+              <TouchableOpacity
+                style={styles.floatingBannerActionBtn}
+                onPress={() => {
+                  setActiveTab('announcements');
+                  if (activeAnnouncementBanner.announcement) {
+                    setSelectedAnnouncementForModal(activeAnnouncementBanner.announcement);
+                  }
+                  setActiveAnnouncementBanner(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.floatingBannerActionText}>View</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.floatingBannerDismissBtn}
+                onPress={() => setActiveAnnouncementBanner(null)}
+                activeOpacity={0.7}
+              >
+                <X size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Screen Body Router */}
       <View style={styles.mainContent}>
@@ -985,7 +1434,12 @@ export default function App() {
         )}
 
         {activeTab === 'announcements' && (
-          <AnnouncementsView announcements={announcements} />
+          <AnnouncementsView
+            announcements={announcements}
+            selectedAnnouncement={selectedAnnouncementForModal}
+            onCloseAnnouncementModal={() => setSelectedAnnouncementForModal(null)}
+            currentUser={currentUser}
+          />
         )}
 
         {activeTab === 'profile' && (
@@ -1071,5 +1525,105 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  floatingBanner: {
+    position: 'absolute',
+    top: 65,
+    left: 16,
+    right: 16,
+    zIndex: 9999,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+    borderWidth: 1,
+  },
+  floatingBannerTopHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  floatingBannerAppTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  appDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  floatingBannerAppLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  floatingBannerTime: {
+    fontSize: 9,
+    color: '#64748b',
+  },
+  floatingBannerMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  floatingBannerNormal: {
+    backgroundColor: '#0f172a',
+    borderColor: '#3b82f6',
+  },
+  floatingBannerEmergency: {
+    backgroundColor: '#7f1d1d',
+    borderColor: '#ef4444',
+  },
+  floatingBannerIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  floatingBannerTextCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  floatingBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  floatingBannerMsg: {
+    fontSize: 11,
+    color: '#cbd5e1',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  floatingBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  floatingBannerActionBtn: {
+    backgroundColor: '#2563eb',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  floatingBannerActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  floatingBannerDismissBtn: {
+    padding: 6,
   },
 });

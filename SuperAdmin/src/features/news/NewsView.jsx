@@ -1,5 +1,5 @@
 // SuperAdmin/src/features/news/NewsView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Newspaper,
   Plus,
@@ -12,22 +12,45 @@ import {
   Edit2,
   Trash2,
   Eye,
-  EyeOff,
   CheckCircle2,
   X,
   Upload,
   Image as ImageIcon,
   ExternalLink,
-  Sparkles,
-  Layers,
   Megaphone,
   Radio,
-  FileText,
-  ShieldCheck
+  Clock,
+  ChevronRight,
+  Loader2,
+  CalendarDays,
+  ShieldCheck,
+  MessageSquare,
+  Send,
+  CornerDownRight,
+  Reply,
+  MessageCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
+  LayoutGrid,
+  Table as TableIcon,
 } from 'lucide-react';
+import {
+  getBulletinComments,
+  getBulletinCommentCounts,
+  postOfficialReply,
+  deleteBulletinComment,
+  subscribeToBulletinComments
+} from '../../core/commentService';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
+import EventCalendar from '../../components/EventCalendar';
+import ActionModal from '../../components/ActionModal';
 import { StorageService } from '../../core/storage';
+import { formatDate, sanitizeInput } from '../../core/security';
 
 const CATEGORIES = [
   'All',
@@ -39,20 +62,187 @@ const CATEGORIES = [
   'Maintenance'
 ];
 
-export default function NewsView({ currentUser, isDarkMode }) {
+export default function NewsView({ currentUser, events = [], onSaveEvent, onDeleteEvent, isDarkMode = false }) {
   const [newsList, setNewsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [filterEmergencyOnly, setFilterEmergencyOnly] = useState(false);
 
+  // Calendar feature state
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showCalendar, setShowCalendar] = useState(true);
+
+  // Table View & Document Requests Pagination/Sorting Logic
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
+  const [sortKey, setSortKey] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 on search, category, or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, filterEmergencyOnly, selectedDate, pageSize]);
+
+  const handleSort = (columnKey) => {
+    if (!columnKey) return;
+    if (sortKey === columnKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortKey('created_at');
+        setSortDirection('desc');
+      }
+    } else {
+      setSortKey(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  // Real-Time Resident Comments & Official Replies State
+  const [commentCounts, setCommentCounts] = useState({});
+  const [selectedNewsForComments, setSelectedNewsForComments] = useState(null);
+  const [bulletinComments, setBulletinComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [adminReplyText, setAdminReplyText] = useState('');
+  const [replyingToComment, setReplyingToComment] = useState(null);
+  const [submittingReply, setSubmittingReply] = useState(false);
+
+  // Load comment counts for all news bulletins
+  useEffect(() => {
+    let isMounted = true;
+    const loadCounts = async () => {
+      try {
+        const counts = await getBulletinCommentCounts(newsList.map((item) => item.id));
+        if (isMounted) setCommentCounts(counts);
+      } catch (err) {
+        console.error('Failed to load comment counts:', err);
+      }
+    };
+    if (newsList.length > 0) {
+      loadCounts();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [newsList]);
+
+  // Subscribe to real-time comment updates for open modal
+  useEffect(() => {
+    if (!selectedNewsForComments) return;
+    const unsub = subscribeToBulletinComments(selectedNewsForComments.id, async () => {
+      const list = await getBulletinComments(selectedNewsForComments.id);
+      setBulletinComments(list);
+      setCommentCounts((prev) => ({ ...prev, [selectedNewsForComments.id]: list.length }));
+    });
+    return unsub;
+  }, [selectedNewsForComments]);
+
+  const handleOpenCommentsModal = async (newsItem) => {
+    setSelectedNewsForComments(newsItem);
+    setReplyingToComment(null);
+    setAdminReplyText('');
+    setLoadingComments(true);
+    try {
+      const list = await getBulletinComments(newsItem.id);
+      setBulletinComments(list);
+      setCommentCounts((prev) => ({ ...prev, [newsItem.id]: list.length }));
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handleSendAdminReply = async (e) => {
+    e?.preventDefault();
+    if (!adminReplyText.trim() || !selectedNewsForComments || submittingReply) return;
+    setSubmittingReply(true);
+    try {
+      const reply = await postOfficialReply({
+        news_id: selectedNewsForComments.id,
+        adminUser: currentUser,
+        content: adminReplyText.trim(),
+        parent_id: replyingToComment?.id || null,
+        reply_to_name: replyingToComment?.author_name || null,
+      });
+
+      setBulletinComments((prev) => {
+        if (prev.some((c) => c.id === reply.id)) return prev;
+        return [...prev, reply];
+      });
+
+      setCommentCounts((prev) => ({
+        ...prev,
+        [selectedNewsForComments.id]: (prev[selectedNewsForComments.id] || 0) + 1,
+      }));
+
+      setAdminReplyText('');
+      setReplyingToComment(null);
+    } catch (err) {
+      console.error('Failed to post official reply:', err);
+      alert('Could not post reply. Please check your connection.');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  const handleDeleteComment = (commentId) => {
+    if (!selectedNewsForComments) return;
+    const commentObj = bulletinComments.find((c) => c.id === commentId);
+    const snippet = commentObj?.content
+      ? `"${commentObj.content.length > 50 ? commentObj.content.slice(0, 50) + '...' : commentObj.content}"`
+      : 'this comment';
+
+    setActionModal({
+      isOpen: true,
+      type: 'warning',
+      title: 'Delete Comment',
+      message: (
+        <div className="space-y-3 text-left">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Are you sure you want to permanently delete {snippet}?
+          </p>
+          <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-xl text-xs text-red-600 dark:text-red-400">
+            <strong>Warning:</strong> Any nested replies to this comment will also be permanently removed.
+          </div>
+        </div>
+      ),
+      confirmText: 'Delete Comment',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      onConfirm: async () => {
+        await deleteBulletinComment(commentId, selectedNewsForComments.id);
+        setBulletinComments((prev) => prev.filter((c) => c.id !== commentId && c.parent_id !== commentId));
+        setCommentCounts((prev) => ({
+          ...prev,
+          [selectedNewsForComments.id]: Math.max(0, (prev[selectedNewsForComments.id] || 1) - 1),
+        }));
+        setActionModal((prev) => ({ ...prev, isOpen: false }));
+      },
+      onClose: () => setActionModal((prev) => ({ ...prev, isOpen: false })),
+    });
+  };
+
+  // Reusable Feedback ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    buttonText: 'OK',
+    onConfirm: null,
+    onClose: null,
+    isDestructive: false,
+    isLoading: false,
+  });
+
   // Modals
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -62,15 +252,17 @@ export default function NewsView({ currentUser, isDarkMode }) {
     content: '',
     banner_url: '',
     location: 'Barangay Zapatera, Cebu City',
-    author: currentUser?.full_name || 'Office of the Super Admin',
+    event_date: '',
+    author: currentUser?.full_name || 'Barangay Administration',
     is_important: false,
     is_emergency: false,
     is_published: true,
-    target_audience: 'all',
+    target_audience: 'residents',
   });
 
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
@@ -79,9 +271,48 @@ export default function NewsView({ currentUser, isDarkMode }) {
 
   const loadNews = async () => {
     setLoading(true);
-    const data = await StorageService.getNewsAsync();
-    setNewsList(data);
-    setLoading(false);
+    try {
+      const [newsData, eventsData] = await Promise.all([
+        StorageService.getNewsAsync(),
+        StorageService.getEventsAsync ? StorageService.getEventsAsync() : Promise.resolve([]),
+      ]);
+
+      // Combine news with historical events if not already present
+      const combined = [...(newsData || [])];
+      const existingTitles = new Set(combined.map((n) => (n.title || '').trim().toLowerCase()));
+
+      if (Array.isArray(eventsData)) {
+        eventsData.forEach((evt) => {
+          const titleKey = (evt.title || '').trim().toLowerCase();
+          if (!existingTitles.has(titleKey)) {
+            combined.push({
+              id: evt.id,
+              title: evt.title,
+              category: 'Events',
+              description: evt.description || '',
+              content: evt.description || '',
+              banner_url: evt.image_url || '',
+              location: evt.location || 'Barangay Zapatera Gymnasium',
+              event_date: evt.event_date || evt.date || '',
+              created_at: evt.created_at || evt.event_date || new Date().toISOString(),
+              author: evt.created_by_name || 'Barangay Administration',
+              is_important: false,
+              is_emergency: false,
+              is_published: evt.status !== 'archived',
+              target_audience: evt.target_audience || 'residents',
+              is_event_source: true,
+            });
+            existingTitles.add(titleKey);
+          }
+        });
+      }
+
+      setNewsList(combined);
+    } catch (err) {
+      console.warn('Failed to load news bulletins:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const showToast = (msg) => {
@@ -89,20 +320,24 @@ export default function NewsView({ currentUser, isDarkMode }) {
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = (prefillCategory = 'Public Advisory') => {
     setEditingItem(null);
+    const isEventCat = prefillCategory === 'Events';
     setFormData({
       title: '',
-      category: 'Public Advisory',
+      category: prefillCategory,
       description: '',
       content: '',
-      banner_url: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+      banner_url: isEventCat
+        ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80'
+        : 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
       location: 'Barangay Zapatera, Cebu City',
-      author: currentUser?.full_name || 'Office of the Super Admin',
+      event_date: isEventCat ? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16) : '',
+      author: currentUser?.full_name || 'Barangay Administration',
       is_important: false,
       is_emergency: false,
       is_published: true,
-      target_audience: 'all',
+      target_audience: 'residents',
     });
     setFormError('');
     setIsFormModalOpen(true);
@@ -117,11 +352,12 @@ export default function NewsView({ currentUser, isDarkMode }) {
       content: item.content || '',
       banner_url: item.banner_url || '',
       location: item.location || 'Barangay Zapatera, Cebu City',
-      author: item.author || currentUser?.full_name || 'Office of the Super Admin',
+      event_date: item.event_date ? new Date(item.event_date).toISOString().slice(0, 16) : '',
+      author: item.author || currentUser?.full_name || 'Barangay Administration',
       is_important: !!item.is_important,
       is_emergency: !!item.is_emergency,
       is_published: item.is_published !== false,
-      target_audience: item.target_audience || 'all',
+      target_audience: item.target_audience || 'residents',
     });
     setFormError('');
     setIsFormModalOpen(true);
@@ -130,6 +366,59 @@ export default function NewsView({ currentUser, isDarkMode }) {
   const handleOpenPreview = (item) => {
     setPreviewItem(item);
     setIsPreviewModalOpen(true);
+  };
+
+  // Helper to compress uploaded images
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit. Please select a smaller image.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const compressedDataUrl = await compressImage(file);
+      setFormData((prev) => ({ ...prev, banner_url: compressedDataUrl }));
+    } catch (err) {
+      console.warn('Image processing error:', err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleFormSubmit = async (e) => {
@@ -154,32 +443,98 @@ export default function NewsView({ currentUser, isDarkMode }) {
       const payload = {
         ...formData,
         id: editingItem ? editingItem.id : undefined,
+        event_date: formData.event_date ? new Date(formData.event_date).toISOString() : null,
         created_by: currentUser?.id || null,
         created_by_name: currentUser?.full_name || currentUser?.email || 'Super Admin',
       };
 
       await StorageService.saveNews(payload, currentUser);
+
+      // If category is Events, also synchronize with event storage if available
+      if (formData.category === 'Events' && onSaveEvent) {
+        try {
+          await onSaveEvent({
+            id: payload.id,
+            title: payload.title,
+            description: payload.description,
+            event_date: payload.event_date || new Date().toISOString(),
+            location: payload.location,
+            image_url: payload.banner_url,
+            status: payload.is_published ? 'upcoming' : 'archived',
+            target_audience: payload.target_audience,
+          });
+        } catch {}
+      }
+
       setIsFormModalOpen(false);
       await loadNews();
-      showToast(editingItem ? 'News bulletin updated successfully!' : 'New article published across all systems!');
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: editingItem ? 'Announcement Updated' : 'Announcement Published',
+        message: editingItem
+          ? 'Your bulletin and scheduled date have been updated successfully.'
+          : 'Your bulletin has been published and scheduled on the community calendar.',
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } catch (err) {
-      setFormError('Failed to save news bulletin. Please check database connection.');
+      setFormError('Failed to save news bulletin. Please try again.');
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Publish Failed',
+        message: 'Something went wrong while publishing the announcement. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await StorageService.deleteNews(deletingId);
-      setIsDeleteModalOpen(false);
-      setDeletingId(null);
-      await loadNews();
-      showToast('Article deleted successfully.');
-    } catch (err) {
-      showToast('Error deleting article.');
-    }
+  const handlePromptDeleteNews = (item) => {
+    setActionModal({
+      isOpen: true,
+      type: 'confirmation',
+      title: 'Delete Announcement?',
+      message: `Are you sure you want to delete "${item.title}"? This action will remove it from the news feed and calendar.`,
+      confirmText: 'Delete Announcement',
+      cancelText: 'Cancel',
+      isDestructive: true,
+      isLoading: false,
+      onConfirm: async () => {
+        setActionModal((prev) => ({ ...prev, isLoading: true }));
+        try {
+          await StorageService.deleteNews(item.id);
+          if (item.category === 'Events' && onDeleteEvent) {
+            try {
+              await onDeleteEvent(item.id);
+            } catch {}
+          }
+          await loadNews();
+          setActionModal({
+            isOpen: true,
+            type: 'success',
+            title: 'Announcement Deleted',
+            message: 'The announcement has been removed from the portal and calendar.',
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        } catch (err) {
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Delete Failed',
+            message: 'Unable to delete the announcement. Please try again.',
+            buttonText: 'Close',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+        }
+      },
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   };
 
   const handleTogglePublish = async (item) => {
@@ -189,30 +544,110 @@ export default function NewsView({ currentUser, isDarkMode }) {
     };
     await StorageService.saveNews(updated, currentUser);
     await loadNews();
-    showToast(updated.is_published ? 'Article broadcasted to residents.' : 'Article set to draft mode.');
+    showToast(updated.is_published ? 'Article published to residents.' : 'Article unpublished.');
   };
 
-  // Filtered Articles
-  const filteredNews = newsList.filter((item) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      (item.title || '').toLowerCase().includes(q) ||
-      (item.description || '').toLowerCase().includes(q) ||
-      (item.content || '').toLowerCase().includes(q) ||
-      (item.author || '').toLowerCase().includes(q) ||
-      (item.location || '').toLowerCase().includes(q);
+  // Filtered Articles (Search, Category, Emergency, Calendar Date)
+  const filteredNews = useMemo(() => {
+    return newsList.filter((item) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (item.title || '').toLowerCase().includes(q) ||
+        (item.description || '').toLowerCase().includes(q) ||
+        (item.content || '').toLowerCase().includes(q) ||
+        (item.author || '').toLowerCase().includes(q) ||
+        (item.location || '').toLowerCase().includes(q);
 
-    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
-    const matchesEmergency = !filterEmergencyOnly || item.is_emergency;
+      const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
+      const matchesEmergency = !filterEmergencyOnly || item.is_emergency;
 
-    return matchesSearch && matchesCategory && matchesEmergency;
-  });
+      let matchesDate = true;
+      if (selectedDate) {
+        const itemDateStr = item.event_date || item.scheduled_date || (item.category === 'Events' ? item.created_at : null);
+        if (itemDateStr) {
+          try {
+            const d = new Date(itemDateStr);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            matchesDate = key === selectedDate;
+          } catch {
+            matchesDate = false;
+          }
+        } else {
+          matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesCategory && matchesEmergency && matchesDate;
+    });
+  }, [newsList, searchQuery, selectedCategory, filterEmergencyOnly, selectedDate]);
+
+  // Calendar events feed (items with an event_date or categorized as Events)
+  const calendarItems = useMemo(() => {
+    return newsList.filter((n) => n.event_date || n.scheduled_date || n.category === 'Events');
+  }, [newsList]);
+
+  // Upcoming scheduled items
+  const upcomingItems = useMemo(() => {
+    const now = new Date();
+    return calendarItems
+      .filter((n) => {
+        const d = new Date(n.event_date || n.created_at);
+        return !isNaN(d.getTime()) && d >= new Date(now.setHours(0, 0, 0, 0));
+      })
+      .sort((a, b) => new Date(a.event_date || a.created_at) - new Date(b.event_date || b.created_at));
+  }, [calendarItems]);
+
+  // Sort filtered news records
+  const sortedNews = useMemo(() => {
+    return [...filteredNews].sort((a, b) => {
+      let valA = a[sortKey];
+      let valB = b[sortKey];
+
+      if (sortKey === 'created_at' || sortKey === 'event_date') {
+        const dateA = new Date(valA || 0).getTime();
+        const dateB = new Date(valB || 0).getTime();
+        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      if (sortKey === 'status') {
+        valA = a.is_published !== false ? 'published' : 'draft';
+        valB = b.is_published !== false ? 'published' : 'draft';
+      }
+
+      const cmp = String(valA || '').localeCompare(String(valB || ''), undefined, { numeric: true, sensitivity: 'base' });
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredNews, sortKey, sortDirection]);
+
+  // Document Requests 10-Row Pagination Computation
+  const totalEntries = sortedNews.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
+  const paginatedNews = sortedNews.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (safeCurrentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   // KPI Metrics
   const totalCount = newsList.length;
   const emergencyCount = newsList.filter((n) => n.is_emergency).length;
   const publishedCount = newsList.filter((n) => n.is_published !== false).length;
-  const advisoryCount = newsList.filter((n) => n.category === 'Public Advisory' || n.category === 'Government Services').length;
+  const scheduledCount = calendarItems.length;
 
   return (
     <div className="space-y-6">
@@ -225,553 +660,1187 @@ export default function NewsView({ currentUser, isDarkMode }) {
       )}
 
       {/* Header Banner */}
-      <div className={`p-6 md:p-8 rounded-2xl shadow-xl border flex flex-col md:flex-row md:items-center justify-between gap-4 ${isDarkMode
-        ? 'bg-slate-900 border-slate-800 text-white'
-        : 'bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 border-slate-800 text-white'
-        }`}>
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-6 md:p-8 rounded-2xl shadow-xl text-white border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2.5 mb-2">
             <div className="p-2 bg-blue-500/20 border border-blue-400/30 rounded-lg text-blue-300">
               <Megaphone className="w-5 h-5 text-blue-400" />
             </div>
             <span className="text-xs font-bold tracking-widest text-blue-400 uppercase">
-              Super Admin Broadcast & Global News Control
+              Community Broadcast, Events & Information Center
             </span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Barangay News & Bulletin Management</h1>
-          <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            Author and oversee all public news articles, official announcements, emergency advisories, and municipal notices synchronized with the Resident Portal.
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">News, Bulletins & Barangay Events</h1>
+          <p className="text-slate-300 text-sm mt-1 max-w-2xl leading-relaxed">
+            Publish official announcements, public advisories, community programs, and scheduled events with integrated calendar dates for residents.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center space-x-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-lg shadow-blue-900/40 hover:shadow-blue-700/50 transition-all duration-200 shrink-0 cursor-pointer"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Post Global Announcement</span>
-        </button>
+        <div className="flex items-center flex-wrap gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowCalendar((prev) => !prev)}
+            className={`inline-flex items-center space-x-2 px-4 py-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+              showCalendar
+                ? 'bg-blue-600/30 border-blue-400 text-blue-200 hover:bg-blue-600/40'
+                : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>{showCalendar ? 'Calendar Panel Active' : 'Show Calendar'}</span>
+          </button>
+
+          <button
+            onClick={() => handleOpenCreateModal('Public Advisory')}
+            className="inline-flex items-center justify-center space-x-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition-all duration-200 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Publish Announcement</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Stats Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
+        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Bulletins</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Bulletins</p>
             <h3 className={`text-2xl font-extrabold mt-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalCount}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Global database entries</p>
+            <p className="text-xs text-slate-500 mt-0.5">Published barangay records</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 flex items-center justify-center text-blue-600">
             <Newspaper className="w-6 h-6" />
           </div>
         </div>
 
-        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
+        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-rose-400">Emergency Alerts</p>
-            <h3 className="text-2xl font-extrabold text-rose-500 mt-1">{emergencyCount}</h3>
-            <p className="text-xs text-rose-400/80 font-semibold mt-0.5">High-priority broadcast</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">Scheduled Events</p>
+            <h3 className={`text-2xl font-extrabold mt-1 ${isDarkMode ? 'text-white' : 'text-indigo-700'}`}>{scheduledCount}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Linked on calendar</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 flex items-center justify-center text-indigo-600">
+            <CalendarDays className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-rose-500">Emergency Alerts</p>
+            <h3 className="text-2xl font-extrabold text-rose-600 mt-1">{emergencyCount}</h3>
+            <p className="text-xs text-rose-500 font-semibold mt-0.5">High-priority broadcast</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center text-rose-600">
             <AlertTriangle className="w-6 h-6" />
           </div>
         </div>
 
-        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
+        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">Live for Residents</p>
-            <h3 className="text-2xl font-extrabold text-emerald-500 mt-1">{publishedCount}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Active in mobile/web app</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-500">Live in Portal</p>
+            <h3 className="text-2xl font-extrabold text-emerald-600 mt-1">{publishedCount}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Accessible by residents</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center justify-center text-emerald-600">
             <Radio className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className={`p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-indigo-400">Public Advisories</p>
-            <h3 className="text-2xl font-extrabold text-indigo-400 mt-1">{advisoryCount}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Services & health guides</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <Megaphone className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className={`p-4 md:p-5 rounded-2xl border shadow-sm space-y-4 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-        }`}>
+      <div className={`p-4 md:p-5 rounded-2xl border shadow-sm space-y-4 transition-colors ${
+        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+      }`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Search */}
+          {/* Search Input */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search news by title, keywords, location, or author..."
+              placeholder="Search by title, keywords, location, or author..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${isDarkMode
-                ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500'
-                : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                }`}
+              className={`w-full pl-10 pr-4 py-2 text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                isDarkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900'
+              }`}
             />
           </div>
 
-          {/* Emergency Filter Toggle */}
-          <button
-            type="button"
-            onClick={() => setFilterEmergencyOnly(!filterEmergencyOnly)}
-            className={`inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 ${filterEmergencyOnly
-              ? 'bg-rose-700 text-white shadow-md shadow-rose-900/30'
-              : isDarkMode
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+          <div className="flex items-center gap-2 shrink-0">
+            {/* View Mode Toggle */}
+            <div className={`flex items-center rounded-xl p-1 border ${
+              isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+            }`}>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+                title="Table View (10-row default)"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span>Table</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'cards'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+                title="Card Grid View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Cards</span>
+              </button>
+            </div>
+
+            {/* Emergency Filter Toggle */}
+            <button
+              type="button"
+              onClick={() => setFilterEmergencyOnly(!filterEmergencyOnly)}
+              className={`inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+                filterEmergencyOnly
+                  ? 'bg-rose-700 text-white shadow-md shadow-rose-900/30'
+                  : isDarkMode
+                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
               }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>{filterEmergencyOnly ? 'Showing Emergency Only' : 'Emergency Filter'}</span>
-          </button>
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{filterEmergencyOnly ? 'Showing Emergency Only' : 'Emergency Filter'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <span className="text-slate-400 font-bold uppercase tracking-wider shrink-0 mr-1 flex items-center">
-            <Filter className="w-3.5 h-3.5 mr-1" /> Category:
-          </span>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-all shrink-0 cursor-pointer ${selectedCategory === cat
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                : isDarkMode
-                  ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+        {/* Category Filter Pills & Date Filter Banner */}
+        <div className={`flex flex-wrap items-center justify-between gap-2 pt-1 border-t ${
+          isDarkMode ? 'border-slate-800' : 'border-slate-100'
+        }`}>
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <span className="text-slate-400 font-bold uppercase tracking-wider shrink-0 mr-1 flex items-center">
+              <Filter className="w-3.5 h-3.5 mr-1" /> Category:
+            </span>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all shrink-0 cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-blue-600 text-white shadow-sm font-bold'
+                    : isDarkMode
+                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                 }`}
-            >
-              {cat}
-            </button>
-          ))}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {selectedDate && (
+            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-800 dark:text-blue-300 font-semibold">
+              <Calendar className="w-3.5 h-3.5 text-blue-600" />
+              <span>Date: {selectedDate}</span>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-blue-600 hover:text-rose-600 font-bold ml-1 cursor-pointer"
+                title="Clear date filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* News Cards Grid */}
-      {loading ? (
-        <div className={`rounded-2xl border p-12 text-center ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
-          }`}>
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="font-semibold text-sm">Fetching synchronized news from Supabase database...</p>
-        </div>
-      ) : filteredNews.length === 0 ? (
-        <div className={`rounded-2xl border border-dashed p-12 text-center ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-300 text-slate-500'
-          }`}>
-          <Newspaper className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-          <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>No News Bulletins Found</h3>
-          <p className="text-sm max-w-md mx-auto mt-1">
-            {searchQuery || selectedCategory !== 'All' || filterEmergencyOnly
-              ? 'No announcements match your search criteria or category filter.'
-              : 'There are no active news articles yet. Click below to publish your first announcement.'}
-          </p>
-          <button
-            onClick={handleOpenCreateModal}
-            className="mt-4 inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Post First Bulletin</span>
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredNews.map((item) => (
-            <div
-              key={item.id}
-              className={`rounded-2xl border transition-all duration-200 flex flex-col overflow-hidden shadow-sm hover:shadow-md ${isDarkMode ? 'bg-slate-900' : 'bg-white'
-                } ${item.is_emergency
-                  ? 'border-rose-500/50 ring-2 ring-rose-500/20'
-                  : item.is_important
-                    ? 'border-blue-500/50 ring-2 ring-blue-500/10'
-                    : isDarkMode ? 'border-slate-800' : 'border-slate-200'
-                }`}
-            >
-              {/* Banner Image */}
-              <div className="relative h-44 bg-slate-800 overflow-hidden group">
-                <img
-                  src={item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&q=80'}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
-
-                {/* Badges on Banner */}
-                <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                  <span
-                    className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md shadow-sm ${item.category === 'Emergency' || item.is_emergency
-                      ? 'bg-rose-700 text-white border border-rose-500'
-                      : item.category === 'Government Services'
-                        ? 'bg-indigo-700 text-white border border-indigo-500'
-                        : item.category === 'Maintenance'
-                          ? 'bg-amber-600 text-white border border-amber-500'
-                          : 'bg-blue-700 text-white border border-blue-500'
-                      }`}
-                  >
-                    {item.category}
-                  </span>
-
-                  {item.is_emergency && (
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-1 rounded-md bg-rose-700 text-white flex items-center space-x-1 animate-pulse">
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>URGENT</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Published Status Badge */}
-                <div className="absolute top-3 right-3">
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 ${item.is_published !== false
-                      ? 'bg-emerald-500/90 text-white border border-emerald-400'
-                      : 'bg-slate-700/90 text-slate-300 border border-slate-600'
-                      }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-white animate-ping' : 'bg-slate-400'}`} />
-                    <span>{item.is_published !== false ? 'LIVE' : 'DRAFT'}</span>
-                  </span>
-                </div>
-
-                {/* Date & Location at bottom of banner */}
-                <div className="absolute bottom-2.5 left-3 right-3 text-white text-xs flex items-center justify-between">
-                  <span className="flex items-center space-x-1 font-semibold text-slate-200">
-                    <Calendar className="w-3.5 h-3.5 text-blue-300" />
-                    <span>{item.date || new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </span>
-                  {item.location && (
-                    <span className="flex items-center space-x-1 text-slate-300 truncate max-w-[150px]">
-                      <MapPin className="w-3.5 h-3.5 text-rose-300 shrink-0" />
-                      <span className="truncate">{item.location}</span>
-                    </span>
-                  )}
-                </div>
+      {/* Main 2-Column Split: Bulletins Feed (8 Cols) | Interactive Event Calendar (4 Cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* News Bulletins & Events Feed */}
+        <div className={showCalendar ? 'lg:col-span-8 space-y-4' : 'lg:col-span-12 space-y-4'}>
+          {selectedDate && (
+            <div className={`p-3.5 rounded-2xl flex items-center justify-between text-xs font-semibold border ${
+              isDarkMode ? 'bg-blue-950/50 border-blue-800 text-blue-200' : 'bg-blue-50 border border-blue-200 text-blue-900'
+            }`}>
+              <div className="flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
+                <span>
+                  Showing announcements & events for:{' '}
+                  <strong className="font-bold">
+                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </strong>
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-[11px] font-bold">
+                  {filteredNews.length} record(s)
+                </span>
               </div>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-blue-600 dark:text-blue-400 hover:text-rose-500 font-bold flex items-center space-x-1 cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Show All Dates</span>
+              </button>
+            </div>
+          )}
 
-              {/* Card Body */}
-              <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
-                <div>
-                  <h3 className={`text-base font-bold leading-snug line-clamp-2 hover:text-blue-500 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'
-                    }`}>
-                    {item.title}
-                  </h3>
-                  <p className={`text-xs mt-2 line-clamp-3 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
-                    }`}>
-                    {item.description}
-                  </p>
-                </div>
-
-                {/* Author Info */}
-                <div className={`pt-3 border-t flex items-center justify-between text-xs ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-500'
-                  }`}>
-                  <span className="flex items-center space-x-1 font-medium truncate max-w-[170px]">
-                    <User className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{item.author || 'Super Admin'}</span>
-                  </span>
-
-                  <span className="text-[11px] font-semibold uppercase">
-                    Audience: {item.target_audience || 'All'}
-                  </span>
-                </div>
-
-                {/* Action Toolbar */}
-                <div className="pt-2 flex items-center justify-between gap-2">
+          {loading ? (
+            <div className={`rounded-2xl border p-12 text-center text-slate-500 ${
+              isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="font-semibold text-sm">Loading official announcements & events...</p>
+            </div>
+          ) : filteredNews.length === 0 ? (
+            <div className={`rounded-2xl border border-dashed p-12 text-center ${
+              isDarkMode ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-white border-slate-300 text-slate-600'
+            }`}>
+              <Newspaper className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+              <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>No Bulletins or Events Found</h3>
+              <p className="text-sm max-w-md mx-auto mt-1">
+                {searchQuery || selectedCategory !== 'All' || filterEmergencyOnly || selectedDate
+                  ? 'No announcements match your search criteria or selected calendar date.'
+                  : 'There are no active bulletins yet. Click below to publish your first announcement or schedule an event.'}
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                {selectedDate && (
                   <button
-                    onClick={() => handleOpenPreview(item)}
-                    className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
+                    onClick={() => setSelectedDate(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl cursor-pointer"
                   >
-                    <Eye className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Preview</span>
+                    Clear Date Filter
                   </button>
+                )}
+                <button
+                  onClick={() => handleOpenCreateModal('Public Advisory')}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Announcement</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {viewMode === 'table' ? (
+                <div className={`rounded-2xl border overflow-hidden shadow-sm transition-colors ${
+                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                }`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className={`uppercase tracking-wider font-semibold border-b ${
+                        isDarkMode
+                          ? 'bg-slate-800/60 text-slate-400 border-slate-800'
+                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                      }`}>
+                        <tr>
+                          <th className="p-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSort('title')}
+                              className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-500 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                            >
+                              <span>Article / Headline</span>
+                              {sortKey === 'title' ? (
+                                sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="p-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSort('category')}
+                              className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-500 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                            >
+                              <span>Category</span>
+                              {sortKey === 'category' ? (
+                                sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="p-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSort('created_at')}
+                              className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-500 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                            >
+                              <span>Date / Schedule</span>
+                              {sortKey === 'created_at' ? (
+                                sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="p-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSort('target_audience')}
+                              className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-500 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                            >
+                              <span>Audience</span>
+                              {sortKey === 'target_audience' ? (
+                                sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="p-4">
+                            <span>Resident Comments</span>
+                          </th>
+                          <th className="p-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSort('status')}
+                              className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-500 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                            >
+                              <span>Status</span>
+                              {sortKey === 'status' ? (
+                                sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                              ) : (
+                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              )}
+                            </button>
+                          </th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                        {paginatedNews.map((item) => {
+                          const commentsCount = commentCounts[item.id] || 0;
+                          return (
+                            <tr
+                              key={item.id}
+                              className={`transition-colors ${
+                                isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              {/* Title & Preview */}
+                              <td className="p-4">
+                                <div className="flex items-center space-x-3 min-w-[220px]">
+                                  <div className="w-12 h-12 rounded-xl bg-slate-800 overflow-hidden shrink-0 border border-slate-700/50">
+                                    <img
+                                      src={item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=200&q=80'}
+                                      alt={item.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center space-x-1.5 flex-wrap">
+                                      <p className={`font-bold text-xs truncate max-w-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                        {item.title}
+                                      </p>
+                                      {item.is_emergency && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-600 text-white">
+                                          Emergency
+                                        </span>
+                                      )}
+                                      {item.is_important && !item.is_emergency && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-blue-600 text-white">
+                                          Priority
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 truncate max-w-xs mt-0.5">
+                                      {item.description || item.content || 'Barangay announcement record'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
 
-                  <div className="flex items-center space-x-1.5">
-                    <button
-                      onClick={() => handleTogglePublish(item)}
-                      title={item.is_published !== false ? 'Unpublish from resident app' : 'Publish to resident app'}
-                      className={`p-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${item.is_published !== false
-                        ? 'text-emerald-400 hover:bg-emerald-500/10'
-                        : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                    >
-                      {item.is_published !== false ? <CheckCircle2 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    </button>
+                              {/* Category */}
+                              <td className="p-4 whitespace-nowrap">
+                                <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
+                                  item.category === 'Emergency' || item.is_emergency
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                                    : item.category === 'Events'
+                                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+                                    : item.category === 'Government Services'
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                                    : item.category === 'Maintenance'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                                }`}>
+                                  {item.category || 'General'}
+                                </span>
+                              </td>
 
-                    <button
-                      onClick={() => handleOpenEditModal(item)}
-                      title="Edit bulletin"
-                      className="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                              {/* Date / Schedule */}
+                              <td className="p-4 whitespace-nowrap text-slate-500 dark:text-slate-400">
+                                {item.event_date ? (
+                                  <div className="flex items-center space-x-1.5 text-indigo-600 dark:text-indigo-400 font-semibold">
+                                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                    <span>{new Date(item.event_date).toLocaleDateString()}</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center space-x-1.5">
+                                    <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                                    <span>{formatDate(item.created_at || new Date())}</span>
+                                  </div>
+                                )}
+                              </td>
 
-                    <button
-                      onClick={() => {
-                        setDeletingId(item.id);
-                        setIsDeleteModalOpen(true);
-                      }}
-                      title="Delete bulletin"
-                      className="p-1.5 text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                              {/* Audience */}
+                              <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 capitalize">
+                                {item.target_audience || 'All Residents'}
+                              </td>
+
+                              {/* Feedback / Comments */}
+                              <td className="p-4 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCommentsModal(item)}
+                                  className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                                    commentsCount > 0
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 hover:bg-blue-100'
+                                      : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 hover:bg-slate-100'
+                                  }`}
+                                  title="View resident feedback"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>{commentsCount} {commentsCount === 1 ? 'Comment' : 'Comments'}</span>
+                                </button>
+                              </td>
+
+                              {/* Status */}
+                              <td className="p-4 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePublish(item)}
+                                  className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                                    item.is_published !== false
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 hover:bg-emerald-100'
+                                      : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 hover:bg-slate-200'
+                                  }`}
+                                  title="Click to toggle publish status"
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                  <span>{item.is_published !== false ? 'Published' : 'Draft'}</span>
+                                </button>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="p-4 text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end space-x-1">
+                                  <button
+                                    onClick={() => handleOpenPreview(item)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors cursor-pointer"
+                                    title="Preview Bulletin"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenEditModal(item)}
+                                    className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-colors cursor-pointer"
+                                    title="Edit Bulletin"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handlePromptDeleteNews(item)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete Bulletin"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* CREATE / EDIT NEWS MODAL */}
-      {isFormModalOpen && (
-        <Modal
-          isOpen={isFormModalOpen}
-          onClose={() => setIsFormModalOpen(false)}
-          title={editingItem ? 'Edit Barangay Bulletin' : 'Publish New Barangay Announcement'}
-          size="lg"
-        >
-          <form onSubmit={handleFormSubmit} className="space-y-4">
-            {formError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Announcement Title <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Free Medical Mission & Health Clearance Day"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium text-slate-900"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Category <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium bg-white text-slate-900"
+              ) : (
+                <div className={`grid gap-6 ${showCalendar ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+                  {paginatedNews.map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border transition-all duration-200 flex flex-col overflow-hidden shadow-sm hover:shadow-md ${
+                    item.is_emergency
+                      ? 'border-rose-300 ring-2 ring-rose-500/20'
+                      : item.category === 'Events' || item.event_date
+                      ? isDarkMode ? 'border-indigo-900/60 bg-slate-900' : 'border-indigo-200 bg-white hover:border-indigo-400'
+                      : item.is_important
+                      ? isDarkMode ? 'border-blue-900/60 bg-slate-900' : 'border-blue-300 ring-2 ring-blue-500/10 bg-white'
+                      : isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'
+                  }`}
                 >
-                  {CATEGORIES.filter((c) => c !== 'All').map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {/* Banner Image */}
+                  <div className="relative h-44 bg-slate-800 overflow-hidden group">
+                    <img
+                      src={item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=600&q=80'}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Venue / Location
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Barangay Zapatera Gymnasium, Rahmann St."
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium text-slate-900"
-                />
+                    {/* Category Badges */}
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                      <span
+                        className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md shadow-sm ${
+                          item.category === 'Emergency' || item.is_emergency
+                            ? 'bg-rose-700 text-white border border-rose-500'
+                            : item.category === 'Events'
+                            ? 'bg-indigo-600 text-white border border-indigo-400'
+                            : item.category === 'Government Services'
+                            ? 'bg-blue-800 text-white border border-blue-600'
+                            : item.category === 'Maintenance'
+                            ? 'bg-amber-600 text-white border border-amber-500'
+                            : 'bg-blue-700 text-white border border-blue-500'
+                        }`}
+                      >
+                        {item.category}
+                      </span>
+
+                      {item.is_emergency && (
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-1 rounded-md bg-rose-700 text-white flex items-center space-x-1 animate-pulse">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>URGENT</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Published Status Badge */}
+                    <div className="absolute top-3 right-3">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 ${
+                          item.is_published !== false
+                            ? 'bg-emerald-500/90 text-white border border-emerald-400'
+                            : 'bg-slate-700/90 text-slate-300 border border-slate-600'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-white animate-ping' : 'bg-slate-400'}`} />
+                        <span>{item.is_published !== false ? 'LIVE' : 'DRAFT'}</span>
+                      </span>
+                    </div>
+
+                    {/* Date & Location at bottom of banner */}
+                    <div className="absolute bottom-2.5 left-3 right-3 text-white text-xs flex items-center justify-between">
+                      <span className="flex items-center space-x-1 font-semibold text-slate-200">
+                        <Calendar className="w-3.5 h-3.5 text-blue-300" />
+                        <span>
+                          {item.event_date
+                            ? formatDate(item.event_date)
+                            : item.date || (item.created_at ? formatDate(item.created_at) : 'Official Notice')}
+                        </span>
+                      </span>
+                      {item.location && (
+                        <span className="flex items-center space-x-1 text-slate-300 truncate max-w-[150px]">
+                          <MapPin className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+                          <span className="truncate">{item.location}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                    <div className="space-y-2">
+                      {/* Prominent Event Schedule Tag if date present */}
+                      {item.event_date && (
+                        <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold">
+                          <Calendar className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                          <span>Event Scheduled: {formatDate(item.event_date)}</span>
+                        </div>
+                      )}
+
+                      <h3 className={`font-bold text-base line-clamp-2 hover:text-blue-500 transition-colors ${
+                        isDarkMode ? 'text-white' : 'text-slate-900'
+                      }`}>
+                        {item.title}
+                      </h3>
+                      <p className={`text-xs line-clamp-3 leading-relaxed ${
+                        isDarkMode ? 'text-slate-400' : 'text-slate-600'
+                      }`}>
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* Author & Footer Meta */}
+                    <div className={`pt-3 border-t flex items-center justify-between text-xs ${
+                      isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-100 text-slate-500'
+                    }`}>
+                      <div className="flex items-center space-x-1.5 truncate max-w-[170px]">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate font-medium">{item.author || 'Super Admin'}</span>
+                      </div>
+
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleOpenCommentsModal(item)}
+                          className="relative p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          title="Resident Inquiries & Official Replies"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          {(commentCounts[item.id] || 0) > 0 && (
+                            <span className="absolute -top-1 -right-1.5 bg-blue-600 text-white text-[9px] font-extrabold rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center shadow-xs">
+                              {commentCounts[item.id]}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleOpenPreview(item)}
+                          className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title="Preview full article"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditModal(item)}
+                          className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title="Edit announcement"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleTogglePublish(item)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            item.is_published !== false
+                              ? 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                              : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                          title={item.is_published !== false ? 'Live (Click to Unpublish)' : 'Draft (Click to Publish)'}
+                        >
+                          <Radio className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handlePromptDeleteNews(item)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                          title="Delete announcement"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+              {/* Document Requests Consistent Pagination Footer */}
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs transition-colors ${
+                isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600'
+              }`}>
+                <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+                  <span className="font-medium">
+                    Showing <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{startIndex}</span> to{' '}
+                    <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{endIndex}</span> of{' '}
+                    <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalEntries}</span> entries
+                  </span>
+
+                  <div className="flex items-center space-x-1.5 text-xs">
+                    <span className="hidden md:inline text-slate-500">Rows per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-1 text-xs border rounded-md font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
+                        isDarkMode
+                          ? 'bg-slate-800 border-slate-700 text-white'
+                          : 'bg-white border-slate-300 text-slate-800'
+                      }`}
+                    >
+                      {[10, 25, 50].map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safeCurrentPage === 1}
+                    className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
+                      isDarkMode
+                        ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                        : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                    }`}
+                    title="First page"
+                  >
+                    <ChevronsLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeCurrentPage === 1}
+                    className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
+                      isDarkMode
+                        ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                        : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                    }`}
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="flex items-center space-x-1">
+                    {getPageNumbers().map((num, i) =>
+                      num === '...' ? (
+                        <span key={`dots-${i}`} className="px-2 py-1 text-slate-400">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={`page-${num}`}
+                          type="button"
+                          onClick={() => setCurrentPage(num)}
+                          className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
+                            safeCurrentPage === num
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                              : isDarkMode
+                              ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                              : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safeCurrentPage === totalPages}
+                    className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
+                      isDarkMode
+                        ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                        : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                    }`}
+                    title="Next page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safeCurrentPage === totalPages}
+                    className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
+                      isDarkMode
+                        ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                        : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                    }`}
+                    title="Last page"
+                  >
+                    <ChevronsRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
+          )}
+        </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Brief Summary / Card Description <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Short summary displayed on the card in resident dashboard..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium resize-none text-slate-900"
-                required
-              />
-            </div>
+        {/* Side Event & Bulletin Calendar (4 Cols) */}
+        {showCalendar && (
+          <div className="lg:col-span-4 space-y-6">
+            {/* Event Calendar Widget */}
+            <EventCalendar
+              events={calendarItems}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              isDarkMode={isDarkMode}
+            />
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Full Bulletin Content & Advisory Details <span className="text-rose-500">*</span>
-              </label>
-              <textarea
-                rows={6}
-                placeholder="Complete bulletin announcement text, program schedules, guidelines, contact details, requirements..."
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-xs leading-relaxed text-slate-900"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Banner Image URL
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={formData.banner_url}
-                  onChange={(e) => setFormData({ ...formData, banner_url: e.target.value })}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium text-xs text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Author / Issuing Body
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Office of the Super Admin"
-                  value={formData.author}
-                  onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium text-slate-900"
-                />
-              </div>
-            </div>
-
-            {/* Checkbox Options */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5 text-slate-900">
-              <label className="flex items-center space-x-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.is_emergency}
-                  onChange={(e) => setFormData({ ...formData, is_emergency: e.target.checked })}
-                  className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
-                />
-                <span className="text-xs font-bold text-rose-800 flex items-center space-x-1">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Mark as Urgent / Emergency Broadcast (Red Alert Banner)</span>
+            {/* Upcoming Schedules Card */}
+            <div className={`p-5 rounded-2xl border shadow-xs space-y-4 transition-colors ${
+              isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            }`}>
+              <div className={`flex items-center justify-between border-b pb-3 ${
+                isDarkMode ? 'border-slate-800' : 'border-slate-100'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <CalendarDays className="w-4 h-4 text-blue-500" />
+                  <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Upcoming Schedules</h4>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                  {upcomingItems.length} active
                 </span>
-              </label>
+              </div>
 
-              <label className="flex items-center space-x-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.is_important}
-                  onChange={(e) => setFormData({ ...formData, is_important: e.target.checked })}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                />
-                <span className="text-xs font-semibold text-slate-700">
-                  Feature prominently as Important Notice
-                </span>
-              </label>
+              <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                {upcomingItems.length > 0 ? (
+                  upcomingItems.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => {
+                        const dateStr = u.event_date || u.created_at;
+                        if (dateStr) {
+                          const d = new Date(dateStr);
+                          const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                          setSelectedDate(k);
+                        }
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer group ${
+                        isDarkMode
+                          ? 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/60 hover:border-blue-500'
+                          : 'bg-slate-50 hover:bg-blue-50 border-slate-100 hover:border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="font-bold text-blue-500 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-blue-500" />
+                          {formatDate(u.event_date || u.created_at)}
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
+                          isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-white border border-slate-200 text-slate-600'
+                        }`}>
+                          {u.category}
+                        </span>
+                      </div>
+                      <h5 className={`font-bold text-xs truncate group-hover:text-blue-400 ${
+                        isDarkMode ? 'text-slate-200' : 'text-slate-800'
+                      }`}>
+                        {u.title}
+                      </h5>
+                      {u.location && (
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{u.location}</span>
+                        </p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6 text-slate-400 space-y-1">
+                    <Calendar className="w-8 h-8 text-slate-500 mx-auto" />
+                    <p className="text-xs font-semibold">No upcoming events scheduled</p>
+                    <p className="text-[11px]">Set an event date when publishing to populate this schedule.</p>
+                  </div>
+                )}
+              </div>
 
-              <label className="flex items-center space-x-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.is_published}
-                  onChange={(e) => setFormData({ ...formData, is_published: e.target.checked })}
-                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
-                />
-                <span className="text-xs font-semibold text-slate-700">
-                  Publish immediately to Resident Portal
-                </span>
-              </label>
-            </div>
-
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-end space-x-3">
               <button
                 type="button"
-                onClick={() => setIsFormModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                onClick={() => handleOpenCreateModal('Events')}
+                className="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-1.5 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <span>{editingItem ? 'Update Bulletin' : 'Publish Announcement'}</span>
-                )}
+                <Plus className="w-3.5 h-3.5" />
+                <span>Schedule New Barangay Event</span>
               </button>
             </div>
-          </form>
-        </Modal>
-      )}
+          </div>
+        )}
+      </div>
 
-      {/* PREVIEW RESIDENT VIEW MODAL */}
-      {isPreviewModalOpen && previewItem && (
+      {/* Create / Edit Form Modal */}
+      <Modal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        title={editingItem ? 'Edit Official Announcement / Event' : 'Publish Official Bulletin / Event'}
+        darkMode={isDarkMode}
+      >
+        <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+          {formError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span className="font-semibold">{formError}</span>
+            </div>
+          )}
+
+          <div>
+            <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              Announcement Title <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="e.g. Barangay General Assembly & Medical Mission"
+              className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+              }`}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Category</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+                }`}
+              >
+                {CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                Event / Scheduled Date (Calendar)
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.event_date}
+                onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
+                className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+                }`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Location / Venue</label>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="e.g. Barangay Zapatera Gymnasium"
+                className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Target Audience</label>
+              <select
+                value={formData.target_audience}
+                onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+                }`}
+              >
+                <option value="residents">All Residents</option>
+                <option value="youth">Youth & Students</option>
+                <option value="seniors">Senior Citizens</option>
+                <option value="pwds">Persons with Disabilities (PWD)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              Short Summary / Highlight <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Brief 1-2 sentence preview for cards and notifications..."
+              className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+              }`}
+            />
+          </div>
+
+          <div>
+            <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+              Full Announcement Content <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              required
+              rows={4}
+              value={formData.content}
+              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              placeholder="Provide complete guidelines, instructions, requirements, or schedule details..."
+              className={`w-full px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+              }`}
+            />
+          </div>
+
+          {/* Banner Image Input & Upload */}
+          <div>
+            <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>Banner Image URL or Upload</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={formData.banner_url}
+                onChange={(e) => setFormData({ ...formData, banner_url: e.target.value })}
+                placeholder="https://images.unsplash.com/..."
+                className={`flex-1 px-3 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'border border-slate-300 bg-white'
+                }`}
+              />
+              <label className="inline-flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-colors">
+                <Upload className="w-3.5 h-3.5" />
+                <span>{isUploading ? 'Uploading...' : 'Upload'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  disabled={isUploading}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Flags & Published Toggle */}
+          <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border ${
+            isDarkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <label className={`flex items-center space-x-2 text-xs font-semibold cursor-pointer ${
+              isDarkMode ? 'text-slate-300' : 'text-slate-700'
+            }`}>
+              <input
+                type="checkbox"
+                checked={formData.is_important}
+                onChange={(e) => setFormData({ ...formData, is_important: e.target.checked })}
+                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+              />
+              <span>Important Notice</span>
+            </label>
+
+            <label className="flex items-center space-x-2 text-xs font-semibold text-rose-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.is_emergency}
+                onChange={(e) => setFormData({ ...formData, is_emergency: e.target.checked })}
+                className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
+              />
+              <span>Emergency Alert</span>
+            </label>
+
+            <label className="flex items-center space-x-2 text-xs font-semibold text-emerald-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.is_published}
+                onChange={(e) => setFormData({ ...formData, is_published: e.target.checked })}
+                className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+              />
+              <span>Live in Portal</span>
+            </label>
+          </div>
+
+          <div className={`pt-3 border-t flex items-center justify-end space-x-2 ${
+            isDarkMode ? 'border-slate-800' : 'border-slate-100'
+          }`}>
+            <button
+              type="button"
+              onClick={() => setIsFormModalOpen(false)}
+              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white rounded-xl"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? 'Publishing...' : editingItem ? 'Save Changes' : 'Publish Bulletin'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Full Article Preview Modal */}
+      {previewItem && (
         <Modal
           isOpen={isPreviewModalOpen}
           onClose={() => setIsPreviewModalOpen(false)}
-          title="Resident Portal View Preview"
-          size="lg"
+          title={previewItem.title}
+          darkMode={isDarkMode}
         >
-          <div className="space-y-4">
-            <div className="relative h-48 rounded-xl overflow-hidden bg-slate-100">
-              <img
-                src={previewItem.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80'}
-                alt={previewItem.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-              <div className="absolute bottom-3 left-3 right-3 text-white">
-                <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded bg-blue-600 text-white mb-1.5 inline-block">
-                  {previewItem.category}
-                </span>
-                <h2 className="text-lg font-bold leading-tight">{previewItem.title}</h2>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-slate-500 py-1 border-b border-slate-100">
-              <span className="flex items-center space-x-1 font-semibold text-slate-700">
-                <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                <span>{previewItem.date || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-              </span>
-              <span className="flex items-center space-x-1">
-                <User className="w-3.5 h-3.5 text-slate-400" />
-                <span>{previewItem.author || 'Barangay Zapatera Office'}</span>
-              </span>
-            </div>
-
-            {previewItem.location && (
-              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center space-x-2 text-xs font-semibold text-blue-900">
-                <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>Location: {previewItem.location}</span>
+          <div className="space-y-4 text-xs">
+            {previewItem.banner_url && (
+              <div className="w-full h-52 rounded-xl overflow-hidden bg-slate-800">
+                <img
+                  src={previewItem.banner_url}
+                  alt={previewItem.title}
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Bulletin Content</h4>
-              <p className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
-                {previewItem.content || previewItem.description}
-              </p>
+            <div className={`flex flex-wrap items-center justify-between gap-2 border-b pb-3 ${
+              isDarkMode ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                  {previewItem.category}
+                </span>
+                {previewItem.is_emergency && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-600 text-white">
+                    Emergency Alert
+                  </span>
+                )}
+              </div>
+
+              <div className="text-slate-400 font-medium">
+                {previewItem.event_date ? (
+                  <span className="text-indigo-400 font-bold flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" /> Event: {formatDate(previewItem.event_date)}
+                  </span>
+                ) : (
+                  <span>Published {formatDate(previewItem.created_at)}</span>
+                )}
+              </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-200 flex justify-end">
+            {previewItem.location && (
+              <div className={`flex items-center space-x-1.5 font-semibold ${
+                isDarkMode ? 'text-slate-300' : 'text-slate-700'
+              }`}>
+                <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>Venue: {previewItem.location}</span>
+              </div>
+            )}
+
+            <div className={`p-3 rounded-xl border font-medium leading-relaxed ${
+              isDarkMode ? 'bg-slate-800/80 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+            }`}>
+              {previewItem.description}
+            </div>
+
+            <div className={`text-xs leading-relaxed whitespace-pre-line ${
+              isDarkMode ? 'text-slate-300' : 'text-slate-800'
+            }`}>
+              {previewItem.content}
+            </div>
+
+            <div className={`pt-3 border-t flex items-center justify-between text-slate-400 ${
+              isDarkMode ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <span>Author: <strong className={isDarkMode ? 'text-white' : 'text-slate-700'}>{previewItem.author || 'Super Admin'}</strong></span>
               <button
+                type="button"
                 onClick={() => setIsPreviewModalOpen(false)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer"
+                className={`px-4 py-1.5 font-bold text-xs rounded-xl cursor-pointer ${
+                  isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
               >
                 Close Preview
               </button>
@@ -780,36 +1849,213 @@ export default function NewsView({ currentUser, isDarkMode }) {
         </Modal>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
-      {isDeleteModalOpen && (
+            {/* Resident Comments & Official Barangay Replies Modal */}
+      {selectedNewsForComments && (
         <Modal
-          isOpen={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          title="Confirm Delete Announcement"
-          size="sm"
+          isOpen={!!selectedNewsForComments}
+          onClose={() => {
+            setSelectedNewsForComments(null);
+            setReplyingToComment(null);
+            setAdminReplyText('');
+          }}
+          title="Resident Inquiries & Official Barangay Replies"
+          maxWidth="max-w-2xl"
         >
-          <div className="space-y-4">
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-medium">
-              Are you sure you want to delete this news bulletin? This will remove it from the Resident Portal immediately.
+          <div className="space-y-4 max-h-[75vh] flex flex-col">
+            {/* Bulletin Reference Header */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                  {selectedNewsForComments.category}
+                </span>
+                <span className="text-xs text-slate-500">{formatDate(selectedNewsForComments.created_at)}</span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{selectedNewsForComments.title}</h4>
+              <p className="text-xs text-slate-600 line-clamp-2">{selectedNewsForComments.description}</p>
             </div>
 
-            <div className="flex justify-end space-x-2.5 pt-2">
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm"
-              >
-                Yes, Delete
-              </button>
+            {/* Comment Thread List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-[160px] max-h-[380px]">
+              {loadingComments ? (
+                <div className="py-8 text-center text-xs text-slate-500 flex items-center justify-center space-x-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  <span>Loading resident comments...</span>
+                </div>
+              ) : bulletinComments.length === 0 ? (
+                <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 p-6">
+                  <MessageSquare className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">No resident inquiries or comments yet</p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    When residents post questions or feedback from their portal, they will appear here in real time.
+                  </p>
+                </div>
+              ) : (
+                bulletinComments
+                  .filter((c) => !c.parent_id)
+                  .map((rootComment) => {
+                    const replies = bulletinComments.filter((c) => c.parent_id === rootComment.id);
+                    const isRootOfficial = rootComment.is_official_response || rootComment.author_role === 'admin' || rootComment.author_role === 'super_admin';
+
+                    return (
+                      <div key={rootComment.id} className="space-y-2">
+                        {/* Root Comment Box */}
+                        <div className={`p-3.5 rounded-xl border ${isRootOfficial ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'} shadow-2xs`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isRootOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                {isRootOfficial ? <ShieldCheck className="w-4 h-4" /> : rootComment.author_name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="text-xs font-bold text-slate-900">{rootComment.author_name}</span>
+                                  {isRootOfficial && (
+                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-600 text-white">
+                                      Official Response
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-400">{formatDate(rootComment.created_at)}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReplyingToComment(rootComment);
+                                }}
+                                className="px-2 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-100 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer"
+                              >
+                                <Reply className="w-3 h-3" />
+                                <span>Reply</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteComment(rootComment.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete comment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-slate-700 mt-2 leading-relaxed whitespace-pre-wrap">{rootComment.content}</p>
+                        </div>
+
+                        {/* Nested Replies */}
+                        {replies.map((reply) => {
+                          const isReplyOfficial = reply.is_official_response || reply.author_role === 'admin' || reply.author_role === 'super_admin';
+
+                          return (
+                            <div key={reply.id} className="flex items-start space-x-2 pl-6">
+                              <CornerDownRight className="w-4 h-4 text-slate-400 mt-2 shrink-0" />
+                              <div className={`flex-1 p-3 rounded-xl border ${isReplyOfficial ? 'bg-blue-50/90 border-blue-300' : 'bg-white border-slate-200'} shadow-2xs`}>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isReplyOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                      {isReplyOfficial ? <ShieldCheck className="w-3.5 h-3.5" /> : reply.author_name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center space-x-1.5">
+                                        <span className="text-xs font-bold text-slate-900">{reply.author_name}</span>
+                                        {isReplyOfficial && (
+                                          <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-600 text-white">
+                                            Official Response
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-[10px] text-slate-400">{formatDate(reply.created_at)}</span>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteComment(reply.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete reply"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                {reply.reply_to_name && (
+                                  <p className="text-[10px] text-slate-500 mt-1">
+                                    Replying to <span className="font-bold text-blue-600">@{reply.reply_to_name}</span>
+                                  </p>
+                                )}
+
+                                <p className="text-xs text-slate-700 mt-1.5 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })
+              )}
             </div>
+
+            {/* Admin Response Composer */}
+            <form onSubmit={handleSendAdminReply} className="pt-3 border-t border-slate-200 space-y-2">
+              {replyingToComment && (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs text-blue-800">
+                  <div className="flex items-center space-x-1.5">
+                    <CornerDownRight className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Replying to <strong className="font-bold">@{replyingToComment.author_name}</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingToComment(null)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  placeholder={replyingToComment ? `Type official reply to @${replyingToComment.author_name}...` : 'Write an official barangay remark or public notice...'}
+                  value={adminReplyText}
+                  onChange={(e) => setAdminReplyText(e.target.value)}
+                  className="flex-1 text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white text-slate-900"
+                />
+                <button
+                  type="submit"
+                  disabled={!adminReplyText.trim() || submittingReply}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  {submittingReply ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{replyingToComment ? 'Send Reply' : 'Post Remark'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </Modal>
       )}
+
+      {/* Confirmation & Alert Feedback Modal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        confirmText={actionModal.confirmText}
+        cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
+        onConfirm={actionModal.onConfirm}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
+        isDestructive={actionModal.isDestructive}
+        isLoading={actionModal.isLoading}
+      />
     </div>
   );
 }

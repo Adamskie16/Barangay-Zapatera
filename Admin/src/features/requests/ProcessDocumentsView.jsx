@@ -1,16 +1,17 @@
-// Admin/src/features/requests/ProcessDocumentsView.jsx
 import React, { useState } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
-import { CheckSquare, CheckCircle2, XCircle, AlertCircle, Clock, FileCheck, FileText, UserCheck } from 'lucide-react';
+import { CheckSquare, CheckCircle2, XCircle, AlertCircle, Clock, FileCheck, FileText, UserCheck, Eye, Image as ImageIcon } from 'lucide-react';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { CardGridSkeleton } from '../../components/SkeletonLoader';
+import FilePreviewModal from '../../components/FilePreviewModal';
 
 export default function ProcessDocumentsView({ requests = [], onUpdateRequestStatus, currentUser, loading = false }) {
   const [selectedReq, setSelectedReq] = useState(null);
   const [actionType, setActionType] = useState('approve'); // approve, review, decline
   const [notes, setNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [previewFile, setPreviewFile] = useState(null);
 
   const pendingOrReviewRequests = requests.filter(
     (r) => r.status === 'pending' || r.status === 'under_review'
@@ -89,11 +90,55 @@ export default function ProcessDocumentsView({ requests = [], onUpdateRequestSta
               <div className="mt-3 text-xs">
                 <p className="font-bold text-slate-700 mb-1">Attached Proof Documents:</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {req.requirements_attached?.map((file, idx) => (
-                    <span key={idx} className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded text-[11px] font-mono text-slate-700">
-                      {file}
-                    </span>
-                  ))}
+                  {req.uploaded_files && req.uploaded_files.length > 0 ? (
+                    req.uploaded_files.map((fileObj, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() =>
+                          setPreviewFile({
+                            name: fileObj.requirement_name || `Requirement #${idx + 1}`,
+                            fileName: fileObj.file_name || `IMG_${5147 + idx}.jpeg`,
+                            fileType: fileObj.file_type || 'image/jpeg',
+                            file_size: fileObj.file_size,
+                            file_url: fileObj.file_url,
+                            storage_path: fileObj.storage_path,
+                            residentName: req.resident_name,
+                          })
+                        }
+                        className="px-2.5 py-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded text-[11px] font-mono text-blue-700 inline-flex items-center space-x-1 cursor-pointer transition-colors"
+                      >
+                        <ImageIcon className="w-3 h-3 text-blue-600" />
+                        <span>{fileObj.requirement_name || fileObj.file_name || `Proof ${idx + 1}`}</span>
+                        <Eye className="w-2.5 h-2.5 opacity-60" />
+                      </button>
+                    ))
+                  ) : req.requirements_attached && req.requirements_attached.length > 0 ? (
+                    req.requirements_attached.map((file, idx) => {
+                      const fileName = typeof file === 'string' ? file : (file?.name || `Requirement #${idx + 1}`);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() =>
+                            setPreviewFile({
+                              name: fileName,
+                              fileName: `${fileName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.jpeg`,
+                              fileType: 'image/jpeg',
+                              residentName: req.resident_name,
+                            })
+                          }
+                          className="px-2.5 py-1 bg-slate-100 border border-slate-200 hover:bg-slate-200 rounded text-[11px] font-mono text-slate-700 inline-flex items-center space-x-1 cursor-pointer transition-colors"
+                        >
+                          <ImageIcon className="w-3 h-3 text-slate-500" />
+                          <span>{fileName}</span>
+                          <Eye className="w-2.5 h-2.5 opacity-60" />
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <span className="text-slate-400 text-[11px] italic">No attachments required</span>
+                  )}
                 </div>
               </div>
 
@@ -203,6 +248,13 @@ export default function ProcessDocumentsView({ requests = [], onUpdateRequestSta
           </form>
         )}
       </Modal>
+
+      {/* File Preview Modal */}
+      <FilePreviewModal
+        isOpen={!!previewFile}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
     </div>
   );
 }

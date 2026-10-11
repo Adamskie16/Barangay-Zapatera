@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
+  Platform,
+  Pressable,
 } from 'react-native';
 import {
   Unlock,
@@ -265,15 +267,23 @@ export default function UnlockAccountModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.modalCard}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation?.()}>
+          {/* Top Blue Accent Bar */}
+          <View style={styles.topAccentBar} />
+
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.titleWithIcon}>
               <View style={styles.iconCircle}>
                 <Unlock size={20} color="#2563eb" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.stepPill}>
+                  <Text style={styles.stepPillText}>
+                    {step === 1 ? 'STEP 1 OF 2 • REQUEST CODE' : 'STEP 2 OF 2 • VERIFY OTP'}
+                  </Text>
+                </View>
                 <Text style={styles.modalTitle}>
                   {step === 1 ? 'Unlock Your Account' : 'Enter Verification Code'}
                 </Text>
@@ -284,7 +294,7 @@ export default function UnlockAccountModal({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>
               <X size={18} color="#64748b" />
             </TouchableOpacity>
           </View>
@@ -430,8 +440,8 @@ export default function UnlockAccountModal({
               )}
             </View>
           )}
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -439,22 +449,66 @@ export default function UnlockAccountModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    zIndex: 999999,
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100vw',
+          height: '100vh',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          display: 'flex',
+        } as any)
+      : {}),
   },
   modalCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
+    borderRadius: 24,
     width: '100%',
     maxWidth: 440,
     padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 25,
-    elevation: 8,
+    paddingTop: 28,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  topAccentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: '#2563eb',
+  },
+  stepPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  stepPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.5,
   },
   headerRow: {
     flexDirection: 'row',

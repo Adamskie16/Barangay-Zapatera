@@ -5,7 +5,7 @@ import UserAvatar from './UserAvatar';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout, isDarkMode }) {
   const menuItems = [
-    { id: 'accounts', label: 'User Account Mgmt', icon: Users },
+    { id: 'accounts', label: 'User Account', icon: Users },
     { id: 'login_design', label: 'Login Screen Design', icon: ImageIcon },
     { id: 'logs', label: 'Activity Logs', icon: History },
   ];

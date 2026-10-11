@@ -14,3 +14,273 @@ body {
   background-color: #090d16;
   color: #ffffff;
 }
+
+/* Modal and Backdrop Animations */
+@keyframes zapateraFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zapateraScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Target react-native-web modal root */
+[aria-modal="true"] {
+  animation: zapateraFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ==========================================================================
+   High-Visibility Security Notice & Account Lockout Modal Styles
+   ========================================================================== */
+.zapatera-security-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(15, 23, 42, 0.82) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 999999 !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+  animation: zapateraFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.zapatera-security-card {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-radius: 28px !important;
+  width: 100% !important;
+  max-width: 460px !important;
+  padding: 32px 26px 24px 26px !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(226, 232, 240, 0.9) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  animation: zapateraScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.zapatera-security-card::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 5px !important;
+  background: linear-gradient(90deg, #ef4444, #f43f5e, #dc2626) !important;
+}
+
+.zapatera-security-card.is-locked::before {
+  background: linear-gradient(90deg, #dc2626, #ea580c, #dc2626) !important;
+}
+
+.zapatera-close-btn {
+  position: absolute !important;
+  top: 16px !important;
+  right: 16px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 17px !important;
+  background-color: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #64748b !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+.zapatera-close-btn:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  transform: scale(1.05) !important;
+}
+
+.zapatera-icon-halo {
+  width: 76px !important;
+  height: 76px !important;
+  border-radius: 38px !important;
+  background-color: #fef2f2 !important;
+  border: 2px solid #fecaca !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto 14px auto !important;
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.18) !important;
+}
+
+.zapatera-badge {
+  display: inline-block !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.8px !important;
+  text-transform: uppercase !important;
+  margin-bottom: 10px !important;
+}
+.zapatera-badge-deleted {
+  background-color: #fff1f2 !important;
+  color: #be123c !important;
+  border: 1px solid #fecdd3 !important;
+}
+.zapatera-badge-locked {
+  background-color: #fef2f2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca !important;
+}
+
+.zapatera-title {
+  font-size: 21px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  margin: 0 0 4px 0 !important;
+  letter-spacing: -0.3px !important;
+}
+
+.zapatera-subtitle {
+  font-size: 12.5px !important;
+  color: #64748b !important;
+  margin: 0 0 16px 0 !important;
+  font-weight: 500 !important;
+}
+
+.zapatera-notice-callout {
+  background-color: #fff1f2 !important;
+  border: 1px solid #fecdd3 !important;
+  border-left: 4px solid #e11d48 !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+  margin-bottom: 16px !important;
+  text-align: left !important;
+}
+.zapatera-notice-callout.is-locked {
+  background-color: #fef2f2 !important;
+  border-color: #fecaca !important;
+  border-left-color: #dc2626 !important;
+}
+.zapatera-notice-text {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: #881337 !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+}
+.zapatera-notice-callout.is-locked .zapatera-notice-text {
+  color: #7f1d1d !important;
+}
+
+.zapatera-office-box {
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+  padding: 14px !important;
+  margin-bottom: 20px !important;
+  text-align: left !important;
+  font-size: 12px !important;
+  color: #475569 !important;
+}
+.zapatera-office-box-title {
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.zapatera-office-box-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 11.5px !important;
+  color: #64748b !important;
+  margin-top: 4px !important;
+}
+
+.zapatera-btn-primary {
+  width: 100% !important;
+  padding: 14px 18px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #e11d48, #be123c) !important;
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35) !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+.zapatera-btn-primary:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(225, 29, 72, 0.45) !important;
+  filter: brightness(1.05) !important;
+}
+.zapatera-btn-primary:active {
+  transform: translateY(0) !important;
+}
+
+.zapatera-btn-unlock {
+  width: 100% !important;
+  padding: 14px 18px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  color: #ffffff !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+.zapatera-btn-unlock:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.45) !important;
+  filter: brightness(1.05) !important;
+}
+
+.zapatera-btn-secondary {
+  width: 100% !important;
+  padding: 12px 18px !important;
+  border-radius: 14px !important;
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: 1px solid #e2e8f0 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin-top: 8px !important;
+}
+.zapatera-btn-secondary:hover {
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}

@@ -19,6 +19,8 @@ import {
   Eye,
   EyeOff,
   Key,
+  Check,
+  X,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
@@ -264,8 +266,17 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       return;
     }
 
-    if (securityForm.newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters long.');
+    // Enforce strong password validation
+    const pw = securityForm.newPassword || '';
+    const hasMinLength = pw.length >= 8;
+    const hasUpper = /[A-Z]/.test(pw);
+    const hasLower = /[a-z]/.test(pw);
+    const hasNumber = /[0-9]/.test(pw);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+    const isPasswordStrong = hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
+
+    if (!isPasswordStrong) {
+      setPasswordError('New password must be strong: at least 8 characters and include uppercase, lowercase, a number, and a special character.');
       return;
     }
 
@@ -781,7 +792,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   autoComplete="new-password"
                   value={securityForm.newPassword}
                   onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
-                  placeholder="At least 6 characters"
+                  placeholder="Minimum 8 strong characters"
                   className={`w-full pl-10 pr-10 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all ${
                     isDarkMode
                       ? 'bg-slate-950 border-slate-800 text-white placeholder-slate-600'
@@ -821,6 +832,103 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               </div>
             </div>
           </div>
+
+          {/* Real-Time Strong Password Validation Checklist */}
+          {securityForm.newPassword && (
+            <div className={`p-3.5 rounded-xl border max-w-2xl text-xs space-y-2 transition-all ${
+              isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className={`font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Password Strength Requirements:
+                </span>
+                <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
+                  [
+                    securityForm.newPassword.length >= 8,
+                    /[A-Z]/.test(securityForm.newPassword),
+                    /[a-z]/.test(securityForm.newPassword),
+                    /[0-9]/.test(securityForm.newPassword),
+                    /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                  ].filter(Boolean).length === 5
+                    ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
+                    : [
+                        securityForm.newPassword.length >= 8,
+                        /[A-Z]/.test(securityForm.newPassword),
+                        /[a-z]/.test(securityForm.newPassword),
+                        /[0-9]/.test(securityForm.newPassword),
+                        /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                      ].filter(Boolean).length >= 3
+                    ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+                    : 'bg-rose-500/20 text-rose-500 border border-rose-500/30'
+                }`}>
+                  {[
+                    securityForm.newPassword.length >= 8,
+                    /[A-Z]/.test(securityForm.newPassword),
+                    /[a-z]/.test(securityForm.newPassword),
+                    /[0-9]/.test(securityForm.newPassword),
+                    /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                  ].filter(Boolean).length === 5 ? 'Strong Password' : 'Incomplete'}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 rounded-full ${
+                    [
+                      securityForm.newPassword.length >= 8,
+                      /[A-Z]/.test(securityForm.newPassword),
+                      /[a-z]/.test(securityForm.newPassword),
+                      /[0-9]/.test(securityForm.newPassword),
+                      /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                    ].filter(Boolean).length === 5
+                      ? 'bg-emerald-500'
+                      : [
+                          securityForm.newPassword.length >= 8,
+                          /[A-Z]/.test(securityForm.newPassword),
+                          /[a-z]/.test(securityForm.newPassword),
+                          /[0-9]/.test(securityForm.newPassword),
+                          /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                        ].filter(Boolean).length >= 3
+                      ? 'bg-amber-500'
+                      : 'bg-rose-500'
+                  }`}
+                  style={{
+                    width: `${([
+                      securityForm.newPassword.length >= 8,
+                      /[A-Z]/.test(securityForm.newPassword),
+                      /[a-z]/.test(securityForm.newPassword),
+                      /[0-9]/.test(securityForm.newPassword),
+                      /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                    ].filter(Boolean).length / 5) * 100}%`
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                <div className={`flex items-center space-x-1.5 ${securityForm.newPassword.length >= 8 ? 'text-emerald-500 font-semibold' : 'text-slate-400'}`}>
+                  {securityForm.newPassword.length >= 8 ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                  <span>At least 8 characters</span>
+                </div>
+                <div className={`flex items-center space-x-1.5 ${/[A-Z]/.test(securityForm.newPassword) ? 'text-emerald-500 font-semibold' : 'text-slate-400'}`}>
+                  {/[A-Z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                  <span>At least one uppercase letter (A-Z)</span>
+                </div>
+                <div className={`flex items-center space-x-1.5 ${/[a-z]/.test(securityForm.newPassword) ? 'text-emerald-500 font-semibold' : 'text-slate-400'}`}>
+                  {/[a-z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                  <span>At least one lowercase letter (a-z)</span>
+                </div>
+                <div className={`flex items-center space-x-1.5 ${/[0-9]/.test(securityForm.newPassword) ? 'text-emerald-500 font-semibold' : 'text-slate-400'}`}>
+                  {/[0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                  <span>At least one number (0-9)</span>
+                </div>
+                <div className={`flex items-center space-x-1.5 ${/[^A-Za-z0-9]/.test(securityForm.newPassword) ? 'text-emerald-500 font-semibold' : 'text-slate-400'}`}>
+                  {/[^A-Za-z0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                  <span>At least one special character (!@#$%^&*)</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
             <button

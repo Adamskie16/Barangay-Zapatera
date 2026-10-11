@@ -1,5 +1,5 @@
-// SuperAdmin/src/features/users/UsersView.jsx
-import React, { useState, useEffect } from 'react';
+// AccountManagement/src/features/accounts/AccountCreationView.jsx
+import React, { useState, useEffect, useMemo } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import UserAvatar from '../../components/UserAvatar';
@@ -22,6 +22,9 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  AlertCircle,
+  CheckCircle2,
+  X,
   Loader2,
   ShieldCheck,
   RefreshCw,
@@ -36,12 +39,125 @@ import {
   Check,
   Activity,
   Info,
+  Vote,
+  Calendar,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import ActionModal from '../../components/ActionModal';
 import { validateEmail, sanitizeInput, unlockUserAccount, lockUserAccount, formatDate } from '../../core/security';
 import { supabase, supabaseAdmin, signUpUserWithoutPersistSession, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton } from '../../components/SkeletonLoader';
+
+const SAMPLE_SITIOS = [
+  'Sitio Zapatera Proper',
+  'Sitio Zapatera Central',
+  'Sitio Lower Zapatera',
+  'Sitio Riverside',
+  'Sitio San Roque',
+  'Sitio Manga',
+  'Sitio Sto. Niño',
+  'Sitio Kawayan',
+  'Sitio Mabolo Border',
+  'Sitio Centro',
+];
+
+const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Separated', 'Divorced'];
+
+export function checkPasswordStrength(password = '') {
+  const p = password || '';
+  return {
+    hasLength: p.length >= 8,
+    hasUpper: /[A-Z]/.test(p),
+    hasLower: /[a-z]/.test(p),
+    hasNumber: /[0-9]/.test(p),
+    hasSpecial: /[@$!%*?&!#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p),
+  };
+}
+
+export function isStrongPassword(password = '') {
+  const s = checkPasswordStrength(password);
+  return s.hasLength && s.hasUpper && s.hasLower && s.hasNumber && s.hasSpecial;
+}
+
+
+export const isUserRegisteredVoter = (user) => {
+  if (!user) return false;
+  if (user.is_registered_voter === true) return true;
+  if (user.is_registered_voter === false) return false;
+  const status = String(user.voter_status || '').toLowerCase().trim();
+  if (status.includes('not registered') || status.includes('non') || status === 'unregistered' || status === 'no' || status === 'false') {
+    return false;
+  }
+  if (status.includes('registered') || status.includes('voter') || status === 'yes' || status === 'true') {
+    return true;
+  }
+  const idType = String(user.id_type || '').toLowerCase().trim();
+  if (idType.includes('voter')) return true;
+  return false;
+};
+
+export const calculateAge = (birthDateStr) => {
+  if (!birthDateStr) return null;
+  const d = new Date(birthDateStr);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+};
+
+export const getResidentNameParts = (user) => {
+  let first = (user?.first_name || '').trim();
+  let mi = (user?.middle_initial || '').trim().replace(/\.$/, '');
+  let last = (user?.last_name || '').trim();
+
+  if ((!first || !last) && user?.full_name) {
+    const fn = user.full_name.trim();
+    if (fn.includes(',')) {
+      const [lastPart, firstPart] = fn.split(',').map((s) => s.trim());
+      last = last || lastPart;
+      const tokens = (firstPart || '').split(/\s+/);
+      if (tokens.length > 1 && tokens[tokens.length - 1].length <= 2) {
+        mi = mi || tokens[tokens.length - 1].replace(/\.$/, '');
+        first = first || tokens.slice(0, -1).join(' ');
+      } else {
+        first = first || firstPart;
+      }
+    } else {
+      const tokens = fn.split(/\s+/);
+      if (tokens.length === 1) {
+        first = first || tokens[0];
+      } else if (tokens.length === 2) {
+        first = first || tokens[0];
+        last = last || tokens[1];
+      } else if (tokens.length >= 3) {
+        const lastToken = tokens[tokens.length - 1];
+        const secondLast = tokens[tokens.length - 2];
+        if (secondLast.length <= 2) {
+          first = first || tokens.slice(0, -2).join(' ');
+          mi = mi || secondLast.replace(/\.$/, '');
+          last = last || lastToken;
+        } else {
+          first = first || tokens.slice(0, -1).join(' ');
+          last = last || lastToken;
+        }
+      }
+    }
+  }
+
+  return { first, mi, last };
+};
+
 
 export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDarkMode }) {
   const [usersList, setUsersList] = useState([]);
@@ -151,11 +267,65 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     setLoadingDevices(false);
   };
 
-  const handleOpenViewModal = (user) => {
-    setViewingUser(user);
-    setModalActiveTab('telemetry');
+  const handleOpenViewModal = async (user) => {
+    if (!user) return;
+    let enriched = { ...user };
+
+    // 1. Fetch full profile from Supabase to guarantee all latest columns
+    if (isSupabaseConfigured() && (user.id || user.email)) {
+      try {
+        let query = supabase.from('profiles').select('*');
+        if (user.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)) {
+          query = query.eq('id', user.id);
+        } else if (user.email) {
+          query = query.eq('email', user.email.toLowerCase().trim());
+        }
+        const { data: dbProfile } = await query.maybeSingle();
+        if (dbProfile) {
+          enriched = { ...enriched, ...dbProfile };
+        }
+      } catch (err) {
+        console.warn('Notice: Error fetching full resident profile:', err);
+      }
+    }
+
+    // 2. Fetch and merge resident signup credentials from local storage
+    try {
+      const stored = localStorage.getItem('zapatera_residents_db');
+      if (stored) {
+        const residents = JSON.parse(stored);
+        if (Array.isArray(residents)) {
+          const match = residents.find(
+            (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
+                   (r.id && r.id === user.id)
+          );
+          if (match) {
+            enriched = {
+              ...match,
+              ...enriched,
+              first_name: enriched.first_name || match.first_name,
+              last_name: enriched.last_name || match.last_name,
+              middle_initial: enriched.middle_initial || match.middle_initial,
+              birth_date: enriched.birth_date || match.birth_date || match.birthdate,
+              civil_status: enriched.civil_status || match.civil_status,
+              sitio: enriched.sitio || match.sitio,
+              voter_status: enriched.voter_status || match.voter_status,
+              phone: enriched.phone || match.phone,
+              address: enriched.address || match.address,
+            };
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 3. Fallback name parsing
+    const nameParts = getResidentNameParts(enriched);
+    enriched.first_name = enriched.first_name || nameParts.first;
+    enriched.middle_initial = enriched.middle_initial || nameParts.mi;
+    enriched.last_name = enriched.last_name || nameParts.last;
+
+    setViewingUser(enriched);
     setIsViewModalOpen(true);
-    fetchUserDevices(user.id);
   };
 
   const handleTerminateDeviceSession = (device) => {
@@ -222,14 +392,53 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
   const [formData, setFormData] = useState({
     email: '',
     full_name: '',
-    role: 'admin', // Default to Barangay Admin creation
+    first_name: '',
+    middle_initial: '',
+    last_name: '',
+    birth_date: '',
+    civil_status: 'Single',
+    voter_status: 'Registered Voter',
+    sitio: 'Sitio Zapatera Proper',
+    role: 'resident',
     phone: '',
-    address: 'Barangay Zapatera, Cebu City',
+    address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
     id_type: 'Government ID',
     id_number: '',
     is_active: true,
     password: '',
+    confirm_password: '',
   });
+
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formGeneralError, setFormGeneralError] = useState('');
+  const [showProvisionPassword, setShowProvisionPassword] = useState(false);
+  const [showProvisionConfirmPassword, setShowProvisionConfirmPassword] = useState(false);
+
+  const passwordStrength = checkPasswordStrength(formData.password);
+  const passwordsMatch = Boolean(
+    formData.password && formData.confirm_password && formData.password === formData.confirm_password
+  );
+
+  const handleFieldChange = (field, value) => {
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'sitio' && prev.role === 'resident') {
+        updated.address = `${value}, Barangay Zapatera, Cebu City`;
+      }
+      return updated;
+    });
+
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    if (formGeneralError) {
+      setFormGeneralError('');
+    }
+  };
 
   async function verifyLoggedInPassword(inputPassword) {
     if (!inputPassword) return false;
@@ -255,9 +464,16 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         });
         if (!error && data?.user) return true;
       } catch (e) {
-        return false;
+        // Fallback
       }
     }
+
+    try {
+      const storedSAs = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+      const match = storedSAs.find((sa) => (sa.email || '').toLowerCase() === loggedInEmail);
+      if (match?.password && match.password === inputPassword) return true;
+    } catch {}
+
     return false;
   }
 
@@ -315,12 +531,35 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           });
         }
 
+        let localResidents = [];
+        try {
+          const storedRes = localStorage.getItem('zapatera_residents_db');
+          if (storedRes) {
+            const parsed = JSON.parse(storedRes);
+            if (Array.isArray(parsed)) localResidents = parsed;
+          }
+        } catch (e) {}
+
         if (!error && supaProfiles) {
           const seenEmails = new Set();
           const uniqueProfiles = [];
 
           for (const p of supaProfiles) {
             const cleanEmail = (p.email || '').toLowerCase().trim();
+            const localMatch = localResidents.find(
+              (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
+            );
+            if (localMatch) {
+              p.first_name = p.first_name || localMatch.first_name;
+              p.last_name = p.last_name || localMatch.last_name;
+              p.middle_initial = p.middle_initial || localMatch.middle_initial;
+              p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
+              p.civil_status = p.civil_status || localMatch.civil_status;
+              p.sitio = p.sitio || localMatch.sitio;
+              p.voter_status = p.voter_status || localMatch.voter_status;
+              p.phone = p.phone || localMatch.phone;
+              p.address = p.address || localMatch.address;
+            }
             if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
             seenEmails.add(cleanEmail);
 
@@ -350,23 +589,119 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     setLoadingUsers(false);
   }
 
+  // Validate Account Provision Form (Resident sign up functionality with field-level alerts)
+  const validateProvisionForm = () => {
+    const errors = {};
+    setFormGeneralError('');
+
+    // Common: Email Address validation
+    const emailVal = (formData.email || '').trim().toLowerCase();
+    if (!emailVal) {
+      errors.email = 'Email address is required.';
+    } else if (!validateEmail(emailVal)) {
+      errors.email = 'Please enter a valid email address (e.g. resident@gmail.com).';
+    }
+
+    // Common: Phone Number validation
+    const phoneVal = (formData.phone || '').trim();
+    if (!phoneVal) {
+      errors.phone = 'Mobile Phone number is required.';
+    } else {
+      const cleanPhone = phoneVal.replace(/[\s-]/g, '');
+      if (!/^(09|\+639)\d{9}$/.test(cleanPhone)) {
+        errors.phone = 'Please enter a valid 11-digit mobile number (e.g. 09171234567).';
+      }
+    }
+
+    if (formData.role === 'resident') {
+      // 1. Full Name Information (Last Name & First Name required, M.I. is strictly optional)
+      if (!formData.last_name || !formData.last_name.trim()) {
+        errors.last_name = 'Last Name is required.';
+      }
+      if (!formData.first_name || !formData.first_name.trim()) {
+        errors.first_name = 'First Name is required.';
+      }
+      // Middle initial is strictly optional! No error check and no error alert.
+
+      // 2. Personal Status & Birth Details
+      if (!formData.birth_date || !formData.birth_date.trim()) {
+        errors.birth_date = 'Date of Birth is required.';
+      }
+      if (!formData.civil_status || !formData.civil_status.trim()) {
+        errors.civil_status = 'Civil Status is required.';
+      }
+
+      // 3. Sitio, Complete Address & Voter Status
+      if (!formData.sitio || !formData.sitio.trim()) {
+        errors.sitio = 'Sitio selection is required.';
+      }
+      if (!formData.address || !formData.address.trim()) {
+        errors.address = 'Complete Address is required.';
+      }
+      if (!formData.voter_status || !formData.voter_status.trim()) {
+        errors.voter_status = 'Voter Registration Status is required.';
+      }
+    } else {
+      // Administrator Profile Information
+      if (!formData.full_name || !formData.full_name.trim()) {
+        errors.full_name = 'Administrator Full Name is required.';
+      }
+    }
+
+    // 4. Strong Password & Confirm Password (only for new account provisioning)
+    if (!editingId) {
+      if (!formData.password || !formData.password.trim()) {
+        errors.password = 'Password is required.';
+      } else if (!isStrongPassword(formData.password)) {
+        errors.password = 'Password must meet all 5 strong criteria below.';
+      }
+
+      if (!formData.confirm_password || !formData.confirm_password.trim()) {
+        errors.confirm_password = 'Confirm Password is required.';
+      } else if (formData.password !== formData.confirm_password) {
+        errors.confirm_password = 'Passwords do not match.';
+      }
+    }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setFormGeneralError('Please resolve all highlighted field alerts before proceeding.');
+      return false;
+    }
+    return true;
+  };
+
   // Handle Main Form Submission -> Trigger Dedicated Security Modal
   function handleFormSubmit(e) {
     e.preventDefault();
 
-    if (!validateEmail(formData.email)) {
-      alert('Please enter a valid email address.');
+    const isValid = validateProvisionForm();
+    if (!isValid) {
       return;
     }
 
+    const cleanMI = (formData.middle_initial || '').trim().toUpperCase().replace(/\.$/, '');
+    const cleanLast = (formData.last_name || '').trim();
+    const cleanFirst = (formData.first_name || '').trim();
+    const computedFullName = formData.role === 'resident' && (cleanLast || cleanFirst)
+      ? `${cleanLast}, ${cleanFirst}${cleanMI ? ' ' + cleanMI + '.' : ''}`
+      : sanitizeInput(formData.full_name);
+
     const payload = {
-      email: sanitizeInput(formData.email),
-      full_name: sanitizeInput(formData.full_name),
+      email: sanitizeInput(formData.email.toLowerCase().trim()),
+      full_name: computedFullName,
+      first_name: cleanFirst || null,
+      middle_initial: cleanMI || null,
+      last_name: cleanLast || null,
+      birth_date: formData.birth_date || null,
+      civil_status: formData.civil_status || 'Single',
+      voter_status: formData.voter_status || 'Registered Voter',
+      sitio: formData.sitio || 'Sitio Zapatera Proper',
       role: formData.role, // 'admin' or 'resident'
       phone: sanitizeInput(formData.phone),
-      address: sanitizeInput(formData.address),
-      id_type: sanitizeInput(formData.id_type),
-      id_number: sanitizeInput(formData.id_number),
+      address: sanitizeInput(formData.address || `${formData.sitio || 'Barangay Zapatera'}, Cebu City`),
+      id_type: sanitizeInput(formData.id_type || (formData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay ID')),
+      id_number: sanitizeInput(formData.id_number || `BZ-${Date.now().toString().slice(-6)}`),
       is_active: formData.is_active,
       updated_at: new Date().toISOString(),
     };
@@ -392,7 +727,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
     setIsSaving(true);
     setIsProcessing(true);
-    setProcessingTitle(editingId ? 'Updating User Account...' : 'Provisioning New Account...');
+    setProcessingTitle(editingId ? 'Updating User Account...' : 'Creating New Account...');
     setProcessingMessage('Verifying credentials & saving user profile to database...');
 
     try {
@@ -474,7 +809,64 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       });
     }
 
+    if (pendingUserPayload.role === 'resident') {
+      try {
+        const storedDb = localStorage.getItem('zapatera_residents_db');
+        let residents = storedDb ? JSON.parse(storedDb) : [];
+        if (!Array.isArray(residents)) residents = [];
+        const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
+        const existingIdx = residents.findIndex((r) => (r.email && r.email.toLowerCase() === cleanEmail) || (editingId && r.id === editingId));
+        const residentEntry = {
+          id: editingId || assignedId || `res-${Date.now()}`,
+          ...pendingUserPayload,
+          password: formData.password || (existingIdx >= 0 ? residents[existingIdx].password : 'password123'),
+        };
+        if (existingIdx >= 0) {
+          residents[existingIdx] = { ...residents[existingIdx], ...residentEntry };
+        } else {
+          residents.unshift(residentEntry);
+        }
+        localStorage.setItem('zapatera_residents_db', JSON.stringify(residents));
+      } catch (e) {
+        console.warn('Notice: localStorage zapatera_residents_db update error:', e);
+      }
+    }
+
+    if (pendingUserPayload.role === 'super_admin' || pendingUserPayload.role === 'superadmin') {
+      try {
+        const storedSAs = localStorage.getItem('zapatera_super_admins_db');
+        let superAdmins = storedSAs ? JSON.parse(storedSAs) : [];
+        if (!Array.isArray(superAdmins)) superAdmins = [];
+        const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
+        const existingIdx = superAdmins.findIndex((s) => (s.email && s.email.toLowerCase() === cleanEmail) || (editingId && s.id === editingId));
+        const saEntry = {
+          id: editingId || assignedId || `sa-${Date.now()}`,
+          ...pendingUserPayload,
+          role: 'super_admin',
+          password: formData.password || (existingIdx >= 0 ? superAdmins[existingIdx].password : 'password123'),
+        };
+        if (existingIdx >= 0) {
+          superAdmins[existingIdx] = { ...superAdmins[existingIdx], ...saEntry };
+        } else {
+          superAdmins.unshift(saEntry);
+        }
+        localStorage.setItem('zapatera_super_admins_db', JSON.stringify(superAdmins));
+      } catch (e) {
+        console.warn('Notice: localStorage zapatera_super_admins_db update error:', e);
+      }
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const savedEmail = pendingUserPayload.email;
+    const savedName = pendingUserPayload.full_name || pendingUserPayload.email;
+    const roleTitle =
+      pendingUserPayload.role === 'super_admin' || pendingUserPayload.role === 'superadmin'
+        ? 'Super Administrator'
+        : pendingUserPayload.role === 'admin'
+        ? 'Barangay Admin'
+        : 'Resident';
+    const isNew = !editingId;
 
     setIsSaveSecurityModalOpen(false);
     setEditingId(null);
@@ -484,21 +876,44 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     setIsSaving(false);
     setIsProcessing(false);
     fetchUsers();
+
+    setActionModal({
+      isOpen: true,
+      type: 'success',
+      title: isNew ? 'Account Created' : 'Account Updated',
+      message: isNew
+        ? `The ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
+        : `The profile details for "${savedName}" (${savedEmail}) were updated successfully.`,
+      buttonText: 'Done',
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   }
 
   // 3. EDIT USER SELECTION
   function handleEdit(user) {
     setEditingId(user.id);
+    setFieldErrors({});
+    setFormGeneralError('');
+    setShowProvisionPassword(false);
+    setShowProvisionConfirmPassword(false);
     setFormData({
       email: user.email || '',
       full_name: user.full_name || '',
-      role: user.role === 'super_admin' ? 'admin' : (user.role || 'admin'),
+      first_name: user.first_name || '',
+      middle_initial: user.middle_initial || '',
+      last_name: user.last_name || '',
+      birth_date: user.birth_date || user.birthdate || '',
+      civil_status: user.civil_status || 'Single',
+      voter_status: user.voter_status || 'Registered Voter',
+      sitio: user.sitio || 'Sitio Zapatera Proper',
+      role: user.role === 'super_admin' || user.role === 'superadmin' ? 'super_admin' : (user.role || 'resident'),
       phone: user.phone || '',
       address: user.address || 'Barangay Zapatera, Cebu City',
       id_type: user.id_type || 'Government ID',
       id_number: user.id_number || '',
       is_active: user.is_active !== false,
       password: '',
+      confirm_password: '',
     });
     setIsModalOpen(true);
   }
@@ -577,6 +992,59 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           }
         }
       }
+
+      // Record deletion in localStorage for cross-tab and login prevention
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const existingDeleted = JSON.parse(localStorage.getItem('zapatera_deleted_accounts') || '[]');
+          const updatedDeleted = Array.isArray(existingDeleted) ? existingDeleted : [];
+          if (!updatedDeleted.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
+            updatedDeleted.push({ id, email: cleanEmail, deleted_at: new Date().toISOString() });
+            localStorage.setItem('zapatera_deleted_accounts', JSON.stringify(updatedDeleted));
+          }
+          localStorage.setItem('zapatera_account_deleted_event', JSON.stringify({ userId: id, email: cleanEmail, time: Date.now() }));
+
+          const storedDb = localStorage.getItem('zapatera_residents_db');
+          if (storedDb) {
+            const resList = JSON.parse(storedDb);
+            if (Array.isArray(resList)) {
+              localStorage.setItem('zapatera_residents_db', JSON.stringify(resList.filter((r) => r.id !== id && (r.email || '').toLowerCase() !== cleanEmail)));
+            }
+          }
+        } catch (storageErr) {
+          console.warn('Storage sync error on delete:', storageErr);
+        }
+      }
+
+      // Broadcast immediately across browser tabs
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('zapatera_security_channel');
+          bc.postMessage({ type: 'ACCOUNT_DELETED', userId: id, email: cleanEmail, time: Date.now() });
+          setTimeout(() => bc.close(), 1000);
+        }
+      } catch (bcErr) {
+        console.warn('BroadcastChannel notice:', bcErr);
+      }
+
+      // Broadcast through Supabase Realtime channel
+      if (isSupabaseConfigured()) {
+        try {
+          const rChannel = supabase.channel('zapatera_account_security_broadcast');
+          rChannel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              rChannel.send({
+                type: 'broadcast',
+                event: 'ACCOUNT_DELETED',
+                payload: { userId: id, email: cleanEmail, time: Date.now() },
+              });
+              setTimeout(() => supabase.removeChannel(rChannel), 2000);
+            }
+          });
+        } catch {
+          // Handled
+        }
+      }
     } catch (err) {
       console.warn('Supabase delete user exception:', err);
     }
@@ -599,16 +1067,28 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
   const openCreateModal = () => {
     setEditingId(null);
+    setFieldErrors({});
+    setFormGeneralError('');
+    setShowProvisionPassword(false);
+    setShowProvisionConfirmPassword(false);
     setFormData({
       email: '',
       full_name: '',
-      role: 'admin', // Default creation role: Barangay Admin
+      first_name: '',
+      middle_initial: '',
+      last_name: '',
+      birth_date: '',
+      civil_status: 'Single',
+      voter_status: 'Registered Voter',
+      sitio: 'Sitio Zapatera Proper',
+      role: 'resident', // Default creation role: Resident User
       phone: '',
-      address: 'Barangay Zapatera, Cebu City',
+      address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
       id_type: 'Government ID',
       id_number: '',
       is_active: true,
-      password: 'password123',
+      password: '',
+      confirm_password: '',
     });
     setIsModalOpen(true);
   };
@@ -689,6 +1169,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         ? true
         : filterRole === 'locked'
         ? isLocked
+        : filterRole === 'super_admin'
+        ? u.role === 'super_admin' || u.role === 'superadmin'
         : u.role === filterRole;
 
     const matchesSearch =
@@ -697,6 +1179,95 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       u.id_number?.toLowerCase().includes(search.toLowerCase());
     return matchesRole && matchesSearch;
   });
+
+  // Sorting & 10-Row Pagination Logic
+  const [sortKey, setSortKey] = useState('full_name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterRole, search, pageSize]);
+
+  const handleSort = (columnKey) => {
+    if (!columnKey) return;
+    if (sortKey === columnKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortKey('full_name');
+        setSortDirection('asc');
+      }
+    } else {
+      setSortKey(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedUsers = useMemo(() => {
+    const sorted = [...filteredUsers];
+    if (!sortKey) return sorted;
+
+    sorted.sort((a, b) => {
+      let valA = a[sortKey];
+      let valB = b[sortKey];
+
+      if (sortKey === 'full_name') {
+        valA = String(a.full_name || a.email || '').toLowerCase();
+        valB = String(b.full_name || b.email || '').toLowerCase();
+      } else if (sortKey === 'role') {
+        valA = String(a.role || '').toLowerCase();
+        valB = String(b.role || '').toLowerCase();
+      } else if (sortKey === 'phone') {
+        valA = String(a.phone || a.address || '').toLowerCase();
+        valB = String(b.phone || b.address || '').toLowerCase();
+      } else if (sortKey === 'is_locked') {
+        valA = a.is_locked ? 1 : 0;
+        valB = b.is_locked ? 1 : 0;
+      } else if (sortKey === 'created_at') {
+        valA = new Date(a.created_at || 0).getTime();
+        valB = new Date(b.created_at || 0).getTime();
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      } else {
+        valA = String(valA || '').toLowerCase();
+        valB = String(valB || '').toLowerCase();
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [filteredUsers, sortKey, sortDirection]);
+
+  // 10-Row Pagination Calculations
+  const totalEntries = sortedUsers.length;
+  const totalPages = Math.ceil(totalEntries / pageSize) || 1;
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return sortedUsers.slice(start, start + pageSize);
+  }, [sortedUsers, safeCurrentPage, pageSize]);
+
+  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 5;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxButtons / 2));
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start + 1 < maxButtons) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <div className="space-y-6">
@@ -725,7 +1296,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         <div>
           <h2 className="text-xl font-bold">User Account Management & Security</h2>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Provision credentials, monitor 3-attempt account lockouts, and authorize unlock actions for Barangay Staff & Residents.
+            Create credentials, monitor 3-attempt account lockouts, and authorize unlock actions for Barangay Staff & Residents.
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -743,7 +1314,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors shrink-0 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Provision New Account</span>
+            <span>Create New Account</span>
           </button>
         </div>
       </div>
@@ -803,24 +1374,72 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               <tr className={`border-b font-bold uppercase tracking-wider text-[10px] ${
                 isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50/80 border-slate-200 text-slate-500'
               }`}>
-                <th className="px-6 py-3.5">User Identity</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Contact & Location</th>
-                <th className="px-6 py-3.5">Security & Lock Status</th>
+                <th
+                  onClick={() => handleSort('full_name')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>User Identity</span>
+                    {sortKey === 'full_name' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('role')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Role</span>
+                    {sortKey === 'role' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('phone')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Contact & Location</span>
+                    {sortKey === 'phone' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('is_locked')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Security & Lock Status</span>
+                    {sortKey === 'is_locked' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-500" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-500" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
               {loadingUsers ? (
                 <TableSkeleton rows={6} cols={5} isDarkMode={isDarkMode} />
-              ) : filteredUsers.length === 0 ? (
+              ) : paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
                     No accounts found matching your search filter.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => {
+                paginatedUsers.map((u) => {
                   const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
                   const failedCount = isLocked ? Math.max(u.failed_attempts || 0, 3) : (u.failed_attempts || 0);
 
@@ -845,9 +1464,22 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                       </td>
 
                       <td className="px-6 py-4">
-                        <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
-                          {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
+                          </Badge>
+                          {u.role === 'resident' && (
+                            isUserRegisteredVoter(u) ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+                                <Vote className="w-3 h-3" /> Registered Voter
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
+                                <Vote className="w-3 h-3 opacity-60" /> Non-Voter
+                              </span>
+                            )
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-6 py-4 space-y-0.5 text-[11px]">
@@ -928,6 +1560,116 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             </tbody>
           </table>
         </div>
+
+        {/* 10-Row Pagination Footer */}
+        {totalEntries > 0 && (
+          <div className={`px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${
+            isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+          }`}>
+            <div className="flex items-center gap-2 font-medium">
+              <span>Showing</span>
+              <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{startIndex}</span>
+              <span>to</span>
+              <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{endIndex}</span>
+              <span>of</span>
+              <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalEntries}</span>
+              <span>accounts</span>
+
+              <div className="ml-4 flex items-center gap-1.5">
+                <span className="text-[11px] opacity-70">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2 py-1 border rounded-md text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${
+                    isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safeCurrentPage === 1}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                  isDarkMode
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+                title="First page"
+              >
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                  isDarkMode
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+                title="Previous page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              {getPageNumbers().map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setCurrentPage(num)}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    safeCurrentPage === num
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : isDarkMode
+                      ? 'border border-slate-800 hover:bg-slate-800 text-slate-300'
+                      : 'border border-slate-200 hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                  isDarkMode
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+                title="Next page"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safeCurrentPage === totalPages}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+                  isDarkMode
+                    ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+                title="Last page"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Dedicated Security Verification - Save/Create Account Modal */}
@@ -939,16 +1681,16 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           setSaveAuthError('');
           setIsModalOpen(true);
         }}
-        title={`Security Verification - ${editingId ? 'Update' : 'Provision'} Account`}
+        title={`Security Verification - ${editingId ? 'Update' : 'Create'} Account`}
         darkMode={isDarkMode}
       >
         <div className="space-y-4 text-xs">
           <div className="p-4 bg-blue-950/60 border border-blue-800/80 rounded-xl text-blue-200 flex items-start space-x-3">
             <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-sm text-blue-100">{editingId ? 'Authorize Account Update' : 'Authorize Account Provisioning'}</p>
+              <p className="font-bold text-sm text-blue-100">{editingId ? 'Authorize Account Update' : 'Authorize Account Creation'}</p>
               <p className="text-xs text-blue-300 mt-1">
-                Please confirm your logged-in account password to authorize {editingId ? 'updating' : 'provisioning'} access credentials for{' '}
+                Please confirm your logged-in account password to authorize {editingId ? 'updating' : 'creating'} access credentials for{' '}
                 <strong className="text-white">{formData.full_name || 'Account User'}</strong> (
                 <span className="font-mono text-blue-200">{formData.email || 'N/A'}</span>).
               </p>
@@ -1229,94 +1971,577 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingId ? 'Edit User Profile & Role' : 'Provision New Account'}
+        title={editingId ? 'Edit User Profile & Role' : 'Create New Account'}
         darkMode={isDarkMode}
       >
-        <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="block text-xs font-bold mb-1">Email Address</label>
-            <input
-              type="email"
-              required
-              disabled={!!editingId}
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="e.g. resident@zapatera.gov.ph"
-              className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono ${
-                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
-              }`}
-            />
-          </div>
-
-          {!editingId && (
-            <div>
-              <label className="block text-xs font-bold mb-1">Account Default Password</label>
-              <input
-                type="text"
-                required
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="e.g. password123"
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
-                }`}
-              />
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-4 text-xs">
+          {formGeneralError && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl text-red-700 dark:text-red-300 flex items-start space-x-2 text-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+              <span>{formGeneralError}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold mb-1">Full Name</label>
-            <input
-              type="text"
-              required
-              value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              placeholder="e.g. Juan De La Cruz"
-              className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
+            <label className="block text-xs font-bold mb-1">
+              Account Role <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.role === 'superadmin' ? 'super_admin' : formData.role}
+              onChange={(e) => handleFieldChange('role', e.target.value)}
+              className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold cursor-pointer ${
+                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
               }`}
-            />
+            >
+              <option value="super_admin">Super Administrator</option>
+              <option value="admin">Barangay Admin</option>
+              <option value="resident">Resident User</option>
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold mb-1">Role Type</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
-                }`}
-              >
-                <option value="admin">Barangay Admin</option>
-                <option value="resident">Resident User</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold mb-1">Phone Number</label>
-              <input
-                type="text"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="0917XXXXXXX"
-                className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
-                }`}
-              />
+          {formData.role === 'resident' ? (
+            <>
+              {/* 1. Full Name Information (Mirroring Resident Sign-up) */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                  1. Full Name Information *
+                </span>
+                <div className="grid grid-cols-5 gap-2">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold mb-1">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dela Cruz"
+                      value={formData.last_name}
+                      onChange={(e) => handleFieldChange('last_name', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.last_name
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.last_name && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.last_name}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold mb-1">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Juan"
+                      value={formData.first_name}
+                      onChange={(e) => handleFieldChange('first_name', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.first_name
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.first_name && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.first_name}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
+                      M.I. (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      placeholder="M."
+                      value={formData.middle_initial}
+                      onChange={(e) => handleFieldChange('middle_initial', e.target.value)}
+                      className={`w-full px-2 py-2 text-xs text-center border rounded-lg focus:ring-2 font-bold ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {(formData.last_name || formData.first_name) && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-lg flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 dark:text-slate-400">Formatted Full Name:</span>
+                    <span className="font-bold text-blue-700 dark:text-blue-300 font-mono">
+                      {formData.last_name.trim() || '[Last]'}, {formData.first_name.trim() || '[First]'}
+                      {formData.middle_initial?.trim()
+                        ? ` ${formData.middle_initial.trim().toUpperCase().replace(/\.$/, '')}.`
+                        : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Personal Status & Birth Details */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                  2. Personal Status & Birth Details *
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Date of Birth <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      max={new Date().toISOString().split('T')[0]}
+                      value={formData.birth_date}
+                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.birth_date
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.birth_date && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.birth_date}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Civil Status <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.civil_status}
+                      onChange={(e) => handleFieldChange('civil_status', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.civil_status
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    >
+                      {CIVIL_STATUS_OPTIONS.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.civil_status && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.civil_status}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Barangay Zapatera Residency & Location */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                  3. Barangay Zapatera Residency & Location *
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Select Sitio <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.sitio}
+                      onChange={(e) => handleFieldChange('sitio', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.sitio
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    >
+                      {SAMPLE_SITIOS.map((sitio) => (
+                        <option key={sitio} value={sitio}>
+                          {sitio}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.sitio && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.sitio}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Complete Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.address}
+                      onChange={(e) => handleFieldChange('address', e.target.value)}
+                      placeholder="e.g. Sitio Zapatera Proper, Cebu City"
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.address
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.address && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.address}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Registered Voter Identifier Selection */}
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5 flex items-center gap-1.5">
+                    <Vote className="w-3.5 h-3.5 text-blue-500" />
+                    <span>
+                      Voter Registration Status <span className="text-red-500">*</span>
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange('voter_status', 'Registered Voter')}
+                      className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        formData.voter_status === 'Registered Voter'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-800 text-slate-300'
+                          : 'bg-white border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <Vote className="w-3.5 h-3.5" />
+                      <span>Yes (Registered Voter)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange('voter_status', 'Not Registered Voter')}
+                      className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        formData.voter_status === 'Not Registered Voter'
+                          ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                          : isDarkMode
+                          ? 'bg-slate-900 border-slate-800 text-slate-300'
+                          : 'bg-white border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <Vote className="w-3.5 h-3.5 opacity-60" />
+                      <span>No (Non-Voter)</span>
+                    </button>
+                  </div>
+                  {fieldErrors.voter_status && (
+                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.voter_status}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Administrator Profile Information */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                  Administrator Credentials *
+                </span>
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    Administrator Full Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => handleFieldChange('full_name', e.target.value)}
+                    placeholder="e.g. Juan De La Cruz"
+                    className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                      fieldErrors.full_name
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                        : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                    }`}
+                  />
+                  {fieldErrors.full_name && (
+                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.full_name}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1">Office / Address</label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => handleFieldChange('address', e.target.value)}
+                    placeholder="e.g. Barangay Zapatera Hall, Cebu City"
+                    className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                        : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                    }`}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Contact Details Section */}
+          <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+              Contact & Login Details *
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Gmail / Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  disabled={!!editingId}
+                  value={formData.email}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                  placeholder="e.g. user@gmail.com"
+                  className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 font-mono ${
+                    fieldErrors.email
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : isDarkMode
+                      ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                      : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                  }`}
+                />
+                {fieldErrors.email && (
+                  <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{fieldErrors.email}</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">
+                  Mobile Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleFieldChange('phone', e.target.value)}
+                  placeholder="09171234567"
+                  className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 font-mono ${
+                    fieldErrors.phone
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                      : isDarkMode
+                      ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                      : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                  }`}
+                />
+                {fieldErrors.phone && (
+                  <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{fieldErrors.phone}</span>
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold mb-1">Address</label>
-            <input
-              type="text"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300'
-              }`}
-            />
-          </div>
+          {/* Password & Security Section (Only for New Account Provisioning) */}
+          {!editingId && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+                Password & Security Credentials *
+              </span>
+
+              {/* Strong Password Requirements Checklist (Live indicators matching Resident signup) */}
+              <div className="p-2.5 bg-white dark:bg-slate-950 border border-blue-200 dark:border-blue-900/60 rounded-lg space-y-1.5 text-[11px]">
+                <div className="flex items-center space-x-1.5 font-bold text-blue-600 dark:text-blue-300">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Strong Password Criteria (Required):</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-[10px]">
+                  <div
+                    className={`flex items-center space-x-1 ${
+                      passwordStrength.hasLength
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {passwordStrength.hasLength ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500" />
+                    )}
+                    <span>At least 8 characters</span>
+                  </div>
+                  <div
+                    className={`flex items-center space-x-1 ${
+                      passwordStrength.hasUpper
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {passwordStrength.hasUpper ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500" />
+                    )}
+                    <span>1 Uppercase (A-Z)</span>
+                  </div>
+                  <div
+                    className={`flex items-center space-x-1 ${
+                      passwordStrength.hasLower
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {passwordStrength.hasLower ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500" />
+                    )}
+                    <span>1 Lowercase (a-z)</span>
+                  </div>
+                  <div
+                    className={`flex items-center space-x-1 ${
+                      passwordStrength.hasNumber
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {passwordStrength.hasNumber ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500" />
+                    )}
+                    <span>1 Number (0-9)</span>
+                  </div>
+                  <div
+                    className={`flex items-center space-x-1 ${
+                      passwordStrength.hasSpecial
+                        ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    {passwordStrength.hasSpecial ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500" />
+                    )}
+                    <span>1 Special symbol (!@#$%^&*)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Password and Password Confirmation Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showProvisionPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => handleFieldChange('password', e.target.value)}
+                      placeholder="Create password"
+                      className={`w-full pl-3 pr-9 py-2 text-xs border rounded-lg focus:ring-2 font-mono ${
+                        fieldErrors.password
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowProvisionPassword(!showProvisionPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                    >
+                      {showProvisionPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {fieldErrors.password && (
+                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.password}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1">
+                    Confirm Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showProvisionConfirmPassword ? 'text' : 'password'}
+                      value={formData.confirm_password}
+                      onChange={(e) => handleFieldChange('confirm_password', e.target.value)}
+                      placeholder="Repeat password"
+                      className={`w-full pl-3 pr-9 py-2 text-xs border rounded-lg focus:ring-2 font-mono ${
+                        fieldErrors.confirm_password
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowProvisionConfirmPassword(!showProvisionConfirmPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                    >
+                      {showProvisionConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {fieldErrors.confirm_password && (
+                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.confirm_password}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {formData.confirm_password && (
+                <div className="text-[11px]">
+                  {passwordsMatch ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Passwords match</span>
+                    </span>
+                  ) : (
+                    <span className="text-red-500 dark:text-red-400 flex items-center gap-1 font-semibold">
+                      <X className="w-3.5 h-3.5" />
+                      <span>Passwords do not match</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end space-x-3">
             <button
@@ -1337,545 +2562,256 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         </form>
       </Modal>
 
-      {/* Safe Credentials & Account Security View Modal */}
+      {/* Simple Resident Credentials View Modal - Single Personal Information Card */}
       {isViewModalOpen && viewingUser && (
         <Modal
-          isOpen={isViewModalOpen}
+          isOpen={isViewModalOpen && !!viewingUser}
           onClose={() => {
             setIsViewModalOpen(false);
             setViewingUser(null);
           }}
-          title="User Account Security & Device Profile"
-          maxWidth="max-w-4xl"
+          title="Resident Credentials"
+          maxWidth="max-w-2xl"
           darkMode={isDarkMode}
         >
-          <div className="space-y-6">
-            {/* User Profile Header Card */}
-            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border shadow-xs transition-colors ${
-              isDarkMode
-                ? 'bg-gradient-to-br from-slate-900 to-blue-950/40 border-slate-800'
-                : 'bg-gradient-to-br from-slate-50 to-blue-50/40 border-slate-200'
-            }`}>
-              <div className="flex items-center space-x-4">
-                <UserAvatar
-                  src={viewingUser.avatar_url}
-                  name={viewingUser.full_name || viewingUser.email}
-                  role={viewingUser.role}
-                  size="xl"
-                  isDarkMode={isDarkMode}
-                  showStatus={true}
-                  isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
-                />
+          {(() => {
+            const isVoter = isUserRegisteredVoter(viewingUser);
+            const { first, mi, last } = getResidentNameParts(viewingUser);
+            const age = calculateAge(viewingUser.birth_date || viewingUser.birthdate);
+            const birthDateFormatted = viewingUser.birth_date || viewingUser.birthdate
+              ? formatDate(viewingUser.birth_date || viewingUser.birthdate)
+              : null;
+            const cleanFullName = viewingUser.full_name || (last && first ? `${last}, ${first}${mi ? ' ' + mi + '.' : ''}` : viewingUser.email);
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-extrabold text-slate-900 dark:text-white text-lg">
-                      {viewingUser.full_name || 'Registered Account'}
-                    </h4>
-                    <Badge
-                      variant={
-                        viewingUser.role === 'super_admin'
-                          ? 'purple'
-                          : viewingUser.role === 'admin'
-                          ? 'blue'
-                          : 'active'
-                      }
-                    >
-                      {viewingUser.role === 'super_admin'
-                        ? 'Super Admin'
-                        : viewingUser.role === 'admin'
-                        ? 'Barangay Admin'
-                        : 'Resident'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-blue-500" />
-                    <span>{viewingUser.email}</span>
-                  </p>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                    Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
-                  </p>
-                </div>
-              </div>
-
-              {/* Status & Quick Actions */}
-              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200 dark:border-slate-800">
-                <span
-                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                    viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
-                      ? 'bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
-                      : 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
-                  }`}
-                >
-                  {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
-                    <>
-                      <Lock className="w-3.5 h-3.5 mr-0.5" />
-                      <span>Locked ({Math.max(viewingUser.failed_attempts || 0, 3)}/3 Failed)</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-3.5 h-3.5 mr-0.5" />
-                      <span>Account Active</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Last Active: {viewingUser.last_active_at ? formatDate(viewingUser.last_active_at) : 'Active recently'}
-                </span>
-              </div>
-            </div>
-
-            {/* Navigation Tab Bar */}
-            <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto">
-              {[
-                { id: 'telemetry', label: 'App Management', icon: Smartphone },
-                { id: 'roles', label: 'Roles & Privileges', icon: ShieldCheck },
-                { id: 'devices', label: `Login Sessions (${userDevices.length})`, icon: Laptop },
-                { id: 'settings', label: 'Security & Preferences', icon: Sliders },
-              ].map((tab) => {
-                const IconComponent = tab.icon;
-                const isActive = modalActiveTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setModalActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                      isActive
-                        ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/30'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* TAB 1: App Management Data */}
-            {modalActiveTab === 'telemetry' && (
+            return (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Release Build & Version */}
-                  <div className={`p-4 rounded-2xl border space-y-2 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Activity className="w-3.5 h-3.5 text-blue-500" /> App Version & Build Status
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Client Release:</span>
-                      <span className={`font-mono text-xs font-bold px-2.5 py-1 rounded-md border ${
-                        isDarkMode ? 'bg-slate-900 border-slate-800 text-blue-300' : 'bg-white border-slate-200 text-slate-900'
-                      }`}>
-                        {viewingUser.app_version || userDevices[0]?.app_version || 'v1.0.0 (Production)'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Release Channel:</span>
-                      <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Up to Date
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Framework Runtime:</span>
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">React Native / Web Client</span>
-                    </div>
-                  </div>
-
-                  {/* Device OS & Model */}
-                  <div className={`p-4 rounded-2xl border space-y-2 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Smartphone className="w-3.5 h-3.5 text-blue-500" /> Device Model & OS
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Operating System:</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {viewingUser.device_os || userDevices[0]?.os_name || 'iOS / Android'}
-                        {userDevices[0]?.os_version ? ` (${userDevices[0].os_version})` : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Hardware / Model:</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {viewingUser.device_model || userDevices[0]?.device_model || 'Mobile Smartphone'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Active IP Address:</span>
-                      <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
-                        {userDevices[0]?.ip_address || '127.0.0.1 (Local)'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Push Notification Token Status */}
-                  <div className={`p-4 rounded-2xl border space-y-2 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 text-blue-500" /> Push Token Status
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Push Delivery Service:</span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        <CheckCircle className="w-3 h-3" />
-                        {viewingUser.push_token_status === 'active' || userDevices[0]?.push_token_status === 'active'
-                          ? 'Token Active'
-                          : 'Registered'}
-                      </span>
-                    </div>
+                {/* Header Profile Identity */}
+                <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                  isDarkMode
+                    ? 'bg-slate-900/80 border-slate-800'
+                    : 'bg-gradient-to-r from-blue-50/80 to-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center space-x-3.5">
+                    <UserAvatar
+                      src={viewingUser.avatar_url}
+                      name={cleanFullName}
+                      role={viewingUser.role}
+                      size="lg"
+                      isDarkMode={isDarkMode}
+                      showStatus={true}
+                      isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
+                    />
                     <div className="space-y-1">
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">APNs / FCM Token:</span>
-                      <p className={`font-mono text-[10px] p-2 rounded-lg border truncate ${
-                        isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600'
-                      }`}>
-                        {viewingUser.push_token || userDevices[0]?.push_token || 'ExponentPushToken[verified_client_token]'}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">
+                          {cleanFullName}
+                        </h4>
+                        <Badge
+                          variant={
+                            viewingUser.role === 'super_admin'
+                              ? 'purple'
+                              : viewingUser.role === 'admin'
+                              ? 'blue'
+                              : 'active'
+                          }
+                        >
+                          {viewingUser.role === 'super_admin'
+                            ? 'Super Admin'
+                            : viewingUser.role === 'admin'
+                            ? 'Barangay Admin'
+                            : 'Resident'}
+                        </Badge>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            isVoter
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700'
+                              : 'bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                          }`}
+                        >
+                          <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
+                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-blue-500" />
+                        <span>{viewingUser.email}</span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Identification & Address */}
-                  <div className={`p-4 rounded-2xl border space-y-2 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <IdCard className="w-3.5 h-3.5 text-blue-500" /> Contact & Resident ID
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Mobile Phone:</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{viewingUser.phone || 'Not registered'}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Verification ID:</span>
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {viewingUser.id_type || 'Government ID'}: {viewingUser.id_number || 'Verified'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Resident Address:</span>
-                      <span className="text-xs text-slate-700 dark:text-slate-300 truncate max-w-[200px]">
-                        {viewingUser.address || 'Barangay Zapatera, Cebu City'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: User Roles & Permissions */}
-            {modalActiveTab === 'roles' && (
-              <div className="space-y-4">
-                <div className={`p-4 rounded-2xl border space-y-2 ${
-                  isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-5 h-5 text-blue-500" />
-                      <h5 className="font-bold text-slate-900 dark:text-white text-sm">
-                        Assigned Role:{' '}
-                        {viewingUser.role === 'super_admin'
-                          ? 'Super Admin'
-                          : viewingUser.role === 'admin'
-                          ? 'Barangay Admin'
-                          : 'Resident User'}
-                      </h5>
-                    </div>
-                    <Badge
-                      variant={
-                        viewingUser.role === 'super_admin'
-                          ? 'purple'
-                          : viewingUser.role === 'admin'
-                          ? 'blue'
-                          : 'active'
-                      }
+                  <div className="flex sm:flex-col items-start sm:items-end justify-between gap-1 shrink-0">
+                    <span
+                      className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                      }`}
                     >
-                      {viewingUser.role === 'super_admin'
-                        ? 'Master Authority'
-                        : viewingUser.role === 'admin'
-                        ? 'Barangay Staff'
-                        : 'Resident Client'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    {viewingUser.role === 'super_admin'
-                      ? 'Master Administrator with unrestricted privilege over system configuration, user provisioning, database administration, and security audits.'
-                      : viewingUser.role === 'admin'
-                      ? 'Barangay Staff Administrator with privileges to verify documents, manage incident blotters, review resident profiles, and unlock locked accounts.'
-                      : 'Resident user with privileges to submit certificate requests, report barangay incidents, upload avatars, and manage personal security settings.'}
-                  </p>
-                </div>
-
-                {/* Privileges Matrix */}
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                  <div className="bg-slate-100 dark:bg-slate-800/80 px-4 py-2.5 font-bold text-slate-700 dark:text-slate-300 text-xs flex justify-between">
-                    <span>Feature / Capability Domain</span>
-                    <span>Granted Access Level</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">Certificate & Document Issuance</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Approve, decline, and sign official barangay certificates</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'resident' ? 'slate' : 'blue'}>
-                        {viewingUser.role === 'resident' ? 'Request Only' : 'Full Approval Authority'}
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">Security & Account Lockout Management</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Unlock accounts locked by 3 failed attempts, terminate sessions</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'resident' ? 'slate' : 'blue'}>
-                        {viewingUser.role === 'resident' ? 'Self Profile Only' : 'Admin Unlock & Revocation'}
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">Active Mobile Session Termination</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Remotely disconnect active device telemetry tokens</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'super_admin' ? 'purple' : 'blue'}>
-                        Authorized
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">System Database & Global Branding Configuration</p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Access Superadmin console, branding logos, and core database</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'super_admin' ? 'purple' : 'slate'}>
-                        {viewingUser.role === 'super_admin' ? 'Superadmin Only' : 'Restricted'}
-                      </Badge>
-                    </div>
+                      {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
+                        <>
+                          <Lock className="w-3 h-3 mr-0.5" />
+                          <span>Locked</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-3 h-3 mr-0.5" />
+                          <span>Active</span>
+                        </>
+                      )}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
+                    </span>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* TAB 3: Login Sessions & Active Device Termination */}
-            {modalActiveTab === 'devices' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-white text-sm">Active Sessions & Telemetry Devices</h5>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Manage active hardware sessions. Terminating a session will instantly revoke the client token.
-                    </p>
+                {/* ONE Single Clean Personal Information Card */}
+                <div className={`p-5 rounded-2xl border ${
+                  isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-800">
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-blue-500" />
+                      <span>Personal Information & Resident Credentials</span>
+                    </h5>
+                    <span className="text-[11px] font-semibold text-slate-400">Barangay Zapatera Records</span>
                   </div>
-                  <button
-                    onClick={() => fetchUserDevices(viewingUser.id)}
-                    className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingDevices ? 'animate-spin' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">First Name</span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {first || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Middle Initial</span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {mi ? `${mi}.` : 'None / Not Provided'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Last Name</span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {last || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-blue-500" /> Date of Birth
+                      </span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {birthDateFormatted || 'Not recorded'}
+                        {age !== null && <span className="text-slate-500 font-normal ml-1">({age} yrs old)</span>}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Civil Status</span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
+                        {viewingUser.civil_status || 'Single'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Vote className="w-3 h-3 text-blue-500" /> Voter Status
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        isVoter
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300'
+                          : 'bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300'
+                      }`}>
+                        {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-500" /> Sitio / Area
+                      </span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {viewingUser.sitio || 'Sitio Zapatera Proper'}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-500" /> Complete Residential Address
+                      </span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">
+                        {viewingUser.address || viewingUser.complete_address || `${viewingUser.sitio || 'Barangay Zapatera'}, Cebu City`}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-emerald-500" /> Contact Number
+                      </span>
+                      <p className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        {viewingUser.phone || viewingUser.contact_number || 'None provided'}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-blue-500" /> Email Address
+                      </span>
+                      <p className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                        {viewingUser.email}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {loadingDevices ? (
-                  <div className="p-8 text-center text-slate-400 flex items-center justify-center space-x-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                    <span>Querying active sessions...</span>
-                  </div>
-                ) : userDevices.length === 0 ? (
-                  <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400">
-                    <Smartphone className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-                    <p className="font-semibold text-xs">No active device sessions found</p>
-                    <p className="text-[11px] mt-1">This user currently has no registered device tokens.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {userDevices.map((device) => {
-                      const isActive = device.is_active !== false;
-                      return (
-                        <div
-                          key={device.id || device.device_id}
-                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-colors ${
-                            isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-2xs ${
-                              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
-                            }`}>
-                              {device.device_model?.toLowerCase().includes('desktop') ||
-                              device.os_name?.toLowerCase().includes('windows') ||
-                              device.os_name?.toLowerCase().includes('mac') ? (
-                                <Laptop className="w-5 h-5 text-blue-500" />
-                              ) : (
-                                <Smartphone className="w-5 h-5 text-blue-500" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-bold text-slate-900 dark:text-white text-xs">
-                                  {device.device_name || device.device_model || 'Mobile Device'}
-                                </p>
-                                {isActive ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    Active Now
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                    Revoked
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {device.os_name || 'OS'} {device.os_version || ''} • Build v{device.app_version || '1.0.0'} • IP: {device.ip_address || '127.0.0.1'}
-                              </p>
-                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                Last Login: {formatDate(device.last_login_at || new Date().toISOString())}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div>
-                            {isActive ? (
-                              <button
-                                onClick={() => handleTerminateDeviceSession(device)}
-                                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 dark:text-rose-300 dark:border-rose-800 rounded-lg text-xs font-bold transition-colors cursor-pointer w-full sm:w-auto justify-center"
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                                <span>Terminate Session</span>
-                              </button>
-                            ) : (
-                              <span className="text-xs text-slate-400 italic">Access Revoked</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 4: App Settings & Preferences */}
-            {modalActiveTab === 'settings' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Biometric */}
-                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Fingerprint className="w-4 h-4 text-blue-500" /> Biometric Authentication
-                      </span>
-                      <Badge variant={viewingUser.biometric_enabled ? 'emerald' : 'slate'}>
-                        {viewingUser.biometric_enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Resident can unlock their mobile account using FaceID or Fingerprint sensor.
-                    </p>
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
+                      <button
+                        onClick={() => {
+                          setIsViewModalOpen(false);
+                          handleUnlockUser(viewingUser);
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Authorize Unlock Account</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setIsViewModalOpen(false);
+                          handleLockUser(viewingUser);
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Lock This Account</span>
+                      </button>
+                    )}
                   </div>
 
-                  {/* 2FA */}
-                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <KeyRound className="w-4 h-4 text-blue-500" /> Two-Factor Authentication
-                      </span>
-                      <Badge variant={viewingUser.two_factor_enabled ? 'emerald' : 'slate'}>
-                        {viewingUser.two_factor_enabled ? 'Active' : 'Password Only'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Require one-time email OTP verification when authenticating from an unrecognized device.
-                    </p>
-                  </div>
-
-                  {/* Push Alerts */}
-                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Bell className="w-4 h-4 text-blue-500" /> Push Notifications
-                      </span>
-                      <Badge variant={viewingUser.notification_preferences?.push !== false ? 'emerald' : 'slate'}>
-                        {viewingUser.notification_preferences?.push !== false ? 'Enabled' : 'Muted'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Delivery of real-time push banners on status changes of barangay document requests.
-                    </p>
-                  </div>
-
-                  {/* Email Notifications */}
-                  <div className={`p-4 rounded-2xl border space-y-1.5 ${
-                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Mail className="w-4 h-4 text-blue-500" /> Security Email Alerts
-                      </span>
-                      <Badge variant={viewingUser.notification_preferences?.email !== false ? 'emerald' : 'slate'}>
-                        {viewingUser.notification_preferences?.email !== false ? 'Active' : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Notify user email immediately upon 3-attempt account lockout or security password resets.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
-              <div className="flex items-center space-x-2">
-                {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
                   <button
                     onClick={() => {
                       setIsViewModalOpen(false);
-                      handleUnlockUser(viewingUser);
+                      setViewingUser(null);
                     }}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    className={`px-5 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer ${
+                      isDarkMode
+                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
                   >
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span>Authorize Unlock Account</span>
+                    Close
                   </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setIsViewModalOpen(false);
-                      handleLockUser(viewingUser);
-                    }}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Lock This Account</span>
-                  </button>
-                )}
+                </div>
               </div>
-
-              <button
-                onClick={() => {
-                  setIsViewModalOpen(false);
-                  setViewingUser(null);
-                }}
-                className={`px-5 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer ${
-                  isDarkMode
-                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
-              >
-                Close Security Profile
-              </button>
-            </div>
-          </div>
+            );
+          })()}
         </Modal>
       )}
 

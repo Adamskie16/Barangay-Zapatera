@@ -1,16 +1,97 @@
 // SuperAdmin/src/features/logs/LogsView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../../components/Badge';
-import { ShieldAlert, Search, Filter, RefreshCw, Terminal, Calendar } from 'lucide-react';
+import { RefreshCw, Terminal, Calendar, User, FileText, Newspaper, UserPlus, Clock } from 'lucide-react';
 import { formatDate } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { TableSkeleton } from '../../components/SkeletonLoader';
+import DataTable from '../../components/DataTable';
+
+/**
+ * Filter strictly for creation actions:
+ * 1. Creating an event
+ * 2. Creating bulletins / announcements
+ * 3. Creating an account
+ * 4. Creating a document template
+ */
+export const isPermittedActivityLog = (log) => {
+  if (!log) return false;
+  const action = (log.action || '').toLowerCase();
+  const feature = (log.feature || '').toLowerCase();
+  const details = (log.details || '').toLowerCase();
+
+  const isCreateAction =
+    action.includes('creat') ||
+    action.includes('add') ||
+    action.includes('post') ||
+    action.includes('publish') ||
+    action.includes('register') ||
+    details.includes('created') ||
+    details.includes('registered') ||
+    details.includes('published');
+
+  if (!isCreateAction) return false;
+
+  // 1. Creating an event
+  const isEvent =
+    action.includes('event') ||
+    feature.includes('event') ||
+    feature.includes('calendar') ||
+    details.includes('event');
+
+  // 2. Creating bulletins / announcements
+  const isBulletin =
+    action.includes('bulletin') ||
+    action.includes('announcement') ||
+    action.includes('news') ||
+    feature.includes('bulletin') ||
+    feature.includes('news') ||
+    details.includes('bulletin') ||
+    details.includes('announcement');
+
+  // 3. Creating an account
+  const isAccount =
+    action.includes('account') ||
+    action.includes('user') ||
+    action.includes('profile') ||
+    feature.includes('account') ||
+    feature.includes('user') ||
+    details.includes('account') ||
+    details.includes('profile');
+
+  // 4. Creating a document template
+  const isDocTemplate =
+    action.includes('template') ||
+    feature.includes('template') ||
+    (action.includes('document') && (action.includes('template') || details.includes('template') || feature.includes('template')));
+
+  return isEvent || isBulletin || isAccount || isDocTemplate;
+};
+
+export const getLogCategory = (log) => {
+  const action = (log.action || '').toLowerCase();
+  const feature = (log.feature || '').toLowerCase();
+  const details = (log.details || '').toLowerCase();
+
+  if (action.includes('template') || feature.includes('template') || details.includes('template')) {
+    return 'Document Template';
+  }
+  if (action.includes('event') || feature.includes('event') || feature.includes('calendar') || details.includes('event')) {
+    return 'Event';
+  }
+  if (action.includes('bulletin') || action.includes('announcement') || action.includes('news') || feature.includes('bulletin') || feature.includes('news')) {
+    return 'Bulletin';
+  }
+  if (action.includes('account') || action.includes('user') || action.includes('profile') || feature.includes('account') || feature.includes('user')) {
+    return 'User Account';
+  }
+  return 'General Creation';
+};
 
 export default function LogsView() {
   const [logsList, setLogsList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const [levelFilter, setLevelFilter] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('all');
 
   // Date Filter States
   const [startDate, setStartDate] = useState('');
@@ -27,7 +108,9 @@ export default function LogsView() {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setLogsList(data);
+          // Strictly filter so it only stores creation of event, bulletin, account, document template
+          const filtered = data.filter(isPermittedActivityLog);
+          setLogsList(filtered);
           setLoading(false);
           return;
         } else if (error) {
@@ -68,47 +151,146 @@ export default function LogsView() {
     }
   };
 
-  const filteredLogs = logsList.filter((log) => {
-    const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
-    const matchesSearch =
-      log.action?.toLowerCase().includes(search.toLowerCase()) ||
-      log.details?.toLowerCase().includes(search.toLowerCase()) ||
-      log.user_email?.toLowerCase().includes(search.toLowerCase()) ||
-      log.feature?.toLowerCase().includes(search.toLowerCase());
+  // Filter logs by category and date
+  const processedLogs = useMemo(() => {
+    return logsList.filter((log) => {
+      // Category filter
+      const category = getLogCategory(log);
+      if (activeCategory === 'events' && category !== 'Event') return false;
+      if (activeCategory === 'bulletins' && category !== 'Bulletin') return false;
+      if (activeCategory === 'accounts' && category !== 'User Account') return false;
+      if (activeCategory === 'templates' && category !== 'Document Template') return false;
 
-    let matchesDate = true;
-    if (log.created_at) {
-      const logDate = new Date(log.created_at);
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        if (logDate < start) matchesDate = false;
+      // Date filter
+      if (log.created_at) {
+        const logDate = new Date(log.created_at);
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (logDate < start) return false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (logDate > end) return false;
+        }
       }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        if (logDate > end) matchesDate = false;
-      }
-    }
 
-    return matchesLevel && matchesSearch && matchesDate;
-  });
+      return true;
+    });
+  }, [logsList, activeCategory, startDate, endDate]);
 
-  const getActionBadgeStyle = (action) => {
-    const act = (action || '').toLowerCase();
-    if (act.includes('created') || act.includes('posted') || act.includes('add')) {
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    }
-    if (act.includes('edit') || act.includes('update') || act.includes('processed')) {
-      return 'bg-blue-50 text-blue-700 border-blue-200';
-    }
-    if (act.includes('delete') || act.includes('remove')) {
-      return 'bg-rose-50 text-rose-700 border-rose-200';
-    }
-    if (act.includes('lock') || act.includes('unlock') || act.includes('security')) {
-      return 'bg-amber-50 text-amber-700 border-amber-200';
-    }
-    return 'bg-slate-100 text-slate-700 border-slate-200';
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    const counts = { all: logsList.length, events: 0, bulletins: 0, accounts: 0, templates: 0 };
+    logsList.forEach((log) => {
+      const cat = getLogCategory(log);
+      if (cat === 'Event') counts.events++;
+      else if (cat === 'Bulletin') counts.bulletins++;
+      else if (cat === 'User Account') counts.accounts++;
+      else if (cat === 'Document Template') counts.templates++;
+    });
+    return counts;
+  }, [logsList]);
+
+  const columns = useMemo(() => [
+    {
+      key: 'created_at',
+      label: 'Date & Time',
+      sortable: true,
+      render: (log) => (
+        <div className="flex items-center gap-2 text-slate-700">
+          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span className="font-mono text-xs whitespace-nowrap">{formatDate(log.created_at)}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'user_email',
+      label: 'Performed By',
+      sortable: true,
+      render: (log) => {
+        const userEmail = log.user_email || log.user || 'superadmin@zapatera.gov.ph';
+        const initial = userEmail.charAt(0).toUpperCase();
+        return (
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+              {initial}
+            </div>
+            <span className="font-semibold text-slate-900 text-xs font-sans truncate max-w-[180px]">
+              {userEmail}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'category',
+      label: 'Category',
+      sortable: true,
+      getValue: (log) => getLogCategory(log),
+      render: (log) => {
+        const cat = getLogCategory(log);
+        if (cat === 'Event') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+              <Calendar className="w-3 h-3 text-purple-600" /> Event
+            </span>
+          );
+        }
+        if (cat === 'Bulletin') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              <Newspaper className="w-3 h-3 text-blue-600" /> Bulletin
+            </span>
+          );
+        }
+        if (cat === 'User Account') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <UserPlus className="w-3 h-3 text-amber-600" /> User Account
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <FileText className="w-3 h-3 text-emerald-600" /> Document Template
+          </span>
+        );
+      },
+    },
+    {
+      key: 'action',
+      label: 'Creation Action',
+      sortable: true,
+      render: (log) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          {log.action}
+        </span>
+      ),
+    },
+    {
+      key: 'details',
+      label: 'Activity Details',
+      sortable: false,
+      render: (log) => (
+        <span className="text-slate-700 text-xs font-sans max-w-sm line-clamp-2 leading-relaxed">
+          {log.details || 'Creation record successfully committed to system database.'}
+        </span>
+      ),
+    },
+  ], []);
+
+  const statusTabs = {
+    activeTab: activeCategory,
+    onChange: (tabId) => setActiveCategory(tabId),
+    tabs: [
+      { id: 'all', label: 'All Permitted Logs', count: tabCounts.all },
+      { id: 'events', label: 'Events Created', count: tabCounts.events },
+      { id: 'bulletins', label: 'Bulletins Created', count: tabCounts.bulletins },
+      { id: 'accounts', label: 'Accounts Created', count: tabCounts.accounts },
+      { id: 'templates', label: 'Templates Created', count: tabCounts.templates },
+    ],
   };
 
   return (
@@ -118,7 +300,7 @@ export default function LogsView() {
         <div>
           <h2 className="text-xl font-bold text-slate-900">Activity Logs & Audit Trail</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Track user operations, event creations/edits/deletions, document updates, and account management history.
+            Exclusive audit log for creation events: event schedules, public bulletins, user accounts, and document templates.
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -133,166 +315,86 @@ export default function LogsView() {
           </button>
           <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-900 text-blue-400">
             <Terminal className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
-            {isSupabaseConfigured() ? 'Live Audit Trail Active' : 'System Audit Engine'}
+            {isSupabaseConfigured() ? 'Live Audit Engine' : 'Local Audit Engine'}
           </span>
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Level Filter */}
-          <div className="flex items-center space-x-2 overflow-x-auto">
-            <Filter className="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-            {['all', 'info', 'warning', 'danger', 'security'].map((lvl) => (
-              <button
-                key={lvl}
-                onClick={() => setLevelFilter(lvl)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors cursor-pointer ${
-                  levelFilter === lvl
-                    ? 'bg-blue-600 text-white shadow-xs font-bold'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {lvl}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Box */}
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Date Filter Toolbar */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center space-x-2">
+          <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="font-semibold text-slate-700">Filter by Date:</span>
+          <div className="flex items-center space-x-1.5">
             <input
-              type="text"
-              id="audit_logs_search_query"
-              name="audit_logs_search_query"
-              autoComplete="off"
-              placeholder="Search by user, action, or module..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+              type="date"
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setDatePreset('custom'); }}
+              className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-slate-400 font-bold">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setDatePreset('custom'); }}
+              className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
 
-        {/* Date Filter Toolbar */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="font-semibold text-slate-700">Date Range:</span>
-            <div className="flex items-center space-x-1.5">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setDatePreset('custom'); }}
-                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="text-slate-400 font-bold">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setDatePreset('custom'); }}
-                className="px-2.5 py-1 border border-slate-300 rounded-lg text-slate-700 font-mono focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
+        <div className="flex items-center space-x-1.5">
+          {[
+            { id: 'all', label: 'All Dates' },
+            { id: 'today', label: 'Today' },
+            { id: 'week', label: 'This Week' },
+            { id: 'month', label: 'This Month' },
+          ].map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handlePresetChange(p.id)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                datePreset === p.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
 
-          {/* Date Presets */}
-          <div className="flex items-center space-x-1.5">
-            {[
-              { id: 'all', label: 'All Dates' },
-              { id: 'today', label: 'Today' },
-              { id: 'week', label: 'This Week' },
-              { id: 'month', label: 'This Month' },
-            ].map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handlePresetChange(p.id)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                  datePreset === p.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-
-            {(startDate || endDate) && (
-              <button
-                onClick={() => handlePresetChange('all')}
-                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-600/20 text-rose-700 border border-rose-300 hover:bg-rose-600/30 transition-colors cursor-pointer"
-                title="Reset Date Range"
-              >
-                Clear Date Filter ✕
-              </button>
-            )}
-          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => handlePresetChange('all')}
+              className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              Clear Dates ✕
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Logs Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="bg-slate-900 text-slate-300 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="p-3.5">Date & Time</th>
-                <th className="p-3.5">Performed By</th>
-                <th className="p-3.5">Action</th>
-                <th className="p-3.5">Module / Target</th>
-                <th className="p-3.5">Activity Details</th>
-                <th className="p-3.5">Level</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {loading ? (
-                <TableSkeleton rows={8} cols={6} isDarkMode={false} />
-              ) : filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500 font-sans text-xs">
-                    No system activity logs matching criteria found.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log, index) => {
-                  const userEmail = log.user_email || log.user || 'admin@zapatera.gov.ph';
-                  const initial = userEmail.charAt(0).toUpperCase();
-                  return (
-                    <tr key={log.id || index} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3.5 text-slate-500 text-[11px] whitespace-nowrap">{formatDate(log.created_at)}</td>
-                      <td className="p-3.5">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-6 h-6 rounded-full bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                            {initial}
-                          </div>
-                          <span className="font-semibold text-slate-900 font-sans text-xs">{userEmail}</span>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border ${getActionBadgeStyle(log.action)}`}>
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          {log.feature || 'General'}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-slate-700 font-sans text-xs max-w-sm leading-relaxed">
-                        {log.details}
-                      </td>
-                      <td className="p-3.5">
-                        <Badge variant={log.level || 'info'}>{log.level || 'info'}</Badge>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Production Civic DataTable with 10-row pagination and sorting */}
+      <DataTable
+        data={processedLogs}
+        columns={columns}
+        keyField="id"
+        searchable={true}
+        searchPlaceholder="Search by user, action, details..."
+        searchKeys={['user_email', 'action', 'details', 'feature']}
+        statusTabs={statusTabs}
+        defaultPageSize={10}
+        pageSizeOptions={[10, 25, 50]}
+        defaultSortKey="created_at"
+        defaultSortDirection="desc"
+        loading={loading}
+        loadingSkeleton={<TableSkeleton rows={8} cols={5} isDarkMode={false} />}
+        emptyTitle="No Creation Activity Logs Found"
+        emptySubtitle="Only events, bulletins, user accounts, and document template creation activities are logged here."
+        onResetFilters={() => {
+          setActiveCategory('all');
+          handlePresetChange('all');
+        }}
+      />
     </div>
   );
 }

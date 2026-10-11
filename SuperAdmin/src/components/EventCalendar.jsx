@@ -1,8 +1,8 @@
-// SuperAdmin/src/components/EventCalendar.jsx
+// components/EventCalendar.jsx
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
 
-export default function EventCalendar({ events = [], selectedDate, onSelectDate }) {
+export default function EventCalendar({ events = [], selectedDate, onSelectDate, isDarkMode = false }) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const year = currentDate.getFullYear();
@@ -27,8 +27,9 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
 
   const eventDatesMap = {};
   events.forEach((evt) => {
-    if (evt.event_date) {
-      const d = new Date(evt.event_date);
+    const rawDate = evt.event_date || evt.scheduled_date || evt.date || (evt.category === 'Events' ? evt.created_at : null);
+    if (rawDate) {
+      const d = new Date(rawDate);
       if (!isNaN(d.getTime())) {
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         if (!eventDatesMap[key]) eventDatesMap[key] = [];
@@ -53,11 +54,14 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
   const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+    <div className={`rounded-2xl border p-5 shadow-xs space-y-4 transition-colors ${
+      isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+    }`}>
+      {/* Calendar Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <CalendarIcon className="w-5 h-5 text-blue-600" />
-          <h3 className="font-bold text-slate-800 text-sm">
+          <h3 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
             {monthNames[month]} {year}
           </h3>
         </div>
@@ -65,21 +69,28 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
           <button
             type="button"
             onClick={prevMonth}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             type="button"
             onClick={nextMonth}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+      {/* Weekday Labels */}
+      <div className={`grid grid-cols-7 text-center text-[10px] font-bold uppercase tracking-wider border-b pb-2 ${
+        isDarkMode ? 'text-slate-500 border-slate-800' : 'text-slate-400 border-slate-100'
+      }`}>
         <span>Su</span>
         <span>Mo</span>
         <span>Tu</span>
@@ -89,11 +100,14 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
         <span>Sa</span>
       </div>
 
+      {/* Grid of Days */}
       <div className="grid grid-cols-7 gap-1 text-center text-xs">
         {days.map((item, idx) => {
           if (!item.isCurrentMonth) {
             return (
-              <div key={idx} className="py-2 text-slate-300 pointer-events-none text-[11px]">
+              <div key={idx} className={`py-2 pointer-events-none text-[11px] ${
+                isDarkMode ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 {item.day}
               </div>
             );
@@ -107,15 +121,15 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
             <button
               key={idx}
               type="button"
-              onClick={() => hasEvents && onSelectDate(isSelected ? null : item.dateKey)}
-              className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all ${
+              onClick={() => onSelectDate(isSelected ? null : item.dateKey)}
+              className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/30'
                   : isToday
-                  ? 'bg-blue-50 text-blue-800 font-bold border border-blue-300'
+                  ? isDarkMode ? 'bg-blue-950/60 text-blue-300 font-bold border border-blue-800' : 'bg-blue-50 text-blue-800 font-bold border border-blue-300'
                   : hasEvents
-                  ? 'bg-blue-100/70 hover:bg-blue-200 text-blue-900 font-bold cursor-pointer'
-                  : 'text-slate-700 hover:bg-slate-100'
+                  ? isDarkMode ? 'bg-blue-900/50 hover:bg-blue-900/80 text-blue-200 font-bold' : 'bg-blue-100/70 hover:bg-blue-200 text-blue-900 font-bold'
+                  : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-700 hover:bg-slate-100'
               }`}
             >
               <span>{item.day}</span>
@@ -127,24 +141,29 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate 
         })}
       </div>
 
+      {/* Active Filter Status */}
       {selectedDate ? (
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-blue-800 font-semibold flex items-center">
+        <div className={`pt-3 border-t flex items-center justify-between text-xs ${
+          isDarkMode ? 'border-slate-800' : 'border-slate-100'
+        }`}>
+          <span className={`font-semibold flex items-center ${isDarkMode ? 'text-blue-400' : 'text-blue-800'}`}>
             <Filter className="w-3.5 h-3.5 mr-1" /> Filtered Date: <span className="font-mono ml-1 font-bold">{selectedDate}</span>
           </span>
           <button
             type="button"
             onClick={() => onSelectDate(null)}
-            className="text-slate-500 hover:text-rose-600 font-bold flex items-center space-x-0.5 text-[11px]"
+            className="text-slate-500 hover:text-rose-600 font-bold flex items-center space-x-0.5 text-[11px] cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
             <span>Clear Filter</span>
           </button>
         </div>
       ) : (
-        <div className="pt-2 border-t border-slate-100 text-center text-[11px] text-slate-400">
+        <div className={`pt-2 border-t text-center text-[11px] ${
+          isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-100 text-slate-400'
+        }`}>
           <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />
-          Highlighted days indicate scheduled barangay events.
+          Highlighted days indicate scheduled barangay events & bulletins.
         </div>
       )}
     </div>

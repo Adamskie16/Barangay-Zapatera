@@ -1,6 +1,7 @@
 // AccountManagement/src/features/auth/LoginPage.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import { StorageService } from '../../core/storage';
 import {
   validateEmail,
   checkRateLimit,
@@ -73,10 +74,27 @@ export default function LoginPage({ onLoginSuccess }) {
   const [unlockLoading, setUnlockLoading] = useState(false);
   const [unlockError, setUnlockError] = useState('');
   const [unlockSuccess, setUnlockSuccess] = useState('');
-  const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
+  const [unlockCountdown, setUnlockCountdown] = useState(600);
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
+  const [loginAssets, setLoginAssets] = useState(null);
+  const [isPictureLoading, setIsPictureLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    setIsPictureLoading(true);
+
+    StorageService.getSupabaseLoginAssetsAsync('all')
+      .then((assets) => {
+        if (!isMounted) return;
+        if (assets) {
+          setLoginAssets(assets);
+        }
+        setIsPictureLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Failed to load login assets from Supabase:', err);
+        if (isMounted) setIsPictureLoading(false);
+      });
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -189,6 +207,19 @@ export default function LoginPage({ onLoginSuccess }) {
 
     const cleanEmail = email.trim().toLowerCase();
 
+    // Check if account was deleted
+    const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
+    if (deletedAccountsStr) {
+      try {
+        const deletedList = JSON.parse(deletedAccountsStr);
+        if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
+          setError('Notice: This account has been deleted by Barangay Zapatera administration. Access has been revoked.');
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
+
     // 1. Rate Limiting Check
     const rateLimit = await checkRateLimit(cleanEmail);
     if (!rateLimit.allowed) {
@@ -222,16 +253,22 @@ export default function LoginPage({ onLoginSuccess }) {
       // Handled silently
     }
 
+    if (profile && profile.is_active === false) {
+      setError('Notice: This account has been deactivated or deleted by Barangay Zapatera administration.');
+      setLoading(false);
+      return;
+    }
+
     if (!profile) {
       setError('This Gmail account is not registered. Please sign up first.');
       setLoading(false);
       return;
     }
 
-    // Verify Role Authorization
+    // Verify Role Authorization - Only Super Admin can access Account Management
     const pRole = (profile.role || '').toLowerCase();
-    if (pRole !== 'super_admin' && pRole !== 'superadmin' && pRole !== 'admin') {
-      setError('Access denied: You do not have permission to access Account Management.');
+    if (pRole !== 'super_admin' && pRole !== 'superadmin') {
+      setError('Access Denied: This is the Account Management portal. Only Super Administrators can log in here. Resident and Barangay Admin accounts cannot access this portal.');
       setLoading(false);
       return;
     }
@@ -608,17 +645,39 @@ export default function LoginPage({ onLoginSuccess }) {
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-800 antialiased overflow-x-hidden">
       {/* LEFT SIDE: Abstract Decorative Fluid/Marble Background (~50% width) */}
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
-        <img
-          src="/auth-bg.jpg"
-          alt="Abstract decorative fluid background"
-          className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
-        />
+        {isPictureLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-white z-0">
+            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mb-3" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-emerald-200">
+              Loading Supabase Assets...
+            </span>
+          </div>
+        ) : loginAssets?.pictureUrl ? (
+          <img
+            src={loginAssets.pictureUrl}
+            alt="Barangay Zapatera Administration Portal"
+            className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-emerald-950" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-emerald-500/15 pointer-events-none" />
 
         <div className="relative z-10 p-12 flex flex-col justify-between w-full h-full text-white">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl">
-              <ShieldCheck className="w-6 h-6 text-emerald-400" />
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl overflow-hidden p-1.5">
+              {loginAssets?.sealUrl ? (
+                <img
+                  src={loginAssets.sealUrl}
+                  alt="Barangay Zapatera Official Seal"
+                  className="w-full h-full object-contain rounded-xl"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+              )}
             </div>
             <div>
               <span className="text-xs uppercase tracking-widest text-emerald-300 font-bold block">

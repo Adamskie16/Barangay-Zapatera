@@ -3,6 +3,38 @@
 
 import { supabase, isSupabaseConfigured } from './supabase';
 
+
+export const isRequestDeleted = (req, deletedList) => {
+  if (!req) return true;
+  try {
+    const list = deletedList || JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+    if (!Array.isArray(list) || list.length === 0) return false;
+    const reqId = req.id ? String(req.id).trim() : '';
+    const reqTrack = req.tracking_number ? String(req.tracking_number).trim().toLowerCase() : '';
+
+    return list.some((d) => {
+      const dId = (typeof d === 'object' && d !== null ? d.id : d) ? String(typeof d === 'object' && d !== null ? d.id : d).trim() : '';
+      const dTrack = (typeof d === 'object' && d !== null ? d.tracking_number : '') ? String(d.tracking_number).trim().toLowerCase() : '';
+
+      if (reqId && dId && reqId === dId) return true;
+      if (reqTrack && dTrack && reqTrack === dTrack) return true;
+      return false;
+    });
+  } catch {
+    return false;
+  }
+};
+
+export const recordDeletedRequest = (requestId, trackingNumber) => {
+  try {
+    const list = JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+    if (!list.some((d) => (d.id && d.id === requestId) || (d.tracking_number && d.tracking_number === trackingNumber))) {
+      list.push({ id: requestId, tracking_number: trackingNumber, deleted_at: new Date().toISOString() });
+      localStorage.setItem('zapatera_deleted_requests', JSON.stringify(list));
+    }
+  } catch (e) {}
+};
+
 const STORAGE_KEYS = {
   SUPER_ADMINS: 'zapatera_super_admins_db',
   DOC_TYPES: 'zapatera_doc_types_db',
@@ -265,9 +297,18 @@ export const StorageService = {
   // DOCUMENT REQUESTS (Shared across Resident, Admin, SuperAdmin)
   getRequests: () => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.REQUESTS) || '[]');
+      const deletedReqs = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+      if (!Array.isArray(deletedReqs) || deletedReqs.length === 0) return stored;
+      return stored.filter((r) => !isRequestDeleted(r, deletedReqs));
     } catch {
-      return INITIAL_REQUESTS;
+      return [];
     }
   },
 
@@ -279,7 +320,13 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!reqErr && reqData && reqData.length > 0) {
+        if (!reqErr && Array.isArray(reqData)) {
+          // If Supabase returned zero requests (e.g. all deleted), clear cache immediately
+          if (reqData.length === 0) {
+            localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify([]));
+            return [];
+          }
+
           const [profilesRes, docTypesRes] = await Promise.all([
             supabase.from('profiles').select('*'),
             supabase.from('document_types').select('*'),
@@ -323,8 +370,18 @@ export const StorageService = {
             };
           });
 
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(normalized));
-          return normalized;
+          // Filter out any request deleted by Admin in zapatera_deleted_requests registry
+          const deletedReqs = (() => {
+            try {
+              return JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+            } catch {
+              return [];
+            }
+          })();
+
+          const activeRequests = normalized.filter((req) => !isRequestDeleted(req, deletedReqs));
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(activeRequests));
+          return activeRequests;
         }
       }
     } catch {
@@ -333,9 +390,67 @@ export const StorageService = {
     return StorageService.getRequests();
   },
 
+  deleteRequest: async (requestId, trackingNumber, superAdminUser) => {
+    // 1. Record deletion in registry
+    recordDeletedRequest(requestId, trackingNumber);
+
+    // 2. Filter local storage
+    let requests = StorageService.getRequests();
+    requests = requests.filter((r) => r.id !== requestId && r.tracking_number !== trackingNumber);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+
+    // 3. Delete from Supabase
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          try {
+            await supabase.from('document_requests').delete().eq('id', requestId);
+          } catch (e) {}
+        }
+        if (trackingNumber) {
+          try {
+            await supabase.from('document_requests').delete().eq('tracking_number', trackingNumber.trim());
+          } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting document request in SuperAdmin:', err);
+    }
+
+    // 4. Cross-tab BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUEST_DELETED',
+          requestId,
+          trackingNumber,
+        });
+        bc.close();
+      } catch (e) {}
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_request_deleted', {
+        detail: { requestId, trackingNumber }
+      }));
+    }
+
+    StorageService.addLog({
+      user_email: superAdminUser?.email || 'superadmin@zapatera.gov.ph',
+      action: 'Deleted Document Request',
+      feature: 'Document Requests',
+      details: `Tracking: ${trackingNumber || requestId}, Deleted by Super Admin`,
+      level: 'warning',
+    });
+
+    return requests;
+  },
+
   saveRequest: async (req, adminUser) => {
     const requests = StorageService.getRequests();
     const existingIndex = requests.findIndex((r) => r.id === req.id || r.tracking_number === req.tracking_number);
+    const existingRequest = existingIndex >= 0 ? { ...requests[existingIndex] } : null;
     req.updated_at = new Date().toISOString();
 
     if (existingIndex >= 0) {
@@ -411,6 +526,31 @@ export const StorageService = {
             is_read: false,
             created_at: new Date().toISOString()
           }]);
+        }
+
+        // Automated Transactional Email Notification Trigger (Dual-Path: DB Webhook + Direct Invoke Fallback)
+        if (req.status === 'ready_for_pickup' || req.status === 'approved') {
+          try {
+            supabase.functions.invoke('send-pickup-email', {
+              body: {
+                record: {
+                  ...req,
+                  status: req.status,
+                },
+                old_record: existingRequest ? { status: existingRequest.status } : null,
+              },
+            }).then((res) => {
+              if (res.data?.simulated) {
+                console.log('[Pickup Email Notification] Simulated delivery:', res.data);
+              } else if (res.data?.success) {
+                console.log('[Pickup Email Notification] Dispatched successfully:', res.data);
+              }
+            }).catch((fnErr) => {
+              console.log('[Pickup Email Notification] Webhook fallback active:', fnErr?.message || fnErr);
+            });
+          } catch {
+            // Non-blocking
+          }
         }
       }
     } catch {
@@ -614,6 +754,7 @@ export const StorageService = {
           is_emergency: !!saved.is_emergency,
           is_published: saved.is_published !== false,
           target_audience: saved.target_audience || 'all',
+          event_date: saved.event_date ? new Date(saved.event_date).toISOString() : null,
           created_by: adminId,
           updated_at: new Date().toISOString(),
         };
@@ -627,9 +768,107 @@ export const StorageService = {
             saved.id = data[0].id;
           }
         }
+
+        // Automatic Resident Notification in public.notifications when published
+        if (saved.is_published !== false) {
+          const notifTitle = saved.is_emergency
+            ? `🚨 Emergency Advisory: ${saved.title}`
+            : saved.is_important
+            ? `📢 Important Announcement: ${saved.title}`
+            : `📰 News Bulletin: ${saved.title}`;
+
+          const cleanDesc = (saved.description || saved.content || '').trim();
+          const excerpt = cleanDesc.length > 130 ? cleanDesc.substring(0, 127) + '...' : cleanDesc;
+          const authorName = saved.author || adminUser?.full_name || 'Office of the Super Admin';
+          const notifMsg = `${excerpt} (Published by ${authorName})`;
+          const notifType = saved.is_emergency ? 'warning' : 'announcement';
+
+          try {
+            await supabase.from('notifications').insert([{
+              user_id: null,
+              role_target: 'resident',
+              title: notifTitle,
+              message: notifMsg,
+              type: notifType,
+              link_tab: 'announcements',
+              is_read: false,
+              created_at: new Date().toISOString()
+            }]);
+          } catch (nErr) {
+            console.warn('Failed to insert news notification in Supabase:', nErr);
+          }
+        }
       }
     } catch {
       // Handled silently
+    }
+
+    // LocalStorage and Cross-tab BroadcastChannel notification for Residents
+    if (saved.is_published !== false) {
+      const notifTitle = saved.is_emergency
+        ? `🚨 Emergency Advisory: ${saved.title}`
+        : saved.is_important
+        ? `📢 Important Announcement: ${saved.title}`
+        : `📰 News Bulletin: ${saved.title}`;
+      const cleanDesc = (saved.description || saved.content || '').trim();
+      const excerpt = cleanDesc.length > 130 ? cleanDesc.substring(0, 127) + '...' : cleanDesc;
+      const authorName = saved.author || adminUser?.full_name || 'Office of the Super Admin';
+      const notifMsg = `${excerpt} (Published by ${authorName})`;
+      const notifType = saved.is_emergency ? 'warning' : 'announcement';
+
+      const notifPayload = {
+        id: `notif-news-${saved.id || Date.now()}`,
+        user_id: null,
+        title: notifTitle,
+        message: notifMsg,
+        type: notifType,
+        link_tab: 'announcements',
+        is_read: false,
+        created_at: new Date().toISOString(),
+      };
+
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const generalNotifs = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]');
+          if (!generalNotifs.some((n) => n.title === notifTitle && (Date.now() - new Date(n.created_at || 0).getTime() < 30000))) {
+            generalNotifs.unshift(notifPayload);
+            localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(generalNotifs));
+          }
+
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('zapatera_notifications_db_')) {
+              try {
+                const uNotifs = JSON.parse(localStorage.getItem(k) || '[]');
+                if (Array.isArray(uNotifs)) {
+                  if (!uNotifs.some((n) => n.title === notifTitle && (Date.now() - new Date(n.created_at || 0).getTime() < 30000))) {
+                    uNotifs.unshift(notifPayload);
+                    localStorage.setItem(k, JSON.stringify(uNotifs));
+                  }
+                }
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const bc = new BroadcastChannel('zapatera_security_channel');
+          bc.postMessage({
+            type: 'NEWS_PUBLISHED',
+            news: saved,
+            notification: notifPayload,
+          });
+          bc.close();
+        } catch (e) {}
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('zapatera_news_published', {
+          detail: { news: saved, notification: notifPayload }
+        }));
+      }
     }
 
     StorageService.addLog({
@@ -661,6 +900,17 @@ export const StorageService = {
       }
     } catch {
       // Handled
+    }
+
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'NEWS_DELETED',
+          newsId,
+        });
+        bc.close();
+      } catch (e) {}
     }
 
     StorageService.addLog({
@@ -868,9 +1118,9 @@ export const StorageService = {
   getLoginDesigns: () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.LOGIN_DESIGNS);
-      return stored ? JSON.parse(stored) : INITIAL_LOGIN_DESIGNS;
+      return stored ? JSON.parse(stored) : [];
     } catch {
-      return INITIAL_LOGIN_DESIGNS;
+      return [];
     }
   },
 
@@ -908,6 +1158,85 @@ export const StorageService = {
     } catch (e) {}
     const local = StorageService.getLoginDesigns();
     return local.find((d) => d.is_active && (d.target_portal === portal || d.target_portal === 'all')) || local[0] || null;
+  },
+
+  getSupabaseLoginAssetsAsync: async (portal = 'super_admin') => {
+    let pictureUrl = null;
+    let sealUrl = null;
+    let title = 'Barangay Zapatera Super Admin Portal';
+    let badge = 'Highest Security Level Required';
+    let description = 'Restricted interface for complete system governance, administrative user provisioning, and secure document records.';
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: designs, error: designErr } = await supabase
+          .from('login_designs')
+          .select('*')
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false });
+
+        if (!designErr && designs && designs.length > 0) {
+          const match = designs.find((d) => d.target_portal === portal || d.target_portal === 'all') || designs[0];
+          if (match) {
+            if (match.image_url && match.image_url.trim()) {
+              pictureUrl = match.image_url.trim();
+            }
+            if (match.title) title = match.title;
+            if (match.badge) badge = match.badge;
+            if (match.description) description = match.description;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load active login design from Supabase:', err);
+      }
+
+      try {
+        const { data: cfg, error: cfgErr } = await supabase
+          .from('system_config')
+          .select('login_bg_url, seal_url, login_title, login_badge, login_description')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (!cfgErr && cfg) {
+          if (!pictureUrl && cfg.login_bg_url && cfg.login_bg_url.trim() && cfg.login_bg_url !== '/auth-bg.jpg') {
+            pictureUrl = cfg.login_bg_url.trim();
+          }
+          if (cfg.seal_url && cfg.seal_url.trim()) {
+            sealUrl = cfg.seal_url.trim();
+          }
+          if (!title && cfg.login_title) title = cfg.login_title;
+          if (!badge && cfg.login_badge) badge = cfg.login_badge;
+          if (!description && cfg.login_description) description = cfg.login_description;
+        }
+      } catch (err) {
+        console.warn('Failed to load config from Supabase:', err);
+      }
+
+      // If pictureUrl is a relative storage path (e.g. 'login/hero.jpg' or 'branding/...'), resolve to Supabase Storage public URL
+      if (pictureUrl && !pictureUrl.startsWith('http://') && !pictureUrl.startsWith('https://') && !pictureUrl.startsWith('data:')) {
+        const cleanPath = pictureUrl.replace(/^\/+/, '');
+        const { data: publicUrlData } = supabase.storage.from('public_assets').getPublicUrl(cleanPath);
+        if (publicUrlData?.publicUrl) {
+          pictureUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      // If still no pictureUrl, check if Supabase Storage has a default login hero
+      if (!pictureUrl) {
+        const { data: publicUrlData } = supabase.storage.from('public_assets').getPublicUrl('login/auth-bg.jpg');
+        if (publicUrlData?.publicUrl) {
+          pictureUrl = publicUrlData.publicUrl;
+        }
+      }
+    }
+
+    return {
+      pictureUrl,
+      sealUrl,
+      title,
+      badge,
+      description,
+    };
   },
 
   createLoginDesign: async (design) => {

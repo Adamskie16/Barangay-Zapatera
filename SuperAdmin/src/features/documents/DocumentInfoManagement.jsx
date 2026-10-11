@@ -173,7 +173,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
 
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center space-x-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-blue-900/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             <span>Add New Document Type</span>
@@ -297,7 +297,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                             <button
                               onClick={() => openEditModal(doc)}
                               title="Edit Document Info"
-                              className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -434,7 +434,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"
             >
               {editingDoc ? 'Update Document Info' : 'Save New Document Type'}
             </button>

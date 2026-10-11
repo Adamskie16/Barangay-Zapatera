@@ -77,23 +77,25 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
   const [unlockSuccess, setUnlockSuccess] = useState('');
   const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
-  const [loginConfig, setLoginConfig] = useState(null);
+  const [loginAssets, setLoginAssets] = useState(null);
+  const [isPictureLoading, setIsPictureLoading] = useState(true);
 
   useEffect(() => {
-    StorageService.getActiveLoginDesignAsync('super_admin').then((activeDesign) => {
-      if (activeDesign) {
-        setLoginConfig({
-          login_bg_url: activeDesign.image_url,
-          login_title: activeDesign.title,
-          login_badge: activeDesign.badge,
-          login_description: activeDesign.description,
-        });
-      } else {
-        StorageService.getConfigAsync().then((cfg) => {
-          if (cfg) setLoginConfig(cfg);
-        });
-      }
-    });
+    let isMounted = true;
+    setIsPictureLoading(true);
+
+    StorageService.getSupabaseLoginAssetsAsync('super_admin')
+      .then((assets) => {
+        if (!isMounted) return;
+        if (assets) {
+          setLoginAssets(assets);
+        }
+        setIsPictureLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Failed to load login assets from Supabase:', err);
+        if (isMounted) setIsPictureLoading(false);
+      });
 
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
@@ -242,15 +244,47 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     }
 
     if (!profile) {
-      setError('This Gmail account is not registered. Please sign up first.');
+      // Check local superadmin storage fallback if profiles table has not synced
+      try {
+        const storedSAs = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+        const saMatch = storedSAs.find((s) => s.email && s.email.toLowerCase() === cleanEmail);
+        if (saMatch) {
+          profile = { ...saMatch, role: 'super_admin' };
+        }
+      } catch (e) {}
+    }
+
+    if (!profile) {
+      // Check if this account belongs to a resident in local storage
+      try {
+        const storedResidents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+        const isRes = storedResidents.some((r) => r.email && r.email.toLowerCase() === cleanEmail);
+        if (isRes) {
+          setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+          setLoading(false);
+          return;
+        }
+      } catch (e) {}
+
+      setError('This email account is not registered. Please check your credentials.');
       setLoading(false);
       return;
     }
 
-    // Verify Role Authorization
+    // Verify Role Authorization - strictly allow ONLY Super Administrators
     const pRole = (profile.role || '').toLowerCase();
+    if (pRole === 'resident') {
+      setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+      setLoading(false);
+      return;
+    }
+
     if (pRole !== 'super_admin' && pRole !== 'superadmin') {
-      setError('Access denied: You do not have Super Administrator privileges.');
+      if (pRole === 'admin') {
+        setError('Access Denied: This account is a Barangay Admin. Please use the Admin Portal.');
+      } else {
+        setError('Access Denied: You do not have Super Administrator access.');
+      }
       setLoading(false);
       return;
     }
@@ -267,7 +301,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         if (authErr) {
           const errMsg = (authErr.message || '').toLowerCase();
           if (errMsg.includes('email not confirmed') || errMsg.includes('confirm') || authErr.code === 'email_not_confirmed') {
-            setError('Your account has been created, but your Gmail has not been confirmed yet. Please check your email and click the confirmation link before logging in.');
+            setError('Your account has been created, but your email has not been confirmed yet. Please check your inbox and click the confirmation link before logging in.');
             setShowResendConfirmation(true);
             setLoading(false);
             return;
@@ -292,6 +326,15 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         }
 
         authUser = authData?.user;
+
+        // Double check auth user metadata role
+        const metaRole = (authUser?.user_metadata?.role || '').toLowerCase();
+        if (metaRole === 'resident') {
+          await supabase.auth.signOut();
+          setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+          setLoading(false);
+          return;
+        }
       }
     } catch (err) {
       setError('Authentication server error. Please try again.');
@@ -366,6 +409,13 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         });
 
         if (!verifyErr && data?.user) {
+          const userMetaRole = (data.user.user_metadata?.role || '').toLowerCase();
+          if (userMetaRole === 'resident' || (pendingUser?.role && pendingUser.role === 'resident')) {
+            await supabase.auth.signOut();
+            setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+            setLoading(false);
+            return;
+          }
           verified = true;
           if (data?.session) {
             await supabase.auth.setSession(data.session);
@@ -685,22 +735,41 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-800 antialiased overflow-x-hidden">
       {/* LEFT SIDE: Abstract Decorative Fluid/Marble Background (~50% width) */}
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
-        <img
-          src={loginConfig?.login_bg_url || '/auth-bg.jpg'}
-          alt="Login background"
-          className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
-        />
-        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-pink-500/15 pointer-events-none" />
+        {isPictureLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-white z-0">
+            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-blue-200">
+              loading image
+            </span>
+          </div>
+        ) : loginAssets?.pictureUrl ? (
+          <img
+            src={loginAssets.pictureUrl}
+            alt="Barangay Zapatera Super Admin Portal"
+            className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-blue-500/15 pointer-events-none" />
 
         <div className="relative z-10 p-12 flex flex-col justify-between w-full h-full text-white">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl">
-              <ShieldCheck className="w-6 h-6 text-red-400" />
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl overflow-hidden p-1.5">
+              {loginAssets?.sealUrl ? (
+                <img
+                  src={loginAssets.sealUrl}
+                  alt="Barangay Zapatera Official Seal"
+                  className="w-full h-full object-contain rounded-xl"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <ShieldCheck className="w-6 h-6 text-blue-400" />
+              )}
             </div>
             <div>
-              <span className="text-xs uppercase tracking-widest text-red-300 font-bold block">
-                Executive Administration
-              </span>
               <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-sm">
                 Barangay Zapatera
               </h1>
@@ -708,15 +777,17 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           </div>
 
           <div className="max-w-md my-auto py-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 backdrop-blur-md border border-red-500/30 text-red-200 text-xs font-semibold mb-6">
-              <Lock className="w-3.5 h-3.5 text-red-300" />
-              {loginConfig?.login_badge || 'Highest Security Level Required'}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-xs font-semibold mb-6">
+              <Lock className="w-3.5 h-3.5 text-blue-300" />
+              {loginAssets?.badge && loginAssets.badge !== 'Executive Administration'
+                ? loginAssets.badge
+                : 'Highest Security Level Required'}
             </div>
             <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight mb-4">
-              {loginConfig?.login_title || 'Barangay Zapatera Super Admin Portal'}
+              {loginAssets?.title || 'Barangay Zapatera Super Admin Portal'}
             </h2>
             <p className="text-sm text-slate-200/90 leading-relaxed">
-              {loginConfig?.login_description || 'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.'}
+              {loginAssets?.description || 'Restricted interface for complete system governance, administrative user provisioning, and secure document records.'}
             </p>
           </div>
 
@@ -735,11 +806,22 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         {/* Top-Left Branding / Mobile Header */}
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-700 shadow-sm">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shadow-sm overflow-hidden p-1">
+              {loginAssets?.sealUrl ? (
+                <img
+                  src={loginAssets.sealUrl}
+                  alt="Barangay Seal"
+                  className="w-full h-full object-contain rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <ShieldCheck className="w-5 h-5" />
+              )}
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-red-600 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
                 Barangay Zapatera
               </span>
               <span className="text-sm font-bold text-slate-900">
@@ -762,7 +844,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                   Super Admin Sign In
                 </h2>
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Enter your executive credentials to access the Barangay Zapatera administration portal.
+                  Enter your credentials to access the Barangay Zapatera super admin portal.
                 </p>
               </div>
 
@@ -785,7 +867,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                         setError('');
                         setInfoMsg('');
                       }}
-                      className="mt-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors shadow-sm"
+                      className="mt-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-sm"
                     >
                       <Unlock className="w-3.5 h-3.5" />
                       Unlock Account
@@ -825,7 +907,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="superadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -842,7 +924,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                         setStep(3);
                         setError('');
                       }}
-                      className="text-[11px] font-semibold text-red-600 hover:text-red-700 hover:underline"
+                      className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -855,7 +937,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -870,7 +952,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-2.5 px-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -897,7 +979,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                     setError('');
                     setInfoMsg('');
                   }}
-                  className="font-semibold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                  className="font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
                 >
                   <Unlock className="w-3.5 h-3.5" />
                   Unlock Account
@@ -910,7 +992,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           {step === 2 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -947,14 +1029,14 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                     value={otpInput}
                     onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                     placeholder="123456"
-                    className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                    className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading || otpInput.length !== 6}
-                  className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -987,7 +1069,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                     type="button"
                     onClick={handleResendOTP}
                     disabled={loading}
-                    className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Resend Code
@@ -1036,7 +1118,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="superadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1044,7 +1126,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {forgotLoading ? (
                     <>
@@ -1116,7 +1198,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
                       placeholder="At least 8 characters"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -1140,7 +1222,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={resetConfirmPassword}
                       onChange={(e) => setResetConfirmPassword(e.target.value)}
                       placeholder="Repeat new password"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -1155,7 +1237,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={resetLoading || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-                  className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {resetLoading ? (
                     <>
@@ -1177,7 +1259,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           {step === 5 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <Unlock className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -1208,7 +1290,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={unlockEmail}
                       onChange={(e) => setUnlockEmail(e.target.value)}
                       placeholder="superadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1216,7 +1298,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={unlockLoading}
-                  className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {unlockLoading ? (
                     <>
@@ -1252,7 +1334,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           {step === 6 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -1315,7 +1397,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       value={unlockOtp}
                       onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, ''))}
                       placeholder="123456"
-                      className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+                      className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
 
@@ -1323,7 +1405,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                     <button
                       type="submit"
                       disabled={unlockLoading || unlockOtp.length !== 6 || unlockCountdown <= 0}
-                      className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {unlockLoading ? (
                         <>

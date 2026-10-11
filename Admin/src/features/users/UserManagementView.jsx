@@ -36,6 +36,13 @@ import {
   Check,
   Activity,
   Info,
+  Vote,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { unlockUserAccount, lockUserAccount, formatDate } from '../../core/security';
@@ -43,11 +50,87 @@ import { StorageService } from '../../core/storage';
 import { TableSkeleton } from '../../components/SkeletonLoader';
 import ActionModal from '../../components/ActionModal';
 
+export const isUserRegisteredVoter = (user) => {
+  if (!user) return false;
+  if (user.is_registered_voter === true) return true;
+  if (user.is_registered_voter === false) return false;
+  const status = String(user.voter_status || '').toLowerCase().trim();
+  if (status.includes('not registered') || status.includes('non') || status === 'unregistered' || status === 'no' || status === 'false') {
+    return false;
+  }
+  if (status.includes('registered') || status.includes('voter') || status === 'yes' || status === 'true') {
+    return true;
+  }
+  const idType = String(user.id_type || '').toLowerCase().trim();
+  if (idType.includes('voter')) return true;
+  return false;
+};
+
+export const calculateAge = (birthDateStr) => {
+  if (!birthDateStr) return null;
+  const d = new Date(birthDateStr);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+};
+
+export const getResidentNameParts = (user) => {
+  let first = (user?.first_name || '').trim();
+  let mi = (user?.middle_initial || '').trim().replace(/\.$/, '');
+  let last = (user?.last_name || '').trim();
+
+  if ((!first || !last) && user?.full_name) {
+    const fn = user.full_name.trim();
+    if (fn.includes(',')) {
+      const [lastPart, firstPart] = fn.split(',').map((s) => s.trim());
+      last = last || lastPart;
+      const tokens = (firstPart || '').split(/\s+/);
+      if (tokens.length > 1 && tokens[tokens.length - 1].length <= 2) {
+        mi = mi || tokens[tokens.length - 1].replace(/\.$/, '');
+        first = first || tokens.slice(0, -1).join(' ');
+      } else {
+        first = first || firstPart;
+      }
+    } else {
+      const tokens = fn.split(/\s+/);
+      if (tokens.length === 1) {
+        first = first || tokens[0];
+      } else if (tokens.length === 2) {
+        first = first || tokens[0];
+        last = last || tokens[1];
+      } else if (tokens.length >= 3) {
+        const lastToken = tokens[tokens.length - 1];
+        const secondLast = tokens[tokens.length - 2];
+        if (secondLast.length <= 2) {
+          first = first || tokens.slice(0, -2).join(' ');
+          mi = mi || secondLast.replace(/\.$/, '');
+          last = last || lastToken;
+        } else {
+          first = first || tokens.slice(0, -1).join(' ');
+          last = last || lastToken;
+        }
+      }
+    }
+  }
+
+  return { first, mi, last };
+};
+
+
 export default function UserManagementView({ currentUser }) {
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'locked'
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Reusable Feedback / Confirmation ActionModal State
   const [actionModal, setActionModal] = useState({
@@ -124,11 +207,65 @@ export default function UserManagementView({ currentUser }) {
     setLoadingDevices(false);
   };
 
-  const handleOpenViewModal = (user) => {
-    setViewingUser(user);
-    setModalActiveTab('telemetry');
+  const handleOpenViewModal = async (user) => {
+    if (!user) return;
+    let enriched = { ...user };
+
+    // 1. Fetch full profile from Supabase to guarantee all latest columns
+    if (isSupabaseConfigured() && (user.id || user.email)) {
+      try {
+        let query = supabase.from('profiles').select('*');
+        if (user.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)) {
+          query = query.eq('id', user.id);
+        } else if (user.email) {
+          query = query.eq('email', user.email.toLowerCase().trim());
+        }
+        const { data: dbProfile } = await query.maybeSingle();
+        if (dbProfile) {
+          enriched = { ...enriched, ...dbProfile };
+        }
+      } catch (err) {
+        console.warn('Notice: Error fetching full resident profile:', err);
+      }
+    }
+
+    // 2. Fetch and merge resident signup credentials from local storage
+    try {
+      const stored = localStorage.getItem('zapatera_residents_db');
+      if (stored) {
+        const residents = JSON.parse(stored);
+        if (Array.isArray(residents)) {
+          const match = residents.find(
+            (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
+                   (r.id && r.id === user.id)
+          );
+          if (match) {
+            enriched = {
+              ...match,
+              ...enriched,
+              first_name: enriched.first_name || match.first_name,
+              last_name: enriched.last_name || match.last_name,
+              middle_initial: enriched.middle_initial || match.middle_initial,
+              birth_date: enriched.birth_date || match.birth_date || match.birthdate,
+              civil_status: enriched.civil_status || match.civil_status,
+              sitio: enriched.sitio || match.sitio,
+              voter_status: enriched.voter_status || match.voter_status,
+              phone: enriched.phone || match.phone,
+              address: enriched.address || match.address,
+            };
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 3. Fallback name parsing
+    const nameParts = getResidentNameParts(enriched);
+    enriched.first_name = enriched.first_name || nameParts.first;
+    enriched.middle_initial = enriched.middle_initial || nameParts.mi;
+    enriched.last_name = enriched.last_name || nameParts.last;
+
+    setViewingUser(enriched);
     setIsViewModalOpen(true);
-    fetchUserDevices(user.id);
   };
 
   const handleTerminateDeviceSession = (device) => {
@@ -222,12 +359,35 @@ export default function UserManagementView({ currentUser }) {
           });
         }
 
+        let localResidents = [];
+        try {
+          const storedRes = localStorage.getItem('zapatera_residents_db');
+          if (storedRes) {
+            const parsed = JSON.parse(storedRes);
+            if (Array.isArray(parsed)) localResidents = parsed;
+          }
+        } catch (e) {}
+
         if (!error && supaProfiles) {
           const seenEmails = new Set();
           const uniqueProfiles = [];
 
           for (const p of supaProfiles) {
             const cleanEmail = (p.email || '').toLowerCase().trim();
+            const localMatch = localResidents.find(
+              (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
+            );
+            if (localMatch) {
+              p.first_name = p.first_name || localMatch.first_name;
+              p.last_name = p.last_name || localMatch.last_name;
+              p.middle_initial = p.middle_initial || localMatch.middle_initial;
+              p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
+              p.civil_status = p.civil_status || localMatch.civil_status;
+              p.sitio = p.sitio || localMatch.sitio;
+              p.voter_status = p.voter_status || localMatch.voter_status;
+              p.phone = p.phone || localMatch.phone;
+              p.address = p.address || localMatch.address;
+            }
             if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
             seenEmails.add(cleanEmail);
 
@@ -390,6 +550,59 @@ export default function UserManagementView({ currentUser }) {
     return matchesStatus && matchesSearch;
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterStatus, pageSize]);
+
+  const handleSort = (columnKey) => {
+    if (!columnKey) return;
+    if (sortKey === columnKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortKey(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortKey(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (!sortKey) return 0;
+    let valA = a[sortKey];
+    let valB = b[sortKey];
+    if (valA === null || valA === undefined) valA = '';
+    if (valB === null || valB === undefined) valB = '';
+
+    const cmp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+
+  const totalEntries = sortedUsers.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
+  const paginatedUsers = sortedUsers.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (safeCurrentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="space-y-6 font-sans">
       {/* Header Banner */}
@@ -456,24 +669,72 @@ export default function UserManagementView({ currentUser }) {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                <th className="px-6 py-3.5">Account Identity</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Contact & Location</th>
-                <th className="px-6 py-3.5">Security & Lock Status</th>
+                <th
+                  onClick={() => handleSort('full_name')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Account Identity</span>
+                    {sortKey === 'full_name' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('role')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Role</span>
+                    {sortKey === 'role' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('phone')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Contact & Location</span>
+                    {sortKey === 'phone' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('is_locked')}
+                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Security & Lock Status</span>
+                    {sortKey === 'is_locked' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {loadingUsers ? (
                 <TableSkeleton rows={6} cols={5} isDarkMode={false} />
-              ) : filteredUsers.length === 0 ? (
+              ) : paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
                     No matching user accounts found.
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => {
+                paginatedUsers.map((u) => {
                   const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3;
                   return (
                     <tr key={u.id || u.email} className="hover:bg-slate-50/80 transition-colors text-slate-700">
@@ -492,10 +753,24 @@ export default function UserManagementView({ currentUser }) {
                         </div>
                       </td>
 
-                      <td className="px-6 py-4">
-                        <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
-                          {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
-                        </Badge>
+                      <td className="px-6 py-4 space-y-1">
+                        <div>
+                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
+                          </Badge>
+                        </div>
+                        {u.role === 'resident' && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isUserRegisteredVoter(u)
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}
+                          >
+                            <Vote className="w-2.5 h-2.5" />
+                            {isUserRegisteredVoter(u) ? 'Registered Voter' : 'Non-Voter'}
+                          </span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4 space-y-0.5 text-[11px]">
@@ -564,511 +839,317 @@ export default function UserManagementView({ currentUser }) {
             </tbody>
           </table>
         </div>
+
+        {/* 10-Row Pagination Footer */}
+        {totalEntries > 0 && (
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-slate-600 font-medium">
+              <span>Showing</span>
+              <span className="font-bold text-slate-900">{startIndex}</span>
+              <span>to</span>
+              <span className="font-bold text-slate-900">{endIndex}</span>
+              <span>of</span>
+              <span className="font-bold text-slate-900">{totalEntries}</span>
+              <span>accounts</span>
+
+              <div className="ml-4 flex items-center gap-1.5">
+                <span className="text-slate-500 text-[11px]">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-white border border-slate-300 rounded-md text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage === 1}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {getPageNumbers().map((pageNum, idx) =>
+                pageNum === '...' ? (
+                  <span key={`dots-${idx}`} className="px-2 py-1 text-slate-400 font-bold select-none">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={`page-${pageNum}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`min-w-[32px] py-1.5 px-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      safeCurrentPage === pageNum
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              )}
+
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Safe Credentials & Account Security View Modal */}
+      {/* Simple Resident Credentials View Modal - Single Personal Information Card */}
       {isViewModalOpen && viewingUser && (
         <Modal
-          isOpen={isViewModalOpen}
+          isOpen={isViewModalOpen && !!viewingUser}
           onClose={() => {
             setIsViewModalOpen(false);
             setViewingUser(null);
           }}
-          title="User Account Security & Device Profile"
-          maxWidth="max-w-4xl"
+          title="Resident Credentials"
+          maxWidth="max-w-2xl"
         >
-          <div className="space-y-6">
-            {/* User Profile Header Card */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-gradient-to-br from-slate-50 to-blue-50/40 rounded-2xl border border-slate-200 shadow-xs">
-              <div className="flex items-center space-x-4">
-                <UserAvatar
-                  src={viewingUser.avatar_url}
-                  name={viewingUser.full_name || viewingUser.email}
-                  role={viewingUser.role}
-                  size="xl"
-                  showStatus={true}
-                  isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
-                />
+          {(() => {
+            const isVoter = isUserRegisteredVoter(viewingUser);
+            const { first, mi, last } = getResidentNameParts(viewingUser);
+            const age = calculateAge(viewingUser.birth_date || viewingUser.birthdate);
+            const birthDateFormatted = viewingUser.birth_date || viewingUser.birthdate
+              ? formatDate(viewingUser.birth_date || viewingUser.birthdate)
+              : null;
+            const cleanFullName = viewingUser.full_name || (last && first ? `${last}, ${first}${mi ? ' ' + mi + '.' : ''}` : viewingUser.email);
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-extrabold text-slate-900 text-lg">
-                      {viewingUser.full_name || 'Registered Resident'}
-                    </h4>
-                    <Badge
-                      variant={
-                        viewingUser.role === 'super_admin'
-                          ? 'purple'
-                          : viewingUser.role === 'admin'
-                          ? 'blue'
-                          : 'active'
-                      }
-                    >
-                      {viewingUser.role === 'super_admin'
-                        ? 'Super Admin'
-                        : viewingUser.role === 'admin'
-                        ? 'Barangay Admin'
-                        : 'Resident'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{viewingUser.email}</span>
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
-                  </p>
-                </div>
-              </div>
-
-              {/* Status & Quick Actions */}
-              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200">
-                <span
-                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-                    viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
-                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                      : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                  }`}
-                >
-                  {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
-                    <>
-                      <Lock className="w-3.5 h-3.5 mr-0.5" />
-                      <span>Locked ({Math.max(viewingUser.failed_attempts || 0, 3)}/3 Failed)</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-3.5 h-3.5 mr-0.5" />
-                      <span>Account Active</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Last Active: {viewingUser.last_active_at ? formatDate(viewingUser.last_active_at) : 'Active recently'}
-                </span>
-              </div>
-            </div>
-
-            {/* Navigation Tab Bar */}
-            <div className="flex border-b border-slate-200 gap-1 overflow-x-auto">
-              {[
-                { id: 'telemetry', label: 'App Management', icon: Smartphone },
-                { id: 'roles', label: 'Roles & Privileges', icon: ShieldCheck },
-                { id: 'devices', label: `Login Sessions (${userDevices.length})`, icon: Laptop },
-                { id: 'settings', label: 'Security & Preferences', icon: Sliders },
-              ].map((tab) => {
-                const IconComponent = tab.icon;
-                const isActive = modalActiveTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setModalActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                      isActive
-                        ? 'border-blue-600 text-blue-600 bg-blue-50/50'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* TAB 1: App Management Data */}
-            {modalActiveTab === 'telemetry' && (
+            return (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Release Build & Version */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Activity className="w-3.5 h-3.5 text-blue-600" /> App Version & Build Status
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Client Release:</span>
-                      <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded-md border border-slate-200">
-                        {viewingUser.app_version || userDevices[0]?.app_version || 'v1.0.0 (Production)'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Release Channel:</span>
-                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Up to Date
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Framework Runtime:</span>
-                      <span className="text-xs font-semibold text-slate-700">React Native / Web Client</span>
-                    </div>
-                  </div>
-
-                  {/* Device OS & Model */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Smartphone className="w-3.5 h-3.5 text-blue-600" /> Device Model & OS
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Operating System:</span>
-                      <span className="text-xs font-bold text-slate-800">
-                        {viewingUser.device_os || userDevices[0]?.os_name || 'iOS / Android'}
-                        {userDevices[0]?.os_version ? ` (${userDevices[0].os_version})` : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Hardware / Model:</span>
-                      <span className="text-xs font-bold text-slate-800">
-                        {viewingUser.device_model || userDevices[0]?.device_model || 'Mobile Smartphone'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Active IP Address:</span>
-                      <span className="font-mono text-xs text-slate-600">
-                        {userDevices[0]?.ip_address || '127.0.0.1 (Local)'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Push Notification Token Status */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 text-blue-600" /> Push Token Status
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Push Delivery Service:</span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                        <CheckCircle className="w-3 h-3" />
-                        {viewingUser.push_token_status === 'active' || userDevices[0]?.push_token_status === 'active'
-                          ? 'Token Active'
-                          : 'Registered'}
-                      </span>
-                    </div>
+                {/* Header Profile Identity */}
+                <div className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-50/80 to-slate-50 border-slate-200">
+                  <div className="flex items-center space-x-3.5">
+                    <UserAvatar
+                      src={viewingUser.avatar_url}
+                      name={cleanFullName}
+                      role={viewingUser.role}
+                      size="lg"
+                      showStatus={true}
+                      isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
+                    />
                     <div className="space-y-1">
-                      <span className="text-[11px] text-slate-500">APNs / FCM Token:</span>
-                      <p className="font-mono text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200 truncate">
-                        {viewingUser.push_token || userDevices[0]?.push_token || 'ExponentPushToken[verified_client_token]'}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-slate-900 text-base">
+                          {cleanFullName}
+                        </h4>
+                        <Badge
+                          variant={
+                            viewingUser.role === 'super_admin'
+                              ? 'purple'
+                              : viewingUser.role === 'admin'
+                              ? 'blue'
+                              : 'active'
+                          }
+                        >
+                          {viewingUser.role === 'super_admin'
+                            ? 'Super Admin'
+                            : viewingUser.role === 'admin'
+                            ? 'Barangay Admin'
+                            : 'Resident'}
+                        </Badge>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            isVoter
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-slate-100 text-slate-700 border border-slate-300'
+                          }`}
+                        >
+                          <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-blue-600" />
+                        <span>{viewingUser.email}</span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Identification & Address */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <IdCard className="w-3.5 h-3.5 text-blue-600" /> Contact & Resident ID
-                    </span>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Mobile Phone:</span>
-                      <span className="text-xs font-bold text-slate-800">{viewingUser.phone || 'Not registered'}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Verification ID:</span>
-                      <span className="text-xs font-bold text-slate-800">
-                        {viewingUser.id_type || 'Government ID'}: {viewingUser.id_number || 'Verified'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600">Resident Address:</span>
-                      <span className="text-xs text-slate-700 truncate max-w-[200px]">
-                        {viewingUser.address || 'Barangay Zapatera, Cebu City'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: User Roles & Permissions */}
-            {modalActiveTab === 'roles' && (
-              <div className="space-y-4">
-                <div className="p-4 rounded-2xl border bg-slate-50 border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-5 h-5 text-blue-600" />
-                      <h5 className="font-bold text-slate-900 text-sm">
-                        Assigned Role:{' '}
-                        {viewingUser.role === 'super_admin'
-                          ? 'Super Admin'
-                          : viewingUser.role === 'admin'
-                          ? 'Barangay Admin'
-                          : 'Resident User'}
-                      </h5>
-                    </div>
-                    <Badge
-                      variant={
-                        viewingUser.role === 'super_admin'
-                          ? 'purple'
-                          : viewingUser.role === 'admin'
-                          ? 'blue'
-                          : 'active'
-                      }
+                  <div className="flex sm:flex-col items-start sm:items-end justify-between gap-1 shrink-0">
+                    <span
+                      className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
+                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      }`}
                     >
-                      {viewingUser.role === 'super_admin'
-                        ? 'Master Authority'
-                        : viewingUser.role === 'admin'
-                        ? 'Barangay Staff'
-                        : 'Resident Client'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    {viewingUser.role === 'super_admin'
-                      ? 'Master Administrator with unrestricted privilege over system configuration, user provisioning, database administration, and security audits.'
-                      : viewingUser.role === 'admin'
-                      ? 'Barangay Staff Administrator with privileges to verify documents, manage incident blotters, review resident profiles, and unlock locked accounts.'
-                      : 'Resident user with privileges to submit certificate requests, report barangay incidents, upload avatars, and manage personal security settings.'}
-                  </p>
-                </div>
-
-                {/* Privileges Matrix */}
-                <div className="rounded-2xl border border-slate-200 overflow-hidden">
-                  <div className="bg-slate-100 px-4 py-2.5 font-bold text-slate-700 text-xs flex justify-between">
-                    <span>Feature / Capability Domain</span>
-                    <span>Granted Access Level</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 text-xs">
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50">
-                      <div>
-                        <p className="font-bold text-slate-900">Certificate & Document Issuance</p>
-                        <p className="text-[11px] text-slate-500">Approve, decline, and sign official barangay certificates</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'resident' ? 'slate' : 'blue'}>
-                        {viewingUser.role === 'resident' ? 'Request Only' : 'Full Approval Authority'}
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50">
-                      <div>
-                        <p className="font-bold text-slate-900">Security & Account Lockout Management</p>
-                        <p className="text-[11px] text-slate-500">Unlock accounts locked by 3 failed attempts, terminate sessions</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'resident' ? 'slate' : 'blue'}>
-                        {viewingUser.role === 'resident' ? 'Self Profile Only' : 'Admin Unlock & Revocation'}
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50">
-                      <div>
-                        <p className="font-bold text-slate-900">Active Mobile Session Termination</p>
-                        <p className="text-[11px] text-slate-500">Remotely disconnect active device telemetry tokens</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'super_admin' ? 'purple' : 'blue'}>
-                        Authorized
-                      </Badge>
-                    </div>
-
-                    <div className="px-4 py-3 flex items-center justify-between hover:bg-slate-50">
-                      <div>
-                        <p className="font-bold text-slate-900">System Database & Global Branding Configuration</p>
-                        <p className="text-[11px] text-slate-500">Access Superadmin console, branding logos, and core database</p>
-                      </div>
-                      <Badge variant={viewingUser.role === 'super_admin' ? 'purple' : 'slate'}>
-                        {viewingUser.role === 'super_admin' ? 'Superadmin Only' : 'Restricted'}
-                      </Badge>
-                    </div>
+                      {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
+                        <>
+                          <Lock className="w-3 h-3 mr-0.5" />
+                          <span>Locked</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-3 h-3 mr-0.5" />
+                          <span>Active</span>
+                        </>
+                      )}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
+                    </span>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* TAB 3: Login Sessions & Active Device Termination */}
-            {modalActiveTab === 'devices' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h5 className="font-bold text-slate-900 text-sm">Active Sessions & Telemetry Devices</h5>
-                    <p className="text-xs text-slate-500">
-                      Manage active hardware sessions. Terminating a session will instantly revoke the client token.
-                    </p>
+                {/* ONE Single Clean Personal Information Card */}
+                <div className="p-5 rounded-2xl border bg-slate-50 border-slate-200">
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
+                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <IdCard className="w-4 h-4 text-blue-600" />
+                      <span>Personal Information & Resident Credentials</span>
+                    </h5>
+                    <span className="text-[11px] font-semibold text-slate-400">Barangay Zapatera Records</span>
                   </div>
-                  <button
-                    onClick={() => fetchUserDevices(viewingUser.id)}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingDevices ? 'animate-spin' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">First Name</span>
+                      <p className="font-semibold text-slate-800">
+                        {first || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Middle Initial</span>
+                      <p className="font-semibold text-slate-800">
+                        {mi ? `${mi}.` : 'None / Not Provided'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Last Name</span>
+                      <p className="font-semibold text-slate-800">
+                        {last || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-blue-600" /> Date of Birth
+                      </span>
+                      <p className="font-semibold text-slate-800">
+                        {birthDateFormatted || 'Not recorded'}
+                        {age !== null && <span className="text-slate-500 font-normal ml-1">({age} yrs old)</span>}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Civil Status</span>
+                      <p className="font-semibold text-slate-800 capitalize">
+                        {viewingUser.civil_status || 'Single'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Vote className="w-3 h-3 text-blue-600" /> Voter Status
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        isVoter
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-slate-200 text-slate-700 border border-slate-300'
+                      }`}>
+                        {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-600" /> Sitio / Area
+                      </span>
+                      <p className="font-semibold text-slate-800">
+                        {viewingUser.sitio || 'Sitio Zapatera Proper'}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-600" /> Complete Residential Address
+                      </span>
+                      <p className="font-semibold text-slate-800">
+                        {viewingUser.address || viewingUser.complete_address || `${viewingUser.sitio || 'Barangay Zapatera'}, Cebu City`}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-emerald-600" /> Contact Number
+                      </span>
+                      <p className="font-mono font-semibold text-slate-800">
+                        {viewingUser.phone || viewingUser.contact_number || 'None provided'}
+                      </p>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                        <Mail className="w-3 h-3 text-blue-600" /> Email Address
+                      </span>
+                      <p className="font-mono font-semibold text-slate-800">
+                        {viewingUser.email}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {loadingDevices ? (
-                  <div className="p-8 text-center text-slate-400 flex items-center justify-center space-x-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                    <span>Querying active sessions...</span>
-                  </div>
-                ) : userDevices.length === 0 ? (
-                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl text-slate-400">
-                    <Smartphone className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="font-semibold text-xs">No active device sessions found</p>
-                    <p className="text-[11px] mt-1">This user currently has no registered device tokens.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {userDevices.map((device) => {
-                      const isActive = device.is_active !== false;
-                      return (
-                        <div
-                          key={device.id || device.device_id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
-                              {device.device_model?.toLowerCase().includes('desktop') ||
-                              device.os_name?.toLowerCase().includes('windows') ||
-                              device.os_name?.toLowerCase().includes('mac') ? (
-                                <Laptop className="w-5 h-5 text-blue-600" />
-                              ) : (
-                                <Smartphone className="w-5 h-5 text-blue-600" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-bold text-slate-900 text-xs">
-                                  {device.device_name || device.device_model || 'Mobile Device'}
-                                </p>
-                                {isActive ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    Active Now
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600">
-                                    Revoked
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-500">
-                                {device.os_name || 'OS'} {device.os_version || ''} • Build v{device.app_version || '1.0.0'} • IP: {device.ip_address || '127.0.0.1'}
-                              </p>
-                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                Last Login: {formatDate(device.last_login_at || new Date().toISOString())}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div>
-                            {isActive ? (
-                              <button
-                                onClick={() => handleTerminateDeviceSession(device)}
-                                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-colors cursor-pointer w-full sm:w-auto justify-center"
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                                <span>Terminate Session</span>
-                              </button>
-                            ) : (
-                              <span className="text-xs text-slate-400 italic">Access Revoked</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 4: App Settings & Preferences */}
-            {modalActiveTab === 'settings' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Biometric */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Fingerprint className="w-4 h-4 text-blue-600" /> Biometric Authentication
-                      </span>
-                      <Badge variant={viewingUser.biometric_enabled ? 'emerald' : 'slate'}>
-                        {viewingUser.biometric_enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Resident can unlock their mobile account using FaceID or Fingerprint sensor.
-                    </p>
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+                  <div className="flex items-center space-x-2">
+                    {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
+                      <button
+                        onClick={() => {
+                          setIsViewModalOpen(false);
+                          initiateAction(viewingUser, 'unlock');
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Authorize Unlock Account</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setIsViewModalOpen(false);
+                          initiateAction(viewingUser, 'lock');
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Lock This Account</span>
+                      </button>
+                    )}
                   </div>
 
-                  {/* 2FA */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <KeyRound className="w-4 h-4 text-blue-600" /> Two-Factor Authentication
-                      </span>
-                      <Badge variant={viewingUser.two_factor_enabled ? 'emerald' : 'slate'}>
-                        {viewingUser.two_factor_enabled ? 'Active' : 'Password Only'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Require one-time email OTP verification when authenticating from an unrecognized device.
-                    </p>
-                  </div>
-
-                  {/* Push Alerts */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Bell className="w-4 h-4 text-blue-600" /> Push Notifications
-                      </span>
-                      <Badge variant={viewingUser.notification_preferences?.push !== false ? 'emerald' : 'slate'}>
-                        {viewingUser.notification_preferences?.push !== false ? 'Enabled' : 'Muted'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Delivery of real-time push banners on status changes of barangay document requests.
-                    </p>
-                  </div>
-
-                  {/* Email Notifications */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Mail className="w-4 h-4 text-blue-600" /> Security Email Alerts
-                      </span>
-                      <Badge variant={viewingUser.notification_preferences?.email !== false ? 'emerald' : 'slate'}>
-                        {viewingUser.notification_preferences?.email !== false ? 'Active' : 'Disabled'}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      Notify user email immediately upon 3-attempt account lockout or security password resets.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-              <div className="flex items-center space-x-2">
-                {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
                   <button
                     onClick={() => {
                       setIsViewModalOpen(false);
-                      initiateAction(viewingUser, 'unlock');
+                      setViewingUser(null);
                     }}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    className="px-5 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
                   >
-                    <Unlock className="w-3.5 h-3.5" />
-                    <span>Authorize Unlock Account</span>
+                    Close
                   </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setIsViewModalOpen(false);
-                      initiateAction(viewingUser, 'lock');
-                    }}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Lock This Account</span>
-                  </button>
-                )}
+                </div>
               </div>
-
-              <button
-                onClick={() => {
-                  setIsViewModalOpen(false);
-                  setViewingUser(null);
-                }}
-                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                Close Security Profile
-              </button>
-            </div>
-          </div>
+            );
+          })()}
         </Modal>
       )}
 

@@ -76,23 +76,25 @@ export default function AdminLoginPage({ onLoginSuccess }) {
   const [unlockSuccess, setUnlockSuccess] = useState('');
   const [unlockCountdown, setUnlockCountdown] = useState(600); // 10 minutes
   const [unlockTimerActive, setUnlockTimerActive] = useState(false);
-  const [loginConfig, setLoginConfig] = useState(null);
+  const [loginAssets, setLoginAssets] = useState(null);
+  const [isPictureLoading, setIsPictureLoading] = useState(true);
 
   useEffect(() => {
-    StorageService.getActiveLoginDesignAsync('admin').then((activeDesign) => {
-      if (activeDesign) {
-        setLoginConfig({
-          login_bg_url: activeDesign.image_url,
-          login_title: activeDesign.title,
-          login_badge: activeDesign.badge,
-          login_description: activeDesign.description,
-        });
-      } else {
-        StorageService.getConfigAsync().then((cfg) => {
-          if (cfg) setLoginConfig(cfg);
-        });
-      }
-    });
+    let isMounted = true;
+    setIsPictureLoading(true);
+
+    StorageService.getSupabaseLoginAssetsAsync('admin')
+      .then((assets) => {
+        if (!isMounted) return;
+        if (assets) {
+          setLoginAssets(assets);
+        }
+        setIsPictureLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Failed to load login assets from Supabase:', err);
+        if (isMounted) setIsPictureLoading(false);
+      });
 
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
@@ -206,6 +208,19 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
     const cleanEmail = email.trim().toLowerCase();
 
+    // Check if account was deleted
+    const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
+    if (deletedAccountsStr) {
+      try {
+        const deletedList = JSON.parse(deletedAccountsStr);
+        if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
+          setError('Notice: This account has been deleted by Barangay Zapatera administration. Access has been revoked.');
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
+
     // 1. Rate Limiting Check
     const rateLimit = await checkRateLimit(cleanEmail);
     if (!rateLimit.allowed) {
@@ -237,6 +252,12 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       }
     } catch (e) {
       // Handled silently
+    }
+
+    if (profile && profile.is_active === false) {
+      setError('Notice: This account has been deactivated or deleted by Barangay Zapatera administration.');
+      setLoading(false);
+      return;
     }
 
     if (!profile) {
@@ -682,22 +703,41 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white font-sans text-slate-800 antialiased overflow-x-hidden">
       {/* LEFT SIDE: Abstract Decorative Fluid/Marble Background (~50% width) */}
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
-        <img
-          src={loginConfig?.login_bg_url || '/auth-bg.jpg'}
-          alt="Login background"
-          className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
-        />
+        {isPictureLoading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-white z-0">
+            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-blue-200">
+              loading image
+            </span>
+          </div>
+        ) : loginAssets?.pictureUrl ? (
+          <img
+            src={loginAssets.pictureUrl}
+            alt="Barangay Zapatera Administration Portal"
+            className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-blue-500/15 pointer-events-none" />
 
         <div className="relative z-10 p-12 flex flex-col justify-between w-full h-full text-white">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl">
-              <ShieldCheck className="w-6 h-6 text-blue-400" />
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl overflow-hidden p-1.5">
+              {loginAssets?.sealUrl ? (
+                <img
+                  src={loginAssets.sealUrl}
+                  alt="Barangay Zapatera Official Seal"
+                  className="w-full h-full object-contain rounded-xl"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <ShieldCheck className="w-6 h-6 text-blue-400" />
+              )}
             </div>
             <div>
-              <span className="text-xs uppercase tracking-widest text-blue-300 font-bold block">
-                Barangay Administration
-              </span>
               <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-sm">
                 Barangay Zapatera
               </h1>
@@ -707,13 +747,13 @@ export default function AdminLoginPage({ onLoginSuccess }) {
           <div className="max-w-md my-auto py-12">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-xs font-semibold mb-6">
               <Lock className="w-3.5 h-3.5 text-blue-300" />
-              {loginConfig?.login_badge || 'Administrative Staff Portal'}
+              {loginAssets?.badge || 'Administrative Staff Portal'}
             </div>
             <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight mb-4">
-              {loginConfig?.login_title || 'Administrator Management System'}
+              {loginAssets?.title || 'Administrator Management System'}
             </h2>
             <p className="text-sm text-slate-200/90 leading-relaxed">
-              {loginConfig?.login_description || 'Secure administrative access for managing resident records, document requests, event issuances, and community services.'}
+              {loginAssets?.description || 'Secure administrative access for managing resident records, document requests, event issuances, and community services.'}
             </p>
           </div>
 
@@ -732,8 +772,19 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         {/* Top-Left Branding */}
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shadow-sm">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shadow-sm overflow-hidden p-1">
+              {loginAssets?.sealUrl ? (
+                <img
+                  src={loginAssets.sealUrl}
+                  alt="Barangay Seal"
+                  className="w-full h-full object-contain rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <ShieldCheck className="w-5 h-5" />
+              )}
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
