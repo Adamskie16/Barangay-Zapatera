@@ -1131,9 +1131,9 @@ export const StorageService = {
   getSupabaseLoginAssetsAsync: async (portal = 'admin') => {
     let pictureUrl = null;
     let sealUrl = null;
-    let title = 'Administrator Management System';
-    let badge = 'Administrative Staff Portal';
-    let description = 'Secure administrative access for managing resident records, document requests, event issuances, and community services.';
+    let title = 'Public service records, made easier to deliver.';
+    let badge = '';
+    let description = 'Process document requests, monitor applications, and issue official clearances through one secure barangay portal.';
 
     if (isSupabaseConfigured()) {
       try {

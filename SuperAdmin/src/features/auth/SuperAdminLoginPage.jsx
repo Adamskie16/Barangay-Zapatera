@@ -751,16 +751,21 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         ) : (
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/40 via-transparent to-blue-500/15 pointer-events-none" />
+        {/* Top subtle shadow gradient for header clarity */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none" />
+        {/* Bottom deep dark color gradient for clear text visibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/90 via-45% to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-blue-950/70 via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative z-10 p-12 flex flex-col justify-between w-full h-full text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl overflow-hidden p-1.5">
+        <div className="relative z-10 p-8 sm:p-12 lg:p-14 flex flex-col justify-between w-full h-full text-white">
+          {/* TOP-LEFT HEADER: Seal + System Title and Subtitle */}
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-xl overflow-hidden p-1 shrink-0">
               {loginAssets?.sealUrl ? (
                 <img
                   src={loginAssets.sealUrl}
                   alt="Barangay Zapatera Official Seal"
-                  className="w-full h-full object-contain rounded-xl"
+                  className="w-full h-full object-contain rounded-full"
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
@@ -770,32 +775,31 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
               )}
             </div>
             <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-white drop-shadow-sm">
-                Barangay Zapatera
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-sm leading-snug">
+                Digital Information Management System
               </h1>
+              <p className="text-xs sm:text-sm font-medium text-slate-200/90">
+                Barangay Zapatera - Cebu City 6000
+              </p>
             </div>
           </div>
 
-          <div className="max-w-md my-auto py-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-xs font-semibold mb-6">
-              <Lock className="w-3.5 h-3.5 text-blue-300" />
-              {loginAssets?.badge && loginAssets.badge !== 'Executive Administration'
-                ? loginAssets.badge
-                : 'Highest Security Level Required'}
-            </div>
-            <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight mb-4">
-              {loginAssets?.title || 'Barangay Zapatera Super Admin Portal'}
+          {/* BOTTOM CONTENT: Hero Headline & Description anchored at bottom */}
+          <div className="max-w-xl mt-auto pt-16 pb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.15] mb-4 drop-shadow-md">
+              {loginAssets?.title || 'System governance support, made easier to manage.'}
             </h2>
-            <p className="text-sm text-slate-200/90 leading-relaxed">
-              {loginAssets?.description || 'Restricted interface for complete system governance, administrative user provisioning, and secure document records.'}
+            <p className="text-sm sm:text-base text-slate-200/95 leading-relaxed font-normal max-w-lg drop-shadow-sm">
+              {loginAssets?.description || 'Oversee portal operations, manage system security, and audit community clearance pipelines through one secure municipal portal.'}
             </p>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-300/80 pt-6 border-t border-white/10">
+          {/* BOTTOM FOOTER */}
+          <div className="flex items-center justify-between text-xs text-slate-300/80 pt-5 border-t border-white/15">
             <span>© 2026 Barangay Zapatera, Cebu City</span>
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Secure Auth Online
+              Super Admin Online
             </span>
           </div>
         </div>
