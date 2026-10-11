@@ -1163,9 +1163,9 @@ export const StorageService = {
   getSupabaseLoginAssetsAsync: async (portal = 'super_admin') => {
     let pictureUrl = null;
     let sealUrl = null;
-    let title = 'Barangay Zapatera Super Admin Portal';
-    let badge = 'Highest Security Level Required';
-    let description = 'Restricted interface for complete system governance, administrative user provisioning, and secure document records.';
+    let title = 'System governance support, made easier to manage.';
+    let badge = '';
+    let description = 'Oversee portal operations, manage system security, and audit community clearance pipelines through one secure municipal portal.';
 
     if (isSupabaseConfigured()) {
       try {

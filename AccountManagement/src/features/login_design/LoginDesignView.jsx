@@ -421,7 +421,7 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
             <div className="lg:col-span-7 space-y-3 text-white">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{activeHeroDesign.badge || 'Executive Administration'}</span>
+                <span>{activeHeroDesign.badge || 'Government Digital Portal'}</span>
               </div>
               <h3 className="text-xl font-bold tracking-tight">{activeHeroDesign.title}</h3>
               <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
