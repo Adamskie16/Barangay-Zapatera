@@ -56,7 +56,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
 
   const cleanMI = formData.middle_initial.trim().toUpperCase().replace(/\.$/, '');
   const previewFormattedName = formData.last_name.trim() || formData.first_name.trim()
-    ? `${formData.last_name.trim() || '[Last Name]'}, ${formData.first_name.trim() || '[First Name]'} ${cleanMI ? cleanMI + '.' : ''}`
+    ? `${formData.last_name.trim() || '[Last Name]'}, ${formData.first_name.trim() || '[First Name]'}${cleanMI ? ' ' + cleanMI + '.' : ''}`
     : '';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,10 +73,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
       setError('Please provide your First Name.');
       return;
     }
-    if (!formData.middle_initial.trim()) {
-      setError('Please provide your Middle Initial (MI).');
-      return;
-    }
+    // Middle initial is optional
 
     // 2. Date of Birth Validation
     if (!formData.birth_date.trim()) {
@@ -138,8 +135,8 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
 
     const cleanLastName = sanitizeInput(formData.last_name.trim());
     const cleanFirstName = sanitizeInput(formData.first_name.trim());
-    const formattedFullName = `${cleanLastName}, ${cleanFirstName} ${cleanMI ? cleanMI + '.' : ''}`;
-    const displayName = `${cleanFirstName} ${cleanMI ? cleanMI + '.' : ''} ${cleanLastName}`;
+    const formattedFullName = `${cleanLastName}, ${cleanFirstName}${cleanMI ? ' ' + cleanMI + '.' : ''}`;
+    const displayName = `${cleanFirstName}${cleanMI ? ' ' + cleanMI + '.' : ''} ${cleanLastName}`;
 
     let generatedId = `res-${Date.now()}`;
 
@@ -284,10 +281,9 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
               </div>
 
               <div className="col-span-1">
-                <label className="block text-slate-300 font-semibold mb-1">MI *</label>
+                <label className="block text-slate-300 font-semibold mb-1">MI (Optional)</label>
                 <input
                   type="text"
-                  required
                   maxLength={3}
                   placeholder="M."
                   value={formData.middle_initial}

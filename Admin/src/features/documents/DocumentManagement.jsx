@@ -28,7 +28,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
   const templateKeys = Object.keys(documentTemplates);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('barangayCertification');
   
-  // 2. Dynamic Certificate Variables
+  // 2. Certificate Template
   const [documentTitle, setDocumentTitle] = useState(documentTemplates.barangayCertification.title);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('Barangay Zapatera, Cebu City');
@@ -186,7 +186,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Configure dynamic variables, preview live certificate, and print or export to PDF with zero layout shift.
+            Configure certificate template, preview live certificate, and print or export to PDF with zero layout shift.
           </p>
         </div>
 
@@ -216,7 +216,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
       {/* Main 2-Column Split: Left Controls | Right Live A4 Preview */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
-        {/* LEFT COLUMN: Controls & Dynamic Variables (5 Cols) */}
+        {/* LEFT COLUMN: Controls & Certificate Template (5 Cols) */}
         <div className="xl:col-span-5 space-y-6">
           
           {/* 1. Document Template Quick Switch */}
@@ -251,10 +251,10 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             </div>
           </div>
 
-          {/* 2. Editable Dynamic Variables Form */}
+          {/* 2. Editable Certificate Template Form */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 text-xs">
             <h3 className="font-bold text-slate-900 uppercase tracking-wider text-xs border-b border-slate-100 pb-2">
-              Dynamic Variable Fields
+              Certificate Template Fields
             </h3>
 
             {/* Variable: documentTitle */}
@@ -404,9 +404,9 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               </div>
             </div>
 
-            {/* Dynamic Ordinal Date Preview Banner */}
+            {/* Certificate Ordinal Date Preview Banner */}
             <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-[11px] text-blue-900">
-              <span className="font-bold">Dynamic Ordinal Date: </span>
+              <span className="font-bold">Official Ordinal Date: </span>
               <span className="font-serif italic font-medium">{formatIssuedDateOrdinal(issuedDate)}</span>
             </div>
 

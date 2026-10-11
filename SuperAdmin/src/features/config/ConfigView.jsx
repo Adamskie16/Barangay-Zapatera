@@ -226,7 +226,7 @@ export default function ConfigView({ config, onSaveConfig }) {
         <div className="flex items-center justify-end pt-2">
           <button
             type="submit"
-            className="inline-flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-900/20 transition-colors"
+            className="inline-flex items-center space-x-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors"
           >
             <Save className="w-4 h-4" />
             <span>Save System Configurations</span>

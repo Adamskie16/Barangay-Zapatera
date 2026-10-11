@@ -1,15 +1,12 @@
 // Admin/src/components/Navbar.jsx
 import React from 'react';
-import { Bell, CheckCircle2 } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
 export default function Navbar({ activeTitle, pendingCount = 0 }) {
   return (
     <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
       <div className="flex items-center space-x-3.5">
         <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">{activeTitle}</h2>
-        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 shadow-xs">
-          <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-blue-600" /> Desk Verification Active
-        </span>
       </div>
 
       <div className="flex items-center space-x-3">

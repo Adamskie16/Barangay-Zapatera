@@ -8,19 +8,14 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
-  Switch,
   Image,
   ActivityIndicator,
 } from 'react-native';
 import {
   User,
-  Shield,
   ShieldCheck,
   Lock,
-  Bell,
-  Fingerprint,
   Phone,
-  Mail,
   MapPin,
   Calendar,
   Vote,
@@ -34,12 +29,13 @@ import {
   AlertCircle,
   ExternalLink,
   Camera,
-  Smartphone,
-  Radio,
+  Eye,
+  EyeOff,
+  Check,
 } from 'lucide-react';
+import { supabase } from '../../core/supabase';
 import { ResidentUser, BarangayConfig } from '../../types';
 import { uploadUserAvatar } from '../../core/storageService';
-import { detectDeviceMetadata } from '../../core/deviceTelemetry';
 import ActionModal from '../../components/ActionModal';
 
 interface ProfileViewProps {
@@ -61,6 +57,90 @@ export default function ProfileView({
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  // Real-time strong password verification
+  const pwLengthMet = newPassword.length >= 8;
+  const pwUpperMet = /[A-Z]/.test(newPassword);
+  const pwLowerMet = /[a-z]/.test(newPassword);
+  const pwNumberMet = /[0-9]/.test(newPassword);
+  const pwSpecialMet = /[^A-Za-z0-9]/.test(newPassword);
+  const isStrongPassword = pwLengthMet && pwUpperMet && pwLowerMet && pwNumberMet && pwSpecialMet;
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current account password.');
+      return;
+    }
+    if (!isStrongPassword) {
+      setPasswordError('New password must contain at least 8 characters, an uppercase letter, a lowercase letter, a number, and a special character.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation password do not match.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const userEmail = (currentUser.email || '').trim().toLowerCase();
+      if (userEmail) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: userEmail,
+          password: currentPassword,
+        });
+        if (signInErr) {
+          setPasswordError('Current password is incorrect. Please re-check your password.');
+          setIsUpdatingPassword(false);
+          return;
+        }
+      }
+
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateErr) {
+        console.warn('Supabase auth update notice:', updateErr.message);
+      }
+
+      onUpdateProfile({ password: newPassword } as any);
+
+      setPasswordSuccess('Account security credentials updated successfully!');
+      setTimeout(() => {
+        setIsPasswordModalOpen(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordError('');
+        setPasswordSuccess('');
+        setActionModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Password Updated',
+          message: 'Your account password has been changed. Use your new strong password on next sign in.',
+          buttonText: 'Done',
+          onClose: () => setActionModal({ isOpen: false, title: '' }),
+        });
+      }, 900);
+    } catch (err: any) {
+      console.error('Password change error:', err);
+      setPasswordError(err?.message || 'Failed to update password. Please try again.');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   // Feedback ActionModal State
   const [actionModal, setActionModal] = useState<{
@@ -86,13 +166,6 @@ export default function ProfileView({
   const [editCivilStatus, setEditCivilStatus] = useState(currentUser.civil_status || 'Single');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
-  // Settings Toggles
-  const [biometricEnabled, setBiometricEnabled] = useState(currentUser.biometric_enabled ?? true);
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(currentUser.two_factor_enabled ?? true);
-  const [pushNotifs, setPushNotifs] = useState(currentUser.notification_preferences?.push ?? true);
-  const [smsNotifs, setSmsNotifs] = useState(currentUser.notification_preferences?.sms ?? true);
-  const [emailNotifs, setEmailNotifs] = useState(currentUser.notification_preferences?.email ?? true);
-
   // Avatar error fallback state
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
@@ -103,11 +176,6 @@ export default function ProfileView({
     setEditPhone(currentUser.phone || '');
     setEditAddress(currentUser.address || currentUser.sitio || '');
     setEditCivilStatus(currentUser.civil_status || 'Single');
-    setBiometricEnabled(currentUser.biometric_enabled ?? true);
-    setTwoFactorEnabled(currentUser.two_factor_enabled ?? true);
-    setPushNotifs(currentUser.notification_preferences?.push ?? true);
-    setSmsNotifs(currentUser.notification_preferences?.sms ?? true);
-    setEmailNotifs(currentUser.notification_preferences?.email ?? true);
   }, [currentUser]);
 
   // Reset image error state whenever avatar_url changes
@@ -136,12 +204,7 @@ export default function ProfileView({
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // Password Modal State
-  const [currentPass, setCurrentPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [passError, setPassError] = useState('');
-  const [passSuccess, setPassSuccess] = useState('');
+
 
   const handleSaveProfile = () => {
     try {
@@ -177,36 +240,7 @@ export default function ProfileView({
     }
   };
 
-  const handleSavePassword = () => {
-    setPassError('');
-    setPassSuccess('');
-    if (!currentPass || !newPass) {
-      setPassError('Please fill in all password fields.');
-      return;
-    }
-    if (newPass.length < 8) {
-      setPassError('New password must be at least 8 characters long.');
-      return;
-    }
-    if (newPass !== confirmPass) {
-      setPassError('New passwords do not match.');
-      return;
-    }
 
-    setIsPasswordModalOpen(false);
-    setCurrentPass('');
-    setNewPass('');
-    setConfirmPass('');
-
-    setActionModal({
-      isOpen: true,
-      type: 'success',
-      title: 'Password Updated Successfully',
-      message: 'Your account security credentials have been updated.',
-      buttonText: 'OK',
-      onClose: () => setActionModal({ isOpen: false, title: '' }),
-    });
-  };
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState('');
@@ -373,155 +407,6 @@ export default function ProfileView({
           <ChevronRight size={16} color="#94a3b8" />
         </TouchableOpacity>
 
-        <View style={styles.menuDivider} />
-
-        <View style={styles.switchRow}>
-          <View style={styles.menuItemLeft}>
-            <Fingerprint size={18} color="#059669" />
-            <View>
-              <Text style={styles.menuItemTitle}>Biometric Authentication</Text>
-              <Text style={styles.menuItemSub}>Use Face ID / Fingerprint on mobile</Text>
-            </View>
-          </View>
-          <Switch
-            value={biometricEnabled}
-            onValueChange={(val) => {
-              setBiometricEnabled(val);
-              onUpdateProfile({ biometric_enabled: val });
-            }}
-          />
-        </View>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.switchRow}>
-          <View style={styles.menuItemLeft}>
-            <Shield size={18} color="#7c3aed" />
-            <View>
-              <Text style={styles.menuItemTitle}>Two-Factor Authentication (2FA)</Text>
-              <Text style={styles.menuItemSub}>Require Gmail OTP verification on login</Text>
-            </View>
-          </View>
-          <Switch
-            value={twoFactorEnabled}
-            onValueChange={(val) => {
-              setTwoFactorEnabled(val);
-              onUpdateProfile({ two_factor_enabled: val });
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Notification Preferences */}
-      <Text style={styles.sectionHeading}>Notification Preferences</Text>
-      <View style={styles.menuCard}>
-        <View style={styles.switchRow}>
-          <View style={styles.menuItemLeft}>
-            <Bell size={18} color="#0284c7" />
-            <View>
-              <Text style={styles.menuItemTitle}>In-App Notifications</Text>
-              <Text style={styles.menuItemSub}>Real-time status updates</Text>
-            </View>
-          </View>
-          <Switch
-            value={pushNotifs}
-            onValueChange={(val) => {
-              setPushNotifs(val);
-              onUpdateProfile({ notification_preferences: { push: val, sms: smsNotifs, email: emailNotifs } });
-            }}
-          />
-        </View>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.switchRow}>
-          <View style={styles.menuItemLeft}>
-            <Phone size={18} color="#059669" />
-            <View>
-              <Text style={styles.menuItemTitle}>SMS Text Notifications</Text>
-              <Text style={styles.menuItemSub}>Ready-for-pickup SMS alerts</Text>
-            </View>
-          </View>
-          <Switch
-            value={smsNotifs}
-            onValueChange={(val) => {
-              setSmsNotifs(val);
-              onUpdateProfile({ notification_preferences: { push: pushNotifs, sms: val, email: emailNotifs } });
-            }}
-          />
-        </View>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.switchRow}>
-          <View style={styles.menuItemLeft}>
-            <Mail size={18} color="#d97706" />
-            <View>
-              <Text style={styles.menuItemTitle}>Email Receipts & Bulletins</Text>
-              <Text style={styles.menuItemSub}>Tracking receipts to Gmail</Text>
-            </View>
-          </View>
-          <Switch
-            value={emailNotifs}
-            onValueChange={(val) => {
-              setEmailNotifs(val);
-              onUpdateProfile({ notification_preferences: { push: pushNotifs, sms: smsNotifs, email: val } });
-            }}
-          />
-        </View>
-      </View>
-
-      {/* App Management & Device Security */}
-      <Text style={styles.sectionHeading}>App Management & Device Security</Text>
-      <View style={styles.menuCard}>
-        <View style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <Smartphone size={18} color="#1d4ed8" />
-            <View>
-              <Text style={styles.menuItemTitle}>Device & Operating System</Text>
-              <Text style={styles.menuItemSub}>
-                {detectDeviceMetadata().deviceModel} • {detectDeviceMetadata().osName} {detectDeviceMetadata().osVersion}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.badgeSmall}>
-            <Text style={styles.badgeSmallText}>Verified</Text>
-          </View>
-        </View>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <Radio size={18} color="#059669" />
-            <View>
-              <Text style={styles.menuItemTitle}>Push Notification Token</Text>
-              <Text style={styles.menuItemSub}>
-                Status: {currentUser.push_token_status === 'denied' ? 'Permission Denied' : 'Active & Registered'}
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.badgeSmall, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }]}>
-            <Text style={[styles.badgeSmallText, { color: '#166534' }]}>Active</Text>
-          </View>
-        </View>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <ShieldCheck size={18} color="#2563eb" />
-            <View>
-              <Text style={styles.menuItemTitle}>Release Build & Security</Text>
-              <Text style={styles.menuItemSub}>
-                App v{detectDeviceMetadata().appVersion} • Government End-to-End Encryption
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.badgeSmall, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-            <Text style={[styles.badgeSmallText, { color: '#1d4ed8' }]}>Production</Text>
-          </View>
-        </View>
       </View>
 
       {/* Support & Privacy */}
@@ -609,53 +494,7 @@ export default function ProfileView({
         </View>
       </Modal>
 
-      {/* CHANGE PASSWORD MODAL */}
-      <Modal visible={isPasswordModalOpen} animationType="slide" transparent onRequestClose={() => setIsPasswordModalOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Account Password</Text>
-              <TouchableOpacity onPress={() => setIsPasswordModalOpen(false)}>
-                <X size={20} color="#64748b" />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView style={styles.modalBody}>
-              {passError ? (
-                <View style={styles.errorBanner}>
-                  <AlertCircle size={16} color="#b91c1c" />
-                  <Text style={styles.errorBannerText}>{passError}</Text>
-                </View>
-              ) : null}
-
-              {passSuccess ? (
-                <View style={styles.successBanner}>
-                  <CheckCircle2 size={16} color="#16a34a" />
-                  <Text style={styles.successBannerText}>{passSuccess}</Text>
-                </View>
-              ) : null}
-
-              <Text style={styles.formLabel}>Current Password *</Text>
-              <TextInput style={styles.formInput} value={currentPass} onChangeText={setCurrentPass} secureTextEntry />
-
-              <Text style={styles.formLabel}>New Password (min. 8 characters) *</Text>
-              <TextInput style={styles.formInput} value={newPass} onChangeText={setNewPass} secureTextEntry />
-
-              <Text style={styles.formLabel}>Confirm New Password *</Text>
-              <TextInput style={styles.formInput} value={confirmPass} onChangeText={setConfirmPass} secureTextEntry />
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelModalBtn} onPress={() => setIsPasswordModalOpen(false)}>
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveModalBtn} onPress={handleSavePassword}>
-                <Text style={styles.saveModalBtnText}>Update Password</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* HELP & SUPPORT MODAL */}
       <Modal visible={isHelpModalOpen} animationType="slide" transparent onRequestClose={() => setIsHelpModalOpen(false)}>
@@ -717,6 +556,152 @@ export default function ProfileView({
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.saveModalBtn} onPress={() => setIsPrivacyModalOpen(false)}>
                 <Text style={styles.saveModalBtnText}>Understood</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* CHANGE PASSWORD MODAL */}
+      <Modal visible={isPasswordModalOpen} animationType="slide" transparent onRequestClose={() => setIsPasswordModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 420 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Lock size={18} color="#1d4ed8" />
+                <Text style={styles.modalTitle}>Change Account Password</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsPasswordModalOpen(false)}>
+                <X size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              {passwordError ? (
+                <View style={styles.errorBanner}>
+                  <AlertCircle size={16} color="#b91c1c" />
+                  <Text style={styles.errorBannerText}>{passwordError}</Text>
+                </View>
+              ) : null}
+
+              {passwordSuccess ? (
+                <View style={styles.successBanner}>
+                  <CheckCircle2 size={16} color="#15803d" />
+                  <Text style={styles.successBannerText}>{passwordSuccess}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.formLabel}>Current Password *</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInputField}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry={!showCurrentPass}
+                  placeholder="Enter current password"
+                  placeholderTextColor="#94a3b8"
+                />
+                <TouchableOpacity onPress={() => setShowCurrentPass(!showCurrentPass)} style={{ padding: 4 }}>
+                  {showCurrentPass ? <EyeOff size={16} color="#64748b" /> : <Eye size={16} color="#64748b" />}
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.formLabel}>New Strong Password *</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInputField}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNewPass}
+                  placeholder="Minimum 8 strong characters"
+                  placeholderTextColor="#94a3b8"
+                />
+                <TouchableOpacity onPress={() => setShowNewPass(!showNewPass)} style={{ padding: 4 }}>
+                  {showNewPass ? <EyeOff size={16} color="#64748b" /> : <Eye size={16} color="#64748b" />}
+                </TouchableOpacity>
+              </View>
+
+              {/* Real-Time Strong Password Validation Checklist */}
+              {newPassword ? (
+                <View style={styles.checklistContainer}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.checklistTitle}>Security Criteria:</Text>
+                    <Text style={[styles.checklistBadge, isStrongPassword ? styles.checklistBadgeMet : styles.checklistBadgeUnmet]}>
+                      {isStrongPassword ? 'Strong' : 'Incomplete'}
+                    </Text>
+                  </View>
+
+                  {/* Progress bar */}
+                  <View style={styles.checklistProgressBar}>
+                    <View
+                      style={[
+                        styles.checklistProgressFill,
+                        {
+                          width: `${([pwLengthMet, pwUpperMet, pwLowerMet, pwNumberMet, pwSpecialMet].filter(Boolean).length / 5) * 100}%`,
+                          backgroundColor: isStrongPassword ? '#16a34a' : [pwLengthMet, pwUpperMet, pwLowerMet, pwNumberMet, pwSpecialMet].filter(Boolean).length >= 3 ? '#d97706' : '#dc2626',
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  <View style={styles.checklistItem}>
+                    {pwLengthMet ? <Check size={14} color="#16a34a" /> : <X size={14} color="#94a3b8" />}
+                    <Text style={pwLengthMet ? styles.checklistTextMet : styles.checklistText}>At least 8 characters</Text>
+                  </View>
+                  <View style={styles.checklistItem}>
+                    {pwUpperMet ? <Check size={14} color="#16a34a" /> : <X size={14} color="#94a3b8" />}
+                    <Text style={pwUpperMet ? styles.checklistTextMet : styles.checklistText}>At least one uppercase letter (A-Z)</Text>
+                  </View>
+                  <View style={styles.checklistItem}>
+                    {pwLowerMet ? <Check size={14} color="#16a34a" /> : <X size={14} color="#94a3b8" />}
+                    <Text style={pwLowerMet ? styles.checklistTextMet : styles.checklistText}>At least one lowercase letter (a-z)</Text>
+                  </View>
+                  <View style={styles.checklistItem}>
+                    {pwNumberMet ? <Check size={14} color="#16a34a" /> : <X size={14} color="#94a3b8" />}
+                    <Text style={pwNumberMet ? styles.checklistTextMet : styles.checklistText}>At least one number (0-9)</Text>
+                  </View>
+                  <View style={styles.checklistItem}>
+                    {pwSpecialMet ? <Check size={14} color="#16a34a" /> : <X size={14} color="#94a3b8" />}
+                    <Text style={pwSpecialMet ? styles.checklistTextMet : styles.checklistText}>At least one special character (!@#$%^&*)</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <Text style={styles.formLabel}>Confirm New Password *</Text>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={styles.passwordInputField}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showNewPass}
+                  placeholder="Re-type new password"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                disabled={isUpdatingPassword}
+                onPress={() => {
+                  setIsPasswordModalOpen(false);
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                }}
+              >
+                <Text style={styles.cancelModalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveModalBtn, { opacity: isUpdatingPassword ? 0.6 : 1 }]}
+                disabled={isUpdatingPassword}
+                onPress={handleChangePassword}
+              >
+                {isUpdatingPassword ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.saveModalBtnText}>Update Password</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1121,5 +1106,76 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#1d4ed8',
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
+  passwordInputField: {
+    flex: 1,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#0f172a',
+  },
+  checklistContainer: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  checklistTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  checklistBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  checklistBadgeMet: {
+    backgroundColor: '#dcfce7',
+    color: '#15803d',
+  },
+  checklistBadgeUnmet: {
+    backgroundColor: '#fee2e2',
+    color: '#b91c1c',
+  },
+  checklistProgressBar: {
+    height: 4,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginVertical: 6,
+  },
+  checklistProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  checklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 2,
+  },
+  checklistText: {
+    fontSize: 10,
+    color: '#64748b',
+  },
+  checklistTextMet: {
+    fontSize: 10,
+    color: '#15803d',
+    fontWeight: '700',
   },
 });

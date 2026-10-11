@@ -18,6 +18,7 @@ import {
   Lock,
   Unlock,
   ShieldCheck,
+  ShieldAlert,
   Info,
   Check,
   X,
@@ -30,6 +31,7 @@ import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempt
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { MobileStorage } from '../../core/storage';
 import UnlockAccountModal from '../../components/UnlockAccountModal';
+import SecurityNoticeModal from '../../components/SecurityNoticeModal';
 
 // ============================================================================
 // SAMPLE SITIO LIST FOR BARANGAY ZAPATERA
@@ -104,6 +106,11 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isUnlockModalOpen, setIsUnlockModalOpen] = useState<boolean>(false);
+  const [securityNoticeModal, setSecurityNoticeModal] = useState<{
+    isOpen: boolean;
+    type: 'deleted' | 'locked' | 'inactive';
+    message: string;
+  } | null>(null);
 
   // Forgot Password & Reset Password State
   const [forgotEmail, setForgotEmail] = useState<string>('');
@@ -270,9 +277,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     if (!regData.first_name || !regData.first_name.trim()) {
       errors.first_name = 'First Name is required.';
     }
-    if (!regData.middle_initial || !regData.middle_initial.trim()) {
-      errors.middle_initial = 'Middle Initial is required.';
-    }
+    // Middle initial is optional
     if (!regData.birth_date || !regData.birth_date.trim()) {
       errors.birth_date = 'Date of Birth is required.';
     }
@@ -359,11 +364,39 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     const cleanEmail = loginEmail.toLowerCase().trim();
 
-    // 1. Pre-auth Account Lockout Check (directly verified against Supabase database)
+    // 1. Pre-auth Account Lockout & Deletion Checks
+    const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
+    let isExplicitlyDeleted = false;
+    if (deletedAccountsStr) {
+      try {
+        const deletedList = JSON.parse(deletedAccountsStr);
+        if (Array.isArray(deletedList) && deletedList.some((d: any) => (d.email || d).toLowerCase() === cleanEmail)) {
+          isExplicitlyDeleted = true;
+        }
+      } catch {}
+    }
+
+    if (isExplicitlyDeleted) {
+      const msg = 'Notice: This resident account has been deleted by Barangay Zapatera administration. Access has been revoked.';
+      setAuthError(msg);
+      setSecurityNoticeModal({
+        isOpen: true,
+        type: 'deleted',
+        message: msg,
+      });
+      return;
+    }
+
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
+      const msg = 'Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.';
       setIsLocked(true);
-      setAuthError('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
+      setAuthError(msg);
+      setSecurityNoticeModal({
+        isOpen: true,
+        type: 'locked',
+        message: msg,
+      });
       return;
     }
 
@@ -383,10 +416,29 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
         profileData = pData;
 
+        // If profile was deleted or marked inactive by admin
+        if (profileData && profileData.is_active === false) {
+          const msg = 'Notice: This account has been deactivated or deleted by Barangay Zapatera administration.';
+          setLoading(false);
+          setAuthError(msg);
+          setSecurityNoticeModal({
+            isOpen: true,
+            type: 'deleted',
+            message: msg,
+          });
+          return;
+        }
+
         if (profileData && profileData.is_locked) {
+          const msg = 'Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.';
           setIsLocked(true);
           setLoading(false);
-          setAuthError('Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.');
+          setAuthError(msg);
+          setSecurityNoticeModal({
+            isOpen: true,
+            type: 'locked',
+            message: msg,
+          });
           return;
         }
 
@@ -395,7 +447,20 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           password: loginPassword,
         });
 
-        if (!authErr && authData?.user) {
+        // If Supabase auth user exists but profile record does NOT exist -> Account was deleted!
+        if (authData?.user && !profileData) {
+          const msg = 'Notice: This account has been deleted by Barangay Zapatera administration.';
+          setLoading(false);
+          setAuthError(msg);
+          setSecurityNoticeModal({
+            isOpen: true,
+            type: 'deleted',
+            message: msg,
+          });
+          return;
+        }
+
+        if (!authErr && authData?.user && profileData) {
           isPasswordValid = true;
         } else if (authErr) {
           console.error('Supabase authentication error:', authErr);
@@ -420,21 +485,29 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         }
       }
 
-      // Check local database fallback
-      const storedDb = await MobileStorage.getItem('zapatera_residents_db');
-      const residents: ResidentUser[] = storedDb ? JSON.parse(storedDb) : [];
-      const resident = residents.find((r) => r.email.toLowerCase() === cleanEmail);
+      // Check local database fallback only if profile was not explicitly deleted
+      if (!isExplicitlyDeleted) {
+        const storedDb = await MobileStorage.getItem('zapatera_residents_db');
+        const residents: ResidentUser[] = storedDb ? JSON.parse(storedDb) : [];
+        const resident = residents.find((r) => r.email.toLowerCase() === cleanEmail);
 
-      if (!isPasswordValid && resident && resident.password === loginPassword) {
-        isPasswordValid = true;
+        if (!isPasswordValid && resident && resident.password === loginPassword) {
+          isPasswordValid = true;
+        }
       }
 
       // If credentials do not match anywhere -> record failed attempt & show actual Supabase error
       if (!isPasswordValid) {
         const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
         if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
+          const msg = 'Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.';
           setIsLocked(true);
-          setAuthError('Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.');
+          setAuthError(msg);
+          setSecurityNoticeModal({
+            isOpen: true,
+            type: 'locked',
+            message: msg,
+          });
         } else {
           const displayMsg = supabaseErrorMessage || 'Invalid login credentials';
           setAuthError(`${displayMsg}. (Attempt ${failedInfo.attempts} of 3 - ${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
@@ -687,10 +760,10 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     const cleanEmail = regData.email.toLowerCase().trim();
     const cleanLastName = sanitizeInput(regData.last_name.trim());
     const cleanFirstName = sanitizeInput(regData.first_name.trim());
-    const cleanMI = sanitizeInput(regData.middle_initial.trim().toUpperCase().replace(/\.$/, ''));
+    const cleanMI = sanitizeInput(regData.middle_initial ? regData.middle_initial.trim().toUpperCase().replace(/\.$/, '') : '');
 
-    const formattedFullName = `${cleanLastName}, ${cleanFirstName} ${cleanMI ? cleanMI + '.' : ''}`;
-    const displayName = `${cleanFirstName} ${cleanMI ? cleanMI + '.' : ''} ${cleanLastName}`;
+    const formattedFullName = `${cleanLastName}, ${cleanFirstName}${cleanMI ? ' ' + cleanMI + '.' : ''}`;
+    const displayName = `${cleanFirstName}${cleanMI ? ' ' + cleanMI + '.' : ''} ${cleanLastName}`;
     let assignedId = `res-${Date.now()}`;
 
     try {
@@ -888,15 +961,35 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             </View>
             <Text style={styles.errorText}>{authError || errorMessage}</Text>
             {isLocked ? (
-              <TouchableOpacity
-                style={[styles.primaryBtn, { marginTop: 10, paddingVertical: 10, backgroundColor: '#dc2626' }]}
-                onPress={() => setIsUnlockModalOpen(true)}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <Unlock size={16} color="#ffffff" />
-                  <Text style={styles.primaryBtnText}>Unlock Account with Gmail Code</Text>
-                </View>
-              </TouchableOpacity>
+              <View style={{ gap: 8, marginTop: 10 }}>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { paddingVertical: 10, backgroundColor: '#dc2626' }]}
+                  onPress={() => setIsUnlockModalOpen(true)}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Unlock size={16} color="#ffffff" />
+                    <Text style={styles.primaryBtnText}>Unlock Account with Gmail Code</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.outlineBtn, { paddingVertical: 8, borderColor: '#fca5a5', backgroundColor: '#ffffff' }]}
+                  onPress={() => {
+                    setSecurityNoticeModal({
+                      isOpen: true,
+                      type: 'locked',
+                      message: authError || 'Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.',
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <ShieldAlert size={14} color="#dc2626" />
+                    <Text style={[styles.outlineBtnText, { color: '#dc2626', fontSize: 12 }]}>View Security Lockout Notice</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             ) : null}
             {showResendConfirmation ? (
               <TouchableOpacity
@@ -1282,13 +1375,13 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>
-                  M.I. <Text style={styles.requiredAsterisk}>*</Text>
+                  M.I. (Opt)
                 </Text>
                 <TextInput
                   style={[
                     styles.modernInput,
                     { textAlign: 'center' },
-                    fieldErrors.middle_initial ? styles.inputErrorBorder : (regData.middle_initial.trim() ? styles.inputSuccessBorder : null),
+                    regData.middle_initial && regData.middle_initial.trim() ? styles.inputSuccessBorder : null,
                   ]}
                   placeholder="A"
                   placeholderTextColor="#94a3b8"
@@ -1296,9 +1389,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                   value={regData.middle_initial}
                   onChangeText={(txt) => handleFieldChange('middle_initial', txt)}
                 />
-                {fieldErrors.middle_initial ? (
-                  <Text style={styles.fieldErrorText}>{fieldErrors.middle_initial}</Text>
-                ) : null}
               </View>
             </View>
 
@@ -1576,6 +1666,18 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           </View>
         </View>
       </Modal>
+
+      {/* Account Security Notice Modal (Deleted / Locked) */}
+      <SecurityNoticeModal
+        visible={Boolean(securityNoticeModal?.isOpen)}
+        type={securityNoticeModal?.type || 'locked'}
+        message={securityNoticeModal?.message}
+        onClose={() => setSecurityNoticeModal(null)}
+        onUnlock={() => {
+          setSecurityNoticeModal(null);
+          setIsUnlockModalOpen(true);
+        }}
+      />
 
       {/* Account Unlock Modal */}
       <UnlockAccountModal

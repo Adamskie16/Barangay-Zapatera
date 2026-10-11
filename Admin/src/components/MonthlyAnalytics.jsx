@@ -1,6 +1,6 @@
 // Admin/src/components/MonthlyAnalytics.jsx
 import React, { useState } from 'react';
-import { BarChart3, Calendar, Filter, CheckCircle2 } from 'lucide-react';
+import { BarChart3, Calendar, Filter, CheckCircle2, Download, FileSpreadsheet } from 'lucide-react';
 import { formatCurrency } from '../core/security';
 
 export default function MonthlyAnalytics({ requests = [] }) {
@@ -44,6 +44,39 @@ export default function MonthlyAnalytics({ requests = [] }) {
   const totalYtdQuantity = requests.length;
   const totalYtdApproved = requests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
 
+  const handleExportMonthlyCSV = () => {
+    const dataToExport = filteredData.map((m) => {
+      const total = Number(m.totalQuantity) || 0;
+      const app = Number(m.approvedQuantity) || 0;
+      const rate = total > 0 ? `${Math.round((app / total) * 100)}%` : '0%';
+      return {
+        'Month': `${m.monthName} ${currentYear}`,
+        'Total Applications Received': total,
+        'Approved & Issued Quantities': app,
+        'Pending & Under Verification': Number(m.pendingQuantity) || 0,
+        'Declined / Returned': Number(m.declinedQuantity) || 0,
+        'Completion Rate': rate,
+      };
+    });
+
+    const separator = ',';
+    const keys = Object.keys(dataToExport[0] || {});
+    const headerLine = keys.map((k) => `"${String(k).replace(/"/g, '""')}"`).join(separator);
+    const dataLines = dataToExport.map((row) =>
+      keys.map((k) => `"${String(row[k] || '').replace(/"/g, '""')}"`).join(separator)
+    );
+    const csvContent = [headerLine, ...dataLines].join('\r\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Barangay_Zapatera_Monthly_Analytics_${currentYear}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
       {/* Header */}
@@ -58,20 +91,31 @@ export default function MonthlyAnalytics({ requests = [] }) {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+        <div className="flex items-center flex-wrap gap-2">
+          <button
+            onClick={handleExportMonthlyCSV}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+            title="Download Monthly Quantities as CSV Spreadsheet"
           >
-            <option value="all">All Months ({currentYear})</option>
-            {monthNames.map((m, idx) => (
-              <option key={idx} value={idx}>
-                {m} {currentYear}
-              </option>
-            ))}
-          </select>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
+          </button>
+
+          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg">
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-hidden cursor-pointer"
+            >
+              <option value="all">All Months ({currentYear})</option>
+              {monthNames.map((m, idx) => (
+                <option key={idx} value={idx}>
+                  {m} {currentYear}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

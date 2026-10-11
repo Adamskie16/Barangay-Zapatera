@@ -1,92 +1,129 @@
 // AccountManagement/src/features/logs/ActivityLogsView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../../components/Badge';
-import Modal from '../../components/Modal';
 import {
-  History,
-  Search,
   RefreshCw,
   Terminal,
-  Filter,
   Calendar,
+  Clock,
+  User,
+  FileText,
+  Newspaper,
+  UserPlus,
   Trash2,
-  Lock,
-  Eye,
-  EyeOff,
-  AlertTriangle,
-  Loader2,
-  CheckCircle2,
 } from 'lucide-react';
-import { validateEmail, sanitizeInput } from '../../core/security';
+import { formatDate } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import DataTable from '../../components/DataTable';
+
+/**
+ * Filter strictly for creation actions:
+ * 1. Creating an event
+ * 2. Creating bulletins / announcements
+ * 3. Creating an account
+ * 4. Creating a document template
+ */
+export const isPermittedActivityLog = (log) => {
+  if (!log) return false;
+  const action = (log.action || '').toLowerCase();
+  const feature = (log.feature || '').toLowerCase();
+  const details = (log.details || '').toLowerCase();
+
+  const isCreateAction =
+    action.includes('creat') ||
+    action.includes('add') ||
+    action.includes('post') ||
+    action.includes('publish') ||
+    action.includes('register') ||
+    details.includes('created') ||
+    details.includes('registered') ||
+    details.includes('published');
+
+  if (!isCreateAction) return false;
+
+  // 1. Creating an event
+  const isEvent =
+    action.includes('event') ||
+    feature.includes('event') ||
+    feature.includes('calendar') ||
+    details.includes('event');
+
+  // 2. Creating bulletins / announcements
+  const isBulletin =
+    action.includes('bulletin') ||
+    action.includes('announcement') ||
+    action.includes('news') ||
+    feature.includes('bulletin') ||
+    feature.includes('news') ||
+    details.includes('bulletin') ||
+    details.includes('announcement');
+
+  // 3. Creating an account
+  const isAccount =
+    action.includes('account') ||
+    action.includes('user') ||
+    action.includes('profile') ||
+    feature.includes('account') ||
+    feature.includes('user') ||
+    details.includes('account') ||
+    details.includes('profile');
+
+  // 4. Creating a document template
+  const isDocTemplate =
+    action.includes('template') ||
+    feature.includes('template') ||
+    (action.includes('document') &&
+      (action.includes('template') || details.includes('template') || feature.includes('template')));
+
+  return isEvent || isBulletin || isAccount || isDocTemplate;
+};
+
+export const getLogCategory = (log) => {
+  const action = (log.action || '').toLowerCase();
+  const feature = (log.feature || '').toLowerCase();
+  const details = (log.details || '').toLowerCase();
+
+  if (action.includes('template') || feature.includes('template') || details.includes('template')) {
+    return 'Document Template';
+  }
+  if (
+    action.includes('event') ||
+    feature.includes('event') ||
+    feature.includes('calendar') ||
+    details.includes('event')
+  ) {
+    return 'Event';
+  }
+  if (
+    action.includes('bulletin') ||
+    action.includes('announcement') ||
+    action.includes('news') ||
+    feature.includes('bulletin') ||
+    feature.includes('news')
+  ) {
+    return 'Bulletin';
+  }
+  if (
+    action.includes('account') ||
+    action.includes('user') ||
+    action.includes('profile') ||
+    feature.includes('account') ||
+    feature.includes('user')
+  ) {
+    return 'User Account';
+  }
+  return 'General Creation';
+};
 
 export default function ActivityLogsView({ currentUser, isDarkMode }) {
   const [logsList, setLogsList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const [levelFilter, setLevelFilter] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('all');
 
   // Date Filter States
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [datePreset, setDatePreset] = useState('all');
-
-  // Single Log Delete Authorization Modal State
-  const [deletingLog, setDeletingLog] = useState(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [deletePasswordInput, setDeletePasswordInput] = useState('');
-  const [showDeletePassword, setShowDeletePassword] = useState(false);
-  const [deleteAuthError, setDeleteAuthError] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Clear All Logs Modal State
-  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
-
-  const [notification, setNotification] = useState(null);
-
-  const formatDate = (isoString) => {
-    if (!isoString) return '—';
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return isoString;
-    }
-  };
-
-  async function verifyLoggedInPassword(inputPassword) {
-    if (!inputPassword) return false;
-
-    const session =
-      currentUser ||
-      JSON.parse(
-        localStorage.getItem('zapatera_account_mgmt_session') ||
-        localStorage.getItem('zapatera_superadmin_session') ||
-        localStorage.getItem('zapatera_admin_session') ||
-        'null'
-      );
-    const loggedInEmail = (session?.email || '').trim().toLowerCase();
-    if (!loggedInEmail) return false;
-
-    if (isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: loggedInEmail,
-          password: inputPassword,
-        });
-        if (!error && data?.user) return true;
-      } catch (e) {
-        return false;
-      }
-    }
-    return false;
-  }
 
   const fetchLiveLogs = async () => {
     setLoading(true);
@@ -98,7 +135,9 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setLogsList(data);
+          // Strictly filter so it only stores creation of event, bulletin, account, document template
+          const filtered = data.filter(isPermittedActivityLog);
+          setLogsList(filtered);
           setLoading(false);
           return;
         } else if (error) {
@@ -139,162 +178,168 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
     }
   };
 
-  const filteredLogs = logsList.filter((log) => {
-    const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
-    const matchesSearch =
-      log.action?.toLowerCase().includes(search.toLowerCase()) ||
-      log.details?.toLowerCase().includes(search.toLowerCase()) ||
-      log.user_email?.toLowerCase().includes(search.toLowerCase()) ||
-      log.feature?.toLowerCase().includes(search.toLowerCase());
+  // Filter logs by category and date
+  const processedLogs = useMemo(() => {
+    return logsList.filter((log) => {
+      // Category filter
+      const category = getLogCategory(log);
+      if (activeCategory === 'events' && category !== 'Event') return false;
+      if (activeCategory === 'bulletins' && category !== 'Bulletin') return false;
+      if (activeCategory === 'accounts' && category !== 'User Account') return false;
+      if (activeCategory === 'templates' && category !== 'Document Template') return false;
 
-    let matchesDate = true;
-    if (log.created_at) {
-      const logDate = new Date(log.created_at);
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        if (logDate < start) matchesDate = false;
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        if (logDate > end) matchesDate = false;
-      }
-    }
-
-    return matchesLevel && matchesSearch && matchesDate;
-  });
-
-  const getActionBadgeStyle = (action) => {
-    const act = (action || '').toLowerCase();
-    if (act.includes('created') || act.includes('posted') || act.includes('add')) {
-      return isDarkMode
-        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-        : 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    }
-    if (act.includes('edit') || act.includes('update') || act.includes('processed')) {
-      return isDarkMode
-        ? 'bg-blue-950/80 text-blue-300 border-blue-800'
-        : 'bg-blue-50 text-blue-700 border-blue-200';
-    }
-    if (act.includes('delete') || act.includes('remove')) {
-      return isDarkMode
-        ? 'bg-rose-950/80 text-rose-300 border-rose-800'
-        : 'bg-rose-50 text-rose-700 border-rose-200';
-    }
-    if (act.includes('lock') || act.includes('unlock') || act.includes('security')) {
-      return isDarkMode
-        ? 'bg-amber-950/80 text-amber-300 border-amber-800'
-        : 'bg-amber-50 text-amber-700 border-amber-200';
-    }
-    return isDarkMode
-      ? 'bg-slate-800 text-slate-300 border-slate-700'
-      : 'bg-slate-100 text-slate-700 border-slate-200';
-  };
-
-  // Open Delete Log Modal
-  const openDeleteModal = (log) => {
-    setDeletingLog(log);
-    setDeletePasswordInput('');
-    setDeleteAuthError('');
-    setShowDeletePassword(false);
-    setIsDeleteModalOpen(true);
-  };
-
-  // Execute Log Delete after Password Authorization
-  const handleDeleteLogExecute = async () => {
-    if (!deletePasswordInput.trim() || !deletingLog) return;
-    setDeleteAuthError('');
-
-    const isPasswordValid = await verifyLoggedInPassword(deletePasswordInput);
-    if (!isPasswordValid) {
-      setDeleteAuthError('Security Verification Failed: Incorrect logged-in account password.');
-      return;
-    }
-
-    setIsDeleting(true);
-
-    try {
-      if (isSupabaseConfigured() && deletingLog.id) {
-        const { error } = await supabase.from('activity_logs').delete().eq('id', deletingLog.id);
-        if (error) {
-          console.warn('Supabase log delete error:', error.message);
+      // Date filter
+      if (log.created_at) {
+        const logDate = new Date(log.created_at);
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (logDate < start) return false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (logDate > end) return false;
         }
       }
-    } catch (err) {
-      console.warn('Log delete notice:', err);
-    }
 
-    setIsDeleting(false);
-    setIsDeleteModalOpen(false);
-    setDeletingLog(null);
-    setDeletePasswordInput('');
-    setNotification({ type: 'success', message: 'Activity log record deleted successfully.' });
-    fetchLiveLogs();
-  };
+      return true;
+    });
+  }, [logsList, activeCategory, startDate, endDate]);
 
-  // Clear All Filtered Logs Execute
-  const handleClearAllLogsExecute = async () => {
-    if (!deletePasswordInput.trim()) return;
-    setDeleteAuthError('');
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    const counts = { all: logsList.length, events: 0, bulletins: 0, accounts: 0, templates: 0 };
+    logsList.forEach((log) => {
+      const cat = getLogCategory(log);
+      if (cat === 'Event') counts.events++;
+      else if (cat === 'Bulletin') counts.bulletins++;
+      else if (cat === 'User Account') counts.accounts++;
+      else if (cat === 'Document Template') counts.templates++;
+    });
+    return counts;
+  }, [logsList]);
 
-    const isPasswordValid = await verifyLoggedInPassword(deletePasswordInput);
-    if (!isPasswordValid) {
-      setDeleteAuthError('Security Verification Failed: Incorrect logged-in account password.');
-      return;
-    }
+  const columns = useMemo(
+    () => [
+      {
+        key: 'created_at',
+        label: 'Date & Time',
+        sortable: true,
+        render: (log) => (
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="font-mono text-xs whitespace-nowrap">{formatDate(log.created_at)}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'user_email',
+        label: 'Performed By',
+        sortable: true,
+        render: (log) => {
+          const userEmail = log.user_email || log.user || 'superadmin@zapatera.gov.ph';
+          const initial = userEmail.charAt(0).toUpperCase();
+          return (
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                {initial}
+              </div>
+              <span className="font-semibold text-slate-900 dark:text-white text-xs font-sans truncate max-w-[180px]">
+                {userEmail}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'category',
+        label: 'Category',
+        sortable: true,
+        getValue: (log) => getLogCategory(log),
+        render: (log) => {
+          const cat = getLogCategory(log);
+          if (cat === 'Event') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800">
+                <Calendar className="w-3 h-3 text-purple-600" /> Event
+              </span>
+            );
+          }
+          if (cat === 'Bulletin') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800">
+                <Newspaper className="w-3 h-3 text-blue-600" /> Bulletin
+              </span>
+            );
+          }
+          if (cat === 'User Account') {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                <UserPlus className="w-3 h-3 text-amber-600" /> User Account
+              </span>
+            );
+          }
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+              <FileText className="w-3 h-3 text-emerald-600" /> Document Template
+            </span>
+          );
+        },
+      },
+      {
+        key: 'action',
+        label: 'Creation Action',
+        sortable: true,
+        render: (log) => (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+            {log.action}
+          </span>
+        ),
+      },
+      {
+        key: 'details',
+        label: 'Activity Details',
+        sortable: false,
+        render: (log) => (
+          <span className="text-slate-700 dark:text-slate-300 text-xs font-sans max-w-sm line-clamp-2 leading-relaxed">
+            {log.details || 'Creation record successfully saved.'}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
 
-    setIsDeleting(true);
-
-    try {
-      if (isSupabaseConfigured() && filteredLogs.length > 0) {
-        const logIds = filteredLogs.map((l) => l.id).filter(Boolean);
-        if (logIds.length > 0) {
-          await supabase.from('activity_logs').delete().in('id', logIds);
-        }
-      }
-    } catch (err) {
-      console.warn('Clear all logs notice:', err);
-    }
-
-    setIsDeleting(false);
-    setIsClearAllModalOpen(false);
-    setDeletePasswordInput('');
-    setNotification({ type: 'success', message: 'All selected activity log records deleted.' });
-    fetchLiveLogs();
+  const statusTabs = {
+    activeTab: activeCategory,
+    onChange: (tabId) => setActiveCategory(tabId),
+    tabs: [
+      { id: 'all', label: 'All Permitted Logs', count: tabCounts.all },
+      { id: 'events', label: 'Events Created', count: tabCounts.events },
+      { id: 'bulletins', label: 'Bulletins Created', count: tabCounts.bulletins },
+      { id: 'accounts', label: 'Accounts Created', count: tabCounts.accounts },
+      { id: 'templates', label: 'Templates Created', count: tabCounts.templates },
+    ],
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className={`p-6 rounded-2xl border shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
+      <div
+        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border shadow-xs transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}
+      >
         <div>
           <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-            Account Management Activity Logs
+            Activity Logs
           </h2>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Real-time audit records for user account creations, edits, deletions, and security administrative operations.
+            Records of created events, bulletins, user accounts, and document templates.
           </p>
         </div>
-
         <div className="flex items-center space-x-2">
-          {filteredLogs.length > 0 && (
-            <button
-              onClick={() => {
-                setDeletePasswordInput('');
-                setDeleteAuthError('');
-                setShowDeletePassword(false);
-                setIsClearAllModalOpen(true);
-              }}
-              className="p-2.5 rounded-xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4 text-rose-400" />
-              <span>Clear Activity Logs</span>
-            </button>
-          )}
-
           <button
             onClick={fetchLiveLogs}
             disabled={loading}
@@ -308,355 +353,105 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
+          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-900 text-blue-400">
+            <Terminal className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
+            {isSupabaseConfigured() ? 'Live Audit Engine' : 'Local Audit Engine'}
+          </span>
         </div>
       </div>
 
-      {notification && (
-        <div className={`p-4 rounded-xl text-xs flex items-center justify-between shadow-sm border ${
-          notification.type === 'error'
-            ? 'bg-rose-950/80 border-rose-800 text-rose-200'
-            : 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
-        }`}>
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-medium">{notification.message}</span>
-          </div>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white font-bold ml-2">
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Filter Toolbar */}
-      <div className={`p-4 rounded-xl border space-y-3 transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Level Filter */}
-          <div className="flex items-center space-x-2 overflow-x-auto">
-            <Filter className="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-            {['all', 'info', 'warning', 'danger', 'security'].map((lvl) => (
-              <button
-                key={lvl}
-                onClick={() => setLevelFilter(lvl)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors cursor-pointer ${
-                  levelFilter === lvl
-                    ? 'bg-blue-600 text-white'
-                    : isDarkMode
-                    ? 'bg-slate-950 text-slate-400 hover:bg-slate-800'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {lvl}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Input */}
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Date Filter Toolbar */}
+      <div
+        className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs transition-colors ${
+          isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        }`}
+      >
+        <div className="flex items-center space-x-2">
+          <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+            Filter by Date:
+          </span>
+          <div className="flex items-center space-x-1.5">
             <input
-              type="text"
-              placeholder="Search by user, action, or module..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={`w-full pl-9 pr-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono ${
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className={`px-2.5 py-1 border rounded-lg font-mono focus:ring-2 focus:ring-blue-500 ${
                 isDarkMode
-                  ? 'bg-slate-950 border-slate-800 text-white placeholder-slate-500'
-                  : 'bg-white border-slate-300 text-slate-900'
+                  ? 'bg-slate-950 border-slate-800 text-white'
+                  : 'bg-white border-slate-300 text-slate-700'
+              }`}
+            />
+            <span className="text-slate-400 font-bold">to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setDatePreset('custom');
+              }}
+              className={`px-2.5 py-1 border rounded-lg font-mono focus:ring-2 focus:ring-blue-500 ${
+                isDarkMode
+                  ? 'bg-slate-950 border-slate-800 text-white'
+                  : 'bg-white border-slate-300 text-slate-700'
               }`}
             />
           </div>
         </div>
 
-        {/* Date Filter Toolbar */}
-        <div className={`pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs ${
-          isDarkMode ? 'border-slate-800/80' : 'border-slate-100'
-        }`}>
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Date Range:</span>
-            <div className="flex items-center space-x-1.5">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setDatePreset('custom'); }}
-                className={`px-2.5 py-1 border rounded-lg font-mono focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-slate-950 border-slate-800 text-white'
-                    : 'bg-white border-slate-300 text-slate-700'
-                }`}
-              />
-              <span className="text-slate-400 font-bold">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setDatePreset('custom'); }}
-                className={`px-2.5 py-1 border rounded-lg font-mono focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-slate-950 border-slate-800 text-white'
-                    : 'bg-white border-slate-300 text-slate-700'
-                }`}
-              />
-            </div>
-          </div>
+        <div className="flex items-center space-x-1.5">
+          {[
+            { id: 'all', label: 'All Dates' },
+            { id: 'today', label: 'Today' },
+            { id: 'week', label: 'This Week' },
+            { id: 'month', label: 'This Month' },
+          ].map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handlePresetChange(p.id)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                datePreset === p.id
+                  ? 'bg-blue-600 text-white'
+                  : isDarkMode
+                  ? 'bg-slate-950 text-slate-400 hover:bg-slate-800'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
 
-          {/* Date Presets */}
-          <div className="flex items-center space-x-1.5">
-            {[
-              { id: 'all', label: 'All Dates' },
-              { id: 'today', label: 'Today' },
-              { id: 'week', label: 'This Week' },
-              { id: 'month', label: 'This Month' },
-            ].map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handlePresetChange(p.id)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                  datePreset === p.id
-                    ? 'bg-blue-600 text-white'
-                    : isDarkMode
-                    ? 'bg-slate-950 text-slate-400 hover:bg-slate-800'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-
-            {(startDate || endDate) && (
-              <button
-                onClick={() => handlePresetChange('all')}
-                className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-600/20 text-rose-300 border border-rose-500/30 hover:bg-rose-600/30 transition-colors cursor-pointer"
-                title="Reset Date Range"
-              >
-                Clear Date Filter ✕
-              </button>
-            )}
-          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => handlePresetChange('all')}
+              className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors cursor-pointer"
+            >
+              Clear Dates ✕
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Activity Logs Table */}
-      <div className={`rounded-2xl border overflow-hidden shadow-xs transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
-            <thead className={`uppercase tracking-wider font-semibold border-b ${
-              isDarkMode ? 'bg-slate-950 text-slate-400 border-slate-800' : 'bg-slate-900 text-slate-300'
-            }`}>
-              <tr>
-                <th className="p-3.5">Date & Time</th>
-                <th className="p-3.5">Performed By</th>
-                <th className="p-3.5">Action</th>
-                <th className="p-3.5">Module / Target</th>
-                <th className="p-3.5">Activity Details</th>
-                <th className="p-3.5">Level</th>
-                <th className="p-3.5 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60 text-slate-300' : 'divide-slate-100 text-slate-700'}`}>
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500 font-sans text-xs">
-                    No activity logs matching criteria found.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log, index) => {
-                  const userEmail = log.user_email || log.user || 'admin@zapatera.gov.ph';
-                  const initial = userEmail.charAt(0).toUpperCase();
-                  return (
-                    <tr key={log.id || index} className={`transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
-                      <td className="p-3.5 text-slate-500 text-[11px] whitespace-nowrap">{formatDate(log.created_at)}</td>
-                      <td className="p-3.5">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                            {initial}
-                          </div>
-                          <span className={`font-semibold font-sans text-xs ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{userEmail}</span>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold border ${getActionBadgeStyle(log.action)}`}>
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                          isDarkMode
-                            ? 'bg-slate-950 text-slate-300 border-slate-800'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}>
-                          {log.feature || 'Account Management'}
-                        </span>
-                      </td>
-                      <td className="p-3.5 font-sans text-xs max-w-sm leading-relaxed">
-                        {log.details}
-                      </td>
-                      <td className="p-3.5">
-                        <Badge variant={log.level || 'info'}>{log.level || 'info'}</Badge>
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <button
-                          onClick={() => openDeleteModal(log)}
-                          className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-400 transition-colors cursor-pointer"
-                          title="Delete Activity Log Record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Delete Single Log Modal */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="Security Authorization: Delete Activity Log"
-      >
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Permanent Deletion Warning</p>
-              <p className="mt-1 leading-relaxed">
-                You are about to delete activity log: <span className="font-mono text-white">{deletingLog?.action}</span> ({deletingLog?.user_email}).
-                Enter your logged-in Super Admin password to authorize deletion.
-              </p>
-            </div>
-          </div>
-
-          {deleteAuthError && (
-            <div className="p-3 bg-rose-950 border border-rose-800 text-rose-200 rounded-xl text-xs font-semibold">
-              {deleteAuthError}
-            </div>
-          )}
-
-          <div>
-            <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-              Enter Account Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type={showDeletePassword ? 'text' : 'password'}
-                required
-                value={deletePasswordInput}
-                onChange={(e) => setDeletePasswordInput(e.target.value)}
-                placeholder="••••••••"
-                className={`w-full pl-9 pr-10 py-2.5 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowDeletePassword(!showDeletePassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-              >
-                {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteLogExecute}
-              disabled={isDeleting || !deletePasswordInput.trim()}
-              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center space-x-1.5 disabled:opacity-50"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              <span>Delete Log Record</span>
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Clear All Logs Modal */}
-      <Modal
-        isOpen={isClearAllModalOpen}
-        onClose={() => setIsClearAllModalOpen(false)}
-        title="Security Authorization: Clear All Activity Logs"
-      >
-        <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-200 text-xs flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">Purge Selected Activity Logs</p>
-              <p className="mt-1 leading-relaxed">
-                You are about to delete <span className="font-bold text-white">{filteredLogs.length}</span> activity log records from Supabase.
-                Enter your logged-in Super Admin password to authorize deletion.
-              </p>
-            </div>
-          </div>
-
-          {deleteAuthError && (
-            <div className="p-3 bg-rose-950 border border-rose-800 text-rose-200 rounded-xl text-xs font-semibold">
-              {deleteAuthError}
-            </div>
-          )}
-
-          <div>
-            <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-              Enter Account Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type={showDeletePassword ? 'text' : 'password'}
-                required
-                value={deletePasswordInput}
-                onChange={(e) => setDeletePasswordInput(e.target.value)}
-                placeholder="••••••••"
-                className={`w-full pl-9 pr-10 py-2.5 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowDeletePassword(!showDeletePassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-              >
-                {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsClearAllModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleClearAllLogsExecute}
-              disabled={isDeleting || !deletePasswordInput.trim()}
-              className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center space-x-1.5 disabled:opacity-50"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              <span>Clear Activity Logs</span>
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Production DataTable with 10-row default pagination, sorting & search */}
+      <DataTable
+        data={processedLogs}
+        columns={columns}
+        keyField="id"
+        searchable={true}
+        searchPlaceholder="Search action, details, user..."
+        searchKeys={['action', 'details', 'user_email', 'feature']}
+        statusTabs={statusTabs}
+        defaultPageSize={10}
+        pageSizeOptions={[10, 25, 50]}
+        defaultSortKey="created_at"
+        defaultSortDirection="desc"
+        emptyTitle="No Creation Activity Logs Found"
+        emptySubtitle="Only events, bulletins, user accounts, and document template creation actions are logged."
+        loading={loading}
+      />
     </div>
   );
 }

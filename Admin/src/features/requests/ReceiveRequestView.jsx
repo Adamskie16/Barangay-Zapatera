@@ -35,7 +35,16 @@ import {
   Info,
   Layers,
   FileCheck,
-  Trash2
+  Trash2,
+  Image as ImageIcon,
+  Flag,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import ActionModal from '../../components/ActionModal';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
@@ -43,7 +52,7 @@ import { TableSkeleton } from '../../components/SkeletonLoader';
 import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documentTemplates';
 import DocumentTemplate from '../documents/DocumentTemplate';
 import FilePreviewModal from '../../components/FilePreviewModal';
-import { downloadStoredAttachment } from '../../core/storageService';
+import { downloadStoredAttachment, getSignedAttachmentUrl } from '../../core/storageService';
 
 const DECLINE_REASONS = [
   'Missing required document',
@@ -65,10 +74,19 @@ export default function ReceiveRequestView({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Reset to page 1 on filter or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, pageSize]);
 
   // Main Document Processing Workspace Modal State
   const [selectedReq, setSelectedReq] = useState(null);
-  const [generatorTab, setGeneratorTab] = useState('variables'); // 'variables' | 'preview'
+  const [generatorTab, setGeneratorTab] = useState('template'); // 'template' | 'preview'
   const [verificationMap, setVerificationMap] = useState({});
   const [processingNotes, setProcessingNotes] = useState('');
 
@@ -94,8 +112,52 @@ export default function ReceiveRequestView({
 
   // File Preview Modal
   const [previewFile, setPreviewFile] = useState(null);
+  const [thumbnailMap, setThumbnailMap] = useState({});
 
-  // Document Generator Variables (Synchronized with SuperAdmin Document Info Management)
+  useEffect(() => {
+    if (!selectedReq) {
+      setThumbnailMap({});
+      return;
+    }
+
+    const reqList = getRequirementList(selectedReq);
+    const initialThumbnails = {};
+    reqList.forEach((item) => {
+      if (item.file_url && (item.file_url.startsWith('http') || item.file_url.startsWith('data:'))) {
+        initialThumbnails[item.id] = item.file_url;
+      }
+    });
+    setThumbnailMap(initialThumbnails);
+
+    let isMounted = true;
+    const loadSignedUrls = async () => {
+      const updates = {};
+      await Promise.all(
+        reqList.map(async (item) => {
+          if (item.storage_path && !initialThumbnails[item.id]) {
+            try {
+              const signed = await getSignedAttachmentUrl(item.storage_path, 3600);
+              if (signed) {
+                updates[item.id] = signed;
+              }
+            } catch (err) {
+              console.warn('Error loading signed url for requirement thumbnail', err);
+            }
+          }
+        })
+      );
+      if (isMounted && Object.keys(updates).length > 0) {
+        setThumbnailMap((prev) => ({ ...prev, ...updates }));
+      }
+    };
+
+    loadSignedUrls();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedReq]);
+
+  // Document Generator Certificate Template (Synchronized with SuperAdmin Document Info Management)
   const templateKeys = Object.keys(documentTemplates);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('barangayCertification');
   const [genDocTitle, setGenDocTitle] = useState(documentTemplates.barangayCertification.title);
@@ -160,6 +222,65 @@ export default function ReceiveRequestView({
     return matchesStatus && matchesSearch;
   });
 
+  const handleSort = (columnKey) => {
+    if (!columnKey) return;
+    if (sortKey === columnKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortKey(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortKey(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedRequests = [...filteredRequests].sort((a, b) => {
+    if (!sortKey) return 0;
+    let valA = a[sortKey];
+    let valB = b[sortKey];
+    if (valA === null || valA === undefined) valA = '';
+    if (valB === null || valB === undefined) valB = '';
+
+    const dateA = Date.parse(valA);
+    const dateB = Date.parse(valB);
+    if (!isNaN(dateA) && !isNaN(dateB) && typeof valA === 'string' && valA.includes('-')) {
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+    }
+
+    if (typeof valA === 'number' && typeof valB === 'number') {
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    }
+
+    const cmp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+
+  const totalEntries = sortedRequests.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
+  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
+  const paginatedRequests = sortedRequests.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safeCurrentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (safeCurrentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safeCurrentPage - 1, safeCurrentPage, safeCurrentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   // Determine if a request has required attachments
   const getRequirementList = (req) => {
     if (!req) return [];
@@ -179,8 +300,8 @@ export default function ReceiveRequestView({
       return req.uploaded_files.map((fileObj, idx) => ({
         id: `req-file-${idx}`,
         name: fileObj.requirement_name || `Requirement #${idx + 1}`,
-        fileName: fileObj.file_name || `attachment_${idx + 1}.pdf`,
-        fileType: fileObj.file_type || 'image/jpeg',
+        fileName: fileObj.file_name || `IMG_${5147 + idx}.jpeg`,
+        fileType: fileObj.file_type || (fileObj.file_name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
         file_size: fileObj.file_size,
         file_url: fileObj.file_url,
         storage_path: fileObj.storage_path,
@@ -198,26 +319,36 @@ export default function ReceiveRequestView({
       );
 
       if (validAttached.length > 0) {
-        return validAttached.map((item, idx) => ({
-          id: `req-att-${idx}`,
-          name: typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`),
-          fileName: typeof item === 'string' ? `${item.toLowerCase().replace(/[^a-z0-9]/g, '_')}_scan.pdf` : (item.fileName || 'attachment.pdf'),
-          fileType: 'application/pdf',
-          uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
-          status: 'pending',
-        }));
+        return validAttached.map((item, idx) => {
+          const rawName = typeof item === 'string' ? item : (item.name || `Requirement #${idx + 1}`);
+          const formattedName = rawName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+          const isPdf = typeof item === 'string' ? item.toLowerCase().endsWith('.pdf') : item?.fileType === 'application/pdf';
+          return {
+            id: `req-att-${idx}`,
+            name: formattedName || `req_${idx + 1}`,
+            fileName: typeof item === 'string' ? (item.match(/\.(jpg|jpeg|png|webp|pdf)$/i) ? item : `IMG_${5147 + idx}.jpeg`) : (item.fileName || `IMG_${5147 + idx}.jpeg`),
+            fileType: isPdf ? 'application/pdf' : 'image/jpeg',
+            file_url: typeof item === 'object' ? item.file_url : undefined,
+            storage_path: typeof item === 'object' ? item.storage_path : undefined,
+            uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
+            status: 'pending',
+          };
+        });
       }
     }
 
     if (docTypeReqs.length > 0) {
-      return docTypeReqs.map((reqTitle, idx) => ({
-        id: `req-doctype-${idx}`,
-        name: reqTitle,
-        fileName: `${reqTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_document.pdf`,
-        fileType: 'application/pdf',
-        uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
-        status: 'pending',
-      }));
+      return docTypeReqs.map((reqTitle, idx) => {
+        const formattedName = reqTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        return {
+          id: `req-doctype-${idx}`,
+          name: formattedName || `req_${idx + 1}`,
+          fileName: `IMG_${5147 + idx}.jpeg`,
+          fileType: 'image/jpeg',
+          uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
+          status: 'pending',
+        };
+      });
     }
 
     return [];
@@ -267,7 +398,7 @@ export default function ReceiveRequestView({
     return r.civil_status || r.civilStatus || r.profiles?.civil_status || 'Single';
   };
 
-  // Synchronize resident profile details directly into generator dynamic variables
+  // Synchronize resident profile details directly into generator certificate template
   const populateGeneratorFromResident = (req) => {
     if (!req) return;
 
@@ -332,7 +463,7 @@ export default function ReceiveRequestView({
             if (updatedReq.requirements_status && updatedReq.requirements_status[item.name]) {
               initialMap[item.name] = updatedReq.requirements_status[item.name];
             } else {
-              initialMap[item.name] = 'verified';
+              initialMap[item.name] = 'pending';
             }
           });
 
@@ -341,7 +472,7 @@ export default function ReceiveRequestView({
 
           // Auto-fill resident details into generator
           populateGeneratorFromResident(updatedReq);
-          setGeneratorTab('variables');
+          setGeneratorTab('template');
 
           // Show Success Modal
           setActionModal({
@@ -624,15 +755,42 @@ export default function ReceiveRequestView({
           ))}
         </div>
 
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search tracking no, resident or purpose..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search tracking no, resident or purpose..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {(search || statusFilter !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('all');
+              }}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              title="Reset all filters"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Clear Filters</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -642,29 +800,133 @@ export default function ReceiveRequestView({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
-                <th className="p-4">Tracking Number</th>
-                <th className="p-4">Resident Applicant</th>
-                <th className="p-4">Document Requested</th>
-                <th className="p-4">Pick-up Time Slot</th>
-                <th className="p-4">Purpose</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Date Submitted</th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('tracking_number')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Tracking Number</span>
+                    {sortKey === 'tracking_number' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('resident_name')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Resident Applicant</span>
+                    {sortKey === 'resident_name' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('document_title')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Document Requested</span>
+                    {sortKey === 'document_title' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('pickup_time_slot')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Pick-up Time Slot</span>
+                    {sortKey === 'pickup_time_slot' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('purpose')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Purpose</span>
+                    {sortKey === 'purpose' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('status')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Status</span>
+                    {sortKey === 'status' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('created_at')}
+                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                  >
+                    <span>Date Submitted</span>
+                    {sortKey === 'created_at' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                    ) : (
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                    )}
+                  </button>
+                </th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {loading ? (
                 <TableSkeleton rows={6} cols={8} isDarkMode={false} />
-              ) : filteredRequests.length === 0 ? (
+              ) : paginatedRequests.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-400">
                     <Inbox className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-600">No document requests found.</p>
                     <p className="text-xs text-slate-400 mt-0.5">Try selecting another filter or adjusting your search query.</p>
+                    {(search || statusFilter !== 'all') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearch('');
+                          setStatusFilter('all');
+                        }}
+                        className="mt-3 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset Filters</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
-                filteredRequests.map((req) => {
+                paginatedRequests.map((req) => {
                   const normalizedStatus = (req.status || 'pending').toLowerCase();
                   return (
                     <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
@@ -739,6 +1001,110 @@ export default function ReceiveRequestView({
             </tbody>
           </table>
         </div>
+
+        {/* ENTERPRISE PAGINATION FOOTER */}
+        <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+            <span className="font-medium text-slate-600">
+              Showing <span className="font-bold text-slate-900">{startIndex}</span> to{' '}
+              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
+              <span className="font-bold text-slate-900">{totalEntries}</span> entries
+            </span>
+
+            <div className="flex items-center space-x-1.5 text-xs text-slate-500">
+              <span className="hidden md:inline">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                aria-label="Rows per page selector"
+              >
+                {[10, 25, 50].map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-1" aria-label="Pagination Navigation">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="First page"
+              aria-label="Go to first page"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage === 1}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Previous page"
+              aria-label="Go to previous page"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="flex items-center space-x-1">
+              {getPageNumbers().map((page, idx) => {
+                if (page === '...') {
+                  return (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-1 text-slate-400 select-none">
+                      …
+                    </span>
+                  );
+                }
+                const isCurrent = page === safeCurrentPage;
+                return (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    aria-current={isCurrent ? 'page' : undefined}
+                    className={`min-w-7 h-7 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      isCurrent
+                        ? 'bg-slate-900 text-white shadow-xs font-bold'
+                        : 'text-slate-700 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage === totalPages || totalEntries === 0}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Next page"
+              aria-label="Go to next page"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage === totalPages || totalEntries === 0}
+              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Last page"
+              aria-label="Go to last page"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 3. Document Processing Workspace Modal — Side-by-Side (50% Review & Verification / 50% Generator & Print) */}
@@ -787,6 +1153,11 @@ export default function ReceiveRequestView({
                   type="button"
                   onClick={handlePrintAndApprove}
                   disabled={!canProceedToPrint}
+                  title={
+                    !canProceedToPrint && totalReqCount > 0
+                      ? 'Please verify all documentary requirements first'
+                      : 'Print official document and approve request'
+                  }
                   className={`px-5 py-2 text-xs font-bold rounded-xl shadow-md inline-flex items-center space-x-1.5 transition-all ${
                     canProceedToPrint
                       ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-900/30 cursor-pointer active:scale-95'
@@ -908,72 +1279,34 @@ export default function ReceiveRequestView({
                   </div>
                 </div>
 
-                {/* 2. Submitted Verification Requirements */}
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Submitted Verification Requirements</span>
-                      </h4>
-                      <p className="text-[10px] text-slate-500">
-                        Review uploaded proof documents & verify compliance.
-                      </p>
-                    </div>
-
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                        canProceedToPrint
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : hasInvalidOrMissing
-                          ? 'bg-rose-50 text-rose-800 border-rose-300'
-                          : 'bg-amber-50 text-amber-800 border-amber-300'
-                      }`}
-                    >
-                      {verifiedCount} of {totalReqCount} Verified
+                {/* 2. Uploaded Documentary Requirements */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-1">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Uploaded Documentary Requirements
+                    </h4>
+                    <span className={`text-xs font-bold ${verifiedCount === totalReqCount && totalReqCount > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {verifiedCount} / {totalReqCount} verified
                     </span>
                   </div>
 
                   {hasRequirements ? (
-                    <div className="space-y-2.5">
-                      {currentReqList.map((item, idx) => {
-                        const currentStatus = verificationMap[item.name] || 'verified';
-                        return (
-                          <div
-                            key={item.id || idx}
-                            className={`p-3 rounded-xl border transition-all ${
-                              currentStatus === 'verified'
-                                ? 'bg-white border-emerald-200 shadow-2xs'
-                                : currentStatus === 'invalid'
-                                ? 'bg-rose-50/40 border-rose-300 shadow-2xs'
-                                : 'bg-amber-50/40 border-amber-300 shadow-2xs'
-                            }`}
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex items-start space-x-2.5">
-                                <div
-                                  className={`p-2 rounded-lg shrink-0 ${
-                                    currentStatus === 'verified'
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : currentStatus === 'invalid'
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : 'bg-amber-100 text-amber-700'
-                                  }`}
-                                >
-                                  <FileText className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <p className="font-bold text-slate-900 text-xs">{item.name}</p>
-                                  <p className="font-mono text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5 truncate">
-                                    <span>{item.fileName}</span>
-                                    <span className="text-slate-300">•</span>
-                                    <span>{item.uploadDate}</span>
-                                  </p>
-                                </div>
-                              </div>
+                    <>
+                      <div className="space-y-3">
+                        {currentReqList.map((item, idx) => {
+                          const currentStatus = verificationMap[item.name] || 'pending';
+                          const isVerified = currentStatus === 'verified';
+                          const isInvalid = currentStatus === 'invalid';
+                          const currentThumbnail = thumbnailMap[item.id] || item.file_url;
 
-                              {/* Action Buttons */}
-                              <div className="flex items-center space-x-1.5 shrink-0">
+                          return (
+                            <div
+                              key={item.id || idx}
+                              className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3.5"
+                            >
+                              {/* Left Section: Thumbnail + Info */}
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                {/* Thumbnail Preview Button */}
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -982,81 +1315,156 @@ export default function ReceiveRequestView({
                                       fileName: item.fileName,
                                       fileType: item.fileType,
                                       file_size: item.file_size,
-                                      file_url: item.file_url,
+                                      file_url: currentThumbnail || item.file_url,
                                       storage_path: item.storage_path,
                                       residentName: residentFullName,
                                     })
                                   }
-                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                  title="Click to view full preview"
+                                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 shrink-0 cursor-pointer hover:border-blue-400 transition-all relative group flex items-center justify-center p-0.5"
                                 >
-                                  <Eye className="w-3 h-3" />
-                                  <span>Preview</span>
+                                  {currentThumbnail ? (
+                                    <img
+                                      src={currentThumbnail}
+                                      alt={item.name}
+                                      className="w-full h-full object-cover rounded-md group-hover:scale-105 transition-transform duration-200"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        if (e.currentTarget.nextSibling) {
+                                          e.currentTarget.nextSibling.style.display = 'flex';
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`w-full h-full bg-white rounded-md p-1.5 flex flex-col justify-between border border-slate-100 select-none shadow-2xs ${
+                                      currentThumbnail ? 'hidden' : 'flex'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1 border-b border-slate-100 pb-1">
+                                      <div className="w-2.5 h-2.5 rounded bg-slate-300 shrink-0" />
+                                      <div className="h-1 bg-slate-300 rounded w-8" />
+                                    </div>
+                                    <div className="space-y-0.5 my-auto">
+                                      <div className="h-0.5 bg-slate-400 rounded w-full" />
+                                      <div className="h-0.5 bg-slate-300 rounded w-5/6" />
+                                      <div className="h-0.5 bg-slate-400 rounded w-4/5" />
+                                      <div className="h-0.5 bg-slate-300 rounded w-full" />
+                                      <div className="h-0.5 bg-slate-300 rounded w-2/3" />
+                                    </div>
+                                    <div className="flex items-center justify-between pt-0.5 border-t border-slate-100">
+                                      <div className="w-3 h-1 bg-slate-300 rounded" />
+                                      <div className="w-2.5 h-1 bg-emerald-500 rounded" />
+                                    </div>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-lg transition-colors flex items-center justify-center">
+                                    <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition-opacity" />
+                                  </div>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (item.storage_path) {
-                                      downloadStoredAttachment(item.storage_path, item.fileName);
-                                    } else if (item.file_url) {
-                                      window.open(item.file_url, '_blank');
-                                    } else {
-                                      alert(`Downloading verification file: ${item.fileName}`);
+                                {/* Document Details */}
+                                <div className="min-w-0 flex flex-col justify-center space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-slate-900 text-sm">{item.name}</span>
+                                    {isVerified ? (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Verified
+                                      </span>
+                                    ) : isInvalid ? (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                        Flagged
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Pending Verification
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="font-mono text-xs text-slate-500 truncate block">
+                                    {item.fileName}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewFile({
+                                        name: item.name,
+                                        fileName: item.fileName,
+                                        fileType: item.fileType,
+                                        file_size: item.file_size,
+                                        file_url: currentThumbnail || item.file_url,
+                                        storage_path: item.storage_path,
+                                        residentName: residentFullName,
+                                      })
                                     }
-                                  }}
-                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold inline-flex items-center space-x-1 cursor-pointer"
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer mt-0.5 w-fit"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5" />
+                                    <span>View image preview</span>
+                                    <ExternalLink className="w-3 h-3 ml-0.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Right Section: Action Buttons */}
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetVerification(item.name, isVerified ? 'pending' : 'verified')}
+                                  className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                    isVerified
+                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                                      : 'bg-white border border-slate-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 hover:border-emerald-300'
+                                  }`}
+                                  title={isVerified ? 'Click to unverify' : 'Click to verify requirement'}
                                 >
-                                  <Download className="w-3 h-3" />
-                                  <span>Download</span>
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>{isVerified ? 'Verified' : 'Verify'}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetVerification(item.name, isInvalid ? 'pending' : 'invalid')}
+                                  className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                    isInvalid
+                                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-2xs'
+                                      : 'bg-white border border-slate-300 hover:bg-rose-50 text-slate-700 hover:text-rose-700 hover:border-rose-300'
+                                  }`}
+                                  title={isInvalid ? 'Click to clear flag' : 'Flag requirement as invalid'}
+                                >
+                                  <span>{isInvalid ? 'Flagged' : 'Flag'}</span>
                                 </button>
                               </div>
                             </div>
+                          );
+                        })}
+                      </div>
 
-                            {/* Status Selector */}
-                            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-bold text-slate-500">Status:</span>
-                              <div className="flex items-center space-x-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetVerification(item.name, 'verified')}
-                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                                    currentStatus === 'verified'
-                                      ? 'bg-emerald-600 text-white shadow-xs'
-                                      : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
-                                  }`}
-                                >
-                                  Verified
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetVerification(item.name, 'invalid')}
-                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                                    currentStatus === 'invalid'
-                                      ? 'bg-rose-600 text-white shadow-xs'
-                                      : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700'
-                                  }`}
-                                >
-                                  Invalid
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetVerification(item.name, 'missing')}
-                                  className={`px-2.5 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                                    currentStatus === 'missing'
-                                      ? 'bg-amber-500 text-white shadow-xs'
-                                      : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
-                                  }`}
-                                >
-                                  Missing
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                      {/* Bottom Verification Progress Card */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
+                        <div className="flex items-center justify-between text-xs sm:text-sm">
+                          <span className="font-semibold text-slate-600">Verification progress</span>
+                          <span className={`font-bold ${verifiedCount === totalReqCount && totalReqCount > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {verifiedCount} of {totalReqCount} documents verified
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              verifiedCount === totalReqCount && totalReqCount > 0 ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                            style={{
+                              width: `${totalReqCount > 0 ? (verifiedCount / totalReqCount) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                        {!canProceedToPrint && totalReqCount > 0 && (
+                          <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1.5 pt-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>Click "Verify" on each documentary requirement above to confirm verification before printing.</span>
+                          </p>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center space-x-2.5 text-blue-900">
                       <Info className="w-4 h-4 text-blue-600 shrink-0" />
@@ -1112,15 +1520,15 @@ export default function ReceiveRequestView({
                   <div className="flex items-center space-x-1.5">
                     <button
                       type="button"
-                      onClick={() => setGeneratorTab('variables')}
+                      onClick={() => setGeneratorTab('template')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-all ${
-                        generatorTab === 'variables'
+                        generatorTab === 'template'
                           ? 'bg-white text-blue-700 shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <SlidersHorizontal className="w-3.5 h-3.5" />
-                      <span>1. Dynamic Certificate Variables</span>
+                      <span>1. Certificate Template</span>
                     </button>
 
                     <button
@@ -1142,44 +1550,12 @@ export default function ReceiveRequestView({
                   </span>
                 </div>
 
-                {/* Template Quick Switcher */}
-                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
-                  <label className="text-[11px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-blue-600" />
-                    <span>Select Certificate Template</span>
-                  </label>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {templateKeys.map((k) => {
-                      const tmpl = documentTemplates[k];
-                      const isActive = selectedTemplateKey === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => handleSelectTemplate(k)}
-                          className={`p-2 rounded-xl text-left border transition-all text-[11px] cursor-pointer ${
-                            isActive
-                              ? 'border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs'
-                              : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="truncate">{tmpl.title}</span>
-                            {isActive && <Check size={12} className="text-blue-600 shrink-0 ml-1" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* TAB 1: DYNAMIC VARIABLES FORM */}
-                {generatorTab === 'variables' && (
+                {/* TAB 1: CERTIFICATE TEMPLATE FORM */}
+                {generatorTab === 'template' && (
                   <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5 text-xs">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <h4 className="font-bold text-slate-900 text-xs">
-                        Certificate Details & Values (Auto-Filled)
+                        Certificate Template Details (Auto-Filled)
                       </h4>
                       <button
                         type="button"
@@ -1358,11 +1734,11 @@ export default function ReceiveRequestView({
 
                       <button
                         type="button"
-                        onClick={() => setGeneratorTab('variables')}
+                        onClick={() => setGeneratorTab('template')}
                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 cursor-pointer"
                       >
                         <SlidersHorizontal size={12} />
-                        <span>Edit Variables</span>
+                        <span>Edit Certificate Template</span>
                       </button>
                     </div>
 

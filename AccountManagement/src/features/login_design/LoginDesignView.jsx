@@ -55,7 +55,7 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
   // Form Data State
   const [formData, setFormData] = useState({
     title: '',
-    badge: 'Executive Administration',
+    badge: 'Barangay Zapatera',
     description: '',
     image_url: '/auth-bg.jpg',
     target_portal: 'all',
@@ -109,10 +109,10 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
     setIsEditing(false);
     setEditingId(null);
     setFormData({
-      title: 'Barangay Zapatera Executive Portal',
-      badge: 'Executive Administration',
+      title: 'Barangay Zapatera Portal',
+      badge: 'Barangay Zapatera',
       description:
-        'Restricted executive interface for complete system governance, administrative user provisioning, and secure document records.',
+        'Official interface for barangay document issuance, account provisioning, and resident services.',
       image_url: '/auth-bg.jpg',
       target_portal: 'all',
       is_active: designs.length === 0,
@@ -126,7 +126,7 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
     setEditingId(design.id);
     setFormData({
       title: design.title || '',
-      badge: design.badge || 'Executive Administration',
+      badge: design.badge || 'Barangay Zapatera',
       description: design.description || '',
       image_url: design.image_url || '/auth-bg.jpg',
       target_portal: design.target_portal || 'all',
@@ -958,16 +958,16 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
                   </div>
                   <div>
                     <span className="text-[10px] uppercase tracking-widest text-blue-300 font-bold block">
-                      Executive Administration
+                      Barangay Zapatera
                     </span>
-                    <h1 className="text-sm font-extrabold text-white">Barangay Zapatera</h1>
+                    <h1 className="text-sm font-extrabold text-white">Official Portal</h1>
                   </div>
                 </div>
 
                 <div className="relative z-10 max-w-md my-auto py-8">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 backdrop-blur-md border border-blue-500/30 text-blue-200 text-[11px] font-semibold mb-4">
                     <Lock className="w-3 h-3 text-blue-300" />
-                    {previewDesign.badge || 'Executive Administration'}
+                    {previewDesign.badge || 'Barangay Zapatera'}
                   </div>
                   <h2 className="text-2xl font-black text-white tracking-tight leading-tight mb-3">
                     {previewDesign.title}

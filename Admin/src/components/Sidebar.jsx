@@ -7,7 +7,6 @@ import {
   FileCheck2,
   FileText,
   Printer,
-  Calendar,
   Newspaper,
   BarChart2,
   History,
@@ -24,9 +23,8 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
     { id: 'approved_documents', label: 'Approved Documents', icon: FileCheck2 },
     { id: 'doc_info', label: 'Official Document Generator', icon: Printer },
     { id: 'news', label: 'News & Bulletins', icon: Newspaper },
-    { id: 'events', label: 'Barangay Events', icon: Calendar },
     { id: 'reports', label: 'Processing Reports', icon: BarChart2 },
-    { id: 'users', label: 'User Account Security', icon: Users },
+    { id: 'users', label: 'User Account', icon: Users },
     { id: 'logs', label: 'Activity Logs', icon: History },
     { id: 'account', label: 'My Account Profile', icon: User },
   ];

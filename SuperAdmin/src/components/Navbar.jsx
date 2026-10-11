@@ -1,6 +1,6 @@
 // SuperAdmin/src/components/Navbar.jsx
 import React from 'react';
-import { Bell, ShieldCheck, Sun, Moon } from 'lucide-react';
+import { Bell, Sun, Moon } from 'lucide-react';
 
 export default function Navbar({
   activeTitle,
@@ -15,10 +15,6 @@ export default function Navbar({
       {/* Title */}
       <div className="flex items-center space-x-3.5">
         <h2 className="text-lg font-extrabold tracking-tight">{activeTitle}</h2>
-        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-xs">
-          <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-purple-500" />
-          System Governance Active
-        </span>
       </div>
 
       {/* Actions */}

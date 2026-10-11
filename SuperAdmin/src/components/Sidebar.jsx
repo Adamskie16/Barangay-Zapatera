@@ -5,10 +5,8 @@ import {
   FileText,
   Printer,
   Newspaper,
-  Calendar,
   Users,
   Settings,
-  Bell,
   BarChart3,
   History,
   LogOut,
@@ -20,11 +18,9 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'documents', label: 'Official Document Generator', icon: Printer },
-    { id: 'news', label: 'News & Bulletins Mgmt', icon: Newspaper },
-    { id: 'events', label: 'Event Info Mgmt', icon: Calendar },
-    { id: 'users', label: 'User Account Mgmt', icon: Users },
+    { id: 'news', label: 'News & Bulletins', icon: Newspaper },
+    { id: 'users', label: 'User Account', icon: Users },
     { id: 'config', label: 'System Configurations', icon: Settings },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'reports', label: 'System Reports', icon: BarChart3 },
     { id: 'logs', label: 'Activity Logs', icon: History },
     { id: 'account', label: 'My Account Profile', icon: User },
@@ -38,7 +34,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
     }`}>
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-800/80 flex items-center space-x-3.5 bg-gradient-to-b from-slate-950/80 to-slate-900/60 backdrop-blur-md">
-        <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-purple-500/30 bg-white shadow-md shadow-purple-950/50 flex items-center justify-center shrink-0">
+        <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-blue-500/30 bg-white shadow-md shadow-blue-950/50 flex items-center justify-center shrink-0">
           <img
             src="/logo.jpg"
             alt="Zapatera Logo"
@@ -48,9 +44,9 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
         <div className="min-w-0">
           <div className="flex items-center space-x-1.5">
             <h1 className="font-extrabold text-base text-white tracking-tight leading-none">Zapatera</h1>
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
           </div>
-          <p className="text-[11px] text-purple-400 font-semibold uppercase tracking-wider mt-0.5">Super Admin Portal</p>
+          <p className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider mt-0.5">SUPER ADMIN PORTAL</p>
         </div>
       </div>
 
