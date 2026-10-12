@@ -1723,6 +1723,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#eff2fc',
+    minHeight: '100vh' as any,
   },
   contentContainer: {
     padding: 16,
@@ -1730,8 +1731,10 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: '100%',
+    minHeight: '100vh' as any,
+    flexGrow: 1,
   },
+
   authCard: {
     backgroundColor: '#ffffff',
     borderRadius: 32,

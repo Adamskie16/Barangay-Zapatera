@@ -1675,15 +1675,18 @@ const styles = StyleSheet.create({
   authContainer: {
     flex: 1,
     backgroundColor: '#eff2fc',
+    minHeight: '100vh' as any,
   },
   appContainer: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    minHeight: '100vh' as any,
   },
   mainContent: {
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+
   floatingBanner: {
     position: 'absolute',
     top: 65,
