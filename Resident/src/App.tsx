@@ -1680,12 +1680,19 @@ const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    height: '100vh' as any,
+    maxHeight: '100vh' as any,
     minHeight: '100vh' as any,
+    overflow: 'hidden' as any,
   },
   mainContent: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: '#f8fafc',
+    overflow: 'hidden' as any,
+    position: 'relative' as any,
   },
+
 
   floatingBanner: {
     position: 'absolute',
