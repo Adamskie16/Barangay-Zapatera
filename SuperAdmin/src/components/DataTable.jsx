@@ -350,13 +350,13 @@ export default function DataTable({
                         <button
                           type="button"
                           onClick={() => handleSort(currentSortKey)}
-                          className={`inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                            isActiveSort ? 'text-slate-900 font-bold' : ''
+                          className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            isActiveSort ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-blue-600'
                           }`}
                           title={`Sort by ${typeof col.header === 'string' ? col.header : col.key}`}
                         >
                           <span>{col.header}</span>
-                          <span className="inline-block transition-transform">
+                          <span className={`inline-block transition-transform p-0.5 rounded ${isActiveSort ? 'bg-blue-50 text-blue-600' : ''}`}>
                             {isActiveSort ? (
                               sortDirection === 'asc' ? (
                                 <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
@@ -364,7 +364,7 @@ export default function DataTable({
                                 <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
                               )
                             ) : (
-                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
                             )}
                           </span>
                         </button>

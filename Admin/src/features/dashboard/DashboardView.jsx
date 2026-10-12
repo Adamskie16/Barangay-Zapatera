@@ -22,7 +22,7 @@ import {
 import { formatDate } from '../../core/security';
 import MonthlyAnalytics from '../../components/MonthlyAnalytics';
 
-export default function DashboardView({ requests = [], events = [], logs = [], setActiveTab }) {
+export default function DashboardView({ requests = [], events = [], logs = [], setActiveTab, onQueueAction }) {
   const pendingRequests = requests.filter((r) => r.status === 'pending');
   const reviewRequests = requests.filter((r) => r.status === 'under_review');
   const approvedRequests = requests.filter((r) => r.status === 'approved');
@@ -244,70 +244,90 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
                       <button
                         type="button"
                         onClick={() => handleSort('tracking_number')}
-                        className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                          sortKey === 'tracking_number' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                        }`}
                       >
                         <span>Tracking No.</span>
-                        {sortKey === 'tracking_number' ? (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                        )}
+                        <span className={`p-0.5 rounded ${sortKey === 'tracking_number' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          {sortKey === 'tracking_number' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                          )}
+                        </span>
                       </button>
                     </th>
                     <th className="p-3">
                       <button
                         type="button"
                         onClick={() => handleSort('resident_name')}
-                        className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                          sortKey === 'resident_name' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                        }`}
                       >
                         <span>Applicant Name</span>
-                        {sortKey === 'resident_name' ? (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                        )}
+                        <span className={`p-0.5 rounded ${sortKey === 'resident_name' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          {sortKey === 'resident_name' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                          )}
+                        </span>
                       </button>
                     </th>
                     <th className="p-3">
                       <button
                         type="button"
                         onClick={() => handleSort('document_title')}
-                        className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                          sortKey === 'document_title' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                        }`}
                       >
                         <span>Document Requested</span>
-                        {sortKey === 'document_title' ? (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                        )}
+                        <span className={`p-0.5 rounded ${sortKey === 'document_title' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          {sortKey === 'document_title' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                          )}
+                        </span>
                       </button>
                     </th>
                     <th className="p-3">
                       <button
                         type="button"
                         onClick={() => handleSort('status')}
-                        className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                          sortKey === 'status' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                        }`}
                       >
                         <span>Status</span>
-                        {sortKey === 'status' ? (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                        )}
+                        <span className={`p-0.5 rounded ${sortKey === 'status' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          {sortKey === 'status' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                          )}
+                        </span>
                       </button>
                     </th>
                     <th className="p-3">
                       <button
                         type="button"
                         onClick={() => handleSort('created_at')}
-                        className="inline-flex items-center gap-1.5 font-semibold hover:text-blue-600 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                          sortKey === 'created_at' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                        }`}
                       >
                         <span>Date Submitted</span>
-                        {sortKey === 'created_at' ? (
-                          sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                        )}
+                        <span className={`p-0.5 rounded ${sortKey === 'created_at' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          {sortKey === 'created_at' ? (
+                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                          )}
+                        </span>
                       </button>
                     </th>
                     <th className="p-3 text-right">Action</th>
@@ -338,8 +358,20 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
                         <td className="p-3 text-right">
                           <button
                             type="button"
-                            onClick={() => setActiveTab('process_documents')}
-                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                            onClick={() => {
+                              if (onQueueAction) {
+                                onQueueAction(req);
+                              } else {
+                                const s = String(req.status || '').toLowerCase();
+                                if (s === 'approved' || s === 'completed' || s === 'issued') {
+                                  setActiveTab('approved_documents');
+                                } else {
+                                  setActiveTab('receive_request');
+                                }
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1 active:scale-95"
+                            title={`Verify request ${req.tracking_number}`}
                           >
                             <span>Verify</span>
                           </button>
