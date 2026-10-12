@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  Platform,
 } from 'react-native';
 import { Bell, Plus, ShieldCheck } from 'lucide-react';
 import { ResidentUser, BarangayConfig } from '../types';
@@ -121,9 +122,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    elevation: 2,
-    zIndex: 10,
+    elevation: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    zIndex: 1000,
+    position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
   },
+
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
