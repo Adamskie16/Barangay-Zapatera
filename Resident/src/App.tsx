@@ -41,6 +41,7 @@ import AnnouncementsView from './features/announcements/AnnouncementsView';
 import NotificationModal from './features/notifications/NotificationModal';
 import ProfileView from './features/profile/ProfileView';
 import SecurityNoticeModal from './components/SecurityNoticeModal';
+import InactivityNoticeModal from './components/InactivityNoticeModal';
 import UnlockAccountModal from './components/UnlockAccountModal';
 import {
   initPhoneNotifications,
@@ -71,6 +72,7 @@ export default function App() {
 
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState<boolean>(false);
   const [accountDeletedNotice, setAccountDeletedNotice] = useState<string | null>(null);
+  const [inactivityNotice, setInactivityNotice] = useState<string | null>(null);
   const [selectedAnnouncementForModal, setSelectedAnnouncementForModal] = useState<BarangayAnnouncement | null>(null);
   const [activeAnnouncementBanner, setActiveAnnouncementBanner] = useState<{
     id: string;
@@ -79,6 +81,45 @@ export default function App() {
     type: 'warning' | 'announcement' | 'info';
     announcement?: BarangayAnnouncement;
   } | null>(null);
+
+  // Early Logout handlers (accessible by all background timers & real-time listeners)
+  const handleLogout = async (notice?: string) => {
+    try {
+      await MobileStorage.removeItem('zapatera_resident_session');
+      if (isSupabaseConfigured()) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // Ignore
+    }
+    setCurrentUser(null);
+    setRequests([]);
+    setNotifications([]);
+    setActiveTab('home');
+    if (notice) {
+      setAccountDeletedNotice(notice);
+    }
+  };
+
+  const handleInactivityLogout = async (notice?: string) => {
+    try {
+      await MobileStorage.removeItem('zapatera_resident_session');
+      if (isSupabaseConfigured()) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // Ignore
+    }
+    setCurrentUser(null);
+    setRequests([]);
+    setNotifications([]);
+    setActiveTab('home');
+    setInactivityNotice(
+      notice ||
+      'Notice: For your account privacy and security, your session was closed due to inactivity. Your resident account is safe, active, and has NOT been deleted. Please sign in again.'
+    );
+  };
+
 
   const currentUserRef = useRef<ResidentUser | null>(currentUser);
   useEffect(() => {
@@ -379,7 +420,7 @@ export default function App() {
       // Check if session has been terminated by administrator
       checkCurrentSessionActive(currentUser.id).then((isActive) => {
         if (!isActive) {
-          handleLogout();
+          handleInactivityLogout('Notice: Your session has expired or was ended remotely. Your account is active—please sign in again.');
         }
       });
 
@@ -398,8 +439,8 @@ export default function App() {
               },
               (payload: any) => {
                 if (payload.new && payload.new.is_active === false) {
-                  // Admin terminated this session!
-                  handleLogout();
+                  // Admin terminated this session remotely!
+                  handleInactivityLogout('Notice: Your device session was ended remotely. Your account remains active—please sign in again.');
                 }
               }
             )
@@ -433,7 +474,7 @@ export default function App() {
 
     // Fresh query cache invalidation & session refresh
     const refreshProfileFromDatabase = async () => {
-      if (!isSupabaseConfigured()) return;
+      if (!isSupabaseConfigured() || !currentUser?.id) return;
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -441,21 +482,70 @@ export default function App() {
           .eq('id', currentUser.id)
           .maybeSingle();
 
-        // Check if explicitly marked inactive
+        // 1. If error occurs (network drop, offline, token refreshing, background tab throttled)
+        // NEVER log out or show account deletion!
+        if (error) {
+          console.warn('Transient profile check notice (network or token refresh):', error.message);
+          return;
+        }
+
+        // 2. Check if explicitly marked inactive
         if (data && data.is_active === false) {
           handleLogout('Notice: Your resident account has been deactivated by Barangay Zapatera administration.');
           return;
         }
 
-        // Check if locked
+        // 3. Check if locked
         if (data && data.is_locked) {
           handleLogout('Notice: Your resident account has been locked. Please unlock via Gmail.');
           return;
         }
 
-        // If profile record was deleted from Supabase
+        // 4. If profile record was not returned (data is null) with no error:
         if (!data) {
-          handleLogout(deletionNoticeText);
+          // Check if session has expired due to inactivity
+          const { data: authData, error: authErr } = await supabase.auth.getUser();
+          if (authErr || !authData?.user) {
+            handleInactivityLogout(
+              'Notice: Your resident session has expired due to inactivity. Your account is active and safe. Please sign in again.'
+            );
+            return;
+          }
+
+          // Check fallback by email to see if profile ID had a mismatch
+          if (currentUser.email) {
+            const { data: emailProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', currentUser.email)
+              .maybeSingle();
+
+            if (emailProfile) {
+              setCurrentUser(emailProfile);
+              return;
+            }
+          }
+
+          // Check if explicitly recorded in deleted accounts
+          const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
+          let isExplicitlyDeleted = false;
+          if (deletedAccountsStr) {
+            try {
+              const deletedList = JSON.parse(deletedAccountsStr);
+              if (Array.isArray(deletedList) && deletedList.some((d: any) => (d.id === currentUser.id || (d.email && d.email.toLowerCase() === currentUser.email?.toLowerCase())))) {
+                isExplicitlyDeleted = true;
+              }
+            } catch {}
+          }
+
+          if (isExplicitlyDeleted) {
+            handleLogout(deletionNoticeText);
+          } else {
+            // Not explicitly deleted - treat as session inactivity timeout
+            handleInactivityLogout(
+              'Notice: Your resident session has expired. Your account has NOT been deleted. Please sign in again to refresh your session.'
+            );
+          }
           return;
         }
 
@@ -473,6 +563,7 @@ export default function App() {
         console.warn('Error refreshing resident profile:', err);
       }
     };
+
 
     // 1. Supabase Realtime subscription on public.profiles for this resident (Both UPDATE and DELETE)
     if (isSupabaseConfigured()) {
@@ -589,6 +680,53 @@ export default function App() {
       }
     };
   }, [currentUser?.id, currentUser?.email]);
+
+  // -------------------------------------------------------------
+  // IDLE POLICY / INACTIVITY SESSION TIMEOUT (20 minutes)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let idleTimeoutId: any = null;
+    const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutes of complete inactivity
+
+    const resetInactivityTimer = () => {
+      if (idleTimeoutId) clearTimeout(idleTimeoutId);
+      idleTimeoutId = setTimeout(() => {
+        handleInactivityLogout(
+          'Notice: Your session was paused after 20 minutes of inactivity to protect your account and records. Your account is active and has NOT been deleted. Please sign in again.'
+        );
+      }, INACTIVITY_LIMIT_MS);
+    };
+
+    resetInactivityTimer();
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    let lastEventTime = Date.now();
+    const handleUserInteraction = () => {
+      const now = Date.now();
+      if (now - lastEventTime > 3000) {
+        lastEventTime = now;
+        resetInactivityTimer();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      activityEvents.forEach((evt) => {
+        window.addEventListener(evt, handleUserInteraction, { passive: true });
+      });
+    }
+
+    return () => {
+      if (idleTimeoutId) clearTimeout(idleTimeoutId);
+      if (typeof window !== 'undefined') {
+        activityEvents.forEach((evt) => {
+          window.removeEventListener(evt, handleUserInteraction);
+        });
+      }
+    };
+  }, [currentUser?.id]);
+
 
   const loadResidentSession = async () => {
     try {
@@ -1004,25 +1142,8 @@ export default function App() {
     await fetchResidentNotifications(user);
   };
 
-  const handleLogout = async (notice?: string) => {
-    try {
-      await MobileStorage.removeItem('zapatera_resident_session');
-      if (isSupabaseConfigured()) {
-        await supabase.auth.signOut();
-      }
-    } catch {
-      // Ignore
-    }
-    setCurrentUser(null);
-    setRequests([]);
-    setNotifications([]);
-    setActiveTab('home');
-    if (notice) {
-      setAccountDeletedNotice(notice);
-    }
-  };
-
   const handleUpdateProfile = async (updatedFields: Partial<ResidentUser>) => {
+
     if (!currentUser) return;
     const updatedUser: ResidentUser = {
       ...currentUser,
@@ -1323,6 +1444,13 @@ export default function App() {
           }}
         />
 
+        {/* Dedicated Inactivity / Session Timeout Modal */}
+        <InactivityNoticeModal
+          visible={Boolean(inactivityNotice)}
+          message={inactivityNotice || undefined}
+          onClose={() => setInactivityNotice(null)}
+        />
+
         {/* Global Unlock Account Modal */}
         <UnlockAccountModal
           visible={isUnlockModalOpen}
@@ -1333,6 +1461,7 @@ export default function App() {
         />
 
         <ResidentAuthPage onLoginSuccess={handleLoginSuccess} />
+
       </SafeAreaView>
     );
   }

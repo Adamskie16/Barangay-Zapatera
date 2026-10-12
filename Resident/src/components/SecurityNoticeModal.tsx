@@ -22,7 +22,7 @@ import {
 
 export interface SecurityNoticeModalProps {
   visible: boolean;
-  type?: 'deleted' | 'locked' | 'inactive';
+  type?: 'deleted' | 'locked' | 'inactive' | 'idle' | 'session_timeout';
   title?: string;
   message?: string;
   onClose: () => void;
@@ -41,28 +41,42 @@ export default function SecurityNoticeModal({
 
   const isLocked = type === 'locked';
   const isInactive = type === 'inactive';
+  const isIdle =
+    type === 'idle' ||
+    type === 'session_timeout' ||
+    Boolean(message?.toLowerCase().includes('inactivity')) ||
+    Boolean(message?.toLowerCase().includes('session'));
 
-  const defaultTitle = isLocked
+  const defaultTitle = isIdle
+    ? 'Session Expired (Inactivity)'
+    : isLocked
     ? 'Account Security Lockout'
     : isInactive
     ? 'Account Deactivated'
     : 'Account Terminated';
 
-  const defaultBadge = isLocked
+  const defaultBadge = isIdle
+    ? 'SESSION TIMED OUT'
+    : isLocked
     ? 'SECURITY LOCKOUT'
     : isInactive
     ? 'ACCESS DEACTIVATED'
     : 'ACCOUNT TERMINATED';
 
-  const defaultSubtitle = isLocked
+  const defaultSubtitle = isIdle
+    ? 'Barangay Zapatera Automated Security Guard'
+    : isLocked
     ? 'Security protection protocol has been triggered'
     : 'Official notice from Barangay Zapatera Administration';
 
   const displayMessage =
     message ||
-    (isLocked
+    (isIdle
+      ? 'Notice: For your account privacy and security, your session was closed due to inactivity. Your resident account is safe, active, and has NOT been deleted.'
+      : isLocked
       ? 'Your resident account has been deactivated or locked by Barangay Zapatera administration.'
       : 'Your resident account has been deleted by Barangay Zapatera administration. You have been logged out.');
+
 
   // =========================================================================
   // WEB PLATFORM: Direct DOM rendering with 100% INLINE STYLES
@@ -118,7 +132,9 @@ export default function SecurityNoticeModal({
               left: 0,
               right: 0,
               height: '6px',
-              background: isLocked
+              background: isIdle
+                ? 'linear-gradient(90deg, #1e40af, #3b82f6, #2563eb)'
+                : isLocked
                 ? 'linear-gradient(90deg, #dc2626, #ea580c, #dc2626)'
                 : 'linear-gradient(90deg, #e11d48, #f43f5e, #be123c)',
             }}
@@ -155,18 +171,22 @@ export default function SecurityNoticeModal({
               width: '76px',
               height: '76px',
               borderRadius: '38px',
-              backgroundColor: isLocked ? '#fef2f2' : '#fff1f2',
-              border: `2px solid ${isLocked ? '#fecaca' : '#fecdd3'}`,
+              backgroundColor: isIdle ? '#eff6ff' : isLocked ? '#fef2f2' : '#fff1f2',
+              border: `2px solid ${isIdle ? '#bfdbfe' : isLocked ? '#fecaca' : '#fecdd3'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 16px auto',
-              boxShadow: isLocked
+              boxShadow: isIdle
+                ? '0 0 24px rgba(37, 99, 235, 0.2)'
+                : isLocked
                 ? '0 0 24px rgba(220, 38, 38, 0.2)'
                 : '0 0 24px rgba(225, 29, 72, 0.2)',
             }}
           >
-            {isLocked ? (
+            {isIdle ? (
+              <Clock size={36} color="#1d4ed8" />
+            ) : isLocked ? (
               <Lock size={36} color="#dc2626" />
             ) : (
               <ShieldAlert size={36} color="#e11d48" />
@@ -184,9 +204,9 @@ export default function SecurityNoticeModal({
               letterSpacing: '0.8px',
               textTransform: 'uppercase',
               marginBottom: '12px',
-              backgroundColor: isLocked ? '#fef2f2' : '#fff1f2',
-              color: isLocked ? '#b91c1c' : '#be123c',
-              border: `1px solid ${isLocked ? '#fecaca' : '#fecdd3'}`,
+              backgroundColor: isIdle ? '#dbeafe' : isLocked ? '#fef2f2' : '#fff1f2',
+              color: isIdle ? '#1e40af' : isLocked ? '#b91c1c' : '#be123c',
+              border: `1px solid ${isIdle ? '#bfdbfe' : isLocked ? '#fecaca' : '#fecdd3'}`,
             }}
           >
             {defaultBadge}
@@ -220,9 +240,9 @@ export default function SecurityNoticeModal({
           {/* Notice Callout Box */}
           <div
             style={{
-              backgroundColor: isLocked ? '#fef2f2' : '#fff1f2',
-              border: `1px solid ${isLocked ? '#fecaca' : '#fecdd3'}`,
-              borderLeft: `5px solid ${isLocked ? '#dc2626' : '#e11d48'}`,
+              backgroundColor: isIdle ? '#eff6ff' : isLocked ? '#fef2f2' : '#fff1f2',
+              border: `1px solid ${isIdle ? '#bfdbfe' : isLocked ? '#fecaca' : '#fecdd3'}`,
+              borderLeft: `5px solid ${isIdle ? '#2563eb' : isLocked ? '#dc2626' : '#e11d48'}`,
               borderRadius: '14px',
               padding: '14px 16px',
               marginBottom: '16px',
@@ -233,7 +253,7 @@ export default function SecurityNoticeModal({
               style={{
                 fontSize: '13px',
                 lineHeight: 1.5,
-                color: isLocked ? '#991b1b' : '#881337',
+                color: isIdle ? '#1e3a8a' : isLocked ? '#991b1b' : '#881337',
                 fontWeight: 600,
                 margin: 0,
               }}
@@ -241,6 +261,40 @@ export default function SecurityNoticeModal({
               {displayMessage}
             </p>
           </div>
+
+          {/* Important Account Status Reassurance Card (Only when isIdle) */}
+          {isIdle && (
+            <div
+              style={{
+                backgroundColor: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: '14px',
+                padding: '12px 16px',
+                marginBottom: '16px',
+                textAlign: 'left',
+                fontSize: '12.5px',
+                color: '#166534',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#15803d',
+                  marginBottom: '3px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>✓ Your Account Remains Active & Safe</span>
+              </div>
+              <p style={{ margin: 0, lineHeight: 1.5, color: '#14532d', fontSize: '12px' }}>
+                Your account has <strong>NOT been deleted</strong>. All of your personal documents and records remain safe. Simply sign in again to continue.
+              </p>
+            </div>
+          )}
+
 
           {/* Guidance Information Section */}
           {isLocked ? (
@@ -394,13 +448,17 @@ export default function SecurityNoticeModal({
                   width: '100%',
                   padding: '14px 20px',
                   borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #e11d48, #be123c)',
+                  background: isIdle
+                    ? 'linear-gradient(135deg, #1e40af, #2563eb)'
+                    : 'linear-gradient(135deg, #e11d48, #be123c)',
                   color: '#ffffff',
                   fontSize: '14px',
                   fontWeight: 700,
                   border: 'none',
                   cursor: 'pointer',
-                  boxShadow: '0 6px 18px rgba(225, 29, 72, 0.35)',
+                  boxShadow: isIdle
+                    ? '0 6px 18px rgba(37, 99, 235, 0.35)'
+                    : '0 6px 18px rgba(225, 29, 72, 0.35)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -408,9 +466,10 @@ export default function SecurityNoticeModal({
                   boxSizing: 'border-box',
                 }}
               >
-                Acknowledge & Return to Login
+                {isIdle ? 'Acknowledge & Sign In' : 'Acknowledge & Return to Login'}
               </button>
             )}
+
           </div>
         </div>
       </div>
@@ -433,7 +492,7 @@ export default function SecurityNoticeModal({
           <View
             style={[
               styles.topAccentBar,
-              isLocked ? styles.topAccentBarLocked : styles.topAccentBarDeleted,
+              isIdle ? styles.topAccentBarIdle : isLocked ? styles.topAccentBarLocked : styles.topAccentBarDeleted,
             ]}
           />
 
@@ -452,16 +511,18 @@ export default function SecurityNoticeModal({
             <View
               style={[
                 styles.iconHalo,
-                isLocked ? styles.iconHaloLocked : styles.iconHaloDeleted,
+                isIdle ? styles.iconHaloIdle : isLocked ? styles.iconHaloLocked : styles.iconHaloDeleted,
               ]}
             >
               <View
                 style={[
                   styles.iconCore,
-                  isLocked ? styles.iconCoreLocked : styles.iconCoreDeleted,
+                  isIdle ? styles.iconCoreIdle : isLocked ? styles.iconCoreLocked : styles.iconCoreDeleted,
                 ]}
               >
-                {isLocked ? (
+                {isIdle ? (
+                  <Clock size={30} color="#1d4ed8" />
+                ) : isLocked ? (
                   <Lock size={30} color="#dc2626" />
                 ) : (
                   <ShieldAlert size={32} color="#e11d48" />
@@ -474,13 +535,13 @@ export default function SecurityNoticeModal({
           <View
             style={[
               styles.badge,
-              isLocked ? styles.badgeLocked : styles.badgeDeleted,
+              isIdle ? styles.badgeIdle : isLocked ? styles.badgeLocked : styles.badgeDeleted,
             ]}
           >
             <Text
               style={[
                 styles.badgeText,
-                isLocked ? styles.badgeTextLocked : styles.badgeTextDeleted,
+                isIdle ? styles.badgeTextIdle : isLocked ? styles.badgeTextLocked : styles.badgeTextDeleted,
               ]}
             >
               {defaultBadge}
@@ -495,18 +556,28 @@ export default function SecurityNoticeModal({
           <View
             style={[
               styles.noticeBox,
-              isLocked ? styles.noticeBoxLocked : styles.noticeBoxDeleted,
+              isIdle ? styles.noticeBoxIdle : isLocked ? styles.noticeBoxLocked : styles.noticeBoxDeleted,
             ]}
           >
             <Text
               style={[
                 styles.noticeText,
-                isLocked ? styles.noticeTextLocked : styles.noticeTextDeleted,
+                isIdle ? styles.noticeTextIdle : isLocked ? styles.noticeTextLocked : styles.noticeTextDeleted,
               ]}
             >
               {displayMessage}
             </Text>
           </View>
+
+          {/* Important Account Status Reassurance Card (Only when isIdle) */}
+          {isIdle && (
+            <View style={styles.reassuranceBox}>
+              <Text style={styles.reassuranceTitle}>✓ Your Account Remains Active & Safe</Text>
+              <Text style={styles.reassuranceText}>
+                Your account has NOT been deleted. All your records remain safe. Please sign in again.
+              </Text>
+            </View>
+          )}
 
           {/* Guidance Information Section */}
           {isLocked ? (
@@ -568,16 +639,17 @@ export default function SecurityNoticeModal({
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.primaryAcknowledgeBtn}
+                style={[styles.primaryAcknowledgeBtn, isIdle && styles.primaryBtnIdle]}
                 onPress={onClose}
                 activeOpacity={0.85}
               >
                 <Text style={styles.primaryAcknowledgeBtnText}>
-                  Acknowledge & Return to Login
+                  {isIdle ? 'Acknowledge & Sign In' : 'Acknowledge & Return to Login'}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
+
         </Pressable>
       </Pressable>
     </Modal>
@@ -618,6 +690,9 @@ const styles = StyleSheet.create({
     right: 0,
     height: 4,
   },
+  topAccentBarIdle: {
+    backgroundColor: '#2563eb',
+  },
   topAccentBarDeleted: {
     backgroundColor: '#e11d48',
   },
@@ -649,6 +724,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
   },
+  iconHaloIdle: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
   iconHaloDeleted: {
     backgroundColor: '#fff1f2',
     borderColor: '#fecdd3',
@@ -664,6 +743,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCoreIdle: {
+    backgroundColor: '#dbeafe',
+  },
   iconCoreDeleted: {
     backgroundColor: '#ffe4e6',
   },
@@ -677,6 +759,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
   },
+  badgeIdle: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#bfdbfe',
+  },
   badgeDeleted: {
     backgroundColor: '#fff1f2',
     borderColor: '#fecdd3',
@@ -689,6 +775,9 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.8,
+  },
+  badgeTextIdle: {
+    color: '#1e40af',
   },
   badgeTextDeleted: {
     color: '#be123c',
@@ -719,6 +808,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     marginBottom: 14,
   },
+  noticeBoxIdle: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    borderLeftColor: '#2563eb',
+  },
   noticeBoxDeleted: {
     backgroundColor: '#fff1f2',
     borderColor: '#fecdd3',
@@ -735,11 +829,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  noticeTextIdle: {
+    color: '#1e3a8a',
+  },
   noticeTextDeleted: {
     color: '#9f1239',
   },
   noticeTextLocked: {
     color: '#991b1b',
+  },
+  reassuranceBox: {
+    width: '100%',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 14,
+  },
+  reassuranceTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
+    marginBottom: 3,
+  },
+  reassuranceText: {
+    fontSize: 11,
+    color: '#14532d',
+    lineHeight: 15,
   },
   guidanceBox: {
     width: '100%',
@@ -820,6 +937,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  primaryBtnIdle: {
+    backgroundColor: '#1e40af',
+    shadowColor: '#1e40af',
+  },
   primaryAcknowledgeBtnText: {
     color: '#ffffff',
     fontSize: 13,
@@ -839,3 +960,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
