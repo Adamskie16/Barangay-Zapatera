@@ -63,12 +63,73 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
   const [processingTitle, setProcessingTitle] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
 
+  const STANDARD_REQUIRED_DOCS = [
+    'Valid Government-Issued ID (PhilSys / Driver\'s License / Passport / UMID)',
+    'Proof of Residency (Utility Bill / Lease Contract / Certificate of Tenancy)',
+    'Community Tax Certificate (Cedula)',
+    '2x2 Colored ID Photo (Recent, White Background)',
+    '1x1 ID Picture',
+    'Barangay Clearance (Previous / Valid Copy)',
+    'Certificate of Indigency / Proof of Low Income',
+    'DTI / SEC Business Registration Certificate',
+    "Mayor's / Business Permit (Previous Year)",
+    'Contract of Lease / Lessor Consent',
+    'PSA Birth Certificate',
+    'Affidavit of Loss / Undertaking (Notarized)',
+    'Endorsement Letter / Formal Letter of Request',
+    'Barangay Lupon Mediation Clearance',
+    'Medical Certificate / Clinical Referral',
+    'Proof of Enrollment / School ID',
+    'Oath of Undertaking (First Time Jobseeker RA 11261)',
+    'Other / Custom Document...',
+  ];
+
+  function parseRequirementsToList(reqs) {
+    let list = [];
+    if (Array.isArray(reqs)) {
+      list = reqs;
+    } else if (typeof reqs === 'string') {
+      try {
+        const parsed = JSON.parse(reqs);
+        if (Array.isArray(parsed)) list = parsed;
+        else list = reqs.split('\n');
+      } catch {
+        list = reqs.split('\n');
+      }
+    }
+    const cleanList = list.map((r) => (typeof r === 'string' ? r.trim() : '')).filter(Boolean);
+
+    if (cleanList.length === 0) {
+      return [
+        { id: `req-init-1`, selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
+        { id: `req-init-2`, selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+      ];
+    }
+
+    return cleanList.map((item, idx) => {
+      const matched = STANDARD_REQUIRED_DOCS.find((opt) => {
+        if (opt === 'Other / Custom Document...') return false;
+        const o = opt.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const it = item.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return o === it || o.includes(it) || it.includes(o);
+      });
+      if (matched) {
+        return { id: `req-${idx}-${Date.now()}`, selectedOption: matched, customText: '' };
+      }
+      return { id: `req-${idx}-${Date.now()}`, selectedOption: 'Other / Custom Document...', customText: item };
+    });
+  }
+
   const [formData, setFormData] = useState({
     code: '',
     title: '',
     description: '',
     fee: 0,
-    requirementsStr: '',
+    processing_days: 1,
+    requirementsList: [
+      { id: 'req-init-1', selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
+      { id: 'req-init-2', selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+    ],
     is_active: true,
   });
 
@@ -102,6 +163,36 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     return false;
   }
 
+  const handleAddRequirement = () => {
+    setFormData((prev) => ({
+      ...prev,
+      requirementsList: [
+        ...prev.requirementsList,
+        {
+          id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          selectedOption: STANDARD_REQUIRED_DOCS[0],
+          customText: '',
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveRequirement = (id) => {
+    setFormData((prev) => ({
+      ...prev,
+      requirementsList: prev.requirementsList.filter((item) => item.id !== id),
+    }));
+  };
+
+  const handleRequirementChange = (id, field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      requirementsList: prev.requirementsList.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
   const openCreateModal = () => {
     setEditingDoc(null);
     setFormData({
@@ -109,7 +200,11 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       title: '',
       description: '',
       fee: 0,
-      requirementsStr: 'Valid Government Issued ID\nProof of Residency / Utility Bill',
+      processing_days: 1,
+      requirementsList: [
+        { id: `req-create-1`, selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
+        { id: `req-create-2`, selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+      ],
       is_active: true,
     });
     setIsModalOpen(true);
@@ -122,7 +217,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       title: doc.title || '',
       description: doc.description || '',
       fee: doc.fee || 0,
-      requirementsStr: Array.isArray(doc.requirements) ? doc.requirements.join('\n') : '',
+      processing_days: doc.processing_days || 1,
+      requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
     });
     setIsModalOpen(true);
@@ -138,9 +234,13 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    const requirementsList = formData.requirementsStr
-      .split('\n')
-      .map((r) => r.trim())
+    const requirementsList = formData.requirementsList
+      .map((item) => {
+        if (item.selectedOption === 'Other / Custom Document...') {
+          return item.customText.trim();
+        }
+        return item.selectedOption.trim();
+      })
       .filter(Boolean);
 
     const docPayload = {
@@ -149,6 +249,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       title: sanitizeInput(formData.title),
       description: sanitizeInput(formData.description),
       fee: Number(formData.fee) || 0,
+      processing_days: Number(formData.processing_days) || 1,
       requirements: requirementsList,
       is_active: formData.is_active,
     };
@@ -324,7 +425,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Add New Document Type</span>
+              <span>Add New Document Template</span>
             </button>
           </div>
 
@@ -594,7 +695,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           <Modal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            title={editingDoc ? 'Edit Document Information' : 'Add New Document Type'}
+            title={editingDoc ? 'Edit Document Template' : 'Add New Document Template'}
           >
             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
@@ -647,29 +748,103 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
-                <select
-                  value={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="true font-semibold">Active Document Type</option>
-                  <option value="false">Inactive / Suspended</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Turnaround Days (SLA)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={formData.processing_days}
+                    onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
+                  <select
+                    value={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="true">Active Document Template</option>
+                    <option value="false">Inactive / Suspended</option>
+                  </select>
+                </div>
               </div>
 
+              {/* Required Documents Section with Dropdown List & Ghost Button */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Required Attachments (One per line)
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.requirementsStr}
-                  onChange={(e) => setFormData({ ...formData, requirementsStr: e.target.value })}
-                  placeholder="e.g. Valid Government Issued ID&#10;Proof of Address"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Required Documents
+                  </label>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    Select required attachments from the list
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {formData.requirementsList.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <select
+                            value={item.selectedOption}
+                            onChange={(e) => handleRequirementChange(item.id, 'selectedOption', e.target.value)}
+                            className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                          >
+                            <option value="" disabled>-- Select Required Document --</option>
+                            {STANDARD_REQUIRED_DOCS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {formData.requirementsList.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRequirement(item.id)}
+                            title="Remove this requirement"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {item.selectedOption === 'Other / Custom Document...' && (
+                        <div className="pl-7">
+                          <input
+                            type="text"
+                            required
+                            value={item.customText}
+                            onChange={(e) => handleRequirementChange(item.id, 'customText', e.target.value)}
+                            placeholder="Specify custom requirement name..."
+                            className="w-full px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Ghost Button to add more required documents */}
+                  <button
+                    type="button"
+                    onClick={handleAddRequirement}
+                    className="w-full py-2.5 px-3 border border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/40 hover:bg-blue-50 text-blue-600 hover:text-blue-700 font-semibold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.99]"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add More Required Documents</span>
+                  </button>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-3">

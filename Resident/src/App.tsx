@@ -761,6 +761,19 @@ export default function App() {
               else inferredCategory = 'General';
             }
 
+            let parsedReqs: string[] = [];
+            if (Array.isArray(d.requirements)) {
+              parsedReqs = d.requirements;
+            } else if (typeof d.requirements === 'string') {
+              try {
+                const parsed = JSON.parse(d.requirements);
+                if (Array.isArray(parsed)) parsedReqs = parsed;
+                else parsedReqs = [d.requirements];
+              } catch {
+                parsedReqs = d.requirements.split('\n').map((s: string) => s.trim()).filter(Boolean);
+              }
+            }
+
             return {
               id: d.id,
               code: d.code,
@@ -769,11 +782,8 @@ export default function App() {
               description: d.description,
               fee: Number(d.fee) || 0,
               processing_days: Number(d.processing_days) || 1,
-              requirements: Array.isArray(d.requirements)
-                ? d.requirements
-                : typeof d.requirements === 'string'
-                ? JSON.parse(d.requirements)
-                : [],
+              validity: d.validity || (Number(d.fee) === 0 ? '3-6 Months' : '6 Months from issuance'),
+              requirements: parsedReqs,
               is_active: d.is_active !== false,
             };
           });
@@ -1623,6 +1633,7 @@ export default function App() {
       <RequirementsModal
         visible={isRequirementsModalOpen}
         doc={selectedDocForRequirements}
+        docTypes={docTypes}
         onClose={() => setIsRequirementsModalOpen(false)}
         onProceedToRequest={(doc) => {
           setIsRequirementsModalOpen(false);
