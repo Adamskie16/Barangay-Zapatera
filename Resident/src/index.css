@@ -10,10 +10,26 @@ html, body, button, input, select, textarea, [data-testid="root"], div, span, p,
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  background-color: #090d16;
-  color: #ffffff;
+html, body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #eff2fc;
 }
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #eff2fc;
+}
+
+body {
+  background-color: #eff2fc;
+  color: #0f172a;
+}
+
 
 /* Modal and Backdrop Animations */
 @keyframes zapateraFadeIn {
