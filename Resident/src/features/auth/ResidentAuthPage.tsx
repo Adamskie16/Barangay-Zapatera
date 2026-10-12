@@ -447,18 +447,43 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           password: loginPassword,
         });
 
-        // If Supabase auth user exists but profile record does NOT exist -> Account was deleted!
+        // Verify profile record with authenticated session before concluding account deletion
         if (authData?.user && !profileData) {
-          const msg = 'Notice: This account has been deleted by Barangay Zapatera administration.';
-          setLoading(false);
-          setAuthError(msg);
-          setSecurityNoticeModal({
-            isOpen: true,
-            type: 'deleted',
-            message: msg,
-          });
-          return;
+          const { data: verifiedProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+
+          if (verifiedProfile) {
+            profileData = verifiedProfile;
+          } else {
+            // Check if explicitly recorded in deleted accounts
+            const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
+            let explicitlyDeleted = false;
+            if (deletedAccountsStr) {
+              try {
+                const deletedList = JSON.parse(deletedAccountsStr);
+                if (Array.isArray(deletedList) && deletedList.some((d: any) => (d.email || d).toLowerCase() === cleanEmail)) {
+                  explicitlyDeleted = true;
+                }
+              } catch {}
+            }
+
+            if (explicitlyDeleted) {
+              const msg = 'Notice: This account has been deleted by Barangay Zapatera administration.';
+              setLoading(false);
+              setAuthError(msg);
+              setSecurityNoticeModal({
+                isOpen: true,
+                type: 'deleted',
+                message: msg,
+              });
+              return;
+            }
+          }
         }
+
 
         if (!authErr && authData?.user && profileData) {
           isPasswordValid = true;
