@@ -719,11 +719,10 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         ) : (
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
         )}
-        {/* Top subtle shadow gradient for header clarity */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none" />
-        {/* Bottom deep dark color gradient for clear text visibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/90 via-45% to-transparent pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-blue-950/70 via-transparent to-transparent pointer-events-none" />
+        {/* Subtle top vignette for clean header contrast while keeping background visible */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/50 via-transparent to-transparent pointer-events-none" />
+        {/* Soft bottom vignette focused only behind text so the background photo is bright & clearly visible */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 via-35% to-transparent pointer-events-none" />
 
         <div className="relative z-10 p-8 sm:p-12 lg:p-14 flex flex-col justify-between w-full h-full text-white">
           {/* TOP-LEFT HEADER: Seal + System Title and Subtitle */}

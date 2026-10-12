@@ -193,7 +193,12 @@ export async function postOfficialReply({
     } catch {}
   }
 
-  // 3. Persist to Supabase if table is available
+  // 3. If this is a reply to a resident's comment, trigger an in-app notification to the original author
+  if (parent_id) {
+    notifyParentAuthorOnReply({ newComment, parentId: parent_id });
+  }
+
+  // 4. Persist to Supabase if table is available
   if (!shouldSkipRemote()) {
     try {
       const payload = {
@@ -226,6 +231,97 @@ export async function postOfficialReply({
   }
 
   return newComment;
+}
+
+/**
+ * Notifies the author of the parent comment when an official administrative reply is posted
+ */
+async function notifyParentAuthorOnReply({ newComment, parentId }) {
+  if (!parentId) return;
+  try {
+    let parentComment = getLocalComments().find((c) => String(c.id) === String(parentId));
+    if (!parentComment && !shouldSkipRemote()) {
+      try {
+        const { data } = await supabase.from('bulletin_comments').select('*').eq('id', parentId).maybeSingle();
+        if (data) parentComment = data;
+      } catch {}
+    }
+
+    if (parentComment && (parentComment.author_id || parentComment.author_name)) {
+      const targetUserId = parentComment.author_id;
+      const targetUserName = parentComment.author_name;
+      const snippet = newComment.content.length > 70 ? newComment.content.substring(0, 70) + '...' : newComment.content;
+      const notifTitle = '💬 Barangay Official Reply to Your Comment';
+      const notifMessage = `${newComment.author_name} (Barangay Office) replied to your comment: "${snippet}"`;
+
+      const notificationObj = {
+        id: `notif-reply-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        user_id: targetUserId || null,
+        title: notifTitle,
+        message: notifMessage,
+        type: 'announcement',
+        link_tab: 'announcements',
+        news_id: newComment.news_id,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      };
+
+      // 1. Save in user-specific local storage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (targetUserId) {
+          const userKey = `zapatera_notifications_db_${targetUserId}`;
+          try {
+            const rawUser = localStorage.getItem(userKey);
+            const userList = rawUser ? JSON.parse(rawUser) : [];
+            userList.unshift(notificationObj);
+            localStorage.setItem(userKey, JSON.stringify(userList.slice(0, 50)));
+          } catch {}
+        }
+        // Save to general list
+        try {
+          const rawGen = localStorage.getItem('zapatera_notifications_db');
+          const genList = rawGen ? JSON.parse(rawGen) : [];
+          genList.unshift(notificationObj);
+          localStorage.setItem('zapatera_notifications_db', JSON.stringify(genList.slice(0, 50)));
+        } catch {}
+      }
+
+      // 2. Persist to Supabase notifications table if available
+      if (!shouldSkipRemote() && targetUserId) {
+        try {
+          await supabase.from('notifications').insert([{
+            user_id: targetUserId,
+            title: notifTitle,
+            message: notifMessage,
+            type: 'announcement',
+            link_tab: 'announcements',
+            is_read: false,
+            created_at: new Date().toISOString(),
+          }]);
+        } catch (e) {
+          console.warn('Could not insert reply notification to Supabase:', e);
+        }
+      }
+
+      // 3. Broadcast real-time message
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const bc = new BroadcastChannel('zapatera_security_channel');
+          bc.postMessage({
+            type: 'NOTIFICATION_SENT',
+            notification: notificationObj,
+            target_user_id: targetUserId,
+            target_user_name: targetUserName,
+            title: notifTitle,
+            message: notifMessage,
+          });
+          bc.close();
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('Notification reply handler notice:', err);
+  }
 }
 
 /**

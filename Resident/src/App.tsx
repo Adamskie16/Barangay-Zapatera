@@ -252,8 +252,31 @@ export default function App() {
             handleNotifyNewAnnouncement(event.data.news, 'broadcast_channel');
           } else if (event.data?.type === 'NOTIFICATION_SENT') {
             fetchAnnouncements();
-            if (currentUserRef.current) {
-              fetchResidentNotifications(currentUserRef.current);
+            const curr = currentUserRef.current;
+            if (curr) {
+              fetchResidentNotifications(curr);
+              const isTargetUser =
+                !event.data?.target_user_id ||
+                event.data?.target_user_id === curr.id ||
+                (event.data?.target_user_name && event.data?.target_user_name.toLowerCase() === curr.full_name?.toLowerCase());
+
+              if (isTargetUser && event.data?.title) {
+                triggerCellphoneNotification({
+                  id: `notif-${Date.now()}`,
+                  title: event.data.title,
+                  message: event.data.message || 'You received a new update from Barangay Zapatera.',
+                  isEmergency: false,
+                  category: 'Official Reply',
+                  url: '/?tab=profile',
+                });
+
+                setActiveAnnouncementBanner({
+                  id: `banner-${Date.now()}`,
+                  title: event.data.title,
+                  message: event.data.message || 'You received a new response.',
+                  type: 'announcement',
+                });
+              }
             }
           } else if (event.data?.type === 'NEWS_DELETED') {
             fetchAnnouncements();
@@ -1446,8 +1469,14 @@ export default function App() {
           <ProfileView
             currentUser={currentUser}
             config={config}
+            announcements={announcements}
             onUpdateProfile={handleUpdateProfile}
             onLogout={handleLogout}
+            onViewAnnouncement={(ann) => {
+              setSelectedAnnouncementForModal(ann);
+              setActiveTab('announcements');
+            }}
+            onNavigateTab={(tab: any) => setActiveTab(tab)}
           />
         )}
       </View>

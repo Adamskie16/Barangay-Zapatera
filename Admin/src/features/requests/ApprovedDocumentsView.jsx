@@ -21,9 +21,21 @@ export default function ApprovedDocumentsView({
   config,
   currentUser,
   loading = false,
+  initialTarget = null,
+  onClearTarget = null,
 }) {
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [docTypeFilter, setDocTypeFilter] = useState('all');
+  const [targetTracking, setTargetTracking] = useState('');
+
+  useEffect(() => {
+    if (initialTarget) {
+      if (initialTarget.trackingNumber) {
+        setTargetTracking(initialTarget.trackingNumber);
+      }
+      if (onClearTarget) onClearTarget();
+    }
+  }, [initialTarget]);
 
   // Action feedback / confirmation modal state
   const [actionModal, setActionModal] = useState({
@@ -224,7 +236,7 @@ export default function ApprovedDocumentsView({
 
   // Filter dataset by claimFilter and docTypeFilter
   const processedData = useMemo(() => {
-    return approvedRequests.filter((req) => {
+    let list = approvedRequests.filter((req) => {
       const claimed = isClaimed(req);
       const matchesClaim =
         claimFilter === 'all' ||
@@ -236,7 +248,17 @@ export default function ApprovedDocumentsView({
 
       return matchesClaim && matchesDocType;
     });
-  }, [approvedRequests, claimFilter, docTypeFilter]);
+
+    if (targetTracking) {
+      list = [...list].sort((a, b) => {
+        if (a.tracking_number === targetTracking) return -1;
+        if (b.tracking_number === targetTracking) return 1;
+        return 0;
+      });
+    }
+
+    return list;
+  }, [approvedRequests, claimFilter, docTypeFilter, targetTracking]);
 
   // Define Enterprise Civic Table Columns
   const columns = useMemo(() => [
@@ -357,7 +379,7 @@ export default function ApprovedDocumentsView({
               className={
                 claimed
                   ? 'px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 cursor-pointer active:scale-95'
-                  : 'px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 cursor-pointer active:scale-95'
+                  : 'px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer active:scale-95'
               }
               title={claimed ? 'Revert to Unclaimed' : 'Mark Document as Claimed'}
               aria-label={
@@ -373,7 +395,7 @@ export default function ApprovedDocumentsView({
                 </>
               ) : (
                 <>
-                  <PackageCheck className="w-3.5 h-3.5 text-emerald-100" />
+                  <PackageCheck className="w-3.5 h-3.5 text-blue-100" />
                   <span>Mark Claimed</span>
                 </>
               )}
@@ -442,6 +464,7 @@ export default function ApprovedDocumentsView({
         columns={columns}
         keyField="id"
         searchable={true}
+        initialSearch={targetTracking}
         searchPlaceholder="Search tracking no, resident, or purpose..."
         searchKeys={[
           'tracking_number',

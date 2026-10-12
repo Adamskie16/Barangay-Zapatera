@@ -71,6 +71,8 @@ export default function ReceiveRequestView({
   onDeleteRequest,
   currentUser,
   loading = false,
+  initialTarget = null,
+  onClearTarget = null,
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -430,6 +432,31 @@ export default function ReceiveRequestView({
     setGenDocTitle(req.document_title ? req.document_title.toUpperCase() : tmpl.title);
     setGenBodyText(tmpl.defaultBody);
   };
+
+  // Consume deep-link target from Dashboard or other views
+  useEffect(() => {
+    if (initialTarget) {
+      if (initialTarget.search) setSearch(initialTarget.search);
+      if (initialTarget.statusFilter) setStatusFilter(initialTarget.statusFilter);
+      if (initialTarget.selectedReq) {
+        const req = initialTarget.selectedReq;
+        populateGeneratorFromResident(req);
+        const reqList = getRequirementList(req);
+        const initialMap = {};
+        reqList.forEach((item) => {
+          if (req.requirements_status && req.requirements_status[item.name]) {
+            initialMap[item.name] = req.requirements_status[item.name];
+          } else {
+            initialMap[item.name] = 'pending';
+          }
+        });
+        setVerificationMap(initialMap);
+        setProcessingNotes(req.notes || '');
+        setSelectedReq(req);
+      }
+      if (onClearTarget) onClearTarget();
+    }
+  }, [initialTarget]);
 
   // When admin clicks Process:
   // Shows confirmation modal, then updates status to under_review, shows success modal, and opens workspace
@@ -804,98 +831,126 @@ export default function ReceiveRequestView({
                   <button
                     type="button"
                     onClick={() => handleSort('tracking_number')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'tracking_number' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Tracking Number</span>
-                    {sortKey === 'tracking_number' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'tracking_number' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'tracking_number' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('resident_name')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'resident_name' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Resident Applicant</span>
-                    {sortKey === 'resident_name' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'resident_name' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'resident_name' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('document_title')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'document_title' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Document Requested</span>
-                    {sortKey === 'document_title' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'document_title' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'document_title' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('pickup_time_slot')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'pickup_time_slot' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Pick-up Time Slot</span>
-                    {sortKey === 'pickup_time_slot' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'pickup_time_slot' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'pickup_time_slot' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('purpose')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'purpose' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Purpose</span>
-                    {sortKey === 'purpose' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'purpose' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'purpose' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('status')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'status' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Status</span>
-                    {sortKey === 'status' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'status' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'status' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4">
                   <button
                     type="button"
                     onClick={() => handleSort('created_at')}
-                    className="inline-flex items-center gap-1.5 font-semibold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-wider cursor-pointer group select-none"
+                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'created_at' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    }`}
                   >
                     <span>Date Submitted</span>
-                    {sortKey === 'created_at' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                    ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-                    )}
+                    <span className={`p-0.5 rounded ${sortKey === 'created_at' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                      {sortKey === 'created_at' ? (
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                      )}
+                    </span>
                   </button>
                 </th>
                 <th className="p-4 text-right">Actions</th>

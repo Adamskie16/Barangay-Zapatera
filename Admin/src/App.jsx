@@ -212,6 +212,46 @@ export default function App() {
     );
   }
 
+  const [receiveRequestTarget, setReceiveRequestTarget] = useState(null);
+  const [approvedDocsTarget, setApprovedDocsTarget] = useState(null);
+
+  const handleQueueAction = (req) => {
+    if (!req) return;
+    const s = String(req.status || '').toLowerCase().trim();
+
+    if (s === 'pending' || s === 'under_review') {
+      // Proceed to process if status is under review and pending
+      setReceiveRequestTarget({
+        selectedReq: req,
+        search: req.tracking_number || '',
+        statusFilter: s,
+      });
+      setActiveTab('receive_request');
+    } else if (s === 'approved' || s === 'completed' || s === 'issued' || s === 'ready_for_pickup') {
+      // Proceed to approved documents sorted / filtered by specific tracking number
+      setApprovedDocsTarget({
+        trackingNumber: req.tracking_number || '',
+        search: req.tracking_number || '',
+      });
+      setActiveTab('approved_documents');
+    } else if (s === 'declined' || s === 'rejected') {
+      // If decline proceed to document request
+      setReceiveRequestTarget({
+        selectedReq: null,
+        search: req.tracking_number || '',
+        statusFilter: 'declined',
+      });
+      setActiveTab('receive_request');
+    } else {
+      setReceiveRequestTarget({
+        selectedReq: req,
+        search: req.tracking_number || '',
+        statusFilter: 'all',
+      });
+      setActiveTab('receive_request');
+    }
+  };
+
   const tabTitles = {
     dashboard: 'Barangay Admin Operations Dashboard',
     receive_request: 'Document Application Requests Management',
@@ -246,6 +286,7 @@ export default function App() {
               events={events}
               logs={logs}
               setActiveTab={setActiveTab}
+              onQueueAction={handleQueueAction}
             />
           )}
 
@@ -257,6 +298,8 @@ export default function App() {
               onProcessRequest={handleUpdateRequestStatus}
               onDeleteRequest={handleDeleteRequest}
               currentUser={currentUser}
+              initialTarget={receiveRequestTarget}
+              onClearTarget={() => setReceiveRequestTarget(null)}
             />
           )}
 
@@ -267,6 +310,8 @@ export default function App() {
               onDeleteRequest={handleDeleteRequest}
               config={config}
               currentUser={currentUser}
+              initialTarget={approvedDocsTarget}
+              onClearTarget={() => setApprovedDocsTarget(null)}
             />
           )}
 

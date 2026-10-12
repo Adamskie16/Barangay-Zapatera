@@ -354,3 +354,73 @@ export function subscribeToBulletinComments(newsId: string, onUpdate: () => void
     }
   };
 }
+
+export interface ResidentCommentHistoryItem {
+  comment: BulletinComment;
+  news_id: string;
+  announcementTitle?: string;
+  announcementDate?: string;
+  replies: BulletinComment[];
+  adminReplies: BulletinComment[];
+  hasAdminReply: boolean;
+}
+
+/**
+ * Fetch all comments and discussions started or participated in by a specific resident,
+ * grouped with official admin/superadmin replies for easy tracking.
+ */
+export async function getUserCommentHistory(
+  userId?: string,
+  userName?: string
+): Promise<ResidentCommentHistoryItem[]> {
+  // 1. Get all local comments
+  let allComments = getLocalComments();
+
+  // 2. Fetch remote if available to ensure full history
+  if (!shouldSkipRemote()) {
+    try {
+      const { data, error } = await supabase
+        .from('bulletin_comments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        isRemoteTableAvailable = true;
+        const map = new Map<string, BulletinComment>();
+        allComments.forEach((c) => map.set(c.id, c));
+        data.forEach((c: any) => map.set(c.id, c));
+        allComments = Array.from(map.values());
+        saveLocalComments(allComments);
+      }
+    } catch {}
+  }
+
+  // Filter comments authored by this resident
+  const userComments = allComments.filter((c) => {
+    if (userId && c.author_id && String(c.author_id) === String(userId)) return true;
+    if (userName && c.author_name?.trim().toLowerCase() === userName.trim().toLowerCase()) return true;
+    return false;
+  });
+
+  // Group replies
+  const historyItems: ResidentCommentHistoryItem[] = userComments.map((comment) => {
+    // Find all replies to this comment
+    const replies = allComments.filter((r) => r.parent_id === comment.id);
+    const adminReplies = replies.filter(
+      (r) => r.author_role === 'admin' || r.author_role === 'super_admin' || r.is_official_response
+    );
+
+    return {
+      comment,
+      news_id: comment.news_id,
+      replies,
+      adminReplies,
+      hasAdminReply: adminReplies.length > 0,
+    };
+  });
+
+  // Sort newest first
+  return historyItems.sort(
+    (a, b) => new Date(b.comment.created_at).getTime() - new Date(a.comment.created_at).getTime()
+  );
+}

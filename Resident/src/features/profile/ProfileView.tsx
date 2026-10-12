@@ -32,24 +32,38 @@ import {
   Eye,
   EyeOff,
   Check,
+  MessageSquare,
+  MessageCircle,
+  Megaphone,
+  Clock,
+  Search,
+  CornerDownRight,
+  Sparkles,
 } from 'lucide-react';
 import { supabase } from '../../core/supabase';
-import { ResidentUser, BarangayConfig } from '../../types';
+import { ResidentUser, BarangayConfig, BarangayAnnouncement } from '../../types';
 import { uploadUserAvatar } from '../../core/storageService';
+import { getUserCommentHistory, ResidentCommentHistoryItem } from '../../core/commentService';
 import ActionModal from '../../components/ActionModal';
 
 interface ProfileViewProps {
   currentUser: ResidentUser;
   config: BarangayConfig;
+  announcements?: BarangayAnnouncement[];
   onUpdateProfile: (updated: Partial<ResidentUser>) => void;
   onLogout: () => void;
+  onViewAnnouncement?: (ann: BarangayAnnouncement) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export default function ProfileView({
   currentUser,
   config,
+  announcements = [],
   onUpdateProfile,
   onLogout,
+  onViewAnnouncement,
+  onNavigateTab,
 }: ProfileViewProps) {
   // Modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -57,6 +71,45 @@ export default function ProfileView({
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isCommentHistoryModalOpen, setIsCommentHistoryModalOpen] = useState(false);
+
+  // Comment History Feature State
+  const [commentHistory, setCommentHistory] = useState<ResidentCommentHistoryItem[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [commentSearchQuery, setCommentSearchQuery] = useState('');
+  const [commentFilter, setCommentFilter] = useState<'all' | 'with_replies' | 'waiting'>('all');
+
+  const loadCommentHistory = async () => {
+    setIsLoadingComments(true);
+    try {
+      const items = await getUserCommentHistory(currentUser.id, currentUser.full_name);
+      setCommentHistory(items);
+    } catch (e) {
+      console.warn('Error loading comment history:', e);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCommentHistory();
+  }, [currentUser?.id, currentUser?.full_name]);
+
+  const filteredCommentHistory = commentHistory.filter((item) => {
+    if (commentFilter === 'with_replies' && !item.hasAdminReply) return false;
+    if (commentFilter === 'waiting' && item.hasAdminReply) return false;
+
+    if (commentSearchQuery.trim()) {
+      const q = commentSearchQuery.toLowerCase().trim();
+      const contentMatch = item.comment.content?.toLowerCase().includes(q);
+      const replyMatch = item.replies.some((r) => r.content?.toLowerCase().includes(q));
+      const annMatch = (announcements || []).some(
+        (a) => String(a.id) === String(item.news_id) && a.title?.toLowerCase().includes(q)
+      );
+      return contentMatch || replyMatch || annMatch;
+    }
+    return true;
+  });
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -409,6 +462,38 @@ export default function ProfileView({
 
       </View>
 
+      {/* Community Discussions & Comments Section */}
+      <Text style={styles.sectionHeading}>Community Discussions</Text>
+      <View style={styles.menuCard}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            loadCommentHistory();
+            setIsCommentHistoryModalOpen(true);
+          }}
+        >
+          <View style={styles.menuItemLeft}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+              <MessageSquare size={17} color="#2563eb" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.menuItemTitle}>My Comment History & Admin Replies</Text>
+                {commentHistory.filter((c) => c.hasAdminReply).length > 0 && (
+                  <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>
+                      {commentHistory.filter((c) => c.hasAdminReply).length} replied
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.menuItemSub}>Track bulletin feedback, questions & official barangay answers</Text>
+            </View>
+          </View>
+          <ChevronRight size={16} color="#94a3b8" />
+        </TouchableOpacity>
+      </View>
+
       {/* Support & Privacy */}
       <Text style={styles.sectionHeading}>Support & Legal</Text>
       <View style={styles.menuCard}>
@@ -734,6 +819,260 @@ export default function ProfileView({
                 }}
               >
                 <Text style={styles.saveModalBtnText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* COMMENT HISTORY & REPLIES MODAL */}
+      <Modal
+        visible={isCommentHistoryModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsCommentHistoryModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 560, height: '85%' }]}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageSquare size={18} color="#2563eb" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>My Community Comment History</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                    Track discussions, questions & official responses from Barangay Zapatera
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsCommentHistoryModalOpen(false)}
+                style={{ padding: 4 }}
+              >
+                <X size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Filter Tabs & Search Bar */}
+            <View style={{ padding: 12, backgroundColor: '#f8fafc', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', gap: 10 }}>
+              {/* Search input */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 10, height: 36 }}>
+                <Search size={14} color="#94a3b8" style={{ marginRight: 6 }} />
+                <TextInput
+                  placeholder="Search comments or administrative replies..."
+                  placeholderTextColor="#94a3b8"
+                  value={commentSearchQuery}
+                  onChangeText={setCommentSearchQuery}
+                  style={{ flex: 1, fontSize: 12, color: '#0f172a', outlineStyle: 'none' as any }}
+                />
+                {commentSearchQuery ? (
+                  <TouchableOpacity onPress={() => setCommentSearchQuery('')}>
+                    <X size={14} color="#94a3b8" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Filter Pills */}
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'all', label: 'All Comments', count: commentHistory.length },
+                  { id: 'with_replies', label: 'With Admin Replies', count: commentHistory.filter((c) => c.hasAdminReply).length },
+                  { id: 'waiting', label: 'Awaiting Reply', count: commentHistory.filter((c) => !c.hasAdminReply).length },
+                ].map((f) => (
+                  <TouchableOpacity
+                    key={f.id}
+                    onPress={() => setCommentFilter(f.id as any)}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 16,
+                      backgroundColor: commentFilter === f.id ? '#2563eb' : '#ffffff',
+                      borderWidth: 1,
+                      borderColor: commentFilter === f.id ? '#2563eb' : '#cbd5e1',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: commentFilter === f.id ? '#ffffff' : '#475569' }}>
+                      {f.label}
+                    </Text>
+                    <View
+                      style={{
+                        paddingHorizontal: 5,
+                        paddingVertical: 1,
+                        borderRadius: 10,
+                        backgroundColor: commentFilter === f.id ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: commentFilter === f.id ? '#ffffff' : '#64748b' }}>
+                        {f.count}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* List Body */}
+            <ScrollView style={{ flex: 1, padding: 14 }} showsVerticalScrollIndicator={false}>
+              {isLoadingComments ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                  <ActivityIndicator size="small" color="#2563eb" />
+                  <Text style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>Loading comment history...</Text>
+                </View>
+              ) : filteredCommentHistory.length === 0 ? (
+                <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                    <MessageCircle size={24} color="#3b82f6" />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b', textAlign: 'center' }}>
+                    No comments found
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, lineHeight: 18 }}>
+                    {commentSearchQuery
+                      ? 'No comments matching your search query. Try adjusting your search keywords.'
+                      : commentFilter === 'with_replies'
+                      ? 'None of your comments currently have administrative replies yet.'
+                      : "You haven't posted any comments on Barangay announcements yet. When you comment on bulletins, they will appear here along with official responses."}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 14, paddingBottom: 20 }}>
+                  {filteredCommentHistory.map((item) => {
+                    const matchedAnn = (announcements || []).find((a) => String(a.id) === String(item.news_id));
+                    const formattedDate = new Date(item.comment.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    return (
+                      <View
+                        key={item.comment.id}
+                        style={{
+                          backgroundColor: '#ffffff',
+                          borderWidth: 1,
+                          borderColor: item.hasAdminReply ? '#bfdbfe' : '#e2e8f0',
+                          borderRadius: 14,
+                          padding: 14,
+                          shadowColor: '#000',
+                          shadowOpacity: 0.03,
+                          shadowRadius: 4,
+                          shadowOffset: { width: 0, height: 1 },
+                        }}
+                      >
+                        {/* Announcement Link Header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Megaphone size={13} color="#2563eb" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#1d4ed8' }} numberOfLines={1}>
+                              {matchedAnn?.title || `Announcement Bulletin #${item.news_id}`}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 10, color: '#94a3b8' }}>{formattedDate}</Text>
+                        </View>
+
+                        {/* Resident's Original Comment */}
+                        <View style={{ marginBottom: 10 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>
+                            Your Comment:
+                          </Text>
+                          <View style={{ backgroundColor: '#f8fafc', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                            <Text style={{ fontSize: 13, color: '#1e293b', lineHeight: 18 }}>
+                              {item.comment.content}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Admin / Official Replies */}
+                        {item.adminReplies && item.adminReplies.length > 0 ? (
+                          <View style={{ gap: 8, marginTop: 4 }}>
+                            {item.adminReplies.map((reply) => (
+                              <View
+                                key={reply.id}
+                                style={{
+                                  backgroundColor: '#eff6ff',
+                                  borderWidth: 1,
+                                  borderColor: '#bfdbfe',
+                                  borderRadius: 10,
+                                  padding: 10,
+                                }}
+                              >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                    <ShieldCheck size={14} color="#1d4ed8" />
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#1e40af' }}>
+                                      {reply.author_name}
+                                    </Text>
+                                    <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#1d4ed8' }}>
+                                        {reply.author_role === 'super_admin' ? 'Super Admin' : 'Barangay Office'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <Text style={{ fontSize: 10, color: '#64748b' }}>
+                                    {new Date(reply.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </Text>
+                                </View>
+                                <Text style={{ fontSize: 12, color: '#1e3a8a', lineHeight: 17 }}>
+                                  {reply.content}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4 }}>
+                            <Clock size={12} color="#d97706" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#b45309' }}>
+                              Awaiting official response from Barangay Administration
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Action: View Announcement */}
+                        {matchedAnn && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setIsCommentHistoryModalOpen(false);
+                              if (onViewAnnouncement) {
+                                onViewAnnouncement(matchedAnn);
+                              } else if (onNavigateTab) {
+                                onNavigateTab('announcements');
+                              }
+                            }}
+                            style={{
+                              marginTop: 10,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: 4,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
+                              View Announcement Discussion
+                            </Text>
+                            <ArrowRight size={12} color="#2563eb" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.saveModalBtn}
+                onPress={() => setIsCommentHistoryModalOpen(false)}
+              >
+                <Text style={styles.saveModalBtnText}>Close Comment History</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -61,12 +61,6 @@ export default function ResidentDashboard({
     return 'Good evening';
   };
 
-  // Status counts
-  const pendingCount = requests.filter((r) => r.status === 'pending' || r.status === 'under_review').length;
-  const processingCount = requests.filter((r) => r.status === 'processing').length;
-  const readyCount = requests.filter((r) => r.status === 'ready_for_pickup').length;
-  const completedCount = requests.filter((r) => r.status === 'completed').length;
-  const rejectedCount = requests.filter((r) => r.status === 'rejected').length;
 
   // Active request (highest priority: ready_for_pickup > processing > pending > under_review)
   const activeRequest =
@@ -228,55 +222,6 @@ export default function ResidentDashboard({
         </TouchableOpacity>
       </View>
 
-      {/* Request Status Summary Row */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionHeading}>Application Status Overview</Text>
-        <TouchableOpacity onPress={() => onNavigateTab('requests')}>
-          <Text style={styles.seeAllText}>View All ({requests.length}) →</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusScroll}>
-        <TouchableOpacity style={styles.statusSummaryCard} onPress={() => onNavigateTab('requests')}>
-          <View style={[styles.statusSummaryIcon, { backgroundColor: '#fef3c7' }]}>
-            <Clock size={16} color="#d97706" />
-          </View>
-          <Text style={styles.statusSummaryCount}>{pendingCount}</Text>
-          <Text style={styles.statusSummaryLabel}>Pending Review</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.statusSummaryCard} onPress={() => onNavigateTab('requests')}>
-          <View style={[styles.statusSummaryIcon, { backgroundColor: '#e0e7ff' }]}>
-            <FileText size={16} color="#4338ca" />
-          </View>
-          <Text style={styles.statusSummaryCount}>{processingCount}</Text>
-          <Text style={styles.statusSummaryLabel}>Processing</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.statusSummaryCard} onPress={() => onNavigateTab('requests')}>
-          <View style={[styles.statusSummaryIcon, { backgroundColor: '#dcfce7' }]}>
-            <PackageCheck size={16} color="#15803d" />
-          </View>
-          <Text style={styles.statusSummaryCount}>{readyCount}</Text>
-          <Text style={styles.statusSummaryLabel}>Ready for Pickup</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.statusSummaryCard} onPress={() => onNavigateTab('requests')}>
-          <View style={[styles.statusSummaryIcon, { backgroundColor: '#d1fae5' }]}>
-            <CheckCircle2 size={16} color="#065f46" />
-          </View>
-          <Text style={styles.statusSummaryCount}>{completedCount}</Text>
-          <Text style={styles.statusSummaryLabel}>Completed</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.statusSummaryCard} onPress={() => onNavigateTab('requests')}>
-          <View style={[styles.statusSummaryIcon, { backgroundColor: '#fee2e2' }]}>
-            <XCircle size={16} color="#b91c1c" />
-          </View>
-          <Text style={styles.statusSummaryCount}>{rejectedCount}</Text>
-          <Text style={styles.statusSummaryLabel}>Rejected</Text>
-        </TouchableOpacity>
-      </ScrollView>
 
       {/* Official Barangay Documents (Live from Supabase CMS) */}
       {docTypes && docTypes.length > 0 && (
