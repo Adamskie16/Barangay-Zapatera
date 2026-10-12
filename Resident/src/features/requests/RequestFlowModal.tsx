@@ -1,5 +1,5 @@
 // Resident/src/features/requests/RequestFlowModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -167,6 +167,21 @@ export default function RequestFlowModal({
       })
     : (selectedDoc?.requirement_items || []);
 
+  // Mandatory requirements calculation for Step 3 progress
+  const mandatoryItems = useMemo(
+    () => (requirementsToUpload || []).filter((r) => r.is_required),
+    [requirementsToUpload]
+  );
+  const totalMandatory = mandatoryItems.length;
+  const mandatoryUploadedCount = useMemo(
+    () => mandatoryItems.filter((m) => !!uploadedFiles[m.name]).length,
+    [mandatoryItems, uploadedFiles]
+  );
+  const isAllMandatoryUploaded = totalMandatory === 0 || mandatoryUploadedCount >= totalMandatory;
+  const uploadProgressPercentage = totalMandatory > 0
+    ? Math.round((mandatoryUploadedCount / totalMandatory) * 100)
+    : 100;
+
   // Real browser/device file and camera upload handler using Supabase Storage
   const handleRealFileUpload = (reqName: string, mode: 'camera' | 'photo' | 'document' = 'photo') => {
     if (typeof document === 'undefined') return;
@@ -261,14 +276,13 @@ export default function RequestFlowModal({
       setUploadError('');
       setCurrentStep(3);
     } else if (currentStep === 3) {
-      // Check mandatory requirements
-      const mandatoryItems = requirementsToUpload.filter((r) => r.is_required);
-      if (mandatoryItems.length > 0) {
+      // Validate that all required fields are submitted before proceeding to Step 4
+      if (!isAllMandatoryUploaded) {
         const missing = mandatoryItems.find((m) => !uploadedFiles[m.name]);
-        if (missing) {
-          setUploadError(`Required: Please upload or capture a copy of "${missing.name}" before proceeding.`);
-          return;
-        }
+        setUploadError(
+          `Upload Required: Please upload or capture all required attachments (${mandatoryUploadedCount} of ${totalMandatory} submitted). Missing: "${missing?.name || 'Required Document'}".`
+        );
+        return;
       }
       setUploadError('');
       setCurrentStep(4);
@@ -673,6 +687,100 @@ export default function RequestFlowModal({
                   Attach clear photos, camera captures, or PDF copies of the required supporting documents for {selectedDoc.title}.
                 </Text>
 
+                {/* Upload Requirements Progress Bar */}
+                {requirementsToUpload.length > 0 && (
+                  <View style={styles.reqProgressCard}>
+                    <View style={styles.reqProgressHeader}>
+                      <View style={styles.reqProgressHeaderLeft}>
+                        <View
+                          style={[
+                            styles.reqProgressIconBox,
+                            isAllMandatoryUploaded
+                              ? styles.reqProgressIconDone
+                              : styles.reqProgressIconPending,
+                          ]}
+                        >
+                          {isAllMandatoryUploaded ? (
+                            <CheckCircle2 size={18} color="#059669" />
+                          ) : (
+                            <Upload size={18} color="#1d4ed8" />
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.reqProgressTitle}>Upload Requirements Progress</Text>
+                          <Text style={styles.reqProgressSubtitle}>
+                            {totalMandatory === 0
+                              ? 'No mandatory attachments required'
+                              : isAllMandatoryUploaded
+                              ? 'All required attachments completed (100%)'
+                              : `${mandatoryUploadedCount} of ${totalMandatory} required attachment(s) submitted`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.reqProgressBadge,
+                          isAllMandatoryUploaded
+                            ? styles.reqProgressBadgeDone
+                            : styles.reqProgressBadgePending,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.reqProgressBadgeText,
+                            isAllMandatoryUploaded
+                              ? styles.reqProgressBadgeTextDone
+                              : styles.reqProgressBadgeTextPending,
+                          ]}
+                        >
+                          {uploadProgressPercentage}%
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Progress Bar Track */}
+                    <View style={styles.reqProgressBarTrack}>
+                      <View
+                        style={[
+                          styles.reqProgressBarFill,
+                          { width: `${uploadProgressPercentage}%` },
+                          isAllMandatoryUploaded && styles.reqProgressBarFillDone,
+                        ]}
+                      />
+                    </View>
+
+                    {/* Status Alert Banner */}
+                    {isAllMandatoryUploaded ? (
+                      <View style={styles.reqProgressSuccessBanner}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                          <CheckCircle2 size={16} color="#059669" />
+                          <Text style={styles.reqProgressSuccessText}>
+                            All required fields submitted! You can now proceed to Step 4 (Schedule).
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.reqQuickProceedBtn}
+                          onPress={() => {
+                            setUploadError('');
+                            setCurrentStep(4);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.reqQuickProceedBtnText}>Proceed to Step 4 →</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.reqProgressPendingBanner}>
+                        <AlertCircle size={15} color="#b45309" />
+                        <Text style={styles.reqProgressPendingText}>
+                          {totalMandatory - mandatoryUploadedCount} mandatory requirement(s) remaining. Upload all required attachments marked with [REQUIRED] to unlock Step 4.
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 {requirementsToUpload.length === 0 ? (
                   <View style={styles.tipBox}>
                     <ShieldCheck size={16} color="#059669" />
@@ -695,6 +803,17 @@ export default function RequestFlowModal({
                                     {item.is_required ? 'REQUIRED' : 'OPTIONAL'}
                                   </Text>
                                 </View>
+                                {uploaded ? (
+                                  <View style={styles.uploadedCheckTag}>
+                                    <CheckCircle2 size={11} color="#059669" />
+                                    <Text style={styles.uploadedCheckTagText}>SUBMITTED</Text>
+                                  </View>
+                                ) : item.is_required ? (
+                                  <View style={styles.pendingActionTag}>
+                                    <AlertCircle size={11} color="#b91c1c" />
+                                    <Text style={styles.pendingActionTagText}>ACTION REQUIRED</Text>
+                                  </View>
+                                ) : null}
                               </View>
                               {item.description && (
                                 <Text style={styles.uploadItemDesc}>{item.description}</Text>
@@ -1077,11 +1196,26 @@ export default function RequestFlowModal({
               )}
 
               <TouchableOpacity
-                style={[styles.nextBtn, isSubmitting && { opacity: 0.6 }]}
+                style={[
+                  styles.nextBtn,
+                  isSubmitting && { opacity: 0.6 },
+                  currentStep === 3 && !isAllMandatoryUploaded && styles.nextBtnIncomplete,
+                  currentStep === 3 && isAllMandatoryUploaded && styles.nextBtnReady,
+                ]}
                 onPress={handleNextStep}
                 disabled={isSubmitting}
                 accessibilityRole="button"
-                accessibilityLabel={isSubmitting ? 'Submitting Request...' : (currentStep === 5 ? 'Submit Application' : 'Next Step')}
+                accessibilityLabel={
+                  isSubmitting
+                    ? 'Submitting Request...'
+                    : currentStep === 5
+                    ? 'Submit Application'
+                    : currentStep === 3
+                    ? isAllMandatoryUploaded
+                      ? 'Proceed to Schedule (Step 4)'
+                      : `Complete Required Uploads (${mandatoryUploadedCount}/${totalMandatory})`
+                    : 'Next Step'
+                }
               >
                 {isSubmitting ? (
                   <>
@@ -1091,7 +1225,13 @@ export default function RequestFlowModal({
                 ) : (
                   <>
                     <Text style={styles.nextBtnText}>
-                      {currentStep === 5 ? 'Submit Application' : 'Next Step'}
+                      {currentStep === 5
+                        ? 'Submit Application'
+                        : currentStep === 3
+                        ? isAllMandatoryUploaded
+                          ? 'Proceed to Schedule (Step 4)'
+                          : `Complete Uploads (${mandatoryUploadedCount}/${totalMandatory})`
+                        : 'Next Step'}
                     </Text>
                     <ArrowRight size={16} color="#ffffff" />
                   </>
@@ -2018,5 +2158,166 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#64748b',
     marginTop: 2,
+  },
+  reqProgressCard: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+    marginBottom: 16,
+  },
+  reqProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  reqProgressHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  reqProgressIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reqProgressIconPending: {
+    backgroundColor: '#dbeafe',
+  },
+  reqProgressIconDone: {
+    backgroundColor: '#dcfce7',
+  },
+  reqProgressTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  reqProgressSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  reqProgressBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reqProgressBadgePending: {
+    backgroundColor: '#dbeafe',
+  },
+  reqProgressBadgeDone: {
+    backgroundColor: '#dcfce7',
+  },
+  reqProgressBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  reqProgressBadgeTextPending: {
+    color: '#1d4ed8',
+  },
+  reqProgressBadgeTextDone: {
+    color: '#15803d',
+  },
+  reqProgressBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#cbd5e1',
+    marginTop: 12,
+    overflow: 'hidden',
+  },
+  reqProgressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
+  },
+  reqProgressBarFillDone: {
+    backgroundColor: '#16a34a',
+  },
+  reqProgressSuccessBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f0fdf4',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginTop: 12,
+  },
+  reqProgressSuccessText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+    flex: 1,
+  },
+  reqQuickProceedBtn: {
+    backgroundColor: '#15803d',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  reqQuickProceedBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  reqProgressPendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginTop: 12,
+  },
+  reqProgressPendingText: {
+    fontSize: 11,
+    color: '#92400e',
+    fontWeight: '600',
+    flex: 1,
+  },
+  uploadedCheckTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  uploadedCheckTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  pendingActionTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pendingActionTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#b91c1c',
+  },
+  nextBtnIncomplete: {
+    backgroundColor: '#64748b',
+    opacity: 0.85,
+  },
+  nextBtnReady: {
+    backgroundColor: '#15803d',
+    shadowColor: '#15803d',
   },
 });
