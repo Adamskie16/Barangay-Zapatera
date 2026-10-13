@@ -347,7 +347,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               .eq('id', device.id);
 
             await supabase.from('activity_logs').insert({
-              user_email: currentUser?.email || 'superadmin@zapatera.gov.ph',
+              user_email: currentUser?.email || StorageService.getCurrentUser()?.email || 'mardee131@gmail.com',
               action: `Terminated Device Session: ${device.device_name || device.device_id}`,
               feature: 'User Account Security',
               details: `Revoked session for user ${viewingUser.email} on ${device.device_name || device.device_id}`,

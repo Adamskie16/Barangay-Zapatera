@@ -221,7 +221,7 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
       if (isSupabaseConfigured()) {
         try {
           await supabase.from('activity_logs').insert([{
-            user_email: currentUser?.email || 'superadmin@zapatera.gov.ph',
+            user_email: currentUser?.email || 'mardee131@gmail.com',
             action: isEditing ? 'Updated Login Design' : 'Created Login Design',
             feature: 'Account Management / Login CMS',
             details: `Managed login design "${payload.title}"`,

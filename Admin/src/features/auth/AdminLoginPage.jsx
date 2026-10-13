@@ -214,7 +214,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       try {
         const deletedList = JSON.parse(deletedAccountsStr);
         if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
-          setError('Notice: This account has been deleted by Barangay Zapatera administration. Access has been revoked.');
+          setError('Invalid email or password.');
           setLoading(false);
           return;
         }
@@ -255,13 +255,13 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     }
 
     if (profile && profile.is_active === false) {
-      setError('Notice: This account has been deactivated or deleted by Barangay Zapatera administration.');
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
 
     if (!profile) {
-      setError('This Gmail account is not registered. Please sign up first.');
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
@@ -269,15 +269,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     // Verify Role Authorization - STRICT: Only Barangay Admin allowed
     const pRole = (profile.role || '').toLowerCase();
     if (pRole !== 'admin') {
-      if (pRole === 'super_admin' || pRole === 'superadmin') {
-        setError('Access Denied: This account is a Super Administrator. Please use the Super Admin Portal.');
-      } else if (pRole === 'treasurer') {
-        setError('Access Denied: This account is a Barangay Treasurer. Please use the Treasurer Portal.');
-      } else if (pRole === 'resident') {
-        setError('Access Denied: Resident accounts cannot log in to the Administrator Portal.');
-      } else {
-        setError('Access denied: You do not have Barangay Administrator privileges.');
-      }
+      setError('Invalid email or password.');
       try {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();

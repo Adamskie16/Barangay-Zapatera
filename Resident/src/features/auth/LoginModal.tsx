@@ -172,8 +172,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       // Handled silently
     }
 
-    if (!profile) {
-      setError('This Gmail account is not registered. Please sign up first.');
+    if (!profile || (profile.role && profile.role.toLowerCase() !== 'resident')) {
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
