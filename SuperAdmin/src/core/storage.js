@@ -64,6 +64,36 @@ const DEFAULT_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
+/**
+ * Resolves the active administrator's email dynamically from session storage,
+ * preventing hardcoded placeholder emails like 'superadmin@zapatera.gov.ph'.
+ */
+export const resolveActiveAdminEmail = (userOrEmail) => {
+  if (userOrEmail && typeof userOrEmail === 'object' && userOrEmail.email) {
+    return userOrEmail.email.toLowerCase().trim();
+  }
+  if (typeof userOrEmail === 'string' && userOrEmail.includes('@') && userOrEmail.toLowerCase().trim() !== 'superadmin@zapatera.gov.ph') {
+    return userOrEmail.toLowerCase().trim();
+  }
+  try {
+    const sessionKeys = [
+      'zapatera_superadmin_session',
+      'zapatera_admin_session',
+      'zapatera_account_mgmt_session',
+    ];
+    for (const key of sessionKeys) {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.email && parsed.email.includes('@')) {
+          return parsed.email.toLowerCase().trim();
+        }
+      }
+    }
+  } catch {}
+  return 'mardee131@gmail.com';
+};
+
 // Storage Service Class
 export const StorageService = {
   // PROFILES / USERS (Directly maps to public.profiles)
@@ -96,7 +126,7 @@ export const StorageService = {
     return StorageService.getUsers();
   },
 
-  saveUser: async (user) => {
+  saveUser: async (user, adminActor) => {
     const users = StorageService.getUsers();
     const existingIndex = users.findIndex((u) => u.id === user.id || (u.email && u.email.toLowerCase() === (user.email || '').toLowerCase()));
     let saved = { ...user };
@@ -138,7 +168,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminActor),
       action: existingIndex >= 0 ? 'Edited User Account' : 'Created User Account',
       feature: 'User Account Management',
       details: `User: ${saved.full_name || saved.email} (${saved.email}), Role: ${saved.role || 'resident'}`,
@@ -148,7 +178,7 @@ export const StorageService = {
     return saved;
   },
 
-  deleteUser: async (userId) => {
+  deleteUser: async (userId, adminActor) => {
     let users = StorageService.getUsers();
     const target = users.find((u) => u.id === userId);
     users = users.filter((u) => u.id !== userId);
@@ -168,7 +198,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminActor),
       action: 'Deleted User Account',
       feature: 'User Account Management',
       details: `Deleted user account for ${target ? target.email : userId}`,
@@ -219,7 +249,7 @@ export const StorageService = {
     return StorageService.getDocTypes();
   },
 
-  saveDocType: async (docType) => {
+  saveDocType: async (docType, adminActor) => {
     const docTypes = StorageService.getDocTypes();
     const existingIndex = docTypes.findIndex((d) => d.id === docType.id || d.code === docType.code);
     let updatedDoc = { ...docType };
@@ -258,7 +288,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminActor),
       action: existingIndex >= 0 ? 'Edited Document Info' : 'Created Document Info',
       feature: 'Document Info Management',
       details: `Title: ${updatedDoc.title}, Code: ${updatedDoc.code}, Fee: ₱${updatedDoc.fee}`,
@@ -268,7 +298,7 @@ export const StorageService = {
     return updatedDoc;
   },
 
-  deleteDocType: async (docTypeId) => {
+  deleteDocType: async (docTypeId, adminActor) => {
     let docTypes = StorageService.getDocTypes();
     const target = docTypes.find((d) => d.id === docTypeId);
     docTypes = docTypes.filter((d) => d.id !== docTypeId);
@@ -288,7 +318,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminActor),
       action: 'Deleted Document Info',
       feature: 'Document Info Management',
       details: `Deleted document type "${target ? target.title : docTypeId}"`,
@@ -874,7 +904,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: adminUser?.email || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser),
       action: existingIndex >= 0 ? 'Updated News Bulletin' : 'Published News Announcement',
       feature: 'News & Announcements',
       details: `Title: ${saved.title}, Category: ${saved.category}, Urgent: ${saved.is_emergency ? 'Yes' : 'No'}`,
@@ -884,7 +914,7 @@ export const StorageService = {
     return saved;
   },
 
-  deleteNews: async (newsId) => {
+  deleteNews: async (newsId, adminUser) => {
     let news = StorageService.getNews();
     const target = news.find((n) => n.id === newsId);
     news = news.filter((n) => n.id !== newsId);
@@ -916,7 +946,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser),
       action: 'Deleted News Bulletin',
       feature: 'News & Announcements',
       details: `Deleted bulletin "${target ? target.title : newsId}"`,
@@ -949,7 +979,7 @@ export const StorageService = {
     return StorageService.getConfig();
   },
 
-  saveConfig: async (config) => {
+  saveConfig: async (config, adminUser) => {
     const current = StorageService.getConfig();
     const updated = { ...current, ...config, updated_at: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
@@ -964,7 +994,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser),
       action: 'Updated System Configuration',
       feature: 'System Config',
       details: `Barangay: ${updated.barangay_name || 'Barangay Zapatera'}, Punong Barangay: ${updated.punong_barangay || ''}, Office Hours: ${updated.office_hours || ''}`,
@@ -1031,7 +1061,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(notif.created_by_email || notif.user_email),
       action: 'Broadcasted Notification',
       feature: 'Notifications',
       details: `Title: ${notif.title}, Target: ${notif.role_target || 'user'}`,
@@ -1070,24 +1100,30 @@ export const StorageService = {
   },
 
   addLog: async (log) => {
+    const activeEmail = resolveActiveAdminEmail(log.user_email);
+    const resolvedLog = {
+      ...log,
+      user_email: activeEmail,
+    };
+
     const logs = StorageService.getLogs();
     const newEntry = {
       id: `log-${Date.now()}`,
       created_at: new Date().toISOString(),
-      ...log,
+      ...resolvedLog,
     };
     logs.unshift(newEntry);
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 100)));
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 200)));
 
     if (isSupabaseConfigured()) {
       try {
         const payload = {
-          user_id: log.user_id || null,
-          user_email: log.user_email || 'superadmin@zapatera.gov.ph',
-          action: log.action || 'Super Admin Action',
-          feature: log.feature || 'General',
-          details: log.details || '',
-          level: log.level || 'info',
+          user_id: resolvedLog.user_id || StorageService.getCurrentUser()?.id || null,
+          user_email: activeEmail,
+          action: resolvedLog.action || 'Super Admin Action',
+          feature: resolvedLog.feature || 'General',
+          details: resolvedLog.details || '',
+          level: resolvedLog.level || 'info',
           created_at: new Date().toISOString(),
         };
         await supabase.from('activity_logs').insert([payload]);

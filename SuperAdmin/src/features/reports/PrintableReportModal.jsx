@@ -24,6 +24,7 @@ import {
   buildSummaryKPIsCSV,
   generatePrintableHTML,
 } from './reportUtils';
+import { StorageService } from '../../core/storage';
 import { formatCurrency, formatDate } from '../../core/security';
 
 export default function PrintableReportModal({
@@ -86,6 +87,14 @@ export default function PrintableReportModal({
       scope,
     });
 
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Printed Official Operations Report',
+      feature: 'Reports & Analytics',
+      details: `Generated and printed ${title} (${scope.toUpperCase()} scope)`,
+      level: 'info',
+    });
+
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
@@ -136,6 +145,14 @@ export default function PrintableReportModal({
       });
       exportToCSV(`${filenamePrefix}_Executive_Summary.csv`, rows);
     }
+
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Printable Report CSV',
+      feature: 'Reports & Analytics',
+      details: `Downloaded official ${scope.toUpperCase()} report CSV (${filenamePrefix})`,
+      level: 'info',
+    });
   };
 
   const handleDownloadHTML = () => {
@@ -154,6 +171,14 @@ export default function PrintableReportModal({
     });
     const filename = `Barangay_Zapatera_Printable_${scope}_Report_${now.toISOString().slice(0, 10)}.html`;
     exportToHTML(filename, html);
+
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Printable Report HTML',
+      feature: 'Reports & Analytics',
+      details: `Downloaded standalone formatted report HTML (${filename})`,
+      level: 'info',
+    });
   };
 
   return (

@@ -32,6 +32,32 @@ const DEFAULT_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
+export const resolveActiveAdminEmail = (userOrEmail) => {
+  if (userOrEmail && typeof userOrEmail === 'object' && userOrEmail.email) {
+    return userOrEmail.email.toLowerCase().trim();
+  }
+  if (typeof userOrEmail === 'string' && userOrEmail.includes('@') && userOrEmail.toLowerCase().trim() !== 'superadmin@zapatera.gov.ph') {
+    return userOrEmail.toLowerCase().trim();
+  }
+  try {
+    const sessionKeys = [
+      'zapatera_superadmin_session',
+      'zapatera_admin_session',
+      'zapatera_account_mgmt_session',
+    ];
+    for (const key of sessionKeys) {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.email && parsed.email.includes('@')) {
+          return parsed.email.toLowerCase().trim();
+        }
+      }
+    }
+  } catch {}
+  return 'mardee131@gmail.com';
+};
+
 // Storage Service Class
 export const StorageService = {
   // PROFILES / USERS (Directly maps to public.profiles)
@@ -927,24 +953,30 @@ export const StorageService = {
   },
 
   addLog: async (log) => {
+    const activeEmail = resolveActiveAdminEmail(log.user_email);
+    const resolvedLog = {
+      ...log,
+      user_email: activeEmail,
+    };
+
     const logs = StorageService.getLogs();
     const newEntry = {
       id: `log-${Date.now()}`,
       created_at: new Date().toISOString(),
-      ...log,
+      ...resolvedLog,
     };
     logs.unshift(newEntry);
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 100)));
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 200)));
 
     if (isSupabaseConfigured()) {
       try {
         const payload = {
-          user_id: log.user_id || null,
-          user_email: log.user_email || 'superadmin@zapatera.gov.ph',
-          action: log.action || 'Super Admin Action',
-          feature: log.feature || 'General',
-          details: log.details || '',
-          level: log.level || 'info',
+          user_id: resolvedLog.user_id || StorageService.getCurrentUser()?.id || null,
+          user_email: activeEmail,
+          action: resolvedLog.action || 'Super Admin Action',
+          feature: resolvedLog.feature || 'General',
+          details: resolvedLog.details || '',
+          level: resolvedLog.level || 'info',
           created_at: new Date().toISOString(),
         };
         await supabase.from('activity_logs').insert([payload]);

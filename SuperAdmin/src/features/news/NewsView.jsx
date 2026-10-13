@@ -507,7 +507,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       onConfirm: async () => {
         setActionModal((prev) => ({ ...prev, isLoading: true }));
         try {
-          await StorageService.deleteNews(item.id);
+          await StorageService.deleteNews(item.id, currentUser);
           if (item.category === 'Events' && onDeleteEvent) {
             try {
               await onDeleteEvent(item.id);

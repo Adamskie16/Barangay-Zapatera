@@ -276,6 +276,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
       setProfile(updatedPayload);
 
+      StorageService.addLog({
+        user_email: updatedUser.email || currentUser?.email,
+        action: 'Updated Profile Information',
+        feature: 'My Account Profile',
+        details: `Updated personal account profile for ${updatedUser.full_name || updatedUser.email} (${updatedUser.email})`,
+        level: 'info',
+      });
+
       if (onUserUpdated) onUserUpdated(updatedUser);
       showNotification('Profile updated successfully in system & database!');
     } catch (err) {
@@ -370,6 +378,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           }
         });
       } catch (e) {}
+
+      StorageService.addLog({
+        user_email: updatedUser.email || currentUser?.email,
+        action: 'Updated Security Password',
+        feature: 'My Account Profile',
+        details: `Updated account security credentials/password for ${updatedUser.email}`,
+        level: 'warning',
+      });
 
       if (onUserUpdated) onUserUpdated(updatedUser);
 

@@ -167,43 +167,46 @@ export default function App() {
   };
 
   const handleSaveDocType = async (docTypePayload) => {
-    await StorageService.saveDocType(docTypePayload);
+    await StorageService.saveDocType(docTypePayload, currentUser);
     await refreshState();
   };
 
   const handleDeleteDocType = async (docTypeId) => {
-    await StorageService.deleteDocType(docTypeId);
+    await StorageService.deleteDocType(docTypeId, currentUser);
     await refreshState();
   };
 
   const handleSaveEvent = async (eventPayload) => {
-    await StorageService.saveEvent(eventPayload);
+    await StorageService.saveEvent(eventPayload, currentUser);
     await refreshState();
   };
 
   const handleDeleteEvent = async (eventId) => {
-    await StorageService.deleteEvent(eventId);
+    await StorageService.deleteEvent(eventId, currentUser);
     await refreshState();
   };
 
   const handleSaveUser = async (userPayload) => {
-    await StorageService.saveUser(userPayload);
+    await StorageService.saveUser(userPayload, currentUser);
     await refreshState();
   };
 
   const handleDeleteUser = async (userId) => {
-    await StorageService.deleteUser(userId);
+    await StorageService.deleteUser(userId, currentUser);
     await refreshState();
   };
 
   const handleSaveConfig = async (newConfig) => {
-    const updated = await StorageService.saveConfig(newConfig);
+    const updated = await StorageService.saveConfig(newConfig, currentUser);
     setConfig(updated);
     await refreshState();
   };
 
   const handleSendNotification = async (notifPayload) => {
-    await StorageService.addNotification(notifPayload);
+    await StorageService.addNotification({
+      ...notifPayload,
+      created_by_email: currentUser?.email,
+    });
     await refreshState();
   };
 

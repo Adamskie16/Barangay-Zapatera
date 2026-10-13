@@ -1122,7 +1122,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     setActionProcessing(true);
     const targetEmail = securityActionTargetUser.email;
-    const adminEmail = currentUser?.email || 'superadmin@zapatera.gov.ph';
+    const adminEmail = currentUser?.email || StorageService.getCurrentUser()?.email || 'mardee131@gmail.com';
 
     try {
       if (securityActionType === 'unlock') {
@@ -1130,6 +1130,14 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       } else {
         await lockUserAccount(targetEmail, adminEmail, 'SuperAdmin Manual Lockout');
       }
+
+      StorageService.addLog({
+        user_email: adminEmail,
+        action: securityActionType === 'unlock' ? 'Unlocked User Account' : 'Locked User Account',
+        feature: 'User Account Security',
+        details: `${securityActionType === 'unlock' ? 'Manually unlocked' : 'Manually locked'} account for ${targetEmail}`,
+        level: securityActionType === 'unlock' ? 'info' : 'warning',
+      });
 
       await fetchUsers();
     } catch (err) {
@@ -1154,6 +1162,14 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     } catch (err) {
       console.warn('Supabase status toggle notice:', err);
     }
+
+    StorageService.addLog({
+      user_email: currentUser?.email || StorageService.getCurrentUser()?.email,
+      action: updatedStatus ? 'Activated User Account' : 'Deactivated User Account',
+      feature: 'User Account Management',
+      details: `${updatedStatus ? 'Activated' : 'Deactivated'} account for ${user.full_name || user.email} (${user.email})`,
+      level: updatedStatus ? 'info' : 'warning',
+    });
 
     setUsersList((prev) =>
       prev.map((u) => (u.id === user.id ? { ...u, is_active: updatedStatus } : u))

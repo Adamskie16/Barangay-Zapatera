@@ -60,20 +60,13 @@ WITH CHECK (
     )
 );
 
--- 6. RLS Policy: Treasurer can read basic profiles for resident identity verification
+-- 6. RLS Policy: Ensure profiles SELECT is clean without infinite recursion
 DROP POLICY IF EXISTS "treasurer_read_profiles" ON public.profiles;
-CREATE POLICY "treasurer_read_profiles"
+DROP POLICY IF EXISTS "Public Profiles Read" ON public.profiles;
+CREATE POLICY "Public Profiles Read"
 ON public.profiles
 FOR SELECT
-TO authenticated
-USING (
-    EXISTS (
-        SELECT 1 FROM public.profiles
-        WHERE profiles.id = auth.uid()
-        AND profiles.role::text IN ('treasurer', 'admin', 'super_admin', 'superadmin')
-    )
-    OR auth.uid() = id
-);
+USING (true);
 
 -- 7. RLS Policy: Document types can be read by everyone authenticated including treasurer
 DROP POLICY IF EXISTS "authenticated_read_document_types" ON public.document_types;
