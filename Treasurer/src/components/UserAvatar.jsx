@@ -56,8 +56,8 @@ export default function UserAvatar({
   const getRoleColors = () => {
     if (role === 'treasurer') {
       return isDarkMode
-        ? 'bg-amber-950/60 text-amber-300 border-amber-800'
-        : 'bg-amber-100 text-amber-800 border-amber-200';
+        ? 'bg-blue-950/60 text-blue-300 border-blue-800'
+        : 'bg-blue-100 text-blue-800 border-blue-200';
     }
     if (role === 'super_admin') {
       return isDarkMode

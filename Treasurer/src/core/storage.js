@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   DOC_TYPES: 'zapatera_doc_types_db',
   CONFIG: 'zapatera_config_db',
   LOGIN_DESIGNS: 'zapatera_login_designs_db',
+  LOGS: 'zapatera_logs_db',
+  NOTIFICATIONS: 'zapatera_notifications_db',
 };
 
 const DEFAULT_CONFIG = {
@@ -382,5 +384,300 @@ export const StorageService = {
       totalTransactions: requests.length,
       breakdownList,
     };
+  },
+
+  // GENERATE SEQUENTIAL OR NUMBER (Official Receipt)
+  generateNextOrNumber: (existingRequests = []) => {
+    try {
+      const allReqs = existingRequests.length > 0 ? existingRequests : StorageService.getRequests();
+      let maxNum = 0;
+      const currentYear = new Date().getFullYear();
+      const prefix = `OR-${currentYear}-`;
+
+      allReqs.forEach((r) => {
+        const or = String(r.or_number || r.official_receipt_number || '').trim();
+        if (or.startsWith(prefix)) {
+          const numPart = parseInt(or.replace(prefix, ''), 10);
+          if (!isNaN(numPart) && numPart > maxNum) {
+            maxNum = numPart;
+          }
+        }
+      });
+
+      const nextNum = maxNum + 1;
+      return `${prefix}${String(nextNum).padStart(4, '0')}`;
+    } catch {
+      return `OR-${new Date().getFullYear()}-0001`;
+    }
+  },
+
+  // RECORD PAYMENT & ISSUE OFFICIAL RECEIPT
+  recordPaymentAsync: async ({
+    requestId,
+    trackingNumber,
+    amount,
+    paymentMethod = 'cash',
+    orNumber,
+    notes = '',
+    markCompleted = true,
+  }) => {
+    const now = new Date().toISOString();
+    const finalOrNumber = orNumber || StorageService.generateNextOrNumber();
+    const parsedAmount = Number(amount) || 0;
+
+    // 1. Update localStorage
+    const localRequests = StorageService.getRequests();
+    let updatedRequest = null;
+
+    const updatedRequests = localRequests.map((req) => {
+      const match = (req.id && req.id === requestId) || (req.tracking_number && req.tracking_number === trackingNumber);
+      if (match) {
+        updatedRequest = {
+          ...req,
+          payment_status: 'paid',
+          is_paid: true,
+          fee: parsedAmount,
+          amount_paid: parsedAmount,
+          payment_method: paymentMethod,
+          or_number: finalOrNumber,
+          official_receipt_number: finalOrNumber,
+          payment_date: now,
+          treasurer_notes: notes,
+          status: markCompleted ? 'completed' : (req.status || 'approved'),
+          updated_at: now,
+          ...(markCompleted
+            ? {
+                issued_at: req.issued_at || now,
+                claimed_at: req.claimed_at || now,
+                is_claimed: true,
+              }
+            : {}),
+        };
+        return updatedRequest;
+      }
+      return req;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedRequests));
+
+    // 2. Update Supabase if configured
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId);
+        const currentUser = StorageService.getCurrentUser();
+
+        const payload = {
+          payment_status: 'paid',
+          is_paid: true,
+          payment_method: paymentMethod,
+          or_number: finalOrNumber,
+          payment_date: now,
+          fee: parsedAmount,
+          updated_at: now,
+        };
+
+        if (markCompleted) {
+          payload.status = 'completed';
+          payload.issued_at = now;
+          payload.claimed_at = now;
+          payload.is_claimed = true;
+        }
+
+        let query = supabase.from('document_requests').update(payload);
+        if (isUuid) {
+          query = query.eq('id', requestId);
+        } else if (trackingNumber) {
+          query = query.eq('tracking_number', trackingNumber);
+        }
+
+        const { error } = await query;
+        if (error) {
+          console.warn('Supabase document_requests payment update note:', error);
+          // Retry with core columns
+          const minimalPayload = {
+            payment_status: 'paid',
+            is_paid: true,
+            status: markCompleted ? 'completed' : 'approved',
+            updated_at: now,
+          };
+          if (isUuid) {
+            await supabase.from('document_requests').update(minimalPayload).eq('id', requestId);
+          } else if (trackingNumber) {
+            await supabase.from('document_requests').update(minimalPayload).eq('tracking_number', trackingNumber);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase recordPaymentAsync catch:', err);
+    }
+
+    // 3. Log Activity
+    StorageService.logActivity({
+      action: 'Recorded Payment',
+      module: 'Treasury Collections',
+      details: `Collected ₱${parsedAmount} (${paymentMethod.toUpperCase()}) for tracking #${trackingNumber || requestId} with OR No. ${finalOrNumber}.`,
+    });
+
+    return updatedRequest;
+  },
+
+  // WAIVE PAYMENT (Indigent, Senior, PWD, Student)
+  waivePaymentAsync: async ({
+    requestId,
+    trackingNumber,
+    reason = 'Indigent Resident',
+    notes = '',
+    markCompleted = true,
+  }) => {
+    const now = new Date().toISOString();
+
+    // 1. Update localStorage
+    const localRequests = StorageService.getRequests();
+    let updatedRequest = null;
+
+    const updatedRequests = localRequests.map((req) => {
+      const match = (req.id && req.id === requestId) || (req.tracking_number && req.tracking_number === trackingNumber);
+      if (match) {
+        updatedRequest = {
+          ...req,
+          payment_status: 'waived',
+          is_waived: true,
+          waived_reason: reason,
+          treasurer_notes: notes,
+          status: markCompleted ? 'completed' : (req.status || 'approved'),
+          updated_at: now,
+          ...(markCompleted
+            ? {
+                issued_at: req.issued_at || now,
+                claimed_at: req.claimed_at || now,
+                is_claimed: true,
+              }
+            : {}),
+        };
+        return updatedRequest;
+      }
+      return req;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedRequests));
+
+    // 2. Update Supabase
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId);
+
+        const payload = {
+          payment_status: 'waived',
+          is_waived: true,
+          waived_reason: reason,
+          updated_at: now,
+        };
+
+        if (markCompleted) {
+          payload.status = 'completed';
+          payload.is_claimed = true;
+          payload.issued_at = now;
+        }
+
+        let query = supabase.from('document_requests').update(payload);
+        if (isUuid) {
+          query = query.eq('id', requestId);
+        } else if (trackingNumber) {
+          query = query.eq('tracking_number', trackingNumber);
+        }
+
+        const { error } = await query;
+        if (error) {
+          console.warn('Supabase document_requests waive update note:', error);
+          const minPayload = {
+            payment_status: 'waived',
+            status: markCompleted ? 'completed' : 'approved',
+            updated_at: now,
+          };
+          if (isUuid) {
+            await supabase.from('document_requests').update(minPayload).eq('id', requestId);
+          } else if (trackingNumber) {
+            await supabase.from('document_requests').update(minPayload).eq('tracking_number', trackingNumber);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase waivePaymentAsync catch:', err);
+    }
+
+    // 3. Log Activity
+    StorageService.logActivity({
+      action: 'Waived Fee',
+      module: 'Treasury Collections',
+      details: `Waived fee for tracking #${trackingNumber || requestId}. Reason: ${reason}.`,
+    });
+
+    return updatedRequest;
+  },
+
+  // LOG ACTIVITY / AUDIT LOG
+  logActivity: (activity) => {
+    try {
+      const currentUser = StorageService.getCurrentUser();
+      const logs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+      const newEntry = {
+        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        created_at: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
+        action: activity.action || 'Activity',
+        module: activity.module || 'Treasury',
+        details: activity.details || '',
+        performed_by: activity.performed_by || currentUser?.full_name || 'Barangay Treasurer',
+        role: 'treasurer',
+      };
+      logs.unshift(newEntry);
+      localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs.slice(0, 500)));
+
+      if (isSupabaseConfigured()) {
+        supabase.from('audit_logs').insert([{
+          action: newEntry.action,
+          module: newEntry.module,
+          details: newEntry.details,
+          performed_by: currentUser?.id || null,
+          role: 'treasurer',
+          created_at: newEntry.created_at,
+        }]).then(() => {}).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('logActivity warning:', e);
+    }
+  },
+
+  // UPDATE TREASURER PROFILE
+  updateProfileAsync: async (userData) => {
+    const currentUser = StorageService.getCurrentUser() || {};
+    const updated = {
+      ...currentUser,
+      ...userData,
+      updated_at: new Date().toISOString(),
+    };
+
+    StorageService.setCurrentUser(updated);
+
+    if (isSupabaseConfigured() && updated.id) {
+      try {
+        const payload = {
+          full_name: updated.full_name,
+          phone: updated.phone || null,
+          gender: updated.gender || null,
+          age: updated.age || null,
+          updated_at: new Date().toISOString(),
+        };
+        if (updated.avatar_url) {
+          payload.avatar_url = updated.avatar_url;
+        }
+
+        await supabase.from('profiles').update(payload).eq('id', updated.id);
+      } catch (e) {
+        console.warn('Profile update in Supabase warning:', e);
+      }
+    }
+
+    return updated;
   },
 };

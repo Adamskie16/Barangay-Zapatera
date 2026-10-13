@@ -11,7 +11,8 @@ import {
   Receipt,
   CheckCircle2,
   FileText,
-  Landmark,
+  Clock,
+  Gift,
 } from 'lucide-react';
 import PrintableFinancialModal from './PrintableFinancialModal';
 import { formatCurrency } from '../../core/security';
@@ -59,7 +60,7 @@ export default function TreasurerReportsView({
     if (dateRange === 'today') return 'Today (' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ')';
     if (dateRange === 'month') return 'This Month (' + new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ')';
     if (dateRange === 'year') return 'Year ' + new Date().getFullYear();
-    return 'All Time Records (Fiscal Year 2026)';
+    return 'All Records (Fiscal Year ' + new Date().getFullYear() + ')';
   }, [dateRange]);
 
   return (
@@ -68,11 +69,11 @@ export default function TreasurerReportsView({
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-amber-600" />
-            <h1 className="text-lg font-bold text-slate-900">Financial Reports & Auditing</h1>
+            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg font-bold text-slate-900">Collection Reports & Summaries</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Generate and print official certified financial collections statements for Barangay Zapatera.
+            View and print official certified financial collections statements for Barangay Zapatera.
           </p>
         </div>
 
@@ -83,21 +84,21 @@ export default function TreasurerReportsView({
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer"
             >
-              <option value="all">All Time Records</option>
+              <option value="all">All Records</option>
               <option value="today">Today's Collections</option>
               <option value="month">Current Month</option>
-              <option value="year">Current Fiscal Year</option>
+              <option value="year">Current Year</option>
             </select>
           </div>
 
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Printer className="w-4 h-4" />
-            <span>Generate Official Statement</span>
+            <span>Print Official Report</span>
           </button>
         </div>
       </div>
@@ -105,42 +106,42 @@ export default function TreasurerReportsView({
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Selected Gross</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Money Collected</p>
           <h3 className="text-2xl font-black text-slate-900 mt-1">
             {formatCurrency(filteredMetrics.totalRevenue)}
           </h3>
           <p className="text-[11px] text-emerald-600 font-semibold mt-1">
-            {filteredMetrics.paidCount} Paid Transactions
+            {filteredMetrics.paidCount} Paid Requests
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Audited</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Documents</p>
           <h3 className="text-2xl font-black text-slate-900 mt-1">
             {filteredRequests.length}
           </h3>
           <p className="text-[11px] text-slate-500 mt-1">
-            Document Clearance Requests
+            Document Requests Processed
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Waived / Indigent</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Free / Waived</p>
           <h3 className="text-2xl font-black text-slate-900 mt-1">
             {formatCurrency(filteredMetrics.waivedAmount)}
           </h3>
           <p className="text-[11px] text-purple-600 font-semibold mt-1">
-            {filteredMetrics.waivedCount} Indigent Clearances
+            {filteredMetrics.waivedCount} Indigent / Free
           </p>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending / Unpaid</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Waiting for Payment</p>
           <h3 className="text-2xl font-black text-slate-900 mt-1">
             {formatCurrency(filteredMetrics.unpaidAmount)}
           </h3>
-          <p className="text-[11px] text-amber-600 font-semibold mt-1">
-            {filteredMetrics.unpaidCount} Awaiting Payment
+          <p className="text-[11px] text-blue-600 font-semibold mt-1">
+            {filteredMetrics.unpaidCount} Pending Collection
           </p>
         </div>
       </div>
@@ -149,12 +150,12 @@ export default function TreasurerReportsView({
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Collections Distribution by Document Type</h2>
+            <h2 className="text-base font-bold text-slate-900">Collections Breakdown by Document Type</h2>
             <p className="text-xs text-slate-500">Summary totals for {periodLabel}</p>
           </div>
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer"
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print View</span>
@@ -165,10 +166,10 @@ export default function TreasurerReportsView({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
-                <th className="p-3">Document Clearance Template</th>
+                <th className="p-3">Document Type</th>
                 <th className="p-3 text-center">Total Requests</th>
                 <th className="p-3 text-center">Paid Count</th>
-                <th className="p-3 text-right">Revenue (PHP)</th>
+                <th className="p-3 text-right">Money Collected (PHP)</th>
                 <th className="p-3 text-right">Share of Total</th>
               </tr>
             </thead>
@@ -186,7 +187,7 @@ export default function TreasurerReportsView({
                       <td className="p-3 text-center font-bold text-emerald-700">{item.paidTransactions}</td>
                       <td className="p-3 text-right font-black text-slate-900">{formatCurrency(item.totalRevenue)}</td>
                       <td className="p-3 text-right">
-                        <span className="font-semibold text-amber-700">{share}%</span>
+                        <span className="font-semibold text-blue-700">{share}%</span>
                       </td>
                     </tr>
                   );
@@ -202,7 +203,7 @@ export default function TreasurerReportsView({
             {filteredMetrics.breakdownList && filteredMetrics.breakdownList.length > 0 && (
               <tfoot className="bg-slate-50/80 font-black border-t-2 border-slate-200">
                 <tr>
-                  <td className="p-3 uppercase">Total Assessed Collections:</td>
+                  <td className="p-3 uppercase">Total Money Collected:</td>
                   <td className="p-3 text-center">{filteredRequests.length}</td>
                   <td className="p-3 text-center text-emerald-800">{filteredMetrics.paidCount}</td>
                   <td className="p-3 text-right text-sm text-slate-900">{formatCurrency(filteredMetrics.totalRevenue)}</td>

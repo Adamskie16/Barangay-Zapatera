@@ -1,14 +1,137 @@
 // SuperAdmin/src/features/config/ConfigView.jsx
 import React, { useState } from 'react';
-import { Settings, Save, Shield, CheckCircle, Image, Globe, Mail, Phone, Clock, FileCode } from 'lucide-react';
+import {
+  Settings,
+  Save,
+  Shield,
+  CheckCircle,
+  Image,
+  Globe,
+  Mail,
+  Phone,
+  Clock,
+  FileCode,
+  Upload,
+  Lock,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Loader2,
+} from 'lucide-react';
 import { sanitizeInput } from '../../core/security';
+import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import { StorageService } from '../../core/storage';
+import Modal from '../../components/Modal';
 
 export default function ConfigView({ config, onSaveConfig }) {
   const [formData, setFormData] = useState({ ...config });
   const [isSaved, setIsSaved] = useState(false);
+  const [uploadingSeal, setUploadingSeal] = useState(false);
 
-  const handleSubmit = (e) => {
+  // Security Verification Modal State
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [securityPassword, setSecurityPassword] = useState('');
+  const [securityError, setSecurityError] = useState('');
+  const [showSecurityPassword, setShowSecurityPassword] = useState(false);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+
+  async function verifyLoggedInPassword(inputPassword) {
+    if (!inputPassword) return false;
+
+    const session =
+      (typeof StorageService !== 'undefined' && StorageService.getCurrentUser ? StorageService.getCurrentUser() : null) ||
+      JSON.parse(
+        localStorage.getItem('zapatera_superadmin_session') ||
+        localStorage.getItem('zapatera_admin_session') ||
+        'null'
+      );
+    const loggedInEmail = (session?.email || '').trim().toLowerCase();
+    if (!loggedInEmail) return false;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: loggedInEmail,
+          password: inputPassword,
+        });
+        if (!error && data?.user) return true;
+      } catch (e) {
+        return false;
+      }
+    } else {
+      if (session?.password && session.password === inputPassword) return true;
+    }
+    return false;
+  }
+
+  const handleSealUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingSeal(true);
+    try {
+      if (isSupabaseConfigured()) {
+        const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase();
+        const path = `seals/seal_${Date.now()}_${sanitized}`;
+        const { data, error } = await supabase.storage.from('public_assets').upload(path, file, {
+          contentType: file.type || 'image/png',
+          upsert: true,
+        });
+        if (!error && data?.path) {
+          const { data: pubData } = supabase.storage.from('public_assets').getPublicUrl(data.path);
+          if (pubData?.publicUrl) {
+            setFormData((prev) => ({ ...prev, seal_url: pubData.publicUrl }));
+            setUploadingSeal(false);
+            return;
+          }
+        }
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setFormData((prev) => ({ ...prev, seal_url: ev.target.result }));
+        setUploadingSeal(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setFormData((prev) => ({ ...prev, seal_url: ev.target.result }));
+        setUploadingSeal(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleInitiateSave = (e) => {
     e.preventDefault();
+    setSecurityPassword('');
+    setSecurityError('');
+    setShowSecurityPassword(false);
+    setIsSecurityModalOpen(true);
+  };
+
+  const handleConfirmSaveConfig = async () => {
+    if (!securityPassword.trim()) {
+      setSecurityError('Please enter your logged-in account password.');
+      return;
+    }
+    setIsVerifyingPassword(true);
+    setSecurityError('');
+
+    const isValid = await verifyLoggedInPassword(securityPassword);
+    if (!isValid) {
+      setSecurityError('Security Verification Failed: Incorrect logged-in account password.');
+      setIsVerifyingPassword(false);
+      return;
+    }
+
+    setIsVerifyingPassword(false);
+    setIsSecurityModalOpen(false);
+    setSecurityPassword('');
+
+    executeSaveConfig();
+  };
+
+  const executeSaveConfig = () => {
     const updated = {
       ...formData,
       barangay_name: sanitizeInput(formData.barangay_name || 'Barangay Zapatera'),
@@ -44,7 +167,7 @@ export default function ConfigView({ config, onSaveConfig }) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleInitiateSave} className="space-y-6">
         {/* Barangay Branding & Seal */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
@@ -99,17 +222,38 @@ export default function ConfigView({ config, onSaveConfig }) {
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Official Seal Image URL</label>
             <div className="flex items-center space-x-3">
-              <input
-                type="text"
-                value={formData.seal_url || ''}
-                onChange={(e) => setFormData({ ...formData, seal_url: e.target.value })}
-                className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
-              />
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={formData.seal_url || ''}
+                  onChange={(e) => setFormData({ ...formData, seal_url: e.target.value })}
+                  placeholder="https://... or upload official seal"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+              </div>
+              <label
+                className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center space-x-1.5 cursor-pointer shrink-0 transition-colors"
+                title="Upload Official Seal Image"
+              >
+                {uploadingSeal ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5 text-blue-600" />
+                )}
+                <span>{uploadingSeal ? 'Uploading…' : 'Upload Seal'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingSeal}
+                  onChange={handleSealUpload}
+                />
+              </label>
               {formData.seal_url && (
                 <img
                   src={formData.seal_url}
                   alt="Seal Preview"
-                  className="w-10 h-10 rounded-full border border-slate-200 object-cover"
+                  className="w-10 h-10 rounded-full border border-slate-200 object-cover shrink-0"
                 />
               )}
             </div>
@@ -233,6 +377,101 @@ export default function ConfigView({ config, onSaveConfig }) {
           </button>
         </div>
       </form>
+
+      {/* Security Verification Modal for System Configuration */}
+      <Modal
+        isOpen={isSecurityModalOpen}
+        onClose={() => {
+          setIsSecurityModalOpen(false);
+          setSecurityPassword('');
+          setSecurityError('');
+        }}
+        title="Security Verification - Save System Configurations"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start space-x-3">
+            <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm text-blue-950">Authorize System Configuration</p>
+              <p className="text-xs text-blue-800 mt-1">
+                Please enter your logged-in administrator password to authorize modifications to global barangay parameters, official branding seal, and document numbering controls.
+              </p>
+            </div>
+          </div>
+
+          {securityError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center space-x-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{securityError}</span>
+            </div>
+          )}
+
+          <div className="p-3.5 rounded-xl border bg-slate-50 border-slate-200 space-y-2">
+            <label className="block font-bold text-xs flex items-center text-slate-700">
+              <Lock className="w-3.5 h-3.5 mr-1 text-slate-500" /> Logged-in Account Password (Required to Authorize)
+            </label>
+            <div className="relative">
+              <input
+                type={showSecurityPassword ? 'text' : 'password'}
+                required
+                autoFocus
+                value={securityPassword}
+                onChange={(e) => {
+                  setSecurityPassword(e.target.value);
+                  setSecurityError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleConfirmSaveConfig();
+                  }
+                }}
+                placeholder="Enter your logged-in account password"
+                className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs bg-white text-slate-900"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecurityPassword(!showSecurityPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                {showSecurityPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSecurityModalOpen(false);
+                setSecurityPassword('');
+                setSecurityError('');
+              }}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isVerifyingPassword || !securityPassword.trim()}
+              onClick={handleConfirmSaveConfig}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-900/20 flex items-center space-x-2 transition-all cursor-pointer"
+            >
+              {isVerifyingPassword ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Verifying…</span>
+                </>
+              ) : (
+                <>
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Authorize & Save Configurations</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

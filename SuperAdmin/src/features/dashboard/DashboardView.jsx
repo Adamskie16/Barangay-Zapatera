@@ -64,7 +64,7 @@ export default function DashboardView({
   const totalFeesCollected = requests
     .filter((r) => {
       const s = String(r.status || '').toLowerCase().trim();
-      return s === 'approved' || s === 'issued' || s === 'ready_for_pickup' || s === 'completed';
+      return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
     })
     .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
 
@@ -268,7 +268,7 @@ export default function DashboardView({
           value={formatCurrency(totalFeesCollected)}
           icon={DollarSign}
           color="emerald"
-          subtitle="Total fees from issued clearance"
+          subtitle="Collected fees from completed documents"
         />
       </div>
 

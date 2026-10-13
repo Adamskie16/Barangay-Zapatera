@@ -69,6 +69,7 @@ const SAMPLE_SITIOS = [
 ];
 
 const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Separated', 'Divorced'];
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
 export function checkPasswordStrength(password = '') {
   const p = password || '';
@@ -299,7 +300,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
                    (r.id && r.id === user.id)
           );
-          if (match) {
+          if (match && enriched.role === 'resident') {
             enriched = {
               ...match,
               ...enriched,
@@ -313,6 +314,9 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               phone: enriched.phone || match.phone,
               address: enriched.address || match.address,
             };
+          } else if (enriched.role !== 'resident') {
+            enriched.voter_status = null;
+            enriched.sitio = null;
           }
         }
       }
@@ -395,13 +399,17 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     first_name: '',
     middle_initial: '',
     last_name: '',
+    gender: 'Male',
+    age: '',
     birth_date: '',
     civil_status: 'Single',
     voter_status: 'Registered Voter',
     sitio: 'Sitio Zapatera Proper',
-    role: 'resident',
+    role: 'admin',
     phone: '',
     address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
+    office: 'Barangay Zapatera Hall, Cebu City',
+    position: '',
     id_type: 'Government ID',
     id_number: '',
     is_active: true,
@@ -422,8 +430,21 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
   const handleFieldChange = (field, value) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
+      if (field === 'role') {
+        if (value === 'resident' && (!prev.address || prev.address.includes('Hall'))) {
+          updated.address = 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City';
+        } else if (value !== 'resident' && (!prev.address || prev.address.includes('Proper'))) {
+          updated.address = 'Barangay Zapatera Hall, Cebu City';
+        }
+      }
       if (field === 'sitio' && prev.role === 'resident') {
         updated.address = `${value}, Barangay Zapatera, Cebu City`;
+      }
+      if (field === 'birth_date') {
+        const computedAge = calculateAge(value);
+        if (computedAge !== null) {
+          updated.age = computedAge.toString();
+        }
       }
       return updated;
     });
@@ -549,7 +570,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             const localMatch = localResidents.find(
               (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
             );
-            if (localMatch) {
+            if (localMatch && p.role === 'resident') {
               p.first_name = p.first_name || localMatch.first_name;
               p.last_name = p.last_name || localMatch.last_name;
               p.middle_initial = p.middle_initial || localMatch.middle_initial;
@@ -559,6 +580,9 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               p.voter_status = p.voter_status || localMatch.voter_status;
               p.phone = p.phone || localMatch.phone;
               p.address = p.address || localMatch.address;
+            } else if (p.role !== 'resident') {
+              p.voter_status = null;
+              p.sitio = null;
             }
             if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
             seenEmails.add(cleanEmail);
@@ -642,9 +666,22 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         errors.voter_status = 'Voter Registration Status is required.';
       }
     } else {
-      // Administrator Profile Information
-      if (!formData.full_name || !formData.full_name.trim()) {
-        errors.full_name = 'Administrator Full Name is required.';
+      // Administrator / Super Admin / Treasurer Profile Information
+      if (!formData.first_name || !formData.first_name.trim()) {
+        errors.first_name = 'First Name is required.';
+      }
+      if (!formData.last_name || !formData.last_name.trim()) {
+        errors.last_name = 'Last Name is required.';
+      }
+      if (!formData.gender || !formData.gender.trim()) {
+        errors.gender = 'Gender selection is required.';
+      }
+      const ageNum = parseInt(formData.age, 10);
+      if (!formData.age || isNaN(ageNum) || ageNum < 18 || ageNum > 120) {
+        errors.age = 'Please enter a valid age (18 or older).';
+      }
+      if (!formData.address || !formData.address.trim()) {
+        errors.address = 'Office / Address is required.';
       }
     }
 
@@ -683,9 +720,11 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     const cleanMI = (formData.middle_initial || '').trim().toUpperCase().replace(/\.$/, '');
     const cleanLast = (formData.last_name || '').trim();
     const cleanFirst = (formData.first_name || '').trim();
-    const computedFullName = formData.role === 'resident' && (cleanLast || cleanFirst)
+    const computedFullName = (cleanLast && cleanFirst)
       ? `${cleanLast}, ${cleanFirst}${cleanMI ? ' ' + cleanMI + '.' : ''}`
-      : sanitizeInput(formData.full_name);
+      : sanitizeInput(formData.full_name || `${cleanFirst} ${cleanLast}`.trim());
+
+    const ageNum = formData.age ? parseInt(formData.age, 10) : (calculateAge(formData.birth_date) || null);
 
     const payload = {
       email: sanitizeInput(formData.email.toLowerCase().trim()),
@@ -693,14 +732,18 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       first_name: cleanFirst || null,
       middle_initial: cleanMI || null,
       last_name: cleanLast || null,
+      gender: formData.gender || 'Male',
+      age: ageNum,
       birth_date: formData.birth_date || null,
       civil_status: formData.civil_status || 'Single',
-      voter_status: formData.voter_status || 'Registered Voter',
-      sitio: formData.sitio || 'Sitio Zapatera Proper',
-      role: formData.role, // 'admin' or 'resident'
+      voter_status: formData.role === 'resident' ? (formData.voter_status || 'Registered Voter') : null,
+      sitio: formData.role === 'resident' ? (formData.sitio || 'Sitio Zapatera Proper') : null,
+      role: formData.role, // 'admin', 'super_admin', 'treasurer', or 'resident'
       phone: sanitizeInput(formData.phone),
-      address: sanitizeInput(formData.address || `${formData.sitio || 'Barangay Zapatera'}, Cebu City`),
-      id_type: sanitizeInput(formData.id_type || (formData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay ID')),
+      address: sanitizeInput(formData.address || (formData.role === 'resident' ? `${formData.sitio || 'Barangay Zapatera'}, Cebu City` : 'Barangay Zapatera Hall, Cebu City')),
+      office: sanitizeInput(formData.office || formData.address || 'Barangay Zapatera Hall, Cebu City'),
+      position: sanitizeInput(formData.position || (formData.role === 'super_admin' ? 'Super Administrator' : formData.role === 'treasurer' ? 'Barangay Treasurer' : formData.role === 'admin' ? 'Barangay Admin' : 'Resident User')),
+      id_type: sanitizeInput(formData.id_type || (formData.role === 'resident' ? (formData.voter_status === 'Registered Voter' ? 'Voters ID' : 'Barangay ID') : 'Official Government ID')),
       id_number: sanitizeInput(formData.id_number || `BZ-${Date.now().toString().slice(-6)}`),
       is_active: formData.is_active,
       updated_at: new Date().toISOString(),
@@ -753,6 +796,15 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 email_confirm: true,
                 user_metadata: {
                   full_name: pendingUserPayload.full_name,
+                  first_name: pendingUserPayload.first_name,
+                  middle_initial: pendingUserPayload.middle_initial,
+                  last_name: pendingUserPayload.last_name,
+                  gender: pendingUserPayload.gender,
+                  age: pendingUserPayload.age,
+                  birth_date: pendingUserPayload.birth_date,
+                  civil_status: pendingUserPayload.civil_status,
+                  office: pendingUserPayload.office,
+                  position: pendingUserPayload.position,
                   role: pendingUserPayload.role,
                   phone: pendingUserPayload.phone,
                 },
@@ -771,6 +823,15 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               password: formData.password || 'password123',
               metadata: {
                 full_name: pendingUserPayload.full_name,
+                first_name: pendingUserPayload.first_name,
+                middle_initial: pendingUserPayload.middle_initial,
+                last_name: pendingUserPayload.last_name,
+                gender: pendingUserPayload.gender,
+                age: pendingUserPayload.age,
+                birth_date: pendingUserPayload.birth_date,
+                civil_status: pendingUserPayload.civil_status,
+                office: pendingUserPayload.office,
+                position: pendingUserPayload.position,
                 role: pendingUserPayload.role,
                 phone: pendingUserPayload.phone,
               },
@@ -830,6 +891,43 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       } catch (e) {
         console.warn('Notice: localStorage zapatera_residents_db update error:', e);
       }
+    } else {
+      try {
+        const storedDb = localStorage.getItem('zapatera_residents_db');
+        if (storedDb) {
+          let residents = JSON.parse(storedDb);
+          if (Array.isArray(residents)) {
+            const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
+            const filtered = residents.filter(
+              (r) => (r.email && r.email.toLowerCase() !== cleanEmail) && (!editingId || r.id !== editingId)
+            );
+            localStorage.setItem('zapatera_residents_db', JSON.stringify(filtered));
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (pendingUserPayload.role === 'admin' || pendingUserPayload.role === 'treasurer') {
+      try {
+        const storedAdmins = localStorage.getItem('zapatera_admins_db');
+        let admins = storedAdmins ? JSON.parse(storedAdmins) : [];
+        if (!Array.isArray(admins)) admins = [];
+        const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
+        const existingIdx = admins.findIndex((a) => (a.email && a.email.toLowerCase() === cleanEmail) || (editingId && a.id === editingId));
+        const adminEntry = {
+          id: editingId || assignedId || `adm-${Date.now()}`,
+          ...pendingUserPayload,
+          password: formData.password || (existingIdx >= 0 ? admins[existingIdx].password : 'password123'),
+        };
+        if (existingIdx >= 0) {
+          admins[existingIdx] = { ...admins[existingIdx], ...adminEntry };
+        } else {
+          admins.unshift(adminEntry);
+        }
+        localStorage.setItem('zapatera_admins_db', JSON.stringify(admins));
+      } catch (e) {
+        console.warn('Notice: localStorage zapatera_admins_db update error:', e);
+      }
     }
 
     if (pendingUserPayload.role === 'super_admin' || pendingUserPayload.role === 'superadmin') {
@@ -865,6 +963,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         ? 'Super Administrator'
         : pendingUserPayload.role === 'admin'
         ? 'Barangay Admin'
+        : pendingUserPayload.role === 'treasurer'
+        ? 'Barangay Treasurer'
         : 'Resident';
     const isNew = !editingId;
 
@@ -896,19 +996,26 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     setFormGeneralError('');
     setShowProvisionPassword(false);
     setShowProvisionConfirmPassword(false);
+    const nameParts = getResidentNameParts(user);
+    const userAge = user.age || calculateAge(user.birth_date || user.birthdate) || '';
+
     setFormData({
       email: user.email || '',
       full_name: user.full_name || '',
-      first_name: user.first_name || '',
-      middle_initial: user.middle_initial || '',
-      last_name: user.last_name || '',
+      first_name: user.first_name || nameParts.first || '',
+      middle_initial: user.middle_initial || nameParts.mi || '',
+      last_name: user.last_name || nameParts.last || '',
+      gender: user.gender || 'Male',
+      age: userAge ? userAge.toString() : '',
       birth_date: user.birth_date || user.birthdate || '',
       civil_status: user.civil_status || 'Single',
       voter_status: user.voter_status || 'Registered Voter',
       sitio: user.sitio || 'Sitio Zapatera Proper',
-      role: user.role === 'super_admin' || user.role === 'superadmin' ? 'super_admin' : (user.role || 'resident'),
+      role: user.role === 'superadmin' ? 'super_admin' : (user.role || 'admin'),
       phone: user.phone || '',
-      address: user.address || 'Barangay Zapatera, Cebu City',
+      address: user.address || (user.office || 'Barangay Zapatera Hall, Cebu City'),
+      office: user.office || user.address || 'Barangay Zapatera Hall, Cebu City',
+      position: user.position || '',
       id_type: user.id_type || 'Government ID',
       id_number: user.id_number || '',
       is_active: user.is_active !== false,
@@ -1077,13 +1184,17 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       first_name: '',
       middle_initial: '',
       last_name: '',
+      gender: 'Male',
+      age: '',
       birth_date: '',
       civil_status: 'Single',
       voter_status: 'Registered Voter',
       sitio: 'Sitio Zapatera Proper',
-      role: 'resident', // Default creation role: Resident User
+      role: 'admin', // Default to Barangay Admin for streamlined creation
       phone: '',
-      address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
+      address: 'Barangay Zapatera Hall, Cebu City',
+      office: 'Barangay Zapatera Hall, Cebu City',
+      position: 'Barangay Admin',
       id_type: 'Government ID',
       id_number: '',
       is_active: true,
@@ -1328,6 +1439,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             { id: 'all', label: 'All' },
             { id: 'super_admin', label: 'Super Admin' },
             { id: 'admin', label: 'Admin' },
+            { id: 'treasurer', label: 'Treasurer' },
             { id: 'resident', label: 'Resident' },
             { id: 'locked', label: 'Locked Out (3 Failures)' },
           ].map((r) => (
@@ -1465,8 +1577,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
-                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
+                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : u.role === 'treasurer' ? 'success' : 'active'}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : u.role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}
                           </Badge>
                           {u.role === 'resident' && (
                             isUserRegisteredVoter(u) ? (
@@ -1995,6 +2107,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             >
               <option value="super_admin">Super Administrator</option>
               <option value="admin">Barangay Admin</option>
+              <option value="treasurer">Barangay Treasurer</option>
               <option value="resident">Resident User</option>
             </select>
           </div>
@@ -2261,36 +2374,194 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             </>
           ) : (
             <>
-              {/* Administrator Profile Information */}
+              {/* Administrator / Super Admin / Treasurer Profile Information */}
               <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
                 <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
-                  Administrator Credentials *
+                  {formData.role === 'super_admin'
+                    ? 'Super Administrator Credentials *'
+                    : formData.role === 'treasurer'
+                    ? 'Barangay Treasurer Credentials *'
+                    : 'Barangay Admin Credentials *'}
                 </span>
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    Administrator Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.full_name}
-                    onChange={(e) => handleFieldChange('full_name', e.target.value)}
-                    placeholder="e.g. Juan De La Cruz"
-                    className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
-                      fieldErrors.full_name
-                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                        : isDarkMode
-                        ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
-                        : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
-                    }`}
-                  />
-                  {fieldErrors.full_name && (
-                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>{fieldErrors.full_name}</span>
-                    </p>
-                  )}
+
+                {/* 1. Name Information (First Name, M.I., Last Name) */}
+                <div className="grid grid-cols-5 gap-2">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold mb-1">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Juan"
+                      value={formData.first_name}
+                      onChange={(e) => handleFieldChange('first_name', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.first_name
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.first_name && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.first_name}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-span-1">
+                    <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
+                      M.I. (Opt.)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      placeholder="D."
+                      value={formData.middle_initial}
+                      onChange={(e) => handleFieldChange('middle_initial', e.target.value)}
+                      className={`w-full px-2 py-2 text-xs text-center border rounded-lg focus:ring-2 font-bold ${
+                        isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold mb-1">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dela Cruz"
+                      value={formData.last_name}
+                      onChange={(e) => handleFieldChange('last_name', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.last_name
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.last_name && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.last_name}</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
 
+                {/* Formatted Full Name Preview */}
+                {(formData.first_name || formData.last_name) && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-lg flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 dark:text-slate-400">Formatted Official Name:</span>
+                    <span className="font-bold text-blue-700 dark:text-blue-300 font-mono">
+                      {formData.last_name.trim() || '[Last]'}, {formData.first_name.trim() || '[First]'}
+                      {formData.middle_initial?.trim()
+                        ? ` ${formData.middle_initial.trim().toUpperCase().replace(/\.$/, '')}.`
+                        : ''}
+                    </span>
+                  </div>
+                )}
+
+                {/* 2. Personal Credentials: Age, Gender, Date of Birth, Civil Status */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Age <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="18"
+                      max="120"
+                      placeholder="e.g. 35"
+                      value={formData.age}
+                      onChange={(e) => handleFieldChange('age', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 font-mono ${
+                        fieldErrors.age
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                    {fieldErrors.age && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.age}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Gender <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.gender || 'Male'}
+                      onChange={(e) => handleFieldChange('gender', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        fieldErrors.gender
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    >
+                      {GENDER_OPTIONS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.gender && (
+                      <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{fieldErrors.gender}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      max={new Date().toISOString().split('T')[0]}
+                      value={formData.birth_date}
+                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
+                      className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Civil Status</label>
+                    <select
+                      value={formData.civil_status || 'Single'}
+                      onChange={(e) => handleFieldChange('civil_status', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    >
+                      {CIVIL_STATUS_OPTIONS.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 3. Office & Official Address */}
                 <div>
                   <label className="block text-xs font-semibold mb-1">Office / Address</label>
                   <input
@@ -2299,11 +2570,19 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                     onChange={(e) => handleFieldChange('address', e.target.value)}
                     placeholder="e.g. Barangay Zapatera Hall, Cebu City"
                     className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
-                      isDarkMode
+                      fieldErrors.address
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : isDarkMode
                         ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
                         : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
                     }`}
                   />
+                  {fieldErrors.address && (
+                    <p className="text-red-500 dark:text-red-400 text-[11px] mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.address}</span>
+                    </p>
+                  )}
                 </div>
               </div>
             </>
@@ -2570,7 +2849,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             setIsViewModalOpen(false);
             setViewingUser(null);
           }}
-          title="Resident Credentials"
+          title={viewingUser?.role === 'resident' ? 'Resident Credentials' : 'Administrator & Official Credentials'}
           maxWidth="max-w-2xl"
           darkMode={isDarkMode}
         >
@@ -2612,6 +2891,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                               ? 'purple'
                               : viewingUser.role === 'admin'
                               ? 'blue'
+                              : viewingUser.role === 'treasurer'
+                              ? 'success'
                               : 'active'
                           }
                         >
@@ -2619,18 +2900,22 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                             ? 'Super Admin'
                             : viewingUser.role === 'admin'
                             ? 'Barangay Admin'
+                            : viewingUser.role === 'treasurer'
+                            ? 'Barangay Treasurer'
                             : 'Resident'}
                         </Badge>
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            isVoter
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700'
-                              : 'bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                          }`}
-                        >
-                          <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
-                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                        </span>
+                        {viewingUser.role === 'resident' && (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                              isVoter
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700'
+                                : 'bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            }`}
+                          >
+                            <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
+                            {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 font-mono flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-blue-500" />
@@ -2672,7 +2957,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                   <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-800">
                     <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
                       <IdCard className="w-4 h-4 text-blue-500" />
-                      <span>Personal Information & Resident Credentials</span>
+                      <span>Personal Information & Official Credentials</span>
                     </h5>
                     <span className="text-[11px] font-semibold text-slate-400">Barangay Zapatera Records</span>
                   </div>
@@ -2701,11 +2986,28 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
                     <div>
                       <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-blue-500" /> Date of Birth
+                        <Calendar className="w-3 h-3 text-blue-500" /> Date of Birth & Age
                       </span>
                       <p className="font-semibold text-slate-800 dark:text-slate-200">
-                        {birthDateFormatted || 'Not recorded'}
-                        {age !== null && <span className="text-slate-500 font-normal ml-1">({age} yrs old)</span>}
+                        {birthDateFormatted ? (
+                          <>
+                            {birthDateFormatted}
+                            {(age !== null || viewingUser.age) && (
+                              <span className="text-slate-500 font-normal ml-1">({viewingUser.age || age} yrs old)</span>
+                            )}
+                          </>
+                        ) : viewingUser.age ? (
+                          `${viewingUser.age} years old`
+                        ) : (
+                          'Not recorded'
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Gender</span>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
+                        {viewingUser.gender || 'Not specified'}
                       </p>
                     </div>
 
@@ -2716,27 +3018,31 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                       </p>
                     </div>
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Vote className="w-3 h-3 text-blue-500" /> Voter Status
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        isVoter
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300'
-                          : 'bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300'
-                      }`}>
-                        {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                      </span>
-                    </div>
+                    {viewingUser.role === 'resident' && (
+                      <div>
+                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                          <Vote className="w-3 h-3 text-blue-500" /> Voter Status
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          isVoter
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300'
+                            : 'bg-slate-200 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                        </span>
+                      </div>
+                    )}
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-emerald-500" /> Sitio / Area
-                      </span>
-                      <p className="font-semibold text-slate-800 dark:text-slate-200">
-                        {viewingUser.sitio || 'Sitio Zapatera Proper'}
-                      </p>
-                    </div>
+                    {viewingUser.role === 'resident' && (
+                      <div>
+                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-emerald-500" /> Sitio / Area
+                        </span>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">
+                          {viewingUser.sitio || 'Sitio Zapatera Proper'}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="sm:col-span-2">
                       <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">

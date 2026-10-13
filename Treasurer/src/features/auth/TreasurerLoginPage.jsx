@@ -896,7 +896,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
                       type="button"
                       onClick={handleResendConfirmation}
                       disabled={resendLoading}
-                      className="mt-1 inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors"
+                      className="mt-1 inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors"
                     >
                       {resendLoading ? 'Resending...' : 'Resend Confirmation Email'}
                     </button>

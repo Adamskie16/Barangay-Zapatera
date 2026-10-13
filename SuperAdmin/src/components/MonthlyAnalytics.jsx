@@ -24,9 +24,11 @@ export default function MonthlyAnalytics({ requests = [] }) {
     const totalQuantity = monthRequests.length;
     const approvedQuantity = monthRequests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
     const pendingQuantity = monthRequests.filter((r) => r.status === 'pending' || r.status === 'under_review').length;
-    const declinedQuantity = monthRequests.filter((r) => r.status === 'declined').length;
     const revenue = monthRequests
-      .filter((r) => r.status === 'approved' || r.status === 'issued')
+      .filter((r) => {
+        const s = String(r.status || '').toLowerCase().trim();
+        return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
+      })
       .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
 
     return {
@@ -51,7 +53,10 @@ export default function MonthlyAnalytics({ requests = [] }) {
   const totalYtdQuantity = requests.length;
   const totalYtdApproved = requests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
   const totalYtdRevenue = requests
-    .filter((r) => r.status === 'approved' || r.status === 'issued')
+    .filter((r) => {
+      const s = String(r.status || '').toLowerCase().trim();
+      return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
+    })
     .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
 
   const handleExportMonthlyCSV = () => {

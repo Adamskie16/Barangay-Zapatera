@@ -6,7 +6,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create Custom ENUM Types
 DO $$ BEGIN
-    CREATE TYPE user_role_enum AS ENUM ('super_admin', 'admin', 'resident');
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role_enum') THEN
+        CREATE TYPE user_role_enum AS ENUM ('super_admin', 'admin', 'resident', 'treasurer');
+    ELSE
+        ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'treasurer';
+    END IF;
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
@@ -52,6 +56,10 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_name TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS middle_initial TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS sitio TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS voter_status TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS age INTEGER;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS office TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS position TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS privacy_policy_accepted BOOLEAN DEFAULT true;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0;
@@ -360,6 +368,8 @@ BEGIN
         meta_role := LOWER(COALESCE(NEW.raw_user_meta_data->>'role', 'resident'));
         IF meta_role = 'super_admin' OR meta_role = 'superadmin' THEN
             assigned_role := 'super_admin'::user_role_enum;
+        ELSIF meta_role = 'treasurer' THEN
+            assigned_role := 'treasurer'::user_role_enum;
         ELSIF meta_role = 'admin' THEN
             assigned_role := 'admin'::user_role_enum;
         ELSE

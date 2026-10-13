@@ -80,7 +80,7 @@ export default function PrintableFinancialModal({
         {/* Top Control Bar (Hidden during print) */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0 print:hidden">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
               <Landmark className="w-4 h-4" />
             </div>
             <div>
@@ -99,7 +99,7 @@ export default function PrintableFinancialModal({
             </button>
             <button
               onClick={handlePrint}
-              className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print Official Statement</span>
@@ -131,7 +131,7 @@ export default function PrintableFinancialModal({
                 <h1 className="text-xl sm:text-2xl font-black font-serif uppercase tracking-tight text-slate-900">
                   BARANGAY ZAPATERA
                 </h1>
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-800">
                   OFFICE OF THE BARANGAY TREASURER
                 </p>
               </div>

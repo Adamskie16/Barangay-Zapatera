@@ -89,10 +89,10 @@ export default function App() {
   }
 
   const tabTitles = {
-    dashboard: 'Financial Dashboard & Revenue Overview',
-    collections: 'Barangay Zapatera Collections Ledger',
-    reports: 'Audited Financial Statements & Reports',
-    account: 'Treasurer Profile & Security',
+    dashboard: 'Treasurer Dashboard',
+    collections: 'Document Payments & Receipts',
+    reports: 'Collection Reports & Summaries',
+    account: 'My Profile & Account',
   };
 
   return (
@@ -125,6 +125,8 @@ export default function App() {
                 metrics={metrics}
                 requests={requests}
                 docTypes={docTypes}
+                config={config}
+                onRefresh={refreshFinancialData}
                 onNavigateToCollections={() => setActiveTab('collections')}
                 onNavigateToReports={() => setActiveTab('reports')}
               />
@@ -134,7 +136,10 @@ export default function App() {
               <CollectionsLedgerView
                 requests={requests}
                 docTypes={docTypes}
+                config={config}
                 loading={loading}
+                currentUser={currentUser}
+                onRefresh={refreshFinancialData}
                 onNavigateToReports={() => setActiveTab('reports')}
               />
             )}
@@ -151,6 +156,7 @@ export default function App() {
             {activeTab === 'account' && (
               <AccountView
                 currentUser={currentUser}
+                onProfileUpdated={(updated) => setCurrentUser(updated)}
                 onLogout={handleLogout}
               />
             )}

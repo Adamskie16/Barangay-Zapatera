@@ -327,10 +327,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       title: '',
       category: prefillCategory,
       description: '',
-      content: '',
-      banner_url: isEventCat
-        ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80'
-        : 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+      banner_url: '',
       location: 'Barangay Zapatera, Cebu City',
       event_date: isEventCat ? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16) : '',
       author: currentUser?.full_name || 'Barangay Administration',

@@ -1,5 +1,5 @@
 // Admin/src/features/requests/ApprovedDocumentsView.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ActionModal from '../../components/ActionModal';
 import DataTable from '../../components/DataTable';
 import {

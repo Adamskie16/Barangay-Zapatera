@@ -17,11 +17,12 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import DataTable from '../../components/DataTable';
 
 /**
- * Filter strictly for creation actions:
- * 1. Creating an event
- * 2. Creating bulletins / announcements
- * 3. Creating an account
- * 4. Creating a document template
+ * Filter activity logs for creations, edits, and deletions:
+ * 1. Events
+ * 2. Bulletins / Announcements / News
+ * 3. User Accounts & Profiles
+ * 4. Document Templates & Types
+ * 5. System Configurations
  */
 export const isPermittedActivityLog = (log) => {
   if (!log) return false;
@@ -39,16 +40,34 @@ export const isPermittedActivityLog = (log) => {
     details.includes('registered') ||
     details.includes('published');
 
-  if (!isCreateAction) return false;
+  const isEditAction =
+    action.includes('edit') ||
+    action.includes('updat') ||
+    action.includes('modif') ||
+    action.includes('change') ||
+    details.includes('edited') ||
+    details.includes('updated') ||
+    details.includes('modified') ||
+    details.includes('changed');
 
-  // 1. Creating an event
+  const isDeleteAction =
+    action.includes('delet') ||
+    action.includes('remov') ||
+    action.includes('trash') ||
+    action.includes('archive') ||
+    details.includes('deleted') ||
+    details.includes('removed');
+
+  if (!isCreateAction && !isEditAction && !isDeleteAction) return false;
+
+  // 1. Event
   const isEvent =
     action.includes('event') ||
     feature.includes('event') ||
     feature.includes('calendar') ||
     details.includes('event');
 
-  // 2. Creating bulletins / announcements
+  // 2. Bulletin / Announcement / News
   const isBulletin =
     action.includes('bulletin') ||
     action.includes('announcement') ||
@@ -58,24 +77,32 @@ export const isPermittedActivityLog = (log) => {
     details.includes('bulletin') ||
     details.includes('announcement');
 
-  // 3. Creating an account
+  // 3. User Account / Profile
   const isAccount =
     action.includes('account') ||
     action.includes('user') ||
     action.includes('profile') ||
     feature.includes('account') ||
     feature.includes('user') ||
+    feature.includes('profile') ||
     details.includes('account') ||
     details.includes('profile');
 
-  // 4. Creating a document template
+  // 4. Document Template / Type
   const isDocTemplate =
     action.includes('template') ||
     feature.includes('template') ||
+    action.includes('document info') ||
     (action.includes('document') &&
-      (action.includes('template') || details.includes('template') || feature.includes('template')));
+      (action.includes('template') || details.includes('template') || feature.includes('template') || details.includes('document type')));
 
-  return isEvent || isBulletin || isAccount || isDocTemplate;
+  // 5. System Configuration
+  const isConfig =
+    action.includes('config') ||
+    feature.includes('config') ||
+    details.includes('config');
+
+  return isEvent || isBulletin || isAccount || isDocTemplate || isConfig;
 };
 
 export const getLogCategory = (log) => {
@@ -83,7 +110,15 @@ export const getLogCategory = (log) => {
   const feature = (log.feature || '').toLowerCase();
   const details = (log.details || '').toLowerCase();
 
-  if (action.includes('template') || feature.includes('template') || details.includes('template')) {
+  if (action.includes('config') || feature.includes('config') || details.includes('config')) {
+    return 'System Config';
+  }
+  if (
+    action.includes('template') ||
+    feature.includes('template') ||
+    details.includes('template') ||
+    action.includes('document info')
+  ) {
     return 'Document Template';
   }
   if (
@@ -108,11 +143,12 @@ export const getLogCategory = (log) => {
     action.includes('user') ||
     action.includes('profile') ||
     feature.includes('account') ||
-    feature.includes('user')
+    feature.includes('user') ||
+    feature.includes('profile')
   ) {
     return 'User Account';
   }
-  return 'General Creation';
+  return 'General';
 };
 
 export default function ActivityLogsView({ currentUser, isDarkMode }) {
@@ -289,13 +325,33 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
       },
       {
         key: 'action',
-        label: 'Creation Action',
+        label: 'Action',
         sortable: true,
-        render: (log) => (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
-            {log.action}
-          </span>
-        ),
+        render: (log) => {
+          const actionLower = (log.action || '').toLowerCase();
+          const isDelete = actionLower.includes('delet') || actionLower.includes('remov') || actionLower.includes('trash') || actionLower.includes('archive');
+          const isEdit = actionLower.includes('edit') || actionLower.includes('updat') || actionLower.includes('modif') || actionLower.includes('change');
+
+          if (isDelete) {
+            return (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800">
+                {log.action}
+              </span>
+            );
+          }
+          if (isEdit) {
+            return (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800">
+                {log.action}
+              </span>
+            );
+          }
+          return (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+              {log.action}
+            </span>
+          );
+        },
       },
       {
         key: 'details',
@@ -303,7 +359,7 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
         sortable: false,
         render: (log) => (
           <span className="text-slate-700 dark:text-slate-300 text-xs font-sans max-w-sm line-clamp-2 leading-relaxed">
-            {log.details || 'Creation record successfully saved.'}
+            {log.details || 'Activity record successfully saved.'}
           </span>
         ),
       },
@@ -315,11 +371,11 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
     activeTab: activeCategory,
     onChange: (tabId) => setActiveCategory(tabId),
     tabs: [
-      { id: 'all', label: 'All Permitted Logs', count: tabCounts.all },
-      { id: 'events', label: 'Events Created', count: tabCounts.events },
-      { id: 'bulletins', label: 'Bulletins Created', count: tabCounts.bulletins },
-      { id: 'accounts', label: 'Accounts Created', count: tabCounts.accounts },
-      { id: 'templates', label: 'Templates Created', count: tabCounts.templates },
+      { id: 'all', label: 'All Activity Logs', count: tabCounts.all },
+      { id: 'events', label: 'Events', count: tabCounts.events },
+      { id: 'bulletins', label: 'Bulletins', count: tabCounts.bulletins },
+      { id: 'accounts', label: 'Accounts', count: tabCounts.accounts },
+      { id: 'templates', label: 'Templates', count: tabCounts.templates },
     ],
   };
 
@@ -336,7 +392,7 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
             Activity Logs
           </h2>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Records of created events, bulletins, user accounts, and document templates.
+            Records of created, edited, and deleted events, bulletins, user accounts, and document templates.
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -444,8 +500,8 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
         pageSizeOptions={[10, 25, 50]}
         defaultSortKey="created_at"
         defaultSortDirection="desc"
-        emptyTitle="No Creation Activity Logs Found"
-        emptySubtitle="Only events, bulletins, user accounts, and document template creation actions are logged."
+        emptyTitle="No Activity Logs Found"
+        emptySubtitle="Activity logs for events, bulletins, user accounts, and templates will appear here."
         loading={loading}
       />
     </div>

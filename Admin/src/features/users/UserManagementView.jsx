@@ -239,7 +239,7 @@ export default function UserManagementView({ currentUser }) {
             (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
                    (r.id && r.id === user.id)
           );
-          if (match) {
+          if (match && enriched.role === 'resident') {
             enriched = {
               ...match,
               ...enriched,
@@ -253,6 +253,9 @@ export default function UserManagementView({ currentUser }) {
               phone: enriched.phone || match.phone,
               address: enriched.address || match.address,
             };
+          } else if (enriched.role !== 'resident') {
+            enriched.voter_status = null;
+            enriched.sitio = null;
           }
         }
       }
@@ -377,7 +380,7 @@ export default function UserManagementView({ currentUser }) {
             const localMatch = localResidents.find(
               (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
             );
-            if (localMatch) {
+            if (localMatch && p.role === 'resident') {
               p.first_name = p.first_name || localMatch.first_name;
               p.last_name = p.last_name || localMatch.last_name;
               p.middle_initial = p.middle_initial || localMatch.middle_initial;
@@ -387,6 +390,9 @@ export default function UserManagementView({ currentUser }) {
               p.voter_status = p.voter_status || localMatch.voter_status;
               p.phone = p.phone || localMatch.phone;
               p.address = p.address || localMatch.address;
+            } else if (p.role !== 'resident') {
+              p.voter_status = null;
+              p.sitio = null;
             }
             if (!cleanEmail || seenEmails.has(cleanEmail)) continue;
             seenEmails.add(cleanEmail);
@@ -755,8 +761,8 @@ export default function UserManagementView({ currentUser }) {
 
                       <td className="px-6 py-4 space-y-1">
                         <div>
-                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
-                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
+                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : u.role === 'treasurer' ? 'success' : 'active'}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : u.role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}
                           </Badge>
                         </div>
                         {u.role === 'resident' && (
@@ -956,6 +962,8 @@ export default function UserManagementView({ currentUser }) {
                               ? 'purple'
                               : viewingUser.role === 'admin'
                               ? 'blue'
+                              : viewingUser.role === 'treasurer'
+                              ? 'success'
                               : 'active'
                           }
                         >
@@ -963,18 +971,22 @@ export default function UserManagementView({ currentUser }) {
                             ? 'Super Admin'
                             : viewingUser.role === 'admin'
                             ? 'Barangay Admin'
+                            : viewingUser.role === 'treasurer'
+                            ? 'Barangay Treasurer'
                             : 'Resident'}
                         </Badge>
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            isVoter
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-slate-100 text-slate-700 border border-slate-300'
-                          }`}
-                        >
-                          <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600' : 'text-slate-400'}`} />
-                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                        </span>
+                        {viewingUser.role === 'resident' && (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                              isVoter
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-slate-100 text-slate-700 border border-slate-300'
+                            }`}
+                          >
+                            <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
                         <Mail className="w-3.5 h-3.5 text-blue-600" />
@@ -1043,11 +1055,28 @@ export default function UserManagementView({ currentUser }) {
 
                     <div>
                       <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-blue-600" /> Date of Birth
+                        <Calendar className="w-3 h-3 text-blue-600" /> Date of Birth & Age
                       </span>
                       <p className="font-semibold text-slate-800">
-                        {birthDateFormatted || 'Not recorded'}
-                        {age !== null && <span className="text-slate-500 font-normal ml-1">({age} yrs old)</span>}
+                        {birthDateFormatted ? (
+                          <>
+                            {birthDateFormatted}
+                            {(age !== null || viewingUser.age) && (
+                              <span className="text-slate-500 font-normal ml-1">({viewingUser.age || age} yrs old)</span>
+                            )}
+                          </>
+                        ) : viewingUser.age ? (
+                          `${viewingUser.age} years old`
+                        ) : (
+                          'Not recorded'
+                        )}
+                      </p>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-slate-400 block mb-1">Gender</span>
+                      <p className="font-semibold text-slate-800 capitalize">
+                        {viewingUser.gender || 'Not specified'}
                       </p>
                     </div>
 
@@ -1058,27 +1087,31 @@ export default function UserManagementView({ currentUser }) {
                       </p>
                     </div>
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Vote className="w-3 h-3 text-blue-600" /> Voter Status
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        isVoter
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : 'bg-slate-200 text-slate-700 border border-slate-300'
-                      }`}>
-                        {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                      </span>
-                    </div>
+                    {viewingUser.role === 'resident' && (
+                      <div>
+                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                          <Vote className="w-3 h-3 text-blue-600" /> Voter Status
+                        </span>
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          isVoter
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-slate-200 text-slate-700 border border-slate-300'
+                        }`}>
+                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                        </span>
+                      </div>
+                    )}
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-emerald-600" /> Sitio / Area
-                      </span>
-                      <p className="font-semibold text-slate-800">
-                        {viewingUser.sitio || 'Sitio Zapatera Proper'}
-                      </p>
-                    </div>
+                    {viewingUser.role === 'resident' && (
+                      <div>
+                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-emerald-600" /> Sitio / Area
+                        </span>
+                        <p className="font-semibold text-slate-800">
+                          {viewingUser.sitio || 'Sitio Zapatera Proper'}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="sm:col-span-2">
                       <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">

@@ -11,50 +11,53 @@ import {
   FileText,
   ArrowRight,
   ShieldCheck,
-  Landmark,
+  DollarSign,
+  Gift,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../core/security';
 
 export default function TreasurerDashboardView({
-  metrics,
+  metrics = {},
   requests = [],
   docTypes = [],
+  config = {},
+  onRefresh,
   onNavigateToCollections,
   onNavigateToReports,
 }) {
-  const recentTransactions = requests.slice(0, 6);
+  const recentTransactions = requests.slice(0, 8);
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-amber-900/80 via-slate-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-amber-500/20 shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Blue Header Banner matching Zapatera system theme */}
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-blue-500/20 shadow-xl relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold mb-3">
-            <Landmark className="w-3.5 h-3.5 text-amber-400" />
-            Treasury & Financial Auditing System
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold mb-3">
+            <Receipt className="w-3.5 h-3.5 text-blue-400" />
+            Barangay Zapatera Treasury
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Barangay Financial Overview
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            Document Fee Collections
           </h1>
           <p className="mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Real-time tracking of documentary fee revenues, official receipt issuances, and verified payments for Barangay Zapatera.
+            Track document fees paid by residents, issue official receipts, and monitor total money collected for Barangay Zapatera.
           </p>
         </div>
       </div>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Revenue */}
+        {/* Total Collected */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Revenue</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Money Collected</p>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-              {formatCurrency(metrics.totalRevenue)}
+              {formatCurrency(metrics.totalRevenue || 0)}
             </h3>
             <p className="text-[11px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
-              {metrics.paidCount} Paid Transactions
+              {metrics.paidCount || 0} Paid Requests
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
@@ -67,13 +70,13 @@ export default function TreasurerDashboardView({
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Today's Collections</p>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-              {formatCurrency(metrics.todayRevenue)}
+              {formatCurrency(metrics.todayRevenue || 0)}
             </h3>
-            <p className="text-[11px] text-slate-500 font-medium mt-1">
-              Today: {new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <p className="text-[11px] text-blue-600 font-semibold mt-1">
+              Collected today
             </p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
             <Calendar className="w-6 h-6" />
           </div>
         </div>
@@ -81,50 +84,50 @@ export default function TreasurerDashboardView({
         {/* This Month's Collections */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">This Month</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">This Month's Collections</p>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-              {formatCurrency(metrics.thisMonthRevenue)}
+              {formatCurrency(metrics.thisMonthRevenue || 0)}
             </h3>
-            <p className="text-[11px] text-blue-600 font-semibold mt-1">
-              Current Fiscal Month
+            <p className="text-[11px] text-indigo-600 font-semibold mt-1">
+              Current month
             </p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
             <CreditCard className="w-6 h-6" />
           </div>
         </div>
 
-        {/* Waived / Pending */}
+        {/* Free / Waived */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Waived / Indigent</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Free / Waived Requests</p>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
-              {formatCurrency(metrics.waivedAmount)}
+              {metrics.waivedCount || 0} Free
             </h3>
             <p className="text-[11px] text-purple-600 font-semibold mt-1">
-              {metrics.waivedCount} Indigent Clearances
+              {formatCurrency(metrics.waivedAmount || 0)} total waived
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-            <Receipt className="w-6 h-6" />
+            <Gift className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* Grid: Collections Breakdown & Recent Transactions */}
+      {/* Grid: Collections by Document Type & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Revenue Breakdown by Document Type */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Collections by Document Type</h2>
-              <p className="text-xs text-slate-500">Distribution of collected fees across official clearance templates</p>
+              <h2 className="text-base font-bold text-slate-900">Fees Collected by Document Type</h2>
+              <p className="text-xs text-slate-500">Summary of payments received per document clearance</p>
             </div>
             <button
               onClick={onNavigateToReports}
-              className="text-xs font-semibold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
-              <span>Generate Audit Report</span>
+              <span>View Full Reports</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -143,12 +146,12 @@ export default function TreasurerDashboardView({
                       <span className="font-black text-slate-900">{formatCurrency(item.totalRevenue)}</span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>{item.paidTransactions} of {item.totalTransactions} paid transactions</span>
-                      <span className="font-semibold text-amber-700">{percentage}% of total</span>
+                      <span>{item.paidTransactions} of {item.totalTransactions} paid requests</span>
+                      <span className="font-semibold text-blue-700">{percentage}% of total</span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
                         style={{ width: `${Math.min(100, Math.max(2, percentage))}%` }}
                       />
                     </div>
@@ -156,34 +159,34 @@ export default function TreasurerDashboardView({
                 );
               })
             ) : (
-              <p className="text-xs text-slate-400 py-6 text-center">No transaction records found yet.</p>
+              <p className="text-xs text-slate-400 py-6 text-center">No payment records found yet.</p>
             )}
           </div>
         </div>
 
-        {/* Right Col: Quick Auditing Summary */}
+        {/* Right Col: Quick Overview & Actions */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <ShieldCheck className="w-5 h-5 text-amber-600" />
-              <h3 className="text-base font-bold text-slate-900">Auditing Checklist</h3>
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <h3 className="text-base font-bold text-slate-900">Payment Status Summary</h3>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              As Barangay Treasurer, all financial collections are strictly read-only for audit, verification, and transparency reporting.
+              Track pending payments and confirm receipts when residents claim their documents.
             </p>
 
             <div className="mt-4 space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center justify-between">
-                <span className="font-medium">Paid Transactions</span>
-                <span className="font-black">{metrics.paidCount}</span>
+                <span className="font-medium">Paid Documents</span>
+                <span className="font-black">{metrics.paidCount || 0}</span>
               </div>
-              <div className="p-2.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-between">
-                <span className="font-medium">Unpaid / In Process</span>
-                <span className="font-black">{metrics.unpaidCount} ({formatCurrency(metrics.unpaidAmount)})</span>
+              <div className="p-2.5 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 flex items-center justify-between">
+                <span className="font-medium">Waiting for Payment</span>
+                <span className="font-black">{metrics.unpaidCount || 0} ({formatCurrency(metrics.unpaidAmount || 0)})</span>
               </div>
               <div className="p-2.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 flex items-center justify-between">
-                <span className="font-medium">Waived Clearances</span>
-                <span className="font-black">{metrics.waivedCount} ({formatCurrency(metrics.waivedAmount)})</span>
+                <span className="font-medium">Free / Waived Requests</span>
+                <span className="font-black">{metrics.waivedCount || 0}</span>
               </div>
             </div>
           </div>
@@ -191,17 +194,17 @@ export default function TreasurerDashboardView({
           <div className="pt-4 border-t border-slate-100 space-y-2">
             <button
               onClick={onNavigateToCollections}
-              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
             >
-              <Receipt className="w-4 h-4 text-amber-400" />
-              <span>Open Collections Ledger</span>
+              <Receipt className="w-4 h-4 text-white" />
+              <span>Record Payment & Issue Receipts</span>
             </button>
             <button
               onClick={onNavigateToReports}
-              className="w-full py-2.5 px-4 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <FileText className="w-4 h-4 text-amber-600" />
-              <span>Official Print Statements</span>
+              <FileText className="w-4 h-4 text-slate-600" />
+              <span>Print Collection Report</span>
             </button>
           </div>
         </div>
@@ -211,14 +214,14 @@ export default function TreasurerDashboardView({
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Recent Collections Activity</h2>
-            <p className="text-xs text-slate-500">Most recent document clearance requests and payment records</p>
+            <h2 className="text-base font-bold text-slate-900">Recent Document Payments</h2>
+            <p className="text-xs text-slate-500">Latest document requests and payment status</p>
           </div>
           <button
             onClick={onNavigateToCollections}
-            className="text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline inline-flex items-center gap-1 cursor-pointer"
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
           >
-            <span>View Full Ledger</span>
+            <span>View All Payments</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -227,12 +230,13 @@ export default function TreasurerDashboardView({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
-                <th className="p-3">Tracking No.</th>
-                <th className="p-3">Resident / Requestor</th>
-                <th className="p-3">Document Type</th>
-                <th className="p-3 text-right">Fee (PHP)</th>
-                <th className="p-3 text-center">Payment Status</th>
+                <th className="p-3">Tracking Number</th>
+                <th className="p-3">Resident Name</th>
+                <th className="p-3">Document</th>
+                <th className="p-3 text-right">Fee</th>
+                <th className="p-3 text-center">Status</th>
                 <th className="p-3">Date</th>
+                <th className="p-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -251,7 +255,7 @@ export default function TreasurerDashboardView({
                         {req.full_name || req.user_name || req.resident_name || 'Resident'}
                       </td>
                       <td className="p-3 text-slate-700">
-                        {req.document_type || req.document_name || 'Official Clearance'}
+                        {req.document_type || req.document_name || 'Clearance'}
                       </td>
                       <td className="p-3 text-right font-black text-slate-900">
                         {formatCurrency(fee)}
@@ -263,22 +267,30 @@ export default function TreasurerDashboardView({
                               ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                               : isWaived
                               ? 'bg-purple-50 text-purple-800 border border-purple-300'
-                              : 'bg-amber-50 text-amber-800 border border-amber-300'
+                              : 'bg-blue-50 text-blue-800 border border-blue-300'
                           }`}
                         >
-                          {isPaid ? 'Paid' : isWaived ? 'Waived' : 'Unpaid'}
+                          {isPaid ? 'Paid' : isWaived ? 'Free (Waived)' : 'Unpaid'}
                         </span>
                       </td>
                       <td className="p-3 text-slate-500">
                         {formatDate(req.created_at || req.payment_date)}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={onNavigateToCollections}
+                          className="px-2.5 py-1 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          {isPaid ? 'View Receipt' : 'Collect Fee'}
+                        </button>
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-slate-400">
-                    No transactions recorded.
+                  <td colSpan={7} className="p-6 text-center text-slate-400">
+                    No document payment records found.
                   </td>
                 </tr>
               )}
