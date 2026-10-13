@@ -151,7 +151,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
-      setError('Your account has been locked after 3 failed login attempts. Please unlock your account using the verification code sent to your email.');
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
       setLoading(false);
       return;
     }
@@ -173,7 +173,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     }
 
     if (!profile || (profile.role && profile.role.toLowerCase() !== 'resident')) {
-      setError('Invalid email or password.');
+      setError('Email or password is incorrect.');
       setLoading(false);
       return;
     }
@@ -199,10 +199,9 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
           const lockRes = await recordFailedAttempt(cleanEmail, 'resident');
           if (lockRes.isLockedOut || lockRes.attempts >= 3) {
             setIsLocked(true);
-            setError('Your account has been locked after 3 failed login attempts. Please unlock your account using the verification code sent to your email.');
+            setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
           } else {
-            const remaining = lockRes.remaining ?? (3 - lockRes.attempts);
-            setError(`Invalid email or password. You have ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} remaining.`);
+            setError('Email or password is incorrect.');
           }
           setLoading(false);
           return;

@@ -1234,13 +1234,14 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
     setActionProcessing(true);
     const targetEmail = securityActionTargetUser.email;
+    const adminId = currentUser?.id || currentUser?.email || 'mardee131@gmail.com';
     const adminEmail = currentUser?.email || 'mardee131@gmail.com';
 
     try {
       if (securityActionType === 'unlock') {
-        await unlockUserAccount(targetEmail, adminEmail);
+        await unlockUserAccount(targetEmail, adminId);
       } else {
-        await lockUserAccount(targetEmail, adminEmail, 'SuperAdmin Manual Lockout');
+        await lockUserAccount(targetEmail, adminId, 'SuperAdmin Manual Lockout');
       }
 
       await fetchUsers();
@@ -1552,8 +1553,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 </tr>
               ) : (
                 paginatedUsers.map((u) => {
-                  const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
-                  const failedCount = isLocked ? Math.max(u.failed_attempts || 0, 3) : (u.failed_attempts || 0);
+                  const isLocked = u.is_locked || (u.failed_login_attempts || 0) >= 3 || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
 
                   return (
                     <tr key={u.id || u.email} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors ${
@@ -1604,7 +1604,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                           <div className="flex flex-col space-y-1">
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800">
                               <Lock className="w-3 h-3" />
-                              <span>Locked ({failedCount}/3 Failed)</span>
+                              <span>Locked - 3 Failed Attempts</span>
                             </span>
                             {u.locked_at && (
                               <span className="text-[10px] text-slate-400 font-mono">
@@ -1615,7 +1615,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                         ) : (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
                             <CheckCircle className="w-3.5 h-3.5" />
-                            <span>Active (Secure)</span>
+                            <span>Active</span>
                           </span>
                         )}
                       </td>

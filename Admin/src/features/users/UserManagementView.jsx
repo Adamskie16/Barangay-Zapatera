@@ -498,13 +498,13 @@ export default function UserManagementView({ currentUser }) {
     }
 
     setIsProcessing(true);
-    const adminEmail = currentUser?.email || 'admin@zapatera.gov.ph';
+    const adminId = currentUser?.id || currentUser?.email || 'admin@zapatera.gov.ph';
 
     try {
       if (actionType === 'unlock') {
-        await unlockUserAccount(targetUser.email, adminEmail);
+        await unlockUserAccount(targetUser.email, adminId);
       } else {
-        await lockUserAccount(targetUser.email, adminEmail, 'Manual Admin Lockout');
+        await lockUserAccount(targetUser.email, adminId, 'Manual Admin Lockout');
       }
 
       await fetchUsers();
@@ -741,7 +741,7 @@ export default function UserManagementView({ currentUser }) {
                 </tr>
               ) : (
                 paginatedUsers.map((u) => {
-                  const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3;
+                  const isLocked = u.is_locked || (u.failed_login_attempts || 0) >= 3 || (u.failed_attempts || 0) >= 3;
                   return (
                     <tr key={u.id || u.email} className="hover:bg-slate-50/80 transition-colors text-slate-700">
                       <td className="px-6 py-4">
@@ -789,7 +789,7 @@ export default function UserManagementView({ currentUser }) {
                           <div className="inline-flex flex-col space-y-1">
                             <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                               <Lock className="w-3 h-3 mr-1" />
-                              <span>Locked ({Math.max(u.failed_attempts || 0, 3)}/3 Failed)</span>
+                              <span>Locked - 3 Failed Attempts</span>
                             </span>
                             {u.locked_at && (
                               <span className="text-[10px] text-slate-400 font-mono">
@@ -800,7 +800,7 @@ export default function UserManagementView({ currentUser }) {
                         ) : (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <CheckCircle className="w-3 h-3 mr-1" />
-                            <span>Active (Secure)</span>
+                            <span>Active</span>
                           </span>
                         )}
                       </td>

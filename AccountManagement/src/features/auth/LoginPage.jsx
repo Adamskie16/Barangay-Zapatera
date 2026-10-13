@@ -232,7 +232,7 @@ export default function LoginPage({ onLoginSuccess }) {
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
-      setError('Your account is locked. Please unlock your account using the verification code sent to your email.');
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
       setLoading(false);
       return;
     }
@@ -243,7 +243,7 @@ export default function LoginPage({ onLoginSuccess }) {
       if (isSupabaseConfigured()) {
         const { data } = await supabase
           .from('profiles')
-          .select('id, email, role, full_name, is_locked, failed_attempts, is_active, phone, address')
+          .select('id, email, role, full_name, is_locked, failed_attempts, failed_login_attempts, is_active, phone, address')
           .eq('email', cleanEmail)
           .maybeSingle();
 
@@ -254,13 +254,13 @@ export default function LoginPage({ onLoginSuccess }) {
     }
 
     if (profile && profile.is_active === false) {
-      setError('Invalid email or password.');
+      setError('Email or password is incorrect.');
       setLoading(false);
       return;
     }
 
     if (!profile) {
-      setError('Invalid email or password.');
+      setError('Email or password is incorrect.');
       setLoading(false);
       return;
     }
@@ -268,7 +268,7 @@ export default function LoginPage({ onLoginSuccess }) {
     // Verify Role Authorization - Only Super Admin can access Account Management
     const pRole = (profile.role || '').toLowerCase();
     if (pRole !== 'super_admin' && pRole !== 'superadmin') {
-      setError('Invalid email or password.');
+      setError('Email or password is incorrect.');
       setLoading(false);
       return;
     }
@@ -296,13 +296,9 @@ export default function LoginPage({ onLoginSuccess }) {
           
           if (lockRes.isLockedOut || lockRes.attempts >= 3) {
             setIsLocked(true);
-            setError('Your account has been locked after 3 failed login attempts.');
-          } else if (lockRes.attempts === 1) {
-            setError('Invalid email or password. You have 2 attempts remaining.');
-          } else if (lockRes.attempts === 2) {
-            setError('Invalid email or password. You have 1 attempt remaining.');
+            setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
           } else {
-            setError('Invalid email or password.');
+            setError('Email or password is incorrect.');
           }
 
           setLoading(false);

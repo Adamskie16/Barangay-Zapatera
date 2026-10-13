@@ -390,7 +390,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
-      const msg = 'Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.';
+      const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
       setIsLocked(true);
       setAuthError(msg);
       setSecurityNoticeModal({
@@ -430,8 +430,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           return;
         }
 
-        if (profileData && profileData.is_locked) {
-          const msg = 'Your account is locked due to 3 consecutive failed login attempts. Please unlock your account via Gmail verification code.';
+        if (profileData && (profileData.is_locked || (profileData.failed_login_attempts || 0) >= 3 || (profileData.failed_attempts || 0) >= 3)) {
+          const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
           setIsLocked(true);
           setLoading(false);
           setAuthError(msg);
@@ -526,7 +526,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       if (!isPasswordValid) {
         const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
         if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
-          const msg = 'Security Alert: Account locked after 3 failed login attempts. Please unlock with your Gmail code.';
+          const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
           setIsLocked(true);
           setAuthError(msg);
           setSecurityNoticeModal({
@@ -535,8 +535,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             message: msg,
           });
         } else {
-          const displayMsg = supabaseErrorMessage || 'Invalid login credentials';
-          setAuthError(`${displayMsg}. (Attempt ${failedInfo.attempts} of 3 - ${failedInfo.remaining} attempt${failedInfo.remaining === 1 ? '' : 's'} remaining)`);
+          setAuthError('Email or password is incorrect.');
         }
         setLoading(false);
         return;

@@ -157,6 +157,7 @@ export const checkRateLimit = async (identifier, maxAttempts = 5, windowSeconds 
 
 /**
  * Check whether an account is locked in Supabase profiles database.
+ * Single source of truth is public.profiles table.
  */
 export const isAccountLocked = async (email) => {
   const cleanEmail = String(email).toLowerCase().trim();
@@ -174,18 +175,41 @@ export const isAccountLocked = async (email) => {
 
   try {
     if (isSupabaseConfigured()) {
+      // 1. Try atomic SECURITY DEFINER RPC first
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('check_account_lockout', {
+          user_email: cleanEmail,
+        });
+        if (!rpcErr && rpcData && typeof rpcData.is_locked === 'boolean') {
+          if (rpcData.is_locked) {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+              localStorage.setItem(`zapatera_failed_${cleanEmail}`, '3');
+            }
+            return true;
+          } else {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+            }
+            return false;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Direct profiles table query fallback
       const { data: profile, error: profErr } = await supabase
         .from('profiles')
-        .select('id, email, is_locked, failed_attempts, is_active, locked_at')
+        .select('id, email, is_locked, failed_login_attempts, failed_attempts, is_active, locked_at')
         .eq('email', cleanEmail)
         .maybeSingle();
 
       if (!profErr && profile) {
-        const isDbLocked = profile.is_locked === true || (profile.failed_attempts || 0) >= 3 || profile.is_active === false;
+        const attempts = Math.max(profile.failed_login_attempts || 0, profile.failed_attempts || 0);
+        const isDbLocked = profile.is_locked === true || attempts >= 3 || profile.is_active === false;
         if (isDbLocked) {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, profile.failed_attempts || 3)));
+            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, attempts)));
           }
           return true;
         } else {
@@ -204,26 +228,12 @@ export const isAccountLocked = async (email) => {
 
 /**
  * Record a consecutive failed password attempt directly on profiles table.
+ * Tracks both failed_login_attempts and failed_attempts.
+ * Auto-locks account after 3 consecutive failures.
  */
 export const recordFailedAttempt = async (email, userRole = 'super_admin') => {
   const cleanEmail = String(email).toLowerCase().trim();
-  let dbAttempts = 0;
-  let profile = null;
-
-  try {
-    if (isSupabaseConfigured()) {
-      const { data: profData, error: profErr } = await supabase
-        .from('profiles')
-        .select('id, email, failed_attempts, is_locked, full_name, role')
-        .eq('email', cleanEmail)
-        .maybeSingle();
-
-      if (!profErr && profData) {
-        profile = profData;
-        dbAttempts = Number(profData.failed_attempts) || 0;
-      }
-    }
-  } catch (err) {}
+  const nowTs = new Date().toISOString();
 
   let localAttempts = 0;
   try {
@@ -232,70 +242,97 @@ export const recordFailedAttempt = async (email, userRole = 'super_admin') => {
     }
   } catch (e) {}
 
-  const currentAttempts = Math.max(dbAttempts, localAttempts) + 1;
-  const isLockedOut = currentAttempts >= 3;
-  const remainingAttempts = Math.max(0, 3 - currentAttempts);
-  const nowTs = new Date().toISOString();
-
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(currentAttempts));
-      if (isLockedOut) {
-        localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-      }
-    }
-  } catch (e) {}
-
   try {
     if (isSupabaseConfigured()) {
-      if (profile?.id) {
+      // 1. Try atomic SECURITY DEFINER RPC first
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('record_failed_login_attempt', {
+          user_email: cleanEmail,
+        });
+        if (!rpcErr && rpcData && rpcData.attempts !== undefined) {
+          const newAttempts = Number(rpcData.attempts) || 1;
+          const isLocked = Boolean(rpcData.is_locked);
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(newAttempts));
+            if (isLocked) {
+              localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+            }
+          }
+          if (isLocked) {
+            broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: newAttempts, lockedAt: nowTs });
+          }
+          return { attempts: newAttempts, isLockedOut: isLocked, remaining: Math.max(0, 3 - newAttempts) };
+        }
+      } catch (e) {}
+
+      // 2. Direct profiles table query and update fallback
+      const { data: profData } = await supabase
+        .from('profiles')
+        .select('id, email, failed_login_attempts, failed_attempts, is_locked, full_name, role')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      const dbAttempts = profData ? Math.max(profData.failed_login_attempts || 0, profData.failed_attempts || 0) : 0;
+      const currentAttempts = Math.max(dbAttempts, localAttempts) + 1;
+      const isLockedOut = currentAttempts >= 3;
+
+      if (profData?.id) {
         await supabase
           .from('profiles')
           .update({
+            failed_login_attempts: currentAttempts,
             failed_attempts: currentAttempts,
             is_locked: isLockedOut,
             is_active: !isLockedOut,
             locked_at: isLockedOut ? nowTs : null,
             updated_at: nowTs,
           })
-          .eq('id', profile.id);
-      } else {
-        await supabase
-          .from('profiles')
-          .update({
-            failed_attempts: currentAttempts,
-            is_locked: isLockedOut,
-            is_active: !isLockedOut,
-            locked_at: isLockedOut ? nowTs : null,
-            updated_at: nowTs,
-          })
-          .eq('email', cleanEmail);
+          .eq('id', profData.id);
+
+        if (isLockedOut) {
+          await supabase
+            .from('account_unlock_requests')
+            .upsert([{
+              user_id: profData.id,
+              email: cleanEmail,
+              full_name: profData.full_name || cleanEmail.split('@')[0],
+              role: profData.role || userRole,
+              status: 'pending',
+              failed_attempts: currentAttempts,
+              locked_at: nowTs,
+              created_at: nowTs,
+            }], { onConflict: 'email' });
+
+          broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: currentAttempts, lockedAt: nowTs });
+        }
       }
 
-      if (isLockedOut) {
-        await supabase
-          .from('account_unlock_requests')
-          .upsert([{
-            user_id: profile?.id || null,
-            email: cleanEmail,
-            full_name: profile?.full_name || cleanEmail.split('@')[0],
-            role: profile?.role || userRole,
-            status: 'pending',
-            failed_attempts: currentAttempts,
-            locked_at: nowTs,
-            created_at: nowTs,
-          }], { onConflict: 'email' });
-
-        broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: currentAttempts, lockedAt: nowTs });
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(currentAttempts));
+        if (isLockedOut) {
+          localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+        }
       }
+
+      return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts) };
     }
   } catch (err) {}
 
-  return { attempts: currentAttempts, isLockedOut, remaining: remainingAttempts };
+  const currentAttempts = localAttempts + 1;
+  const isLockedOut = currentAttempts >= 3;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(currentAttempts));
+    if (isLockedOut) {
+      localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+    }
+  }
+
+  return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts) };
 };
 
 /**
  * Reset failed attempts immediately upon successful authentication or verified unlock.
+ * failed_login_attempts = 0, failed_attempts = 0
  */
 export const resetFailedAttempts = async (email) => {
   const cleanEmail = String(email).toLowerCase().trim();
@@ -310,33 +347,33 @@ export const resetFailedAttempts = async (email) => {
 
   try {
     if (isSupabaseConfigured()) {
+      try {
+        await supabase.rpc('reset_account_lockout', { user_email: cleanEmail });
+      } catch (e) {}
+
       await supabase
         .from('profiles')
         .update({
+          failed_login_attempts: 0,
           failed_attempts: 0,
-          is_locked: false,
-          is_active: true,
-          locked_at: null,
           updated_at: nowTs,
         })
-        .eq('email', cleanEmail);
-
-      await supabase
-        .from('account_unlock_requests')
-        .delete()
-        .eq('email', cleanEmail);
-
-      broadcastSecurityEvent('ACCOUNT_UNLOCKED', cleanEmail);
+        .eq('email', cleanEmail)
+        .eq('is_locked', false);
     }
   } catch (err) {}
 };
 
 /**
  * Unlock a user account manually or programmatically.
+ * Sets is_locked = false, resets failed attempts, records unlocked_at and unlocked_by.
  */
-export const unlockUserAccount = async (targetEmail, adminUserEmail = 'admin@zapatera.gov.ph') => {
+export const unlockUserAccount = async (targetEmail, adminIdentifier = null) => {
   const cleanEmail = String(targetEmail).toLowerCase().trim();
   const nowTs = new Date().toISOString();
+  let adminUuid = (adminIdentifier && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminIdentifier))
+    ? adminIdentifier
+    : null;
 
   try {
     if (typeof localStorage !== 'undefined') {
@@ -347,20 +384,45 @@ export const unlockUserAccount = async (targetEmail, adminUserEmail = 'admin@zap
 
   try {
     if (isSupabaseConfigured()) {
+      if (!adminUuid && adminIdentifier) {
+        const { data: adminProf } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', String(adminIdentifier).toLowerCase().trim())
+          .maybeSingle();
+        if (adminProf?.id) {
+          adminUuid = adminProf.id;
+        }
+      }
+
+      try {
+        await supabase.rpc('admin_unlock_account', {
+          target_user_email: cleanEmail,
+          admin_user_id: adminUuid,
+        });
+      } catch (e) {}
+
       await supabase
         .from('account_unlock_requests')
         .delete()
         .eq('email', cleanEmail);
 
+      const updatePayload = {
+        is_locked: false,
+        is_active: true,
+        failed_login_attempts: 0,
+        failed_attempts: 0,
+        locked_at: null,
+        unlocked_at: nowTs,
+        updated_at: nowTs,
+      };
+      if (adminUuid) {
+        updatePayload.unlocked_by = adminUuid;
+      }
+
       await supabase
         .from('profiles')
-        .update({
-          is_locked: false,
-          is_active: true,
-          failed_attempts: 0,
-          locked_at: null,
-          updated_at: nowTs,
-        })
+        .update(updatePayload)
         .eq('email', cleanEmail);
 
       broadcastSecurityEvent('ACCOUNT_UNLOCKED', cleanEmail);
@@ -373,9 +435,12 @@ export const unlockUserAccount = async (targetEmail, adminUserEmail = 'admin@zap
 /**
  * Lock a user account manually or programmatically.
  */
-export const lockUserAccount = async (targetEmail, adminUserEmail = 'admin@zapatera.gov.ph', reason = 'Manual Admin Lockout') => {
+export const lockUserAccount = async (targetEmail, adminIdentifier = null, reason = 'Manual Admin Lockout') => {
   const cleanEmail = String(targetEmail).toLowerCase().trim();
   const nowTs = new Date().toISOString();
+  let adminUuid = (adminIdentifier && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminIdentifier))
+    ? adminIdentifier
+    : null;
 
   try {
     if (typeof localStorage !== 'undefined') {
@@ -386,28 +451,36 @@ export const lockUserAccount = async (targetEmail, adminUserEmail = 'admin@zapat
 
   try {
     if (isSupabaseConfigured()) {
+      if (!adminUuid && adminIdentifier) {
+        const { data: adminProf } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', String(adminIdentifier).toLowerCase().trim())
+          .maybeSingle();
+        if (adminProf?.id) {
+          adminUuid = adminProf.id;
+        }
+      }
+
+      try {
+        await supabase.rpc('admin_lock_account', {
+          target_user_email: cleanEmail,
+          admin_user_id: adminUuid,
+          lock_reason: reason,
+        });
+      } catch (e) {}
+
       await supabase
         .from('profiles')
         .update({
           is_locked: true,
           is_active: false,
+          failed_login_attempts: 3,
           failed_attempts: 3,
           locked_at: nowTs,
           updated_at: nowTs,
         })
         .eq('email', cleanEmail);
-
-      await supabase
-        .from('account_unlock_requests')
-        .upsert([{
-          email: cleanEmail,
-          full_name: cleanEmail.split('@')[0],
-          role: 'super_admin',
-          status: 'pending',
-          failed_attempts: 3,
-          locked_at: nowTs,
-          created_at: nowTs,
-        }], { onConflict: 'email' });
 
       broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: 3, lockedAt: nowTs });
       return true;
