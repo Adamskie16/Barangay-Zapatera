@@ -119,14 +119,62 @@ export const StorageService = {
   getRequestsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
+        const { data: reqData, error: reqErr } = await supabase
           .from('document_requests')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data) {
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(data));
-          return data;
+        if (!reqErr && reqData) {
+          const [profilesRes, docTypesRes] = await Promise.all([
+            supabase.from('profiles').select('*'),
+            supabase.from('document_types').select('*'),
+          ]);
+
+          const profilesMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
+          const docTypesMap = new Map((docTypesRes.data || []).map((d) => [d.id, d]));
+
+          const normalized = reqData.map((req) => {
+            const profile = profilesMap.get(req.resident_id) || {};
+            const docType = docTypesMap.get(req.document_type_id) || {};
+
+            // Resolve fee: prioritize amount_paid > 0, then req.fee > 0, then docType.fee, then notes
+            let resolvedFee = 0;
+            if (Number(req.amount_paid) > 0) {
+              resolvedFee = Number(req.amount_paid);
+            } else if (Number(req.fee) > 0) {
+              resolvedFee = Number(req.fee);
+            } else if (docType.fee !== undefined && Number(docType.fee) >= 0) {
+              resolvedFee = Number(docType.fee);
+            } else if (typeof req.notes === 'string') {
+              const feeMatch = req.notes.match(/Fee:\s*₱?\s*([\d,]+(?:\.\d+)?)/i);
+              if (feeMatch) {
+                const parsed = parseFloat(feeMatch[1].replace(/,/g, ''));
+                if (!isNaN(parsed)) resolvedFee = parsed;
+              }
+            }
+
+            const docTitle = docType.title || req.document_title || req.document_type || 'Barangay Document';
+            const residentName = profile.full_name || req.resident_name || req.full_name || 'Resident Account';
+
+            return {
+              ...req,
+              profiles: profile,
+              document_types: docType,
+              resident_name: residentName,
+              full_name: residentName,
+              user_name: residentName,
+              resident_email: profile.email || req.resident_email || '',
+              resident_phone: req.resident_phone || profile.phone || req.phone || '',
+              document_title: docTitle,
+              document_type: docTitle,
+              document_name: docTitle,
+              fee: resolvedFee,
+              amount: resolvedFee,
+            };
+          });
+
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(normalized));
+          return normalized;
         }
       }
     } catch (err) {
@@ -312,11 +360,33 @@ export const StorageService = {
 
     // Helper to get fee for request
     const getRequestFee = (req) => {
-      if (req.fee !== undefined && req.fee !== null) return Number(req.fee) || 0;
-      if (req.amount !== undefined && req.amount !== null) return Number(req.amount) || 0;
-      // Fallback matching against docType
-      const match = docTypes.find((d) => d.id === req.document_type_id || d.code === req.document_type || d.title === req.document_type);
-      return match ? Number(match.fee) || 0 : 0;
+      if (Number(req.amount_paid) > 0) return Number(req.amount_paid);
+      if (Number(req.fee) > 0) return Number(req.fee);
+      if (Number(req.amount) > 0) return Number(req.amount);
+
+      // Match against docTypes
+      const match = docTypes.find(
+        (d) =>
+          d.id === req.document_type_id ||
+          d.code === req.document_type ||
+          d.title === req.document_type ||
+          d.title === req.document_title ||
+          d.title === req.document_name
+      );
+      if (match && Number(match.fee) > 0) {
+        return Number(match.fee);
+      }
+
+      // Match from notes string (e.g. "Fee: ₱50")
+      if (typeof req.notes === 'string') {
+        const feeMatch = req.notes.match(/Fee:\s*₱?\s*([\d,]+(?:\.\d+)?)/i);
+        if (feeMatch) {
+          const parsed = parseFloat(feeMatch[1].replace(/,/g, ''));
+          if (!isNaN(parsed) && parsed > 0) return parsed;
+        }
+      }
+
+      return Number(req.fee) || 0;
     };
 
     let totalRevenue = 0;
@@ -332,11 +402,20 @@ export const StorageService = {
 
     requests.forEach((req) => {
       const fee = getRequestFee(req);
-      const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
+      const s = String(req.status || '').toLowerCase().trim();
       const isWaived = req.payment_status === 'waived' || req.is_waived === true;
-      const isUnpaid = !isPaid && !isWaived;
+      const isPaid = !isWaived && (
+        req.payment_status === 'paid' ||
+        req.is_paid === true ||
+        s === 'released' ||
+        s === 'completed' ||
+        Boolean(req.is_claimed) ||
+        (s === 'approved' && req.payment_status === 'paid')
+      );
+      const isDeclined = s === 'declined' || s === 'rejected';
+      const isUnpaid = !isPaid && !isWaived && !isDeclined;
 
-      const docName = req.document_type || req.document_name || req.doc_type_title || 'General Document';
+      const docName = req.document_title || req.document_type || req.document_name || req.doc_type_title || 'General Document';
 
       if (!breakdownMap[docName]) {
         breakdownMap[docName] = {
@@ -354,7 +433,7 @@ export const StorageService = {
         breakdownMap[docName].paidTransactions += 1;
         breakdownMap[docName].totalRevenue += fee;
 
-        const reqDate = new Date(req.payment_date || req.created_at || now);
+        const reqDate = new Date(req.payment_date || req.issued_at || req.claimed_at || req.updated_at || req.created_at || now);
         if (reqDate.toISOString().split('T')[0] === todayDateStr) {
           todayRevenue += fee;
         }

@@ -334,6 +334,12 @@ export const StorageService = {
           payload.issued_at = req.issued_at || req.claimed_at || new Date().toISOString();
           payload.claimed_at = req.claimed_at || req.issued_at || new Date().toISOString();
           payload.is_claimed = true;
+          payload.payment_status = 'paid';
+          payload.is_paid = true;
+          if (req.fee && Number(req.fee) > 0) {
+            payload.fee = Number(req.fee);
+            payload.amount_paid = Number(req.fee);
+          }
         }
         if (dbStatus === 'declined') {
           payload.decline_reason = req.decline_reason || req.declined_reason || req.rejection_reason || 'Incomplete requirements';

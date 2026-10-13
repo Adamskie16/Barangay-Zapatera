@@ -514,6 +514,14 @@ export const StorageService = {
         }
         if (req.status === 'completed' || req.status === 'issued') {
           payload.issued_at = req.issued_at || new Date().toISOString();
+          payload.claimed_at = req.claimed_at || req.issued_at || new Date().toISOString();
+          payload.is_claimed = true;
+          payload.payment_status = 'paid';
+          payload.is_paid = true;
+          if (req.fee && Number(req.fee) > 0) {
+            payload.fee = Number(req.fee);
+            payload.amount_paid = Number(req.fee);
+          }
         }
 
         if (isUuid) {

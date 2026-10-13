@@ -1299,6 +1299,8 @@ export default function App() {
           pickup_date: newReq.pickup_date || null,
           pickup_time_slot: newReq.pickup_time_slot || null,
           status: 'pending',
+          fee: Number(newReq.fee) || 0,
+          payment_status: 'unpaid',
           notes: notesDetails,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

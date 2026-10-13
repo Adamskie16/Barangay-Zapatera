@@ -50,10 +50,17 @@ export default function TreasurerDashboardView({
   // Process & filter payments
   const processedPayments = useMemo(() => {
     return requests.filter((req) => {
-      // Status filter
-      const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
+      const s = String(req.status || '').toLowerCase().trim();
       const isWaived = req.payment_status === 'waived' || req.is_waived === true;
-      const isUnpaid = !isPaid && !isWaived;
+      const isPaid = !isWaived && (
+        req.payment_status === 'paid' ||
+        req.is_paid === true ||
+        s === 'released' ||
+        s === 'completed' ||
+        Boolean(req.is_claimed)
+      );
+      const isDeclined = s === 'declined' || s === 'rejected';
+      const isUnpaid = !isPaid && !isWaived && !isDeclined;
 
       if (statusFilter === 'paid' && !isPaid) return false;
       if (statusFilter === 'unpaid' && !isUnpaid) return false;
@@ -64,7 +71,7 @@ export default function TreasurerDashboardView({
         const query = searchTerm.toLowerCase().trim();
         const tracking = String(req.tracking_number || '').toLowerCase();
         const name = String(req.full_name || req.user_name || req.resident_name || '').toLowerCase();
-        const doc = String(req.document_type || req.document_name || '').toLowerCase();
+        const doc = String(req.document_type || req.document_title || req.document_name || '').toLowerCase();
         const orNum = String(req.or_number || '').toLowerCase();
         return tracking.includes(query) || name.includes(query) || doc.includes(query) || orNum.includes(query);
       }
@@ -439,9 +446,20 @@ export default function TreasurerDashboardView({
             <tbody className="divide-y divide-slate-100">
               {paginatedPayments.length > 0 ? (
                 paginatedPayments.map((req, idx) => {
-                  const fee = Number(req.fee ?? req.amount ?? 0);
-                  const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
+                  let fee = Number(req.fee ?? req.amount ?? req.amount_paid ?? 0);
+                  if (fee === 0 && docTypes?.length) {
+                    const match = docTypes.find((d) => d.id === req.document_type_id || d.title === req.document_type || d.title === req.document_title);
+                    if (match && Number(match.fee) > 0) fee = Number(match.fee);
+                  }
+                  const s = String(req.status || '').toLowerCase().trim();
                   const isWaived = req.payment_status === 'waived' || req.is_waived === true;
+                  const isPaid = !isWaived && (
+                    req.payment_status === 'paid' ||
+                    req.is_paid === true ||
+                    s === 'released' ||
+                    s === 'completed' ||
+                    Boolean(req.is_claimed)
+                  );
 
                   return (
                     <tr key={req.id || idx} className="hover:bg-slate-50/80 transition-colors">
