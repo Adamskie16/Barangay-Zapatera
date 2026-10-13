@@ -254,13 +254,13 @@ export default function LoginPage({ onLoginSuccess }) {
     }
 
     if (profile && profile.is_active === false) {
-      setError('Notice: This account has been deactivated or deleted by Barangay Zapatera administration.');
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
 
     if (!profile) {
-      setError('This Gmail account is not registered. Please sign up first.');
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
@@ -268,7 +268,7 @@ export default function LoginPage({ onLoginSuccess }) {
     // Verify Role Authorization - Only Super Admin can access Account Management
     const pRole = (profile.role || '').toLowerCase();
     if (pRole !== 'super_admin' && pRole !== 'superadmin') {
-      setError('Access Denied: This is the Account Management portal. Only Super Administrators can log in here. Resident and Barangay Admin accounts cannot access this portal.');
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }

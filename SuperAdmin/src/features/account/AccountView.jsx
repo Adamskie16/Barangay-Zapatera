@@ -116,14 +116,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             if (isMounted) {
               const loadedProfile = {
                 id: data.id,
-                email: data.email || currentUser.email || 'superadmin@zapatera.gov.ph',
-                role: data.role || currentUser.role || 'super_admin',
-                full_name: data.full_name || currentUser.full_name || 'Super Admin',
-                username: data.username || currentUser.username || (data.email || currentUser.email)?.split('@')[0] || 'superadmin',
-                phone: data.phone || currentUser.phone || '',
-                address: data.address || currentUser.address || 'Barangay Zapatera, Cebu City',
-                avatar_url: data.avatar_url || currentUser.avatar_url || '',
-                created_at: data.created_at || currentUser.created_at || new Date().toISOString(),
+                email: data.email || currentUser?.email || 'mardee131@gmail.com',
+                role: data.role || currentUser?.role || 'super_admin',
+                full_name: data.full_name || currentUser?.full_name || 'Super Admin',
+                username: data.username || currentUser?.username || (data.email || currentUser?.email)?.split('@')[0] || 'superadmin',
+                phone: data.phone || currentUser?.phone || '',
+                address: data.address || currentUser?.address || 'Barangay Zapatera, Cebu City',
+                avatar_url: data.avatar_url || currentUser?.avatar_url || '',
+                created_at: data.created_at || currentUser?.created_at || new Date().toISOString(),
                 updated_at: data.updated_at || new Date().toISOString(),
               };
 
@@ -139,10 +139,10 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             // Profile does not exist -> Create initial profile
             const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser?.id);
             const newProfile = {
-              email: (currentUser?.email || 'superadmin@zapatera.gov.ph').toLowerCase().trim(),
+              email: (currentUser?.email || 'mardee131@gmail.com').toLowerCase().trim(),
               role: currentUser?.role || 'super_admin',
               full_name: currentUser?.full_name || 'Hon. Executive Officer',
-              username: currentUser?.username || (currentUser?.email || 'superadmin')?.split('@')[0] || 'superadmin',
+              username: currentUser?.username || (currentUser?.email || 'mardee131')?.split('@')[0] || 'superadmin',
               phone: currentUser?.phone || '09171234567',
               address: currentUser?.address || 'Barangay Zapatera, Cebu City',
               avatar_url: currentUser?.avatar_url || '',
@@ -169,7 +169,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           if (found && isMounted) {
             setProfile({
               id: found.id,
-              email: found.email || currentUser?.email || 'superadmin@zapatera.gov.ph',
+              email: found.email || currentUser?.email || 'mardee131@gmail.com',
               role: found.role || currentUser?.role || 'super_admin',
               full_name: found.full_name || currentUser?.full_name || 'Super Admin',
               username: found.username || currentUser?.username || 'superadmin',

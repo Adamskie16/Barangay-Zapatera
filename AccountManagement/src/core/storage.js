@@ -130,7 +130,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(saved.email),
       action: existingIndex >= 0 ? 'Edited User Account' : 'Created User Account',
       feature: 'User Account Management',
       details: `User: ${saved.full_name || saved.email} (${saved.email}), Role: ${saved.role || 'resident'}`,
@@ -160,7 +160,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(target?.email),
       action: 'Deleted User Account',
       feature: 'User Account Management',
       details: `Deleted user account for ${target ? target.email : userId}`,
@@ -250,7 +250,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(),
       action: existingIndex >= 0 ? 'Edited Document Info' : 'Created Document Info',
       feature: 'Document Info Management',
       details: `Title: ${updatedDoc.title}, Code: ${updatedDoc.code}, Fee: ₱${updatedDoc.fee}`,
@@ -280,7 +280,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(),
       action: 'Deleted Document Info',
       feature: 'Document Info Management',
       details: `Deleted document type "${target ? target.title : docTypeId}"`,
@@ -444,7 +444,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: adminUser?.email || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser?.email),
       action: existingIndex >= 0 ? `Request Status Updated (${req.status})` : 'New Document Requested',
       feature: 'Document Request',
       details: `Tracking Number: ${req.tracking_number}, Resident: ${req.resident_name || req.resident_email}, Status: ${req.status}`,
@@ -541,7 +541,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: saved.created_by_email || saved.created_by_name || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(saved.created_by_email || saved.created_by_name),
       action: existingIndex >= 0 ? 'Updated Barangay Event' : 'Posted New Barangay Event',
       feature: 'Event Information Management',
       details: `Title: ${saved.title}, Date: ${saved.event_date}, Venue: ${saved.location}`,
@@ -572,7 +572,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: (target && (target.created_by_email || target.created_by_name)) || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(target && (target.created_by_email || target.created_by_name)),
       action: 'Deleted Barangay Event',
       feature: 'Barangay Events',
       details: `Deleted event "${target ? target.title : eventId}"`,
@@ -757,7 +757,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: adminUser?.email || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser?.email),
       action: existingIndex >= 0 ? 'Updated News Bulletin' : 'Published News Announcement',
       feature: 'News & Announcements',
       details: `Title: ${saved.title}, Category: ${saved.category}, Urgent: ${saved.is_emergency ? 'Yes' : 'No'}`,
@@ -799,7 +799,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(),
       action: 'Deleted News Bulletin',
       feature: 'News & Announcements',
       details: `Deleted bulletin "${target ? target.title : newsId}"`,
@@ -847,7 +847,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(),
       action: 'Updated System Configuration',
       feature: 'System Config',
       details: `Barangay: ${updated.barangay_name || 'Barangay Zapatera'}, Punong Barangay: ${updated.punong_barangay || ''}, Office Hours: ${updated.office_hours || ''}`,
@@ -914,7 +914,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(notif.created_by_email || notif.user_email),
       action: 'Broadcasted Notification',
       feature: 'Notifications',
       details: `Title: ${notif.title}, Target: ${notif.role_target || 'user'}`,

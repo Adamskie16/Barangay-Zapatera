@@ -349,7 +349,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               .eq('id', device.id);
 
             await supabase.from('activity_logs').insert({
-              user_email: currentUser?.email || 'superadmin@zapatera.gov.ph',
+              user_email: currentUser?.email || 'mardee131@gmail.com',
               action: `Terminated Device Session: ${device.device_name || device.device_id}`,
               feature: 'User Account Security',
               details: `Revoked session for user ${viewingUser.email} on ${device.device_name || device.device_id}`,
@@ -1123,7 +1123,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
     setActionProcessing(true);
     const targetEmail = securityActionTargetUser.email;
-    const adminEmail = currentUser?.email || 'superadmin@zapatera.gov.ph';
+    const adminEmail = currentUser?.email || 'mardee131@gmail.com';
 
     try {
       if (securityActionType === 'unlock') {

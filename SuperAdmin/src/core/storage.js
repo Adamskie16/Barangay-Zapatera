@@ -469,7 +469,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: superAdminUser?.email || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(superAdminUser),
       action: 'Deleted Document Request',
       feature: 'Document Requests',
       details: `Tracking: ${trackingNumber || requestId}, Deleted by Super Admin`,
@@ -590,7 +590,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: adminUser?.email || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser),
       action: existingIndex >= 0 ? `Request Status Updated (${req.status})` : 'New Document Requested',
       feature: 'Document Request',
       details: `Tracking Number: ${req.tracking_number}, Resident: ${req.resident_name || req.resident_email}, Status: ${req.status}`,
@@ -687,7 +687,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: saved.created_by_email || saved.created_by_name || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(saved.created_by_email || saved.created_by_name),
       action: existingIndex >= 0 ? 'Updated Barangay Event' : 'Posted New Barangay Event',
       feature: 'Event Information Management',
       details: `Title: ${saved.title}, Date: ${saved.event_date}, Venue: ${saved.location}`,
@@ -697,7 +697,7 @@ export const StorageService = {
     return saved;
   },
 
-  deleteEvent: async (eventId) => {
+  deleteEvent: async (eventId, adminUser) => {
     let events = StorageService.getEvents();
     const target = events.find((e) => e.id === eventId);
     events = events.filter((e) => e.id !== eventId);
@@ -718,7 +718,7 @@ export const StorageService = {
     }
 
     StorageService.addLog({
-      user_email: (target && (target.created_by_email || target.created_by_name)) || 'superadmin@zapatera.gov.ph',
+      user_email: resolveActiveAdminEmail(adminUser || (target && (target.created_by_email || target.created_by_name))),
       action: 'Deleted Barangay Event',
       feature: 'Barangay Events',
       details: `Deleted event "${target ? target.title : eventId}"`,

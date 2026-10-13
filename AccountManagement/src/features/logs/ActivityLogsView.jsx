@@ -238,7 +238,7 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
         label: 'Performed By',
         sortable: true,
         render: (log) => {
-          const userEmail = log.user_email || log.user || 'superadmin@zapatera.gov.ph';
+          const userEmail = log.user_email || log.user || 'mardee131@gmail.com';
           const initial = userEmail.charAt(0).toUpperCase();
           return (
             <div className="flex items-center space-x-2">

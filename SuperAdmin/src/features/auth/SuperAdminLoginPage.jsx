@@ -254,39 +254,16 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       } catch (e) {}
     }
 
-    if (!profile) {
-      // Check if this account belongs to a resident in local storage
-      try {
-        const storedResidents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
-        const isRes = storedResidents.some((r) => r.email && r.email.toLowerCase() === cleanEmail);
-        if (isRes) {
-          setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
-          setLoading(false);
-          return;
-        }
-      } catch (e) {}
-
-      setError('This email account is not registered. Please check your credentials.');
+    if (!profile || profile.is_active === false) {
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
 
     // Verify Role Authorization - strictly allow ONLY Super Administrators
     const pRole = (profile.role || '').toLowerCase();
-    if (pRole === 'resident') {
-      setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
-      setLoading(false);
-      return;
-    }
-
     if (pRole !== 'super_admin' && pRole !== 'superadmin') {
-      if (pRole === 'admin') {
-        setError('Access Denied: This account is a Barangay Admin. Please use the Admin Portal.');
-      } else if (pRole === 'treasurer') {
-        setError('Access Denied: This account is a Barangay Treasurer. Please use the Treasurer Portal.');
-      } else {
-        setError('Access Denied: You do not have Super Administrator access.');
-      }
+      setError('Invalid email or password.');
       setLoading(false);
       return;
     }
@@ -331,9 +308,9 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
 
         // Double check auth user metadata role
         const metaRole = (authUser?.user_metadata?.role || '').toLowerCase();
-        if (metaRole === 'resident') {
+        if (metaRole && metaRole !== 'super_admin' && metaRole !== 'superadmin') {
           await supabase.auth.signOut();
-          setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+          setError('Invalid email or password.');
           setLoading(false);
           return;
         }
@@ -412,9 +389,9 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
 
         if (!verifyErr && data?.user) {
           const userMetaRole = (data.user.user_metadata?.role || '').toLowerCase();
-          if (userMetaRole === 'resident' || (pendingUser?.role && pendingUser.role === 'resident')) {
+          if (userMetaRole && userMetaRole !== 'super_admin' && userMetaRole !== 'superadmin') {
             await supabase.auth.signOut();
-            setError('Access Denied: This is the Super Administrator portal. Resident accounts cannot log in here. Please use the Resident Portal.');
+            setError('Invalid email or password.');
             setLoading(false);
             return;
           }
@@ -903,7 +880,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="superadmin@zapatera.gov.ph"
+                      placeholder="admin@zapatera.gov.ph"
                       className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
@@ -1114,7 +1091,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="superadmin@zapatera.gov.ph"
+                      placeholder="admin@zapatera.gov.ph"
                       className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
@@ -1286,7 +1263,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
                       required
                       value={unlockEmail}
                       onChange={(e) => setUnlockEmail(e.target.value)}
-                      placeholder="superadmin@zapatera.gov.ph"
+                      placeholder="admin@zapatera.gov.ph"
                       className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
