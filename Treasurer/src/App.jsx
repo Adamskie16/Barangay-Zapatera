@@ -14,8 +14,18 @@ import {
   FileText,
   Lock,
   Layers,
-  Check
+  Check,
+  User,
+  Eye
 } from 'lucide-react';
+import {
+  TableSkeleton,
+  Button,
+  CivicPageLoader,
+  ProfileSkeleton,
+  Spinner,
+  useDelayedLoading
+} from './components/loaders';
 
 export default function App() {
   const [dbStatus, setDbStatus] = useState('checking'); // 'checking' | 'connected' | 'error'
@@ -23,6 +33,11 @@ export default function App() {
   const [latency, setLatency] = useState(null);
   const [docTypes, setDocTypes] = useState([]);
   const [docTypesCount, setDocTypesCount] = useState(null);
+  const [showLogoLoaderModal, setShowLogoLoaderModal] = useState(false);
+  const [showProfileSkeletonModal, setShowProfileSkeletonModal] = useState(false);
+
+  const isTableLoading = dbStatus === 'checking';
+  const showTableSkeleton = useDelayedLoading(isTableLoading, 150);
 
   const testConnection = async () => {
     setDbStatus('checking');
@@ -72,8 +87,8 @@ export default function App() {
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner">
-              <Landmark className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-blue-500/30 flex items-center justify-center shadow-inner overflow-hidden p-0.5">
+              <img src="/logo.png" alt="Barangay Zapatera Official Seal" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -246,19 +261,45 @@ export default function App() {
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-blue-400" />
-                Live Connection Diagnostics
+                Live Connection Diagnostics & Loading System
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Real-time validation against the Barangay Zapatera Supabase project
+                Real-time validation against Supabase with zero-CLS skeleton loaders
               </p>
             </div>
-            <button
-              onClick={testConnection}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition cursor-pointer self-start sm:self-auto"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${dbStatus === 'checking' ? 'animate-spin' : ''}`} />
-              Run Health Check
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProfileSkeletonModal(true)}
+                className="text-xs"
+              >
+                <User className="w-3.5 h-3.5 mr-1" />
+                Profile Skeleton
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowLogoLoaderModal(true);
+                  setTimeout(() => setShowLogoLoaderModal(false), 2000);
+                }}
+                className="text-xs"
+              >
+                <Eye className="w-3.5 h-3.5 mr-1" />
+                Official Logo Loader
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                isLoading={dbStatus === 'checking'}
+                loadingText="Verifying..."
+                onClick={testConnection}
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                Run Health Check
+              </Button>
+            </div>
           </div>
 
           <div
@@ -384,8 +425,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Live Document Fees Table from Supabase */}
-          {docTypes.length > 0 && (
+          {/* Live Document Fees Table from Supabase with Flash Prevention Skeleton */}
+          {showTableSkeleton ? (
+            <div className="mt-6">
+              <TableSkeleton rows={5} columns={5} isDarkMode={true} />
+            </div>
+          ) : docTypes.length > 0 ? (
             <div className="mt-6 rounded-xl bg-slate-800/40 border border-slate-700/60 overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b border-slate-700/60 flex items-center justify-between">
                 <div>
@@ -439,9 +484,40 @@ export default function App() {
                 </table>
               </div>
             </div>
-          )}
+          ) : null}
         </section>
       </main>
+
+      {/* Official Logo Page Loader Preview */}
+      {showLogoLoaderModal && (
+        <CivicPageLoader
+          message="Authenticating Barangay Treasury..."
+          submessage="Official Municipal Records &bull; Barangay Zapatera"
+          fullScreen={true}
+          isDarkMode={true}
+        />
+      )}
+
+      {/* Profile Skeleton Modal Preview */}
+      {showProfileSkeletonModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-4xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-400" />
+                Profile & Security Skeleton Preview
+              </h3>
+              <button
+                onClick={() => setShowProfileSkeletonModal(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Close Preview ✕
+              </button>
+            </div>
+            <ProfileSkeleton isDarkMode={true} />
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-800 py-4 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">

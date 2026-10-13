@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  Image,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -939,8 +940,12 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               <View style={{ width: 36 }} />
             )}
 
-            {/* Modern Cignifi-Style Brand Logo with Dot Accents */}
+            {/* Modern Brand Logo with Official Seal */}
             <View style={styles.brandLogoWrapper}>
+              <Image
+                source={{ uri: '/logo.png' }}
+                style={{ width: 28, height: 28, resizeMode: 'contain', marginRight: 8, borderRadius: 14 }}
+              />
               <Text style={styles.brandLogoText}>zapatera</Text>
               <View style={styles.dotAccents}>
                 <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />

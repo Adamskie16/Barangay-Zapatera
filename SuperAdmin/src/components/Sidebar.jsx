@@ -34,11 +34,11 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
     }`}>
       {/* Brand Header */}
       <div className="p-4 border-b border-slate-800/80 flex items-center space-x-3.5 bg-gradient-to-b from-slate-950/80 to-slate-900/60 backdrop-blur-md">
-        <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-blue-500/30 bg-white shadow-md shadow-blue-950/50 flex items-center justify-center shrink-0">
+        <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-blue-500/30 bg-white shadow-md shadow-blue-950/50 flex items-center justify-center shrink-0 p-0.5">
           <img
-            src="/logo.jpg"
-            alt="Zapatera Logo"
-            className="w-full h-full object-cover"
+            src="/logo.png"
+            alt="Barangay Zapatera Official Seal"
+            className="w-full h-full object-contain"
           />
         </div>
         <div className="min-w-0">

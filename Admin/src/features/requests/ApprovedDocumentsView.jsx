@@ -11,7 +11,7 @@ import {
   CheckCheck,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../core/security';
-import { TableSkeleton } from '../../components/SkeletonLoader';
+import { TableSkeleton, useDelayedLoading } from '../../components/loaders';
 import { DESIGN_TOKENS } from '../../core/designTokens';
 
 export default function ApprovedDocumentsView({
@@ -27,6 +27,7 @@ export default function ApprovedDocumentsView({
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [docTypeFilter, setDocTypeFilter] = useState('all');
   const [targetTracking, setTargetTracking] = useState('');
+  const showSkeleton = useDelayedLoading(loading, 150);
 
   useEffect(() => {
     if (initialTarget) {
@@ -458,53 +459,55 @@ export default function ApprovedDocumentsView({
         </div>
       </div>
 
-      {/* Reusable Civic Enterprise DataTable */}
-      <DataTable
-        data={processedData}
-        columns={columns}
-        keyField="id"
-        searchable={true}
-        initialSearch={targetTracking}
-        searchPlaceholder="Search tracking no, resident, or purpose..."
-        searchKeys={[
-          'tracking_number',
-          'resident_name',
-          'resident_email',
-          'document_title',
-          'purpose',
-        ]}
-        statusTabs={{
-          tabs: [
-            { id: 'all', label: 'All Approved', count: totalCount },
-            { id: 'unclaimed', label: 'Unclaimed', count: unclaimedCount },
-            { id: 'claimed', label: 'Claimed', count: claimedCount },
-          ],
-          activeTab: claimFilter,
-          onChange: setClaimFilter,
-        }}
-        filters={[
-          {
-            id: 'docType',
-            label: 'Document Type',
-            value: docTypeFilter,
-            onChange: setDocTypeFilter,
-            options: docTypeOptions,
-            filterFn: (row, val) => val === 'all' || row.document_title === val,
-          },
-        ]}
-        defaultPageSize={10}
-        pageSizeOptions={[10, 25, 50]}
-        defaultSortKey="approved_at"
-        defaultSortDirection="desc"
-        emptyTitle="No approved documents found."
-        emptySubtitle="Documents will appear here once processed and approved by the barangay staff."
-        onResetFilters={() => {
-          setClaimFilter('all');
-          setDocTypeFilter('all');
-        }}
-        loading={loading}
-        loadingSkeleton={<TableSkeleton rows={6} cols={8} isDarkMode={false} />}
-      />
+      {/* Reusable Civic Enterprise DataTable with Flash-Free Skeleton */}
+      {showSkeleton ? (
+        <TableSkeleton rows={10} columns={6} isDarkMode={false} />
+      ) : (
+        <DataTable
+          data={processedData}
+          columns={columns}
+          keyField="id"
+          searchable={true}
+          initialSearch={targetTracking}
+          searchPlaceholder="Search tracking no, resident, or purpose..."
+          searchKeys={[
+            'tracking_number',
+            'resident_name',
+            'resident_email',
+            'document_title',
+            'purpose',
+          ]}
+          statusTabs={{
+            tabs: [
+              { id: 'all', label: 'All Approved', count: totalCount },
+              { id: 'unclaimed', label: 'Unclaimed', count: unclaimedCount },
+              { id: 'claimed', label: 'Claimed', count: claimedCount },
+            ],
+            activeTab: claimFilter,
+            onChange: setClaimFilter,
+          }}
+          filters={[
+            {
+              id: 'docType',
+              label: 'Document Type',
+              value: docTypeFilter,
+              onChange: setDocTypeFilter,
+              options: docTypeOptions,
+              filterFn: (row, val) => val === 'all' || row.document_title === val,
+            },
+          ]}
+          defaultPageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+          defaultSortKey="approved_at"
+          defaultSortDirection="desc"
+          emptyTitle="No approved documents found."
+          emptySubtitle="Documents will appear here once processed and approved by the barangay staff."
+          onResetFilters={() => {
+            setClaimFilter('all');
+            setDocTypeFilter('all');
+          }}
+        />
+      )}
 
       {/* Accessible Action Feedback / Confirmation Modal */}
       <ActionModal
