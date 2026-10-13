@@ -856,6 +856,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         ? 'Super Administrator'
         : pendingUserPayload.role === 'admin'
         ? 'Barangay Admin'
+        : pendingUserPayload.role === 'treasurer'
+        ? 'Barangay Treasurer'
         : 'Resident';
     const isNew = !editingId;
 
@@ -1288,6 +1290,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             { id: 'all', label: 'All' },
             { id: 'super_admin', label: 'Super Admin' },
             { id: 'admin', label: 'Admin' },
+            { id: 'treasurer', label: 'Treasurer' },
             { id: 'resident', label: 'Resident' },
             { id: 'locked', label: 'Locked Out (3 Failures)' },
           ].map((r) => (
@@ -1425,8 +1428,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : 'active'}>
-                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : 'Resident'}
+                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : u.role === 'treasurer' ? 'success' : 'active'}>
+                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : u.role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}
                           </Badge>
                           {u.role === 'resident' && (
                             isUserRegisteredVoter(u) ? (
@@ -1939,6 +1942,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             >
               <option value="super_admin">Super Administrator</option>
               <option value="admin">Barangay Admin</option>
+              <option value="treasurer">Barangay Treasurer</option>
               <option value="resident">Resident User</option>
             </select>
           </div>
@@ -2556,6 +2560,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                               ? 'purple'
                               : viewingUser.role === 'admin'
                               ? 'blue'
+                              : viewingUser.role === 'treasurer'
+                              ? 'success'
                               : 'active'
                           }
                         >
@@ -2563,6 +2569,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                             ? 'Super Admin'
                             : viewingUser.role === 'admin'
                             ? 'Barangay Admin'
+                            : viewingUser.role === 'treasurer'
+                            ? 'Barangay Treasurer'
                             : 'Resident'}
                         </Badge>
                         <span

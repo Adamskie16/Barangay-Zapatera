@@ -282,6 +282,8 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     if (pRole !== 'super_admin' && pRole !== 'superadmin') {
       if (pRole === 'admin') {
         setError('Access Denied: This account is a Barangay Admin. Please use the Admin Portal.');
+      } else if (pRole === 'treasurer') {
+        setError('Access Denied: This account is a Barangay Treasurer. Please use the Treasurer Portal.');
       } else {
         setError('Access Denied: You do not have Super Administrator access.');
       }
