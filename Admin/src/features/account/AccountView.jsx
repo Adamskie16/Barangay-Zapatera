@@ -98,50 +98,83 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
     const fetchOrCreateProfile = async () => {
       setLoading(true);
       try {
-        if (isSupabaseConfigured() && currentUser?.id) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .maybeSingle();
+        if (isSupabaseConfigured() && (currentUser?.id || currentUser?.email)) {
+          let data = null;
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser?.id);
 
-          if (error && error.code !== 'PGRST116') {
-            console.warn('Supabase profiles query notice:', error);
+          // 1. Query by UUID id if valid
+          if (isUuid) {
+            const { data: idData, error: idErr } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+
+            if (!idErr && idData) {
+              data = idData;
+            }
+          }
+
+          // 2. Query by Email if not found by id
+          if (!data && currentUser?.email) {
+            const { data: emailData, error: emailErr } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', currentUser.email.toLowerCase().trim())
+              .maybeSingle();
+
+            if (!emailErr && emailData) {
+              data = emailData;
+            }
           }
 
           if (data) {
             if (isMounted) {
-              setProfile({
+              const loadedProfile = {
                 id: data.id,
-                email: currentUser.email || data.email || 'admin@zapatera.gov.ph',
+                email: data.email || currentUser.email || 'admin@zapatera.gov.ph',
                 role: data.role || currentUser.role || 'admin',
                 full_name: data.full_name || currentUser.full_name || 'Barangay Admin',
-                username: data.username || currentUser.username || currentUser.email?.split('@')[0] || 'admin',
+                username: data.username || currentUser.username || (data.email || currentUser.email)?.split('@')[0] || 'admin',
                 phone: data.phone || currentUser.phone || '',
+                address: data.address || currentUser.address || 'Barangay Zapatera, Cebu City',
                 avatar_url: data.avatar_url || currentUser.avatar_url || '',
                 created_at: data.created_at || currentUser.created_at || new Date().toISOString(),
                 updated_at: data.updated_at || new Date().toISOString(),
-              });
+              };
+
+              setProfile(loadedProfile);
+
+              // Keep local session updated with latest profile fields
+              try {
+                const currentSession = StorageService.getCurrentUser() || {};
+                StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+              } catch (e) {}
             }
           } else {
+            const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser?.id);
             const newProfile = {
-              id: currentUser.id,
-              email: currentUser.email || 'admin@zapatera.gov.ph',
-              role: currentUser.role || 'admin',
-              full_name: currentUser.full_name || 'Barangay Staff Officer',
-              username: currentUser.username || currentUser.email?.split('@')[0] || 'admin',
-              phone: currentUser.phone || '09171234567',
-              avatar_url: currentUser.avatar_url || '',
-              created_at: currentUser.created_at || new Date().toISOString(),
+              email: (currentUser?.email || 'admin@zapatera.gov.ph').toLowerCase().trim(),
+              role: currentUser?.role || 'admin',
+              full_name: currentUser?.full_name || 'Barangay Staff Officer',
+              username: currentUser?.username || (currentUser?.email || 'admin')?.split('@')[0] || 'admin',
+              phone: currentUser?.phone || '09171234567',
+              address: currentUser?.address || 'Barangay Zapatera, Cebu City',
+              avatar_url: currentUser?.avatar_url || '',
+              created_at: currentUser?.created_at || new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
 
-            await supabase.from('profiles').upsert(newProfile);
+            if (isTargetUuid) {
+              newProfile.id = currentUser.id;
+            }
+
+            const { data: upserted } = await supabase.from('profiles').upsert(newProfile, { onConflict: 'email' }).select().maybeSingle();
 
             if (isMounted) {
               setProfile({
                 ...newProfile,
-                email: currentUser.email,
+                id: upserted?.id || newProfile.id || currentUser?.id,
               });
             }
           }

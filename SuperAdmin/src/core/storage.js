@@ -83,13 +83,15 @@ export const StorageService = {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (error) {
+          console.warn('SuperAdmin getUsersAsync query error:', error.message || error);
+        } else if (data) {
           localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(data));
           return data;
         }
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn('SuperAdmin getUsersAsync exception:', err);
     }
     return StorageService.getUsers();
   },
