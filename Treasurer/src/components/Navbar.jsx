@@ -32,7 +32,7 @@ export default function Navbar({
         </div>
 
         <h2 className="text-sm sm:text-base md:text-lg font-extrabold text-slate-900 tracking-tight truncate">{activeTitle}</h2>
-        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 shrink-0">
           Auditing Mode
         </span>
       </div>

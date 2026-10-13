@@ -39,7 +39,7 @@ export default function Sidebar({
         {/* Brand Header */}
         <div className="p-4 border-b border-slate-800/80 flex items-center justify-between bg-gradient-to-b from-slate-950/80 to-slate-900/60 backdrop-blur-md">
           <div className="flex items-center space-x-3.5 min-w-0">
-            <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-purple-500/30 bg-white shadow-md shadow-purple-950/50 flex items-center justify-center shrink-0 p-0.5">
+            <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-blue-500/30 bg-white shadow-md shadow-blue-950/50 flex items-center justify-center shrink-0 p-0.5">
               <img
                 src="/logo.png"
                 alt="Barangay Zapatera Official Seal"
@@ -49,9 +49,9 @@ export default function Sidebar({
             <div className="min-w-0">
               <div className="flex items-center space-x-1.5">
                 <h1 className="font-extrabold text-base text-white tracking-tight leading-none">Zapatera</h1>
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
               </div>
-              <p className="text-[11px] text-purple-400 font-semibold uppercase tracking-wider mt-0.5">Account Management</p>
+              <p className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider mt-0.5">Account Management</p>
             </div>
           </div>
           {/* Mobile Close Button (< 1024px) */}
