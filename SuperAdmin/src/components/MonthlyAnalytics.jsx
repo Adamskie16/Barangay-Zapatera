@@ -24,6 +24,7 @@ export default function MonthlyAnalytics({ requests = [] }) {
     const totalQuantity = monthRequests.length;
     const approvedQuantity = monthRequests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
     const pendingQuantity = monthRequests.filter((r) => r.status === 'pending' || r.status === 'under_review').length;
+    const declinedQuantity = monthRequests.filter((r) => r.status === 'declined').length;
     const revenue = monthRequests
       .filter((r) => {
         const s = String(r.status || '').toLowerCase().trim();
