@@ -670,18 +670,14 @@ export default function LoginPage({ onLoginSuccess }) {
           {/* TOP-LEFT HEADER: Seal + System Title and Subtitle */}
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-xl overflow-hidden p-1 shrink-0">
-              {loginAssets?.sealUrl ? (
-                <img
-                  src={loginAssets.sealUrl}
-                  alt="Barangay Zapatera Official Seal"
-                  className="w-full h-full object-contain rounded-full"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <ShieldCheck className="w-6 h-6 text-emerald-400" />
-              )}
+              <img
+                src={loginAssets?.sealUrl || '/logo.png'}
+                alt="Barangay Zapatera Official Seal"
+                className="w-full h-full object-contain rounded-full"
+                onError={(e) => {
+                  e.target.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-sm leading-snug">
@@ -719,8 +715,8 @@ export default function LoginPage({ onLoginSuccess }) {
         {/* Top-Left Branding */}
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shadow-sm">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shadow-sm overflow-hidden p-0.5">
+              <img src="/logo.png" alt="Barangay Zapatera Official Seal" className="w-full h-full object-contain" />
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">

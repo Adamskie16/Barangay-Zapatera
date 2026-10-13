@@ -760,18 +760,14 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           {/* TOP-LEFT HEADER: Seal + System Title and Subtitle */}
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-xl overflow-hidden p-1 shrink-0">
-              {loginAssets?.sealUrl ? (
-                <img
-                  src={loginAssets.sealUrl}
-                  alt="Barangay Zapatera Official Seal"
-                  className="w-full h-full object-contain rounded-full"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <ShieldCheck className="w-6 h-6 text-blue-400" />
-              )}
+              <img
+                src={loginAssets?.sealUrl || '/logo.png'}
+                alt="Barangay Zapatera Official Seal"
+                className="w-full h-full object-contain rounded-full"
+                onError={(e) => {
+                  e.target.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-sm leading-snug">
@@ -810,18 +806,14 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shadow-sm overflow-hidden p-1">
-              {loginAssets?.sealUrl ? (
-                <img
-                  src={loginAssets.sealUrl}
-                  alt="Barangay Seal"
-                  className="w-full h-full object-contain rounded-lg"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <ShieldCheck className="w-5 h-5" />
-              )}
+              <img
+                src={loginAssets?.sealUrl || '/logo.png'}
+                alt="Barangay Seal"
+                className="w-full h-full object-contain rounded-lg"
+                onError={(e) => {
+                  e.target.src = '/logo.png';
+                }}
+              />
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
