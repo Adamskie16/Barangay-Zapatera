@@ -12,6 +12,7 @@ import './index.css';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('accounts');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('zapatera_dark_mode') !== 'false';
   });
@@ -187,6 +188,8 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogoutRequest}
         isDarkMode={isDarkMode}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Container */}
@@ -196,9 +199,11 @@ export default function App() {
           notificationsCount={0}
           isDarkMode={isDarkMode}
           onToggleDarkMode={toggleDarkMode}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+          currentUser={currentUser}
         />
 
-        <main className={`flex-1 overflow-y-auto p-6 transition-colors duration-200 ${
+        <main className={`flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-full overflow-x-hidden transition-colors duration-200 ${
           isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
         }`}>
           {activeTab === 'accounts' && (
