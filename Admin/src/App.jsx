@@ -152,8 +152,8 @@ export default function App() {
     refreshState();
   };
 
-  // Auth Guard
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
+  // Auth Guard - Strictly Barangay Admin only (Reject super_admin, treasurer, resident)
+  if (!currentUser || currentUser.role !== 'admin') {
     return (
       <>
         {accountDeletedNotice && (

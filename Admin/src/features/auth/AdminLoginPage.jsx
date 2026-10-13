@@ -266,10 +266,23 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // Verify Role Authorization (Admin or Super Admin or Staff)
+    // Verify Role Authorization - STRICT: Only Barangay Admin allowed
     const pRole = (profile.role || '').toLowerCase();
-    if (pRole !== 'admin' && pRole !== 'super_admin' && pRole !== 'superadmin' && pRole !== 'staff') {
-      setError('Access denied: You do not have Administrator privileges.');
+    if (pRole !== 'admin') {
+      if (pRole === 'super_admin' || pRole === 'superadmin') {
+        setError('Access Denied: This account is a Super Administrator. Please use the Super Admin Portal.');
+      } else if (pRole === 'treasurer') {
+        setError('Access Denied: This account is a Barangay Treasurer. Please use the Treasurer Portal.');
+      } else if (pRole === 'resident') {
+        setError('Access Denied: Resident accounts cannot log in to the Administrator Portal.');
+      } else {
+        setError('Access denied: You do not have Barangay Administrator privileges.');
+      }
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
       setLoading(false);
       return;
     }
