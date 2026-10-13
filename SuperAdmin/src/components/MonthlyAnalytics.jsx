@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { BarChart3, Calendar, DollarSign, FileCheck, Filter, TrendingUp, Download } from 'lucide-react';
 import { formatCurrency } from '../core/security';
+import ErrorBoundary from './ErrorBoundary';
 
-export default function MonthlyAnalytics({ requests = [] }) {
+function MonthlyAnalyticsContent({ requests = [] }) {
   const [selectedMonth, setSelectedMonth] = useState('all');
 
   const monthNames = [
@@ -11,26 +12,37 @@ export default function MonthlyAnalytics({ requests = [] }) {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  // Generate monthly aggregations for 2026 (or year from requests)
+  const safeRequests = Array.isArray(requests) ? requests : [];
   const currentYear = new Date().getFullYear();
 
   const monthlyData = monthNames.map((monthName, idx) => {
-    const monthRequests = requests.filter((r) => {
-      if (!r.created_at) return false;
-      const d = new Date(r.created_at);
-      return d.getMonth() === idx;
+    const monthRequests = safeRequests.filter((r) => {
+      if (!r) return false;
+      const dateStr = r.created_at || r.payment_date || r.updated_at;
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      return !isNaN(d.getTime()) && d.getMonth() === idx;
     });
 
     const totalQuantity = monthRequests.length;
-    const approvedQuantity = monthRequests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
-    const pendingQuantity = monthRequests.filter((r) => r.status === 'pending' || r.status === 'under_review').length;
-    const declinedQuantity = monthRequests.filter((r) => r.status === 'declined').length;
+    const approvedQuantity = monthRequests.filter((r) => {
+      const s = String(r?.status || '').toLowerCase().trim();
+      return s === 'approved' || s === 'issued';
+    }).length;
+    const pendingQuantity = monthRequests.filter((r) => {
+      const s = String(r?.status || '').toLowerCase().trim();
+      return s === 'pending' || s === 'under_review' || s === 'processing';
+    }).length;
+    const declinedQuantity = monthRequests.filter((r) => {
+      const s = String(r?.status || '').toLowerCase().trim();
+      return s === 'declined' || s === 'rejected';
+    }).length;
     const revenue = monthRequests
       .filter((r) => {
-        const s = String(r.status || '').toLowerCase().trim();
-        return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
+        const s = String(r?.status || '').toLowerCase().trim();
+        return s === 'completed' || s === 'released' || Boolean(r?.is_claimed);
       })
-      .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+      .reduce((sum, r) => sum + (Number(r?.fee ?? r?.amount) || 0), 0);
 
     return {
       monthIndex: idx,
@@ -51,14 +63,17 @@ export default function MonthlyAnalytics({ requests = [] }) {
     ? monthlyData
     : monthlyData.filter((m) => m.monthIndex === Number(selectedMonth));
 
-  const totalYtdQuantity = requests.length;
-  const totalYtdApproved = requests.filter((r) => r.status === 'approved' || r.status === 'issued').length;
-  const totalYtdRevenue = requests
+  const totalYtdQuantity = safeRequests.length;
+  const totalYtdApproved = safeRequests.filter((r) => {
+    const s = String(r?.status || '').toLowerCase().trim();
+    return s === 'approved' || s === 'issued';
+  }).length;
+  const totalYtdRevenue = safeRequests
     .filter((r) => {
-      const s = String(r.status || '').toLowerCase().trim();
-      return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
+      const s = String(r?.status || '').toLowerCase().trim();
+      return s === 'completed' || s === 'released' || Boolean(r?.is_claimed);
     })
-    .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+    .reduce((sum, r) => sum + (Number(r?.fee ?? r?.amount) || 0), 0);
 
   const handleExportMonthlyCSV = () => {
     const dataToExport = filteredData.map((m) => {
@@ -228,10 +243,16 @@ export default function MonthlyAnalytics({ requests = [] }) {
               <td className="p-3 text-center font-mono text-blue-300">{totalYtdQuantity} Reqs</td>
               <td className="p-3 text-center font-mono text-emerald-400">{totalYtdApproved} Approved</td>
               <td className="p-3 text-center font-mono text-amber-300">
-                {requests.filter((r) => r.status === 'pending' || r.status === 'under_review').length} Pending
+                {safeRequests.filter((r) => {
+                  const s = String(r?.status || '').toLowerCase().trim();
+                  return s === 'pending' || s === 'under_review' || s === 'processing';
+                }).length} Pending
               </td>
               <td className="p-3 text-center font-mono text-rose-300">
-                {requests.filter((r) => r.status === 'declined').length} Declined
+                {safeRequests.filter((r) => {
+                  const s = String(r?.status || '').toLowerCase().trim();
+                  return s === 'declined' || s === 'rejected';
+                }).length} Declined
               </td>
               <td className="p-3 text-right font-mono text-blue-300">{formatCurrency(totalYtdRevenue)}</td>
             </tr>
@@ -239,5 +260,13 @@ export default function MonthlyAnalytics({ requests = [] }) {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function MonthlyAnalytics(props) {
+  return (
+    <ErrorBoundary title="Monthly Document Analytics">
+      <MonthlyAnalyticsContent {...props} />
+    </ErrorBoundary>
   );
 }
