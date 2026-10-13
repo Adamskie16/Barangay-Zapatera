@@ -238,48 +238,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 3. Verify Profile Record Existence
-    let profile = null;
-    try {
-      if (isSupabaseConfigured()) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, email, role, full_name, is_locked, failed_attempts, failed_login_attempts, is_active, phone, address')
-          .eq('email', cleanEmail)
-          .maybeSingle();
-
-        profile = data;
-      }
-    } catch (e) {
-      // Handled silently
-    }
-
-    if (profile && profile.is_active === false) {
-      setError('Email or password is incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    if (!profile) {
-      setError('Email or password is incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    // Verify Role Authorization - STRICT: Only Barangay Admin allowed
-    const pRole = (profile.role || '').toLowerCase();
-    if (pRole !== 'admin') {
-      setError('Email or password is incorrect.');
-      try {
-        if (isSupabaseConfigured()) {
-          await supabase.auth.signOut();
-        }
-      } catch {}
-      setLoading(false);
-      return;
-    }
-
-    // 4. Supabase Official Password Authentication
+    // 3. Supabase Official Primary Password Authentication
     let authUser = null;
     try {
       if (isSupabaseConfigured()) {
@@ -319,10 +278,72 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 5. SUCCESSFUL AUTHENTICATION RESET
+    if (!authUser?.id) {
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 4. Fetch User Profile from public.profiles using authenticated user.id
+    let profile = null;
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error: profileErr } = await supabase
+          .from('profiles')
+          .select('id, email, role, full_name, is_locked, failed_attempts, failed_login_attempts, is_active, phone, address')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (profileErr) {
+          console.error('Profile fetch error:', profileErr);
+        }
+        profile = data;
+      }
+    } catch (e) {
+      // Handled silently
+    }
+
+    // Fallback check against local admin storage if profiles table record is missing
+    if (!profile) {
+      try {
+        const localAdmins = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+        const match = localAdmins.find((a) => (a.email && a.email.toLowerCase() === cleanEmail) || a.id === authUser.id);
+        if (match) {
+          profile = match;
+        }
+      } catch (e) {}
+    }
+
+    // If profile not found, is inactive, or is locked -> immediately terminate session
+    if (!profile || profile.is_active === false || profile.is_locked === true) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 5. STRICT Role Verification: Allowed Role: 'admin' only
+    // If a super_admin, treasurer, or resident attempts to log in via /admin/login, immediately terminate session!
+    const pRole = (profile.role || '').toLowerCase();
+    if (pRole !== 'admin') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 6. SUCCESSFUL CREDENTIAL & ROLE VERIFICATION RESET
     await resetFailedAttempts(cleanEmail);
 
-    // 6. Send 6-Digit MFA Verification Code to Gmail
+    // 7. Send 6-Digit MFA Verification Code to Gmail
     try {
       if (isSupabaseConfigured()) {
         const { error: otpErr } = await supabase.auth.signInWithOtp({
@@ -346,7 +367,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       id: profile.id,
       email: cleanEmail,
       full_name: profile.full_name || authUser?.user_metadata?.full_name || cleanEmail.split('@')[0],
-      role: pRole === 'superadmin' ? 'super_admin' : pRole,
+      role: 'admin',
       phone: profile.phone || '',
       address: profile.address || 'Barangay Zapatera, Cebu City',
       is_active: true,
@@ -401,9 +422,21 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
+    // Secondary Strict Role Guard before committing session to localStorage
+    if ((pendingUser?.role || '').toLowerCase() !== 'admin') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
     const verifiedAdmin = {
       ...pendingUser,
-      role: pendingUser.role || 'admin',
+      role: 'admin',
     };
 
     StorageService.setCurrentUser(verifiedAdmin);

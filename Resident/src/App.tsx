@@ -733,7 +733,12 @@ export default function App() {
       const stored = await MobileStorage.getItem('zapatera_resident_session');
       if (stored) {
         const parsed = JSON.parse(stored);
-        setCurrentUser(parsed);
+        if (parsed && (parsed.role || '').toLowerCase() === 'resident') {
+          setCurrentUser(parsed);
+        } else {
+          await MobileStorage.removeItem('zapatera_resident_session');
+          setCurrentUser(null);
+        }
       }
     } catch {
       // Ignore
@@ -1139,6 +1144,14 @@ export default function App() {
     setRequests([]);
     setNotifications([]);
     
+    if ((user?.role || '').toLowerCase() !== 'resident') {
+      try {
+        await MobileStorage.removeItem('zapatera_resident_session');
+      } catch {}
+      setCurrentUser(null);
+      return;
+    }
+
     try {
       await MobileStorage.setItem('zapatera_resident_session', JSON.stringify(user));
     } catch {
@@ -1431,8 +1444,8 @@ export default function App() {
 
   const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
 
-  // Unauthenticated screen
-  if (!currentUser) {
+  // Unauthenticated screen or Non-Resident role
+  if (!currentUser || (currentUser.role || '').toLowerCase() !== 'resident') {
     return (
       <SafeAreaView style={styles.authContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#eff2fc" />

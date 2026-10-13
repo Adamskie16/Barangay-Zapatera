@@ -11,7 +11,14 @@ import { supabase, isSupabaseConfigured } from './core/supabase';
 import { LogOut, X, AlertTriangle } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(() => StorageService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState(() => {
+    const user = StorageService.getCurrentUser();
+    if (user && user.role !== 'treasurer') {
+      StorageService.setCurrentUser(null);
+      return null;
+    }
+    return user;
+  });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [requests, setRequests] = useState([]);
@@ -43,6 +50,11 @@ export default function App() {
   };
 
   useEffect(() => {
+    const initialUser = StorageService.getCurrentUser();
+    if (initialUser && initialUser.role !== 'treasurer') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+    }
     refreshFinancialData();
 
     // Subscribe to realtime updates on document_requests
@@ -58,6 +70,11 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (user) => {
+    if (user?.role !== 'treasurer') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+      return;
+    }
     setCurrentUser(user);
     refreshFinancialData();
   };

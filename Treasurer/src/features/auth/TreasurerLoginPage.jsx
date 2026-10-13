@@ -260,54 +260,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 3. Verify Profile Record Existence
-    let profile = null;
-    try {
-      if (isSupabaseConfigured()) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, email, role, full_name, is_locked, failed_attempts, failed_login_attempts, is_active, phone, address')
-          .eq('email', cleanEmail)
-          .maybeSingle();
-
-        profile = data;
-      }
-    } catch (e) {
-      // Handled silently
-    }
-
-    if (!profile) {
-      // Fallback check against local admin storage if profiles table has not synced
-      try {
-        const storedUsers = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
-        const match = storedUsers.find((u) => u.email && u.email.toLowerCase() === cleanEmail);
-        if (match) {
-          profile = match;
-        }
-      } catch (e) {}
-    }
-
-    // Generic OWASP Error: If user does not exist or is inactive, do NOT reveal role details!
-    if (!profile || profile.is_active === false) {
-      setError('Email or password is incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    // STRICT: Only 'treasurer' role permitted. On mismatch, return generic Email or password is incorrect!
-    const pRole = (profile.role || '').toLowerCase();
-    if (pRole !== 'treasurer') {
-      try {
-        if (isSupabaseConfigured()) {
-          await supabase.auth.signOut();
-        }
-      } catch {}
-      setError('Email or password is incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    // 4. Supabase Official Password Authentication
+    // 3. Supabase Official Primary Password Authentication
     let authUser = null;
     try {
       if (isSupabaseConfigured()) {
@@ -340,15 +293,6 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
         }
 
         authUser = authData?.user;
-
-        // Double check auth user metadata role
-        const metaRole = (authUser?.user_metadata?.role || '').toLowerCase();
-        if (metaRole && metaRole !== 'treasurer') {
-          await supabase.auth.signOut();
-          setError('Invalid email or password.');
-          setLoading(false);
-          return;
-        }
       }
     } catch (err) {
       setError('Authentication server error. Please try again.');
@@ -356,10 +300,72 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 5. SUCCESSFUL AUTHENTICATION RESET
+    if (!authUser?.id) {
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 4. Fetch User Profile from public.profiles using authenticated user.id
+    let profile = null;
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error: profileErr } = await supabase
+          .from('profiles')
+          .select('id, email, role, full_name, is_locked, failed_attempts, failed_login_attempts, is_active, phone, address')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (profileErr) {
+          console.error('Profile fetch error:', profileErr);
+        }
+        profile = data;
+      }
+    } catch (e) {
+      // Handled silently
+    }
+
+    // Fallback check against local admin storage if profiles table record is missing
+    if (!profile) {
+      try {
+        const storedUsers = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+        const match = storedUsers.find((u) => (u.email && u.email.toLowerCase() === cleanEmail) || u.id === authUser.id);
+        if (match) {
+          profile = match;
+        }
+      } catch (e) {}
+    }
+
+    // If profile not found, is inactive, or is locked -> immediately terminate session
+    if (!profile || profile.is_active === false || profile.is_locked === true) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 5. STRICT Role Verification: Allowed Role: 'treasurer' only
+    // If an admin, super_admin, or resident attempts to log in via /treasurer/login, immediately terminate session!
+    const pRole = (profile.role || '').toLowerCase();
+    if (pRole !== 'treasurer') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 6. SUCCESSFUL CREDENTIAL & ROLE VERIFICATION RESET
     await resetFailedAttempts(cleanEmail);
 
-    // 6. Send 6-Digit MFA Verification Code to Gmail
+    // 7. Send 6-Digit MFA Verification Code to Gmail
     try {
       if (isSupabaseConfigured()) {
         const { error: otpErr } = await supabase.auth.signInWithOtp({
@@ -431,13 +437,6 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
         });
 
         if (!verifyErr && data?.user) {
-          const userMetaRole = (data.user.user_metadata?.role || '').toLowerCase();
-          if (userMetaRole && userMetaRole !== 'treasurer') {
-            await supabase.auth.signOut();
-            setError('Invalid email or password.');
-            setLoading(false);
-            return;
-          }
           verified = true;
           if (data?.session) {
             await supabase.auth.setSession(data.session);
@@ -450,6 +449,19 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
 
     if (!verified) {
       setError('Invalid or expired verification code. Please check your Gmail or request a new code.');
+      setLoading(false);
+      return;
+    }
+
+    // Secondary strict role guard before committing session
+    const pRole = (pendingUser?.role || '').toLowerCase();
+    if (pRole !== 'treasurer') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
       setLoading(false);
       return;
     }

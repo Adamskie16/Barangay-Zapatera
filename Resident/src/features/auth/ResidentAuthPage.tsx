@@ -404,94 +404,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setLoading(true);
 
     try {
-      let isPasswordValid = false;
-      let profileData: any = null;
-      let supabaseErrorMessage = '';
+      let authUser: any = null;
 
       if (isSupabaseConfigured()) {
-        const { data: pData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', cleanEmail)
-          .maybeSingle();
-
-        profileData = pData;
-
-        // If profile was deleted or marked inactive by admin
-        if (profileData && profileData.is_active === false) {
-          const msg = 'Notice: This account has been deactivated or deleted by Barangay Zapatera administration.';
-          setLoading(false);
-          setAuthError(msg);
-          setSecurityNoticeModal({
-            isOpen: true,
-            type: 'deleted',
-            message: msg,
-          });
-          return;
-        }
-
-        if (profileData && (profileData.is_locked || (profileData.failed_login_attempts || 0) >= 3 || (profileData.failed_attempts || 0) >= 3)) {
-          const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
-          setIsLocked(true);
-          setLoading(false);
-          setAuthError(msg);
-          setSecurityNoticeModal({
-            isOpen: true,
-            type: 'locked',
-            message: msg,
-          });
-          return;
-        }
-
         const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password: loginPassword,
         });
 
-        // Verify profile record with authenticated session before concluding account deletion
-        if (authData?.user && !profileData) {
-          const { data: verifiedProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authData.user.id)
-            .maybeSingle();
-
-          if (verifiedProfile) {
-            profileData = verifiedProfile;
-          } else {
-            // Check if explicitly recorded in deleted accounts
-            const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
-            let explicitlyDeleted = false;
-            if (deletedAccountsStr) {
-              try {
-                const deletedList = JSON.parse(deletedAccountsStr);
-                if (Array.isArray(deletedList) && deletedList.some((d: any) => (d.email || d).toLowerCase() === cleanEmail)) {
-                  explicitlyDeleted = true;
-                }
-              } catch {}
-            }
-
-            if (explicitlyDeleted) {
-              const msg = 'Notice: This account has been deleted by Barangay Zapatera administration.';
-              setLoading(false);
-              setAuthError(msg);
-              setSecurityNoticeModal({
-                isOpen: true,
-                type: 'deleted',
-                message: msg,
-              });
-              return;
-            }
-          }
-        }
-
-
-        if (!authErr && authData?.user && profileData) {
-          isPasswordValid = true;
-        } else if (authErr) {
+        if (authErr) {
           console.error('Supabase authentication error:', authErr);
-          supabaseErrorMessage = authErr.message || '';
-          const errMsg = supabaseErrorMessage.toLowerCase();
+          const errMsg = (authErr.message || '').toLowerCase();
           const isEmailNotConfirmed =
             errMsg.includes('email not confirmed') ||
             errMsg.includes('confirm') ||
@@ -504,66 +427,101 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             return;
           }
 
-          // Check if password matches stored profile or local db
-          if (profileData && profileData.password === loginPassword) {
-            isPasswordValid = true;
+          const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
+          if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
+            const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
+            setIsLocked(true);
+            setAuthError(msg);
+            setSecurityNoticeModal({
+              isOpen: true,
+              type: 'locked',
+              message: msg,
+            });
+          } else {
+            setAuthError('Email or password is incorrect.');
           }
+          setLoading(false);
+          return;
         }
+
+        authUser = authData?.user;
       }
 
-      // Check local database fallback only if profile was not explicitly deleted
-      if (!isExplicitlyDeleted) {
-        const storedDb = await MobileStorage.getItem('zapatera_residents_db');
-        const residents: ResidentUser[] = storedDb ? JSON.parse(storedDb) : [];
-        const resident = residents.find((r) => r.email.toLowerCase() === cleanEmail);
-
-        if (!isPasswordValid && resident && resident.password === loginPassword) {
-          isPasswordValid = true;
-        }
-      }
-
-      // If credentials do not match anywhere -> record failed attempt & show actual Supabase error
-      if (!isPasswordValid) {
-        const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
-        if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
-          const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
-          setIsLocked(true);
-          setAuthError(msg);
-          setSecurityNoticeModal({
-            isOpen: true,
-            type: 'locked',
-            message: msg,
-          });
-        } else {
-          setAuthError('Email or password is incorrect.');
-        }
+      if (!authUser?.id) {
+        setAuthError('Email or password is incorrect.');
         setLoading(false);
         return;
       }
 
-      // Valid Password -> Reset failed attempts and dispatch 2FA OTP
+      // Fetch Profile from public.profiles using authenticated user.id
+      let verifiedProfile: any = null;
+      if (isSupabaseConfigured()) {
+        const { data: pData, error: pErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (pErr) {
+          console.error('Profile fetch error:', pErr);
+        }
+        verifiedProfile = pData;
+      }
+
+      // Fallback check against local resident storage if profiles table record is missing
+      if (!verifiedProfile) {
+        try {
+          const storedDb = await MobileStorage.getItem('zapatera_residents_db');
+          const residents: ResidentUser[] = storedDb ? JSON.parse(storedDb) : [];
+          const match = residents.find((r) => (r.email && r.email.toLowerCase() === cleanEmail) || r.id === authUser.id);
+          if (match) {
+            verifiedProfile = match;
+          }
+        } catch {}
+      }
+
+      // If profile not found, is inactive, or is locked -> immediately terminate session
+      if (!verifiedProfile || verifiedProfile.is_active === false || verifiedProfile.is_locked === true) {
+        try {
+          if (isSupabaseConfigured()) {
+            await supabase.auth.signOut();
+          }
+        } catch {}
+        setAuthError('Email or password is incorrect.');
+        setLoading(false);
+        return;
+      }
+
+      // STRICT Role Verification: Allowed Role: 'resident' only
+      // If an admin, super_admin, or treasurer attempts to log in via /resident/login, terminate session!
+      const pRole = (verifiedProfile.role || '').toLowerCase();
+      if (pRole !== 'resident') {
+        try {
+          if (isSupabaseConfigured()) {
+            await supabase.auth.signOut();
+          }
+        } catch {}
+        setAuthError('Email or password is incorrect.');
+        setLoading(false);
+        return;
+      }
+
+      // Valid Credentials & Role -> Reset failed attempts and dispatch 2FA OTP
       await resetFailedAttempts(cleanEmail);
 
-      const currentProfile = profileData || resident || {
-        id: `res-${Date.now()}`,
-        email: cleanEmail,
-        full_name: 'Barangay Zapatera Resident',
-        role: 'resident',
-      };
-
       const residentUser: ResidentUser = {
-        id: currentProfile.id || `res-${Date.now()}`,
+        id: verifiedProfile.id || authUser.id,
         email: cleanEmail,
-        full_name: currentProfile.full_name || 'Resident',
-        first_name: currentProfile.first_name || '',
-        last_name: currentProfile.last_name || '',
-        middle_initial: currentProfile.middle_initial || '',
-        birth_date: currentProfile.birth_date || '',
-        civil_status: currentProfile.civil_status || 'Single',
+        full_name: verifiedProfile.full_name || authUser?.user_metadata?.full_name || 'Resident',
+        first_name: verifiedProfile.first_name || '',
+        last_name: verifiedProfile.last_name || '',
+        middle_initial: verifiedProfile.middle_initial || '',
+        birth_date: verifiedProfile.birth_date || '',
+        civil_status: verifiedProfile.civil_status || 'Single',
         role: 'resident',
-        sitio: currentProfile.sitio || SAMPLE_SITIOS[0],
-        phone: currentProfile.phone || '',
-        voter_status: currentProfile.voter_status || 'Registered Voter',
+        sitio: verifiedProfile.sitio || SAMPLE_SITIOS[0],
+        phone: verifiedProfile.phone || '',
+        voter_status: verifiedProfile.voter_status || 'Registered Voter',
         is_active: true,
         is_locked: false,
         failed_attempts: 0,
@@ -599,6 +557,16 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setErrorMessage('');
     if (!otpInput || otpInput.trim().length !== 6) {
       setErrorMessage('Please enter the full 6-digit verification code.');
+      return;
+    }
+
+    if (!pendingUser || (pendingUser.role || '').toLowerCase() !== 'resident') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setErrorMessage('Email or password is incorrect.');
       return;
     }
 

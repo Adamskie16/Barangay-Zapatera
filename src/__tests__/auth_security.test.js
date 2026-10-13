@@ -99,6 +99,49 @@ class SecurityEngine {
     return { success: true, user: profile };
   }
 
+  loginToPortal(email, password, portalRole) {
+    const cleanEmail = email.toLowerCase();
+
+    // 1. Rate limit check
+    const limit = this.checkRateLimit(cleanEmail);
+    if (!limit.allowed) {
+      return { success: false, code: 'RATE_LIMIT', message: limit.message };
+    }
+
+    // 2. Lock status check
+    const profile = this.profiles.get(cleanEmail);
+    if (profile && profile.is_locked) {
+      return { success: false, code: 'ACCOUNT_LOCKED', message: 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.' };
+    }
+
+    // 3. Authenticate primary credentials
+    if (!profile || profile.password !== password) {
+      const lockResult = this.recordFailedAttempt(cleanEmail, portalRole);
+      if (lockResult.isLockedOut) {
+        return { success: false, code: 'JUST_LOCKED', message: 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.' };
+      }
+      return { success: false, code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.' };
+    }
+
+    // 4. Role segregation check: fetched role must strictly match portalRole
+    const normalizedUserRole = (profile.role || '').toLowerCase();
+    const normalizedPortalRole = (portalRole || '').toLowerCase();
+    const isSuperAdminMatch = (normalizedPortalRole === 'super_admin' && (normalizedUserRole === 'super_admin' || normalizedUserRole === 'superadmin'));
+    const isAcctMgmtMatch = (normalizedPortalRole === 'accountmanagement' && (normalizedUserRole === 'accountmanagement' || normalizedUserRole === 'account_management'));
+
+    const isMatch = normalizedUserRole === normalizedPortalRole || isSuperAdminMatch || isAcctMgmtMatch;
+
+    if (!isMatch) {
+      this.logAudit('Role Mismatch Blocked', `User ${cleanEmail} (role: ${profile.role}) blocked from accessing ${portalRole} portal.`, 'security', cleanEmail);
+      return { success: false, code: 'ROLE_MISMATCH', message: 'Email or password is incorrect.' };
+    }
+
+    // 5. Success -> reset attempts, issue OTP step
+    this.resetFailedAttempts(cleanEmail);
+    this.logAudit('Portal Credential Auth Success', `User ${cleanEmail} authenticated for ${portalRole} portal, OTP dispatched.`, 'info', cleanEmail);
+    return { success: true, step: 'otp', user: profile };
+  }
+
   unlockAccount(targetEmail, adminUser, isAdmin = true) {
     if (!isAdmin) {
       this.logAudit('Unauthorized Unlock Attempt', `User ${adminUser} attempted to unlock ${targetEmail} without authorization.`, 'security', adminUser);
@@ -220,8 +263,56 @@ export function runSecurityTestSuite() {
   assert.strictEqual(unlockLog.user_email, 'admin@zapatera.gov.ph');
   console.log('  [PASS] Audit logs recorded admin identity, timestamp, and action without exposing credentials\n');
 
+  // TEST 10: Superadmin Account Attempting Login on Admin Portal -> Blocked
+  console.log('--> Test 10: Superadmin Attempting Login on Admin Portal (/admin/login)...');
+  const saUser = 'superadmin.zapatera@gmail.com';
+  engine.registerUser(saUser, 'SuperAdminPass123!', 'super_admin');
+  const crossRes1 = engine.loginToPortal(saUser, 'SuperAdminPass123!', 'admin');
+  assert.strictEqual(crossRes1.success, false);
+  assert.strictEqual(crossRes1.code, 'ROLE_MISMATCH');
+  assert.strictEqual(crossRes1.message, 'Email or password is incorrect.');
+  console.log('  [PASS] Superadmin account strictly blocked from Admin portal with generic error\n');
+
+  // TEST 11: Admin Account Attempting Login on Superadmin Portal -> Blocked
+  console.log('--> Test 11: Admin Attempting Login on Superadmin Portal (/superadmin/login)...');
+  const adminUser = 'admin.zapatera@gmail.com';
+  engine.registerUser(adminUser, 'AdminPass123!', 'admin');
+  const crossRes2 = engine.loginToPortal(adminUser, 'AdminPass123!', 'super_admin');
+  assert.strictEqual(crossRes2.success, false);
+  assert.strictEqual(crossRes2.code, 'ROLE_MISMATCH');
+  assert.strictEqual(crossRes2.message, 'Email or password is incorrect.');
+  console.log('  [PASS] Admin account strictly blocked from Superadmin portal with generic error\n');
+
+  // TEST 12: Resident Account Attempting Login on Treasurer Portal -> Blocked
+  console.log('--> Test 12: Resident Attempting Login on Treasurer Portal (/treasurer/login)...');
+  const residentTestUser = 'resident.portal.test@gmail.com';
+  engine.registerUser(residentTestUser, 'ResidentPass123!', 'resident');
+  const crossRes3 = engine.loginToPortal(residentTestUser, 'ResidentPass123!', 'treasurer');
+  assert.strictEqual(crossRes3.success, false);
+  assert.strictEqual(crossRes3.code, 'ROLE_MISMATCH');
+  assert.strictEqual(crossRes3.message, 'Email or password is incorrect.');
+  console.log('  [PASS] Resident account strictly blocked from Treasurer portal with generic error\n');
+
+  // TEST 13: Authorized Admin Logging in on Admin Portal -> Success to OTP Step
+  console.log('--> Test 13: Authorized Admin Logging into Admin Portal (/admin/login)...');
+  const validAdminRes = engine.loginToPortal(adminUser, 'AdminPass123!', 'admin');
+  assert.strictEqual(validAdminRes.success, true);
+  assert.strictEqual(validAdminRes.step, 'otp');
+  assert.strictEqual(validAdminRes.user.role, 'admin');
+  console.log('  [PASS] Authorized admin accepted and routed to 2FA OTP verification step\n');
+
+  // TEST 14: Authorized Treasurer Logging in on Treasurer Portal -> Success to OTP Step
+  console.log('--> Test 14: Authorized Treasurer Logging into Treasurer Portal (/treasurer/login)...');
+  const treasurerUser = 'treasurer.zapatera@gmail.com';
+  engine.registerUser(treasurerUser, 'TreasurerPass123!', 'treasurer');
+  const validTreasurerRes = engine.loginToPortal(treasurerUser, 'TreasurerPass123!', 'treasurer');
+  assert.strictEqual(validTreasurerRes.success, true);
+  assert.strictEqual(validTreasurerRes.step, 'otp');
+  assert.strictEqual(validTreasurerRes.user.role, 'treasurer');
+  console.log('  [PASS] Authorized treasurer accepted and routed to 2FA OTP verification step\n');
+
   console.log('====================================================');
-  console.log('✅ ALL 9 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
+  console.log('✅ ALL 14 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
   console.log('====================================================\n');
 }
 

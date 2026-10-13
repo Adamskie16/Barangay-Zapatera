@@ -42,10 +42,21 @@ export default function App() {
     if (evts) setEvents(evts);
     if (logsData) setLogs(logsData);
     if (cfg) setConfig(cfg);
-    setCurrentUser(StorageService.getCurrentUser());
+    const user = StorageService.getCurrentUser();
+    if (user && user.role !== 'admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+    } else {
+      setCurrentUser(user);
+    }
   };
 
   useEffect(() => {
+    const initialUser = StorageService.getCurrentUser();
+    if (initialUser && initialUser.role !== 'admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+    }
     refreshState();
 
     const handleConfigUpdate = () => {
@@ -107,6 +118,11 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (user) => {
+    if (user?.role !== 'admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+      return;
+    }
     setCurrentUser(user);
     refreshState();
   };

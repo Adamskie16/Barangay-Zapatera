@@ -156,29 +156,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       return;
     }
 
-    // 3. Check whether the Gmail / account exists
-    let profile: any = null;
-    try {
-      if (isSupabaseConfigured()) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', cleanEmail)
-          .maybeSingle();
-
-        profile = data;
-      }
-    } catch (e) {
-      // Handled silently
-    }
-
-    if (!profile || (profile.role && profile.role.toLowerCase() !== 'resident')) {
-      setError('Email or password is incorrect.');
-      setLoading(false);
-      return;
-    }
-
-    // 4. Verify Password with Official Supabase Auth Provider & Check Email Confirmation
+    // 3. Supabase Official Primary Password Authentication
     let authUser: any = null;
     try {
       if (isSupabaseConfigured()) {
@@ -215,10 +193,73 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       return;
     }
 
-    // 5. Proceed to OTP verification -> Reset lockout and Send 6-Digit Code to Gmail
+    if (!authUser?.id) {
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 4. Fetch User Profile from public.profiles using authenticated user.id
+    let profile: any = null;
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error: profileErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (profileErr) {
+          console.error('Profile fetch error:', profileErr);
+        }
+        profile = data;
+      }
+    } catch (e) {
+      // Handled silently
+    }
+
+    // Fallback check against local resident storage if profiles table record is missing
+    if (!profile) {
+      try {
+        const storedResidents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+        const match = storedResidents.find((r: any) => (r.email && r.email.toLowerCase() === cleanEmail) || r.id === authUser.id);
+        if (match) {
+          profile = match;
+        }
+      } catch (e) {}
+    }
+
+    // If profile not found, is inactive, or is locked -> immediately terminate session
+    if (!profile || profile.is_active === false || profile.is_locked === true) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 5. STRICT Role Verification: Allowed Role: 'resident' only
+    // If an admin, super_admin, or treasurer attempts to log in via /resident/login, terminate session!
+    const pRole = (profile.role || '').toLowerCase();
+    if (pRole !== 'resident') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    // 6. SUCCESSFUL CREDENTIAL & ROLE VERIFICATION RESET
     await resetFailedAttempts(cleanEmail);
     setIsLocked(false);
 
+    // 7. Send 6-Digit MFA Verification Code to Gmail
     try {
       if (isSupabaseConfigured()) {
         const { error: otpErr } = await supabase.auth.signInWithOtp({
@@ -331,21 +372,18 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       return;
     }
 
-    // Role-based verification from server
-    let trustedRole = 'resident';
-    try {
-      if (isSupabaseConfigured()) {
-        const { data: serverProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', pendingUser.email)
-          .single();
-
-        if (serverProfile) {
-          trustedRole = (serverProfile.role || '').toLowerCase();
+    // Secondary strict role guard before committing session
+    const pRole = (pendingUser?.role || '').toLowerCase();
+    if (pRole !== 'resident') {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
         }
-      }
-    } catch (err) {}
+      } catch {}
+      setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
 
     const verifiedResident: ResidentUser = {
       ...pendingUser,

@@ -30,10 +30,11 @@ export default function App() {
       const stored = localStorage.getItem('zapatera_account_mgmt_session');
       if (!stored) return null;
       const parsed = JSON.parse(stored);
-      if (parsed && (parsed.role === 'superadmin' || parsed.role === 'super_admin')) {
-        return { ...parsed, role: 'super_admin' };
+      if (parsed && (parsed.role === 'accountmanagement' || parsed.role === 'account_management')) {
+        return parsed;
       }
-      return parsed;
+      localStorage.removeItem('zapatera_account_mgmt_session');
+      return null;
     } catch {
       return null;
     }
@@ -85,12 +86,13 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (user) => {
-    const normalizedUser = {
-      ...user,
-      role: (user?.role === 'superadmin' || user?.role === 'super_admin') ? 'super_admin' : user?.role,
-    };
-    localStorage.setItem('zapatera_account_mgmt_session', JSON.stringify(normalizedUser));
-    setCurrentUser(normalizedUser);
+    if (user?.role !== 'accountmanagement' && user?.role !== 'account_management') {
+      localStorage.removeItem('zapatera_account_mgmt_session');
+      setCurrentUser(null);
+      return;
+    }
+    localStorage.setItem('zapatera_account_mgmt_session', JSON.stringify(user));
+    setCurrentUser(user);
   };
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -110,9 +112,9 @@ export default function App() {
     setCurrentUser(null);
   };
 
-  // Auth Guard: Only Super Admin accounts are authorized to access portal
-  const isSuperAdmin = currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'superadmin');
-  if (!isSuperAdmin) {
+  // Auth Guard: Strictly Account Management role only
+  const isAuthorized = currentUser && (currentUser.role === 'accountmanagement' || currentUser.role === 'account_management');
+  if (!isAuthorized) {
     return (
       <>
         {accountDeletedNotice && (

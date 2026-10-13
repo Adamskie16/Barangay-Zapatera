@@ -59,10 +59,21 @@ export default function App() {
     if (cfg) setConfig(cfg);
     if (logsData) setLogs(logsData);
     if (notifs) setNotifications(notifs);
-    setCurrentUser(StorageService.getCurrentUser());
+    const user = StorageService.getCurrentUser();
+    if (user && user.role !== 'super_admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+    } else {
+      setCurrentUser(user);
+    }
   };
 
   useEffect(() => {
+    const initialUser = StorageService.getCurrentUser();
+    if (initialUser && initialUser.role !== 'super_admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+    }
     refreshState();
 
     // 1. Cross-tab BroadcastChannel listener for live request status updates & deletions from Admin
@@ -145,6 +156,11 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (user) => {
+    if (user?.role !== 'super_admin') {
+      StorageService.setCurrentUser(null);
+      setCurrentUser(null);
+      return;
+    }
     setCurrentUser(user);
     refreshState();
   };
