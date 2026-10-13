@@ -647,8 +647,8 @@ export default function LoginPage({ onLoginSuccess }) {
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
         {isPictureLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-white z-0">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin mb-3" />
-            <span className="text-xs font-semibold tracking-wider uppercase text-emerald-200">
+            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-blue-200">
               Loading Supabase Assets...
             </span>
           </div>
@@ -659,7 +659,7 @@ export default function LoginPage({ onLoginSuccess }) {
             className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-emerald-950" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
         )}
         {/* Subtle top vignette for clean header contrast while keeping background visible */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/50 via-transparent to-transparent pointer-events-none" />
@@ -715,11 +715,11 @@ export default function LoginPage({ onLoginSuccess }) {
         {/* Top-Left Branding */}
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shadow-sm overflow-hidden p-0.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shadow-sm overflow-hidden p-0.5">
               <img src="/logo.png" alt="Barangay Zapatera Official Seal" className="w-full h-full object-contain" />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
                 Barangay Zapatera
               </span>
               <span className="text-sm font-bold text-slate-900">
@@ -765,7 +765,7 @@ export default function LoginPage({ onLoginSuccess }) {
                         setError('');
                         setInfoMsg('');
                       }}
-                      className="mt-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors shadow-sm"
+                      className="mt-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-sm"
                     >
                       <Unlock className="w-3.5 h-3.5" />
                       Unlock Account
@@ -805,7 +805,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="accountadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -822,7 +822,7 @@ export default function LoginPage({ onLoginSuccess }) {
                         setStep(3);
                         setError('');
                       }}
-                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+                      className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       Forgot password?
                     </button>
@@ -835,7 +835,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -850,7 +850,7 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full mt-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -877,7 +877,7 @@ export default function LoginPage({ onLoginSuccess }) {
                     setError('');
                     setInfoMsg('');
                   }}
-                  className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                  className="font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
                 >
                   <Unlock className="w-3.5 h-3.5" />
                   Unlock Account
@@ -890,7 +890,7 @@ export default function LoginPage({ onLoginSuccess }) {
           {step === 2 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -927,14 +927,14 @@ export default function LoginPage({ onLoginSuccess }) {
                     value={otpInput}
                     onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
                     placeholder="123456"
-                    className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading || otpInput.length !== 6}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
                     <>
@@ -967,7 +967,7 @@ export default function LoginPage({ onLoginSuccess }) {
                     type="button"
                     onClick={handleResendOTP}
                     disabled={loading}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     Resend Code
@@ -1016,7 +1016,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="accountadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1024,7 +1024,7 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {forgotLoading ? (
                     <>
@@ -1096,7 +1096,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
                       placeholder="At least 8 characters"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -1120,7 +1120,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={resetConfirmPassword}
                       onChange={(e) => setResetConfirmPassword(e.target.value)}
                       placeholder="Repeat new password"
-                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
                       type="button"
@@ -1135,7 +1135,7 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={resetLoading || !resetNewPassword || resetNewPassword !== resetConfirmPassword}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {resetLoading ? (
                     <>
@@ -1157,7 +1157,7 @@ export default function LoginPage({ onLoginSuccess }) {
           {step === 5 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <Unlock className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -1188,7 +1188,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={unlockEmail}
                       onChange={(e) => setUnlockEmail(e.target.value)}
                       placeholder="accountadmin@zapatera.gov.ph"
-                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
                 </div>
@@ -1196,7 +1196,7 @@ export default function LoginPage({ onLoginSuccess }) {
                 <button
                   type="submit"
                   disabled={unlockLoading}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {unlockLoading ? (
                     <>
@@ -1232,7 +1232,7 @@ export default function LoginPage({ onLoginSuccess }) {
           {step === 6 && (
             <div>
               <div className="mb-6 text-left">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 mb-3">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -1295,7 +1295,7 @@ export default function LoginPage({ onLoginSuccess }) {
                       value={unlockOtp}
                       onChange={(e) => setUnlockOtp(e.target.value.replace(/\D/g, ''))}
                       placeholder="123456"
-                      className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full text-center tracking-[0.4em] font-mono text-lg font-bold py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
 
@@ -1303,7 +1303,7 @@ export default function LoginPage({ onLoginSuccess }) {
                     <button
                       type="submit"
                       disabled={unlockLoading || unlockOtp.length !== 6 || unlockCountdown <= 0}
-                      className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {unlockLoading ? (
                         <>

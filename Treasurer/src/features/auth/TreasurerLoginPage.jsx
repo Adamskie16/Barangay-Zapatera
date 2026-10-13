@@ -87,18 +87,30 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
     let isMounted = true;
     setIsPictureLoading(true);
 
-    StorageService.getSupabaseLoginAssetsAsync('treasurer')
-      .then((assets) => {
-        if (!isMounted) return;
-        if (assets) {
-          setLoginAssets(assets);
-        }
-        setIsPictureLoading(false);
-      })
-      .catch((err) => {
-        console.warn('Failed to load login assets from Supabase:', err);
-        if (isMounted) setIsPictureLoading(false);
-      });
+    const loadAssets = () => {
+      StorageService.getSupabaseLoginAssetsAsync('treasurer')
+        .then((assets) => {
+          if (!isMounted) return;
+          if (assets) {
+            setLoginAssets(assets);
+          }
+          setIsPictureLoading(false);
+        })
+        .catch((err) => {
+          console.warn('Failed to load login assets from Supabase:', err);
+          if (isMounted) setIsPictureLoading(false);
+        });
+    };
+
+    loadAssets();
+
+    // Listen to localStorage changes when design is modified in AccountManagement
+    const handleStorageChange = (e) => {
+      if (e.key === 'zapatera_login_designs_db') {
+        loadAssets();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
 
     // 1. Detect if redirected from password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
@@ -113,6 +125,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
       setInfoMsg('Password Recovery Active: Please enter your new Treasurer password below.');
     }
 
+    let authUnsubscribe = null;
     if (isSupabaseConfigured()) {
       const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'PASSWORD_RECOVERY') {
@@ -120,8 +133,14 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
           setInfoMsg('Password Recovery Active: Please enter your new Treasurer password below.');
         }
       });
-      return () => authListener?.subscription?.unsubscribe();
+      authUnsubscribe = () => authListener?.subscription?.unsubscribe();
     }
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorageChange);
+      if (authUnsubscribe) authUnsubscribe();
+    };
   }, []);
 
   // BroadcastChannel for live cross-tab unlock synchronization
@@ -740,8 +759,8 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
       <div className="relative hidden lg:flex lg:w-1/2 min-h-screen bg-slate-950 overflow-hidden select-none">
         {isPictureLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-white z-0">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-3" />
-            <span className="text-xs font-semibold tracking-wider uppercase text-amber-200">
+            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
+            <span className="text-xs font-semibold tracking-wider uppercase text-blue-200">
               loading image
             </span>
           </div>
@@ -752,7 +771,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
             className="absolute inset-0 w-full h-full object-cover object-center transform scale-105 hover:scale-100 transition-transform duration-1000"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-amber-950" />
+          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-blue-950" />
         )}
         {/* Subtle top vignette for clean header contrast while keeping background visible */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/50 via-transparent to-transparent pointer-events-none" />
@@ -808,7 +827,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
         {/* Top-Left Branding / Mobile Header */}
         <div className="flex items-center justify-between w-full max-w-[400px] mx-auto mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shadow-sm overflow-hidden p-1">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shadow-sm overflow-hidden p-1">
               <img
                 src={loginAssets?.sealUrl || '/logo.png'}
                 alt="Barangay Seal"
@@ -819,7 +838,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
                 Barangay Zapatera
               </span>
               <span className="text-sm font-bold text-slate-900">

@@ -21,9 +21,10 @@ import {
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 
 const DEFAULT_PORTAL_NAMES = {
-  all: 'All Portals (Super Admin & Admin)',
+  all: 'All Portals (Super Admin, Admin & Treasurer)',
   super_admin: 'Super Admin Portal Only',
   admin: 'Barangay Admin Portal Only',
+  treasurer: 'Barangay Treasurer Portal Only',
 };
 
 const INITIAL_LOCAL_DESIGNS = [];
@@ -516,6 +517,19 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
           >
             Admin
           </button>
+          <button
+            type="button"
+            onClick={() => setPortalFilter('treasurer')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              portalFilter === 'treasurer'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : isDarkMode
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Treasurer
+          </button>
         </div>
       </div>
 
@@ -589,6 +603,8 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
                       ? 'All Portals'
                       : design.target_portal === 'super_admin'
                       ? 'Super Admin'
+                      : design.target_portal === 'treasurer'
+                      ? 'Treasurer'
                       : 'Admin'}
                   </span>
                 </div>
@@ -862,9 +878,10 @@ export default function LoginDesignView({ currentUser, isDarkMode }) {
                         : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-600'
                     }`}
                   >
-                    <option value="all">All Portals (SuperAdmin & Admin)</option>
+                    <option value="all">All Portals (Super Admin, Admin & Treasurer)</option>
                     <option value="super_admin">Super Admin Portal Only</option>
                     <option value="admin">Barangay Admin Portal Only</option>
+                    <option value="treasurer">Barangay Treasurer Portal Only</option>
                   </select>
                 </div>
 

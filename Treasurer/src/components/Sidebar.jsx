@@ -45,7 +45,7 @@ export default function Sidebar({
         {/* Brand Header */}
         <div className="p-4 border-b border-slate-800/80 flex items-center justify-between bg-gradient-to-b from-slate-950/80 to-slate-900/60 backdrop-blur-md">
           <div className="flex items-center space-x-3.5 min-w-0">
-            <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-amber-500/30 bg-white shadow-md shadow-amber-950/50 flex items-center justify-center shrink-0 p-0.5">
+            <div className="relative w-11 h-11 rounded-xl overflow-hidden ring-2 ring-blue-500/30 bg-white shadow-md shadow-blue-950/50 flex items-center justify-center shrink-0 p-0.5">
               <img
                 src="/logo.png"
                 alt="Barangay Zapatera Official Seal"
@@ -55,9 +55,9 @@ export default function Sidebar({
             <div className="min-w-0">
               <div className="flex items-center space-x-1.5">
                 <h1 className="font-extrabold text-base text-white tracking-tight leading-none">Zapatera</h1>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
               </div>
-              <p className="text-[11px] text-amber-400 font-semibold uppercase tracking-wider mt-0.5">Treasurer Portal</p>
+              <p className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider mt-0.5">Treasurer Portal</p>
             </div>
           </div>
           {/* Mobile Close Button (< 1024px) */}
@@ -73,8 +73,8 @@ export default function Sidebar({
         </div>
 
         {/* Role Notice Pill */}
-        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-[11px] font-medium flex items-center gap-2">
-          <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+        <div className="px-4 py-2 bg-blue-500/10 border-b border-blue-500/20 text-blue-300 text-[11px] font-medium flex items-center gap-2">
+          <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span className="truncate">Financial Auditing & Ledger</span>
         </div>
 
@@ -95,13 +95,13 @@ export default function Sidebar({
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer group ${
                   isActive
-                    ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg shadow-amber-600/30 ring-1 ring-amber-400/30 font-bold'
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-400/30 font-bold'
                     : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
                 }`}
               >
                 <Icon
                   className={`w-4 h-4 transition-transform duration-200 group-hover:scale-110 shrink-0 ${
-                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-amber-400'
+                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-blue-400'
                   }`}
                 />
                 <span className="truncate">{item.label}</span>
@@ -130,7 +130,7 @@ export default function Sidebar({
               />
               <div className="truncate">
                 <p className="text-xs font-bold text-white truncate leading-tight">{currentUser?.full_name || 'Barangay Treasurer'}</p>
-                <p className="text-[10px] text-amber-400 font-semibold truncate mt-0.5">Barangay Treasurer</p>
+                <p className="text-[10px] text-blue-400 font-semibold truncate mt-0.5">Barangay Treasurer</p>
               </div>
             </button>
 

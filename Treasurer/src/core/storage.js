@@ -161,20 +161,144 @@ export const StorageService = {
     }
   },
 
-  // LOGIN BRANDING ASSETS
-  getSupabaseLoginAssetsAsync: async (role = 'treasurer') => {
+  // LOGIN BRANDING ASSETS (Fetched from Account Management login_designs CMS & system_config)
+  getLoginDesigns: () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.LOGIN_DESIGNS);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  getLoginDesignsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
-        const { data } = await supabase
-          .from('login_design_assets')
+        const { data, error } = await supabase
+          .from('login_designs')
           .select('*')
-          .eq('role', role)
-          .maybeSingle();
+          .order('created_at', { ascending: false });
+        if (data && !error && data.length > 0) {
+          localStorage.setItem(STORAGE_KEYS.LOGIN_DESIGNS, JSON.stringify(data));
+          return data;
+        }
+      }
+    } catch (e) {
+      console.warn('getLoginDesignsAsync fallback:', e);
+    }
+    return StorageService.getLoginDesigns();
+  },
 
-        if (data) return data;
+  getActiveLoginDesignAsync: async (portal = 'treasurer') => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('login_designs')
+          .select('*')
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false });
+        if (data && !error && data.length > 0) {
+          const match = data.find((d) => d.target_portal === portal || d.target_portal === 'treasurer' || d.target_portal === 'all') || data[0];
+          return match;
+        }
       }
     } catch (e) {}
-    return null;
+    const local = StorageService.getLoginDesigns();
+    return local.find((d) => d.is_active && (d.target_portal === portal || d.target_portal === 'treasurer' || d.target_portal === 'all')) || local[0] || null;
+  },
+
+  getSupabaseLoginAssetsAsync: async (portal = 'treasurer') => {
+    let pictureUrl = null;
+    let sealUrl = null;
+    let title = 'Treasury & Revenue Governance, Made Transparent.';
+    let badge = 'Barangay Zapatera';
+    let description = 'Audit municipal collections, verify clearance fee schedules, and track revenue disbursements through one secure municipal portal.';
+
+    // 1. Try Supabase login_designs table (managed by Account Management)
+    if (isSupabaseConfigured()) {
+      try {
+        const { data: designs, error: designErr } = await supabase
+          .from('login_designs')
+          .select('*')
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false });
+
+        if (!designErr && designs && designs.length > 0) {
+          const match = designs.find((d) => d.target_portal === portal || d.target_portal === 'treasurer' || d.target_portal === 'all') || designs[0];
+          if (match) {
+            if (match.image_url && match.image_url.trim()) {
+              pictureUrl = match.image_url.trim();
+            }
+            if (match.title) title = match.title;
+            if (match.badge) badge = match.badge;
+            if (match.description) description = match.description;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load active login design from Supabase:', err);
+      }
+
+      // 2. Fallback to system_config table
+      try {
+        const { data: cfg, error: cfgErr } = await supabase
+          .from('system_config')
+          .select('login_bg_url, seal_url, login_title, login_badge, login_description')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (!cfgErr && cfg) {
+          if (!pictureUrl && cfg.login_bg_url && cfg.login_bg_url.trim() && cfg.login_bg_url !== '/auth-bg.jpg') {
+            pictureUrl = cfg.login_bg_url.trim();
+          }
+          if (cfg.seal_url && cfg.seal_url.trim()) {
+            sealUrl = cfg.seal_url.trim();
+          }
+          if (!title && cfg.login_title) title = cfg.login_title;
+          if (!badge && cfg.login_badge) badge = cfg.login_badge;
+          if (!description && cfg.login_description) description = cfg.login_description;
+        }
+      } catch (err) {
+        console.warn('Failed to load config from Supabase:', err);
+      }
+
+      // Resolve relative storage path to public URL
+      if (pictureUrl && !pictureUrl.startsWith('http://') && !pictureUrl.startsWith('https://') && !pictureUrl.startsWith('data:')) {
+        const cleanPath = pictureUrl.replace(/^\/+/, '');
+        try {
+          const { data: publicUrlData } = supabase.storage.from('public_assets').getPublicUrl(cleanPath);
+          if (publicUrlData?.publicUrl) {
+            pictureUrl = publicUrlData.publicUrl;
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Fallback to localStorage zapatera_login_designs_db (synchronized from Account Management)
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.LOGIN_DESIGNS);
+      if (stored) {
+        const localDesigns = JSON.parse(stored);
+        if (Array.isArray(localDesigns) && localDesigns.length > 0) {
+          const activeMatch = localDesigns.find((d) => d.is_active && (d.target_portal === portal || d.target_portal === 'treasurer' || d.target_portal === 'all'))
+            || localDesigns.find((d) => d.is_active)
+            || localDesigns[0];
+          if (activeMatch) {
+            if (!pictureUrl && activeMatch.image_url) pictureUrl = activeMatch.image_url;
+            if (activeMatch.title) title = activeMatch.title;
+            if (activeMatch.badge) badge = activeMatch.badge;
+            if (activeMatch.description) description = activeMatch.description;
+          }
+        }
+      }
+    } catch {}
+
+    return {
+      pictureUrl,
+      sealUrl: sealUrl || '/logo.png',
+      title,
+      badge,
+      description,
+    };
   },
 
   // FINANCIAL AUDIT COMPUTATIONS
