@@ -11,6 +11,7 @@ import {
   buildRevenueAuditCSV,
   buildSummaryKPIsCSV,
 } from './reportUtils';
+import { StorageService } from '../../core/storage';
 import {
   BarChart3,
   Download,
@@ -281,24 +282,52 @@ export default function ReportsView({
       periodLabel: `Calendar Year ${currentYear}`,
     });
     exportToCSV(`Barangay_Zapatera_Executive_Summary_${currentYear}`, rows);
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Executive Summary Report',
+      feature: 'Reports & Analytics',
+      details: `Exported Executive Summary Report (CSV) for Calendar Year ${currentYear}`,
+      level: 'info',
+    });
     setIsExportMenuOpen(false);
   };
 
   const handleExportApplicationsCSV = () => {
     const rows = buildApplicationsCSV(filteredRequests);
     exportToCSV(`Barangay_Zapatera_Applications_Pipeline_${currentYear}`, rows);
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Applications Pipeline Report',
+      feature: 'Reports & Analytics',
+      details: `Exported Document Applications Pipeline Report (CSV) with ${filteredRequests.length} records`,
+      level: 'info',
+    });
     setIsExportMenuOpen(false);
   };
 
   const handleExportMonthlyCSV = () => {
     const rows = buildMonthlyCSV(monthlyData, currentYear);
     exportToCSV(`Barangay_Zapatera_Monthly_Processing_${currentYear}`, rows);
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Monthly Processing Report',
+      feature: 'Reports & Analytics',
+      details: `Exported Monthly Processing & Financial Report (CSV) for ${currentYear}`,
+      level: 'info',
+    });
     setIsExportMenuOpen(false);
   };
 
   const handleExportDocAuditCSV = () => {
     const rows = buildRevenueAuditCSV(docTypeCounts, requests.length);
     exportToCSV(`Barangay_Zapatera_Document_Clearances_Audit_${currentYear}`, rows);
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Document Clearance Audit Report',
+      feature: 'Reports & Analytics',
+      details: `Exported Document Clearances & Revenue Audit Report (CSV) for ${currentYear}`,
+      level: 'info',
+    });
     setIsExportMenuOpen(false);
   };
 
@@ -319,6 +348,13 @@ export default function ReportsView({
       applications: filteredRequests,
     };
     exportToJSON(`Barangay_Zapatera_Comprehensive_Report_${currentYear}`, payload);
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Downloaded Comprehensive System Report',
+      feature: 'Reports & Analytics',
+      details: `Exported Comprehensive System Data Backup (JSON) with full issuance and financial metrics`,
+      level: 'info',
+    });
     setIsExportMenuOpen(false);
   };
 
