@@ -157,9 +157,9 @@ export const getResidentNameParts = (user) => {
 };
 
 
-export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDarkMode }) {
-  const [usersList, setUsersList] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
+export default function UsersView({ users = [], onSaveUser, onDeleteUser, currentUser, isDarkMode }) {
+  const [usersList, setUsersList] = useState(() => (Array.isArray(users) && users.length > 0 ? users : StorageService.getUsers()));
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [filterRole, setFilterRole] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -507,6 +507,10 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           .select('*')
           .order('created_at', { ascending: false });
 
+        if (error) {
+          console.warn('Notice: Supabase profiles query error in UsersView:', error.message || error);
+        }
+
         // Also fetch pending unlock requests to guarantee real-time locked status across all origins
         const { data: unlockRequests } = await supabase
           .from('account_unlock_requests')
@@ -576,7 +580,9 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       console.warn('Notice: Supabase users fetch error:', err);
     }
 
-    setUsersList([]);
+    // Fallback if Supabase fetch failed or returned error
+    const fallbackList = (Array.isArray(users) && users.length > 0) ? users : StorageService.getUsers();
+    setUsersList(fallbackList || []);
     setLoadingUsers(false);
   }
 
