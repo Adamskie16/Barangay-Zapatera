@@ -18,6 +18,8 @@ import './index.css';
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  // Mobile responsive drawer state (< 1024px)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [currentUser, setCurrentUser] = useState(StorageService.getCurrentUser());
   const [accountDeletedNotice, setAccountDeletedNotice] = useState(null);
@@ -266,20 +268,26 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans overflow-hidden">
+      {/* Responsive Sidebar (Off-canvas drawer on mobile < 1024px, static on desktop >= 1024px) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         onLogout={handleLogoutRequest}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main Workspace Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full">
         <Navbar
           activeTitle={tabTitles[activeTab]}
           pendingCount={requests.filter((r) => r.status === 'pending').length}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+          currentUser={currentUser}
         />
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-full overflow-x-hidden">
           {activeTab === 'dashboard' && (
             <DashboardView
               requests={requests}

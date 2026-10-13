@@ -20,6 +20,8 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('zapatera_dark_mode') === 'true';
   });
+  // Mobile responsive drawer state (< 1024px)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => {
@@ -286,25 +288,29 @@ export default function App() {
     <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
       isDarkMode ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
     }`}>
-      {/* Sidebar */}
+      {/* Responsive Sidebar (Off-canvas drawer on mobile < 1024px, static on desktop >= 1024px) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         onLogout={handleLogoutRequest}
         isDarkMode={isDarkMode}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
-      {/* Main Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main Workspace Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full max-w-full">
         <Navbar
           activeTitle={tabTitles[activeTab]}
           notificationsCount={notifications.length}
           isDarkMode={isDarkMode}
           onToggleDarkMode={toggleDarkMode}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+          currentUser={currentUser}
         />
 
-        <main className={`flex-1 overflow-y-auto p-6 transition-colors duration-200 ${
+        <main className={`flex-1 overflow-y-auto p-4 sm:p-6 transition-colors duration-200 w-full max-w-full overflow-x-hidden ${
           isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
         }`}>
           {activeTab === 'dashboard' && (

@@ -14,6 +14,7 @@ import { LogOut, X, AlertTriangle } from 'lucide-react';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => StorageService.getCurrentUser());
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [requests, setRequests] = useState([]);
   const [docTypes, setDocTypes] = useState([]);
   const [config, setConfig] = useState(() => StorageService.getConfig());
@@ -102,6 +103,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         onLogout={handleLogout}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -111,9 +114,11 @@ export default function App() {
           isRefreshing={isRefreshing}
           onRefresh={refreshFinancialData}
           paidTodayCount={metrics.paidCount}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
+          currentUser={currentUser}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           <div className="max-w-7xl mx-auto pb-12">
             {activeTab === 'dashboard' && (
               <TreasurerDashboardView
