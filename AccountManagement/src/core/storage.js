@@ -628,7 +628,16 @@ export const StorageService = {
         const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
         const adminId = adminUser?.id && isUuid(adminUser.id) ? adminUser.id : (isUuid(saved.created_by) ? saved.created_by : null);
 
-        const payload = {
+        // Verify adminId exists in public.profiles to prevent foreign key violation
+        let validProfileId = null;
+        if (adminId) {
+          try {
+            const { data: prof } = await supabase.from('profiles').select('id').eq('id', adminId).maybeSingle();
+            if (prof?.id) validProfileId = prof.id;
+          } catch {}
+        }
+
+        const basePayload = {
           title: saved.title,
           category: saved.category || 'Public Advisory',
           description: saved.description,
@@ -639,16 +648,28 @@ export const StorageService = {
           is_important: !!saved.is_important,
           is_emergency: !!saved.is_emergency,
           is_published: saved.is_published !== false,
-          target_audience: saved.target_audience || 'all',
-          created_by: adminId,
+          target_audience: saved.target_audience || 'residents',
+          created_by: validProfileId,
           updated_at: new Date().toISOString(),
         };
 
+        const payloadWithEvent = saved.event_date
+          ? { ...basePayload, event_date: new Date(saved.event_date).toISOString() }
+          : basePayload;
+
         if (isUuid(saved.id)) {
-          payload.id = saved.id;
-          await supabase.from('news').upsert(payload);
+          payloadWithEvent.id = saved.id;
+          const { error: upsertErr } = await supabase.from('news').upsert(payloadWithEvent);
+          if (upsertErr && (upsertErr.code === 'PGRST204' || String(upsertErr.message).includes('event_date'))) {
+            basePayload.id = saved.id;
+            await supabase.from('news').upsert(basePayload);
+          }
         } else {
-          const { data } = await supabase.from('news').insert([payload]).select();
+          let { data, error: insertErr } = await supabase.from('news').insert([payloadWithEvent]).select();
+          if (insertErr && (insertErr.code === 'PGRST204' || String(insertErr.message).includes('event_date'))) {
+            const retryRes = await supabase.from('news').insert([basePayload]).select();
+            data = retryRes.data;
+          }
           if (data && data[0]) {
             saved.id = data[0].id;
           }

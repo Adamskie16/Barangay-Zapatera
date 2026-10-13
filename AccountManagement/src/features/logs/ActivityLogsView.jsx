@@ -353,10 +353,6 @@ export default function ActivityLogsView({ currentUser, isDarkMode }) {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
-          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-slate-900 text-blue-400">
-            <Terminal className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
-            {isSupabaseConfigured() ? 'Live Audit Engine' : 'Local Audit Engine'}
-          </span>
         </div>
       </div>
 
