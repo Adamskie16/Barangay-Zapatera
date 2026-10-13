@@ -438,7 +438,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               message: msg,
             });
           } else {
-            setAuthError('Email or password is incorrect.');
+            const remaining = typeof failedInfo.remaining === 'number' ? failedInfo.remaining : Math.max(0, 3 - (failedInfo.attempts || 1));
+            setAuthError(`Email or password is incorrect. (${remaining} attempt${remaining === 1 ? '' : 's'} remaining before account lockout)`);
           }
           setLoading(false);
           return;

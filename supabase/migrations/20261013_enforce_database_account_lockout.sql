@@ -112,7 +112,7 @@ DECLARE
   is_now_locked BOOLEAN;
   now_ts TIMESTAMPTZ := NOW();
 BEGIN
-  SELECT id, failed_login_attempts, failed_attempts, is_locked, full_name, role
+  SELECT id, failed_login_attempts, failed_attempts, is_locked, full_name, role, locked_at, is_active
   INTO prof
   FROM public.profiles
   WHERE LOWER(TRIM(email)) = clean_email
@@ -120,7 +120,7 @@ BEGIN
 
   IF NOT FOUND THEN
     -- Return generic response without leaking user non-existence
-    RETURN jsonb_build_object('success', false, 'is_locked', false, 'attempts', 1);
+    RETURN jsonb_build_object('success', false, 'is_locked', false, 'attempts', 1, 'remaining', 2);
   END IF;
 
   new_count := COALESCE(prof.failed_login_attempts, prof.failed_attempts, 0) + 1;
@@ -132,6 +132,7 @@ BEGIN
     failed_attempts = new_count,
     is_locked = is_now_locked,
     locked_at = CASE WHEN is_now_locked THEN now_ts ELSE prof.locked_at END,
+    is_active = CASE WHEN is_now_locked THEN false ELSE prof.is_active END,
     updated_at = now_ts
   WHERE id = prof.id;
 

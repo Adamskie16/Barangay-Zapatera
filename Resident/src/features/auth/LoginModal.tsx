@@ -179,7 +179,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
             setIsLocked(true);
             setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
           } else {
-            setError('Email or password is incorrect.');
+            const remaining = typeof lockRes.remaining === 'number' ? lockRes.remaining : Math.max(0, 3 - (lockRes.attempts || 1));
+            setError(`Email or password is incorrect. (${remaining} attempt${remaining === 1 ? '' : 's'} remaining before account lockout)`);
           }
           setLoading(false);
           return;

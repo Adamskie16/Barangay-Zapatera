@@ -176,6 +176,7 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
           } else {
             if (typeof localStorage !== 'undefined') {
               localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+              localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
             }
             return false;
           }
