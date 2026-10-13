@@ -4,7 +4,6 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import TreasurerLoginPage from './features/auth/TreasurerLoginPage';
 import TreasurerDashboardView from './features/dashboard/TreasurerDashboardView';
-import CollectionsLedgerView from './features/collections/CollectionsLedgerView';
 import TreasurerReportsView from './features/reports/TreasurerReportsView';
 import AccountView from './features/account/AccountView';
 import { StorageService } from './core/storage';
@@ -90,7 +89,6 @@ export default function App() {
 
   const tabTitles = {
     dashboard: 'Treasurer Dashboard',
-    collections: 'Document Payments & Receipts',
     reports: 'Collection Reports & Summaries',
     account: 'My Profile & Account',
   };
@@ -126,19 +124,6 @@ export default function App() {
                 requests={requests}
                 docTypes={docTypes}
                 config={config}
-                onRefresh={refreshFinancialData}
-                onNavigateToCollections={() => setActiveTab('collections')}
-                onNavigateToReports={() => setActiveTab('reports')}
-              />
-            )}
-
-            {activeTab === 'collections' && (
-              <CollectionsLedgerView
-                requests={requests}
-                docTypes={docTypes}
-                config={config}
-                loading={loading}
-                currentUser={currentUser}
                 onRefresh={refreshFinancialData}
                 onNavigateToReports={() => setActiveTab('reports')}
               />

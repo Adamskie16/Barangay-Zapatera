@@ -23,7 +23,6 @@ export default function Sidebar({
 }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'collections', label: 'Payments & Receipts', icon: Receipt },
     { id: 'reports', label: 'Collection Reports', icon: FileSpreadsheet },
     { id: 'account', label: 'My Profile', icon: User },
   ];

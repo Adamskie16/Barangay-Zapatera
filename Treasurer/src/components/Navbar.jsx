@@ -32,17 +32,10 @@ export default function Navbar({
         </div>
 
         <h2 className="text-sm sm:text-base md:text-lg font-extrabold text-slate-900 tracking-tight truncate">{activeTitle}</h2>
-        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 shrink-0">
-          Auditing Mode
-        </span>
       </div>
 
       {/* Actions */}
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-        <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-medium">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Live Ledger Sync</span>
-        </div>
 
         {onRefresh && (
           <button

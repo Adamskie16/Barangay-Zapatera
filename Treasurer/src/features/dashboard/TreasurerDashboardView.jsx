@@ -1,5 +1,5 @@
 // Treasurer/src/features/dashboard/TreasurerDashboardView.jsx
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   Receipt,
@@ -13,8 +13,14 @@ import {
   ShieldCheck,
   DollarSign,
   Gift,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Filter,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../core/security';
+import MonthlyAnalytics from '../../components/MonthlyAnalytics';
 
 export default function TreasurerDashboardView({
   metrics = {},
@@ -22,10 +28,103 @@ export default function TreasurerDashboardView({
   docTypes = [],
   config = {},
   onRefresh,
-  onNavigateToCollections,
   onNavigateToReports,
 }) {
-  const recentTransactions = requests.slice(0, 8);
+  // Sorting & Filtering State for Recent Document Payments Table
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortField, setSortField] = useState('date');
+  const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Process & filter payments
+  const processedPayments = useMemo(() => {
+    return requests.filter((req) => {
+      // Status filter
+      const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
+      const isWaived = req.payment_status === 'waived' || req.is_waived === true;
+      const isUnpaid = !isPaid && !isWaived;
+
+      if (statusFilter === 'paid' && !isPaid) return false;
+      if (statusFilter === 'unpaid' && !isUnpaid) return false;
+      if (statusFilter === 'waived' && !isWaived) return false;
+
+      // Search filter
+      if (searchTerm.trim()) {
+        const query = searchTerm.toLowerCase().trim();
+        const tracking = String(req.tracking_number || '').toLowerCase();
+        const name = String(req.full_name || req.user_name || req.resident_name || '').toLowerCase();
+        const doc = String(req.document_type || req.document_name || '').toLowerCase();
+        const orNum = String(req.or_number || '').toLowerCase();
+        return tracking.includes(query) || name.includes(query) || doc.includes(query) || orNum.includes(query);
+      }
+
+      return true;
+    });
+  }, [requests, statusFilter, searchTerm]);
+
+  // Sort payments
+  const sortedPayments = useMemo(() => {
+    return [...processedPayments].sort((a, b) => {
+      let valA, valB;
+
+      if (sortField === 'tracking') {
+        valA = a.tracking_number || '';
+        valB = b.tracking_number || '';
+      } else if (sortField === 'name') {
+        valA = a.full_name || a.user_name || a.resident_name || '';
+        valB = b.full_name || b.user_name || b.resident_name || '';
+      } else if (sortField === 'doc') {
+        valA = a.document_type || a.document_name || '';
+        valB = b.document_type || b.document_name || '';
+      } else if (sortField === 'or') {
+        valA = a.or_number || '';
+        valB = b.or_number || '';
+      } else if (sortField === 'fee') {
+        valA = Number(a.fee ?? a.amount ?? 0);
+        valB = Number(b.fee ?? b.amount ?? 0);
+      } else if (sortField === 'status') {
+        valA = a.payment_status || (a.is_paid ? 'paid' : 'unpaid');
+        valB = b.payment_status || (b.is_paid ? 'paid' : 'unpaid');
+      } else {
+        // Date sort
+        valA = new Date(a.payment_date || a.created_at || 0).getTime();
+        valB = new Date(b.payment_date || b.created_at || 0).getTime();
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [processedPayments, sortField, sortDirection]);
+
+  // Pagination
+  const totalPages = Math.ceil(sortedPayments.length / itemsPerPage) || 1;
+  const paginatedPayments = sortedPayments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const renderSortIndicator = (field) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="w-3.5 h-3.5 text-blue-600 font-bold" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-blue-600 font-bold" />
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -38,10 +137,10 @@ export default function TreasurerDashboardView({
             Barangay Zapatera Treasury
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Document Fee Collections
+            Document Fee Collections & Treasury
           </h1>
           <p className="mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Track document fees paid by residents, issue official receipts, and monitor total money collected for Barangay Zapatera.
+            Monitor document fee collections, monthly processing volumes, official receipts, and financial transparency records for Barangay Zapatera.
           </p>
         </div>
       </div>
@@ -114,7 +213,10 @@ export default function TreasurerDashboardView({
         </div>
       </div>
 
-      {/* Grid: Collections by Document Type & Quick Actions */}
+      {/* Monthly Processing Volume & Quantities Component */}
+      <MonthlyAnalytics requests={requests} />
+
+      {/* Grid: Fees Collected by Document Type & Status Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Revenue Breakdown by Document Type */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
@@ -123,13 +225,15 @@ export default function TreasurerDashboardView({
               <h2 className="text-base font-bold text-slate-900">Fees Collected by Document Type</h2>
               <p className="text-xs text-slate-500">Summary of payments received per document clearance</p>
             </div>
-            <button
-              onClick={onNavigateToReports}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>View Full Reports</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            {onNavigateToReports && (
+              <button
+                onClick={onNavigateToReports}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>View Full Reports</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           <div className="space-y-3 pt-2">
@@ -164,7 +268,7 @@ export default function TreasurerDashboardView({
           </div>
         </div>
 
-        {/* Right Col: Quick Overview & Actions */}
+        {/* Right Col: Payment Status Summary & Action */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -172,7 +276,7 @@ export default function TreasurerDashboardView({
               <h3 className="text-base font-bold text-slate-900">Payment Status Summary</h3>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Track pending payments and confirm receipts when residents claim their documents.
+              Real-time audit breakdown of collected document clearance fees across all active requests.
             </p>
 
             <div className="mt-4 space-y-2 text-xs">
@@ -191,112 +295,259 @@ export default function TreasurerDashboardView({
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100 space-y-2">
-            <button
-              onClick={onNavigateToCollections}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-            >
-              <Receipt className="w-4 h-4 text-white" />
-              <span>Record Payment & Issue Receipts</span>
-            </button>
-            <button
-              onClick={onNavigateToReports}
-              className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-slate-600" />
-              <span>Print Collection Report</span>
-            </button>
+          <div className="pt-4 border-t border-slate-100">
+            {onNavigateToReports && (
+              <button
+                onClick={onNavigateToReports}
+                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <FileText className="w-4 h-4 text-white" />
+                <span>View Financial Reports</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Recent Transactions Preview */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+      {/* Recent Document Payments: Sorted, Filtered Table with No Actions */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        {/* Table Toolbar */}
+        <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Recent Document Payments</h2>
-            <p className="text-xs text-slate-500">Latest document requests and payment status</p>
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-blue-600" />
+              <h2 className="text-base font-bold text-slate-900">Recent Document Payments</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Comprehensive ledger of document clearance requests and payment records
+            </p>
           </div>
-          <button
-            onClick={onNavigateToCollections}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
-          >
-            <span>View All Payments</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+
+          <div className="flex items-center flex-wrap gap-2.5">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search tracking, resident, OR#..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-52 sm:w-64"
+              />
+            </div>
+
+            {/* Status Filter Buttons */}
+            <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 text-xs">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'paid', label: 'Paid' },
+                { id: 'unpaid', label: 'Unpaid' },
+                { id: 'waived', label: 'Waived' },
+              ].map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => {
+                    setStatusFilter(filter.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                    statusFilter === filter.id
+                      ? 'bg-white text-blue-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
+        {/* Sortable Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider font-bold text-[10px] select-none">
               <tr>
-                <th className="p-3">Tracking Number</th>
-                <th className="p-3">Resident Name</th>
-                <th className="p-3">Document</th>
-                <th className="p-3 text-right">Fee</th>
-                <th className="p-3 text-center">Status</th>
-                <th className="p-3">Date</th>
-                <th className="p-3 text-center">Action</th>
+                <th
+                  onClick={() => handleSort('tracking')}
+                  className="p-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Tracking Number</span>
+                    {renderSortIndicator('tracking')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('name')}
+                  className="p-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Resident Name</span>
+                    {renderSortIndicator('name')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('doc')}
+                  className="p-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Document Type</span>
+                    {renderSortIndicator('doc')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('or')}
+                  className="p-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Official Receipt (OR#)</span>
+                    {renderSortIndicator('or')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('date')}
+                  className="p-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Payment / Issued Date</span>
+                    {renderSortIndicator('date')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('fee')}
+                  className="p-3.5 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Fee (PHP)</span>
+                    {renderSortIndicator('fee')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('status')}
+                  className="p-3.5 text-center cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center justify-center space-x-1">
+                    <span>Payment Status</span>
+                    {renderSortIndicator('status')}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {recentTransactions.length > 0 ? (
-                recentTransactions.map((req, idx) => {
+              {paginatedPayments.length > 0 ? (
+                paginatedPayments.map((req, idx) => {
                   const fee = Number(req.fee ?? req.amount ?? 0);
                   const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
                   const isWaived = req.payment_status === 'waived' || req.is_waived === true;
 
                   return (
-                    <tr key={req.id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        {req.tracking_number || 'BZ-2026-PEND'}
+                    <tr key={req.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3.5 font-mono font-bold text-slate-900">
+                        {req.tracking_number || `BZ-REQ-${String(req.id || idx).slice(0, 6)}`}
                       </td>
-                      <td className="p-3 font-medium text-slate-800">
-                        {req.full_name || req.user_name || req.resident_name || 'Resident'}
+                      <td className="p-3.5 font-semibold text-slate-800">
+                        {req.full_name || req.user_name || req.resident_name || 'Resident Account'}
                       </td>
-                      <td className="p-3 text-slate-700">
-                        {req.document_type || req.document_name || 'Clearance'}
+                      <td className="p-3.5 text-slate-600">
+                        <span className="inline-block px-2 py-0.5 bg-slate-100 rounded text-[11px] font-medium text-slate-700">
+                          {req.document_type || req.document_name || 'Barangay Clearance'}
+                        </span>
                       </td>
-                      <td className="p-3 text-right font-black text-slate-900">
+                      <td className="p-3.5 font-mono">
+                        {req.or_number ? (
+                          <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            {req.or_number}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">Unissued</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-slate-600">
+                        {formatDate(req.payment_date || req.created_at)}
+                      </td>
+                      <td className="p-3.5 text-right font-black font-mono text-slate-900">
                         {formatCurrency(fee)}
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-3.5 text-center">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                             isPaid
                               ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                               : isWaived
                               ? 'bg-purple-50 text-purple-800 border border-purple-300'
-                              : 'bg-blue-50 text-blue-800 border border-blue-300'
+                              : 'bg-amber-50 text-amber-800 border border-amber-300'
                           }`}
                         >
-                          {isPaid ? 'Paid' : isWaived ? 'Free (Waived)' : 'Unpaid'}
+                          {isPaid ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Paid</span>
+                            </>
+                          ) : isWaived ? (
+                            <>
+                              <Gift className="w-3 h-3 text-purple-600" />
+                              <span>Free (Waived)</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              <span>Unpaid</span>
+                            </>
+                          )}
                         </span>
-                      </td>
-                      <td className="p-3 text-slate-500">
-                        {formatDate(req.created_at || req.payment_date)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={onNavigateToCollections}
-                          className="px-2.5 py-1 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-xs font-semibold cursor-pointer transition-colors"
-                        >
-                          {isPaid ? 'View Receipt' : 'Collect Fee'}
-                        </button>
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-slate-400">
-                    No document payment records found.
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <p className="font-semibold text-slate-500">No document payment transactions found</p>
+                    <p className="text-[11px] mt-1">Try adjusting your search query or status filter.</p>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination & Count Footer */}
+        {sortedPayments.length > 0 && (
+          <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 text-xs">
+            <span className="text-slate-500">
+              Showing <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+              <span className="font-bold text-slate-800">
+                {Math.min(currentPage * itemsPerPage, sortedPayments.length)}
+              </span>{' '}
+              of <span className="font-bold text-slate-800">{sortedPayments.length}</span> payments
+            </span>
+
+            {totalPages > 1 && (
+              <div className="flex items-center space-x-1.5">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Previous
+                </button>
+                <span className="px-2 font-bold text-slate-700">
+                  {currentPage} of {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

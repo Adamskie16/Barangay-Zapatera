@@ -1,6 +1,6 @@
 // SuperAdmin/src/components/Navbar.jsx
 import React from 'react';
-import { Bell, Sun, Moon, Menu } from 'lucide-react';
+import { Sun, Moon, Menu } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 
 export default function Navbar({
@@ -62,20 +62,6 @@ export default function Navbar({
             </>
           )}
         </button>
-
-        {/* Notifications Icon */}
-        <div className="relative">
-          <button className={`p-2 sm:p-2.5 rounded-xl transition-all relative cursor-pointer active:scale-95 ${
-            isDarkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-          }`}>
-            <Bell className="w-5 h-5" />
-            {notificationsCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white animate-pulse">
-                {notificationsCount > 99 ? '99+' : notificationsCount}
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Mobile User Avatar (< 1024px) */}
         <div className="lg:hidden pl-1">

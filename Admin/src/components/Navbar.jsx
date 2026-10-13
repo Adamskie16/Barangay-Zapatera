@@ -1,6 +1,6 @@
 // Admin/src/components/Navbar.jsx
 import React from 'react';
-import { Bell, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 
 export default function Navbar({
@@ -33,19 +33,6 @@ export default function Navbar({
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-        <div className="relative">
-          <button
-            title={pendingCount > 0 ? `${pendingCount} pending requests awaiting review` : 'Notifications'}
-            className="p-2 sm:p-2.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all relative cursor-pointer active:scale-95"
-          >
-            <Bell className="w-5 h-5" />
-            {pendingCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-white rounded-full text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white animate-pulse">
-                {pendingCount > 99 ? '99+' : pendingCount}
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Mobile User Avatar (< 1024px) */}
         <div className="lg:hidden pl-1">
