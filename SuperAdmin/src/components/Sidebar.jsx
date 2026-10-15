@@ -12,6 +12,7 @@ import {
   LogOut,
   User,
   X,
+  Archive,
 } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 
@@ -29,6 +30,7 @@ export default function Sidebar({
     { id: 'documents', label: 'Official Document Generator', icon: Printer },
     { id: 'news', label: 'News & Bulletins', icon: Newspaper },
     { id: 'users', label: 'User Account', icon: Users },
+    { id: 'archive', label: 'Archive & Trash', icon: Archive },
     { id: 'config', label: 'System Configurations', icon: Settings },
     { id: 'reports', label: 'System Reports', icon: BarChart3 },
     { id: 'logs', label: 'Activity Logs', icon: History },

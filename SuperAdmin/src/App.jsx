@@ -9,6 +9,7 @@ import ConfigView from './features/config/ConfigView';
 import ReportsView from './features/reports/ReportsView';
 import LogsView from './features/logs/LogsView';
 import AccountView from './features/account/AccountView';
+import ArchiveView from './features/archive/ArchiveView';
 import SuperAdminLoginPage from './features/auth/SuperAdminLoginPage';
 import { StorageService } from './core/storage';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
@@ -289,6 +290,7 @@ export default function App() {
     documents: 'Official Document Generator & Guidelines',
     news: 'Barangay News & Bulletin Management',
     users: 'User Accounts & Roles',
+    archive: 'Archive & Trash Management',
     config: 'Global System Configurations',
     reports: 'Document Issuance Reports & Analytics',
     logs: 'System Security Audit Trail',
@@ -356,6 +358,10 @@ export default function App() {
               onDeleteUser={handleDeleteUser}
               isDarkMode={false}
             />
+          )}
+
+          {activeTab === 'archive' && (
+            <ArchiveView currentUser={currentUser} isDarkMode={false} />
           )}
 
           {activeTab === 'config' && (

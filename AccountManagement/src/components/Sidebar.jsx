@@ -1,6 +1,6 @@
 // AccountManagement/src/components/Sidebar.jsx
 import React from 'react';
-import { Users, Image as ImageIcon, History, LogOut, X } from 'lucide-react';
+import { Users, Image as ImageIcon, History, LogOut, X, Archive } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 
 export default function Sidebar({
@@ -14,6 +14,7 @@ export default function Sidebar({
 }) {
   const menuItems = [
     { id: 'accounts', label: 'User Account', icon: Users },
+    { id: 'archive', label: 'Archive & Trash', icon: Archive },
     { id: 'login_design', label: 'Login Screen Design', icon: ImageIcon },
     { id: 'logs', label: 'Activity Logs', icon: History },
   ];

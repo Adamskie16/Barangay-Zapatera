@@ -78,14 +78,19 @@ export const StorageService = {
           .order('created_at', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(data));
-          return data;
+          const active = data.filter((u) => u.is_archived !== true && !u.deleted_at);
+          localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(active));
+          return active;
         }
       }
     } catch {
       // fallback
     }
-    return StorageService.getUsers();
+    return StorageService.getUsers().filter((u) => u.is_archived !== true && !u.deleted_at);
+  },
+
+  deleteUser: async (userId, adminActor) => {
+    return StorageService.archiveUser(userId, adminActor);
   },
 
   saveUser: async (user) => {
@@ -138,34 +143,6 @@ export const StorageService = {
     });
 
     return saved;
-  },
-
-  deleteUser: async (userId) => {
-    let users = StorageService.getUsers();
-    const target = users.find((u) => u.id === userId);
-    users = users.filter((u) => u.id !== userId);
-    localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(users));
-
-    try {
-      if (isSupabaseConfigured()) {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-        if (isUuid) {
-          await supabase.from('profiles').delete().eq('id', userId);
-        } else if (target && target.email) {
-          await supabase.from('profiles').delete().eq('email', target.email);
-        }
-      }
-    } catch {
-      // Handled
-    }
-
-    StorageService.addLog({
-      user_email: resolveActiveAdminEmail(target?.email),
-      action: 'Deleted User Account',
-      feature: 'User Account Management',
-      details: `Deleted user account for ${target ? target.email : userId}`,
-      level: 'danger',
-    });
   },
 
   // DOCUMENT TYPES (Templates & Requirements)
@@ -1305,5 +1282,380 @@ export const StorageService = {
     });
 
     return true;
+  },
+
+  // ==============================================================================
+  // CENTRALIZED ARCHIVE & TRASH RECYCLING BIN (SOFT-DELETE, RESTORE, PURGE)
+  // ==============================================================================
+  getArchivedAnnouncementsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('news')
+          .select('*, profiles:deleted_by(full_name, email)')
+          .or('is_archived.eq.true,deleted_at.not.is.null')
+          .order('deleted_at', { ascending: false });
+        if (!error && Array.isArray(data)) return data;
+      }
+    } catch {}
+    try {
+      return JSON.parse(localStorage.getItem('zapatera_news_archive_db') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  getArchivedUsersAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*, profiles:deleted_by(full_name, email)')
+          .or('is_archived.eq.true,deleted_at.not.is.null')
+          .order('deleted_at', { ascending: false });
+        if (!error && Array.isArray(data)) return data;
+      }
+    } catch {}
+    try {
+      return JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  getArchivedApprovedDocumentsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_requests')
+          .select('*, profiles:resident_id(full_name, email, phone), deleted_by_profile:deleted_by(full_name, email), document_types(*)')
+          .or('is_archived.eq.true,deleted_at.not.is.null')
+          .order('deleted_at', { ascending: false });
+        if (!error && Array.isArray(data)) return data;
+      }
+    } catch {}
+    try {
+      return JSON.parse(localStorage.getItem('zapatera_approved_docs_archive_db') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
+  archiveNews: async (newsId, adminUser) => {
+    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const deletedAt = new Date().toISOString();
+
+    let news = StorageService.getNews ? StorageService.getNews() : [];
+    const item = news.find((n) => n.id === newsId);
+    news = news.filter((n) => n.id !== newsId);
+    localStorage.setItem(STORAGE_KEYS.NEWS || 'zapatera_news_db', JSON.stringify(news));
+
+    const archiveItem = {
+      ...(item || { id: newsId }),
+      is_archived: true,
+      deleted_at: deletedAt,
+      deleted_by: actorId,
+      archived_by_name: actorName,
+    };
+    try {
+      const arcList = JSON.parse(localStorage.getItem('zapatera_news_archive_db') || '[]');
+      if (!arcList.some((a) => a.id === newsId)) {
+        arcList.unshift(archiveItem);
+        localStorage.setItem('zapatera_news_archive_db', JSON.stringify(arcList));
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase
+          .from('news')
+          .update({
+            is_archived: true,
+            deleted_at: deletedAt,
+            deleted_by: actorId,
+          })
+          .eq('id', newsId);
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Archived Announcement',
+      feature: 'Archive & Trash Management',
+      details: `Soft-deleted announcement "${item?.title || newsId}" to recycling bin`,
+      level: 'warning',
+    });
+  },
+
+  restoreNews: async (newsId, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_news_archive_db') || '[]');
+      const item = arcList.find((n) => n.id === newsId);
+      arcList = arcList.filter((n) => n.id !== newsId);
+      localStorage.setItem('zapatera_news_archive_db', JSON.stringify(arcList));
+
+      if (item) {
+        const restored = { ...item, is_archived: false, deleted_at: null, deleted_by: null };
+        const news = StorageService.getNews ? StorageService.getNews() : [];
+        if (!news.some((n) => n.id === newsId)) {
+          news.unshift(restored);
+          localStorage.setItem(STORAGE_KEYS.NEWS || 'zapatera_news_db', JSON.stringify(news));
+        }
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase
+          .from('news')
+          .update({
+            is_archived: false,
+            deleted_at: null,
+            deleted_by: null,
+          })
+          .eq('id', newsId);
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Restored Announcement',
+      feature: 'Archive & Trash Management',
+      details: `Restored announcement ${newsId} to active feed`,
+      level: 'info',
+    });
+  },
+
+  purgeNews: async (newsId, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_news_archive_db') || '[]');
+      arcList = arcList.filter((n) => n.id !== newsId);
+      localStorage.setItem('zapatera_news_archive_db', JSON.stringify(arcList));
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase.from('news').delete().eq('id', newsId);
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Permanently Purged Announcement',
+      feature: 'Archive & Trash Management',
+      details: `Permanently erased announcement ${newsId} from database`,
+      level: 'danger',
+    });
+  },
+
+  archiveUser: async (userId, adminUser) => {
+    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const deletedAt = new Date().toISOString();
+
+    let users = StorageService.getUsers();
+    const target = users.find((u) => u.id === userId);
+    users = users.filter((u) => u.id !== userId);
+    localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(users));
+
+    const archiveUserItem = {
+      ...(target || { id: userId }),
+      is_archived: true,
+      is_active: false,
+      deleted_at: deletedAt,
+      deleted_by: actorId,
+      archived_by_name: actorName,
+    };
+    try {
+      const arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+      if (!arcList.some((u) => u.id === userId)) {
+        arcList.unshift(archiveUserItem);
+        localStorage.setItem('zapatera_users_archive_db', JSON.stringify(arcList));
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        if (isUuid) {
+          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('id', userId);
+        } else if (target?.email) {
+          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('email', target.email);
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Archived User Account',
+      feature: 'Archive & Trash Management',
+      details: `Soft-deleted user account ${target?.email || userId} to recycling bin`,
+      level: 'warning',
+    });
+  },
+
+  restoreUser: async (userId, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+      const item = arcList.find((u) => u.id === userId);
+      arcList = arcList.filter((u) => u.id !== userId);
+      localStorage.setItem('zapatera_users_archive_db', JSON.stringify(arcList));
+
+      if (item) {
+        const restored = { ...item, is_archived: false, is_active: true, deleted_at: null, deleted_by: null };
+        const users = StorageService.getUsers();
+        if (!users.some((u) => u.id === userId)) {
+          users.unshift(restored);
+          localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(users));
+        }
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        if (isUuid) {
+          await supabase.from('profiles').update({ is_archived: false, is_active: true, deleted_at: null, deleted_by: null }).eq('id', userId);
+        } else {
+          await supabase.from('profiles').update({ is_archived: false, is_active: true, deleted_at: null, deleted_by: null }).eq('email', userId);
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Restored User Account',
+      feature: 'Archive & Trash Management',
+      details: `Restored user account ${userId} from archive`,
+      level: 'info',
+    });
+  },
+
+  purgeUser: async (userId, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+      arcList = arcList.filter((u) => u.id !== userId);
+      localStorage.setItem('zapatera_users_archive_db', JSON.stringify(arcList));
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        if (isUuid) {
+          await supabase.from('profiles').delete().eq('id', userId);
+        } else {
+          await supabase.from('profiles').delete().eq('email', userId);
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Permanently Purged User Account',
+      feature: 'Archive & Trash Management',
+      details: `Permanently erased user account ${userId} from database`,
+      level: 'danger',
+    });
+  },
+
+  archiveApprovedDocument: async (requestId, trackingNumber, adminUser) => {
+    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const deletedAt = new Date().toISOString();
+
+    let requests = StorageService.getRequests ? StorageService.getRequests() : [];
+    const target = requests.find((r) => r.id === requestId || r.tracking_number === trackingNumber);
+    requests = requests.filter((r) => r.id !== requestId && r.tracking_number !== trackingNumber);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS || 'zapatera_requests_db', JSON.stringify(requests));
+
+    const archiveDocItem = {
+      ...(target || { id: requestId, tracking_number: trackingNumber }),
+      is_archived: true,
+      deleted_at: deletedAt,
+      deleted_by: actorId,
+      archived_by_name: actorName,
+    };
+    try {
+      const arcList = JSON.parse(localStorage.getItem('zapatera_approved_docs_archive_db') || '[]');
+      if (!arcList.some((d) => (requestId && d.id === requestId) || (trackingNumber && d.tracking_number === trackingNumber))) {
+        arcList.unshift(archiveDocItem);
+        localStorage.setItem('zapatera_approved_docs_archive_db', JSON.stringify(arcList));
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Archived Approved Document',
+      feature: 'Archive & Trash Management',
+      details: `Soft-deleted approved document ${trackingNumber || requestId} to recycling bin`,
+      level: 'warning',
+    });
+  },
+
+  restoreApprovedDocument: async (requestId, trackingNumber, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_approved_docs_archive_db') || '[]');
+      const item = arcList.find((d) => (requestId && d.id === requestId) || (trackingNumber && d.tracking_number === trackingNumber));
+      arcList = arcList.filter((d) => (requestId ? d.id !== requestId : true) && (trackingNumber ? d.tracking_number !== trackingNumber : true));
+      localStorage.setItem('zapatera_approved_docs_archive_db', JSON.stringify(arcList));
+
+      if (item) {
+        const restored = { ...item, is_archived: false, deleted_at: null, deleted_by: null };
+        const requests = StorageService.getRequests ? StorageService.getRequests() : [];
+        if (!requests.some((r) => (requestId && r.id === requestId) || (trackingNumber && r.tracking_number === trackingNumber))) {
+          requests.unshift(restored);
+          localStorage.setItem(STORAGE_KEYS.REQUESTS || 'zapatera_requests_db', JSON.stringify(requests));
+        }
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').update({ is_archived: false, deleted_at: null, deleted_by: null }).eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').update({ is_archived: false, deleted_at: null, deleted_by: null }).eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Restored Approved Document',
+      feature: 'Archive & Trash Management',
+      details: `Restored approved document ${trackingNumber || requestId} from archive`,
+      level: 'info',
+    });
+  },
+
+  purgeApprovedDocument: async (requestId, trackingNumber, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_approved_docs_archive_db') || '[]');
+      arcList = arcList.filter((d) => (requestId ? d.id !== requestId : true) && (trackingNumber ? d.tracking_number !== trackingNumber : true));
+      localStorage.setItem('zapatera_approved_docs_archive_db', JSON.stringify(arcList));
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').delete().eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').delete().eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      action: 'Permanently Purged Approved Document',
+      feature: 'Archive & Trash Management',
+      details: `Permanently erased document ${trackingNumber || requestId} from database`,
+      level: 'danger',
+    });
   },
 };

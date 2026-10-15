@@ -6,6 +6,7 @@ import LoginPage from './features/auth/LoginPage';
 import AccountCreationView from './features/accounts/AccountCreationView';
 import ActivityLogsView from './features/logs/ActivityLogsView';
 import LoginDesignView from './features/login_design/LoginDesignView';
+import ArchiveView from './features/archive/ArchiveView';
 import { supabase } from './core/supabase';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
 import './index.css';
@@ -170,6 +171,7 @@ export default function App() {
 
   const tabTitles = {
     accounts: 'User Account Provisioning & Roles',
+    archive: 'Archive & Trash Management',
     login_design: 'Login Screen Design & Themes',
     logs: 'System Security Audit Trail',
   };
@@ -199,6 +201,9 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-full overflow-x-hidden transition-colors duration-200 bg-slate-100 text-slate-800">
           {activeTab === 'accounts' && (
             <AccountCreationView currentUser={currentUser} isDarkMode={false} />
+          )}
+          {activeTab === 'archive' && (
+            <ArchiveView currentUser={currentUser} isDarkMode={false} />
           )}
           {activeTab === 'login_design' && (
             <LoginDesignView currentUser={currentUser} isDarkMode={false} />

@@ -258,6 +258,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     is_emergency: false,
     is_published: true,
     target_audience: 'residents',
+    duration_days: 7,
   });
 
   const [formError, setFormError] = useState('');
@@ -301,13 +302,31 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               is_published: evt.status !== 'archived',
               target_audience: evt.target_audience || 'residents',
               is_event_source: true,
+              is_archived: evt.is_archived || evt.status === 'archived',
             });
             existingTitles.add(titleKey);
           }
         });
       }
 
-      setNewsList(combined);
+      // Check for duration auto-expiration and filter soft-archived items
+      const nowTime = Date.now();
+      const activeCombined = [];
+      for (const item of combined) {
+        if (item.is_archived === true || item.deleted_at) continue;
+        if (item.expires_at && new Date(item.expires_at).getTime() <= nowTime) {
+          try {
+            await StorageService.archiveNews(item.id, {
+              ...currentUser,
+              full_name: 'System Auto-Expire (Duration Reached)',
+            });
+          } catch {}
+          continue;
+        }
+        activeCombined.push(item);
+      }
+
+      setNewsList(activeCombined);
     } catch (err) {
       console.warn('Failed to load news bulletins:', err);
     } finally {
@@ -336,6 +355,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       is_emergency: false,
       is_published: true,
       target_audience: 'residents',
+      duration_days: 7,
     });
     setFormError('');
     setIsFormModalOpen(true);
@@ -356,6 +376,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       is_emergency: !!item.is_emergency,
       is_published: item.is_published !== false,
       target_audience: item.target_audience || 'residents',
+      duration_days: item.duration_days !== undefined ? item.duration_days : (item.expires_at ? Math.max(1, Math.round((new Date(item.expires_at).getTime() - new Date(item.created_at || Date.now()).getTime()) / 86400000)) : 7),
     });
     setFormError('');
     setIsFormModalOpen(true);
@@ -438,8 +459,15 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     setFormError('');
 
     try {
+      const durationNum = Number(formData.duration_days !== undefined ? formData.duration_days : 7);
+      const expiresAt = durationNum > 0
+        ? new Date(Date.now() + durationNum * 86400000).toISOString()
+        : null;
+
       const payload = {
         ...formData,
+        duration_days: durationNum,
+        expires_at: expiresAt,
         id: editingItem ? editingItem.id : undefined,
         event_date: formData.event_date ? new Date(formData.event_date).toISOString() : null,
         created_by: currentUser?.id || null,
@@ -496,16 +524,16 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     setActionModal({
       isOpen: true,
       type: 'confirmation',
-      title: 'Delete Announcement?',
-      message: `Are you sure you want to delete "${item.title}"? This action will remove it from the news feed and calendar.`,
-      confirmText: 'Delete Announcement',
+      title: 'Move Announcement to Archive?',
+      message: `Are you sure you want to remove "${item.title}"? It will be safely moved to the Archive & Trash Management recycling bin where it can be inspected or restored.`,
+      confirmText: 'Move to Archive',
       cancelText: 'Cancel',
       isDestructive: true,
       isLoading: false,
       onConfirm: async () => {
         setActionModal((prev) => ({ ...prev, isLoading: true }));
         try {
-          await StorageService.deleteNews(item.id);
+          await StorageService.archiveNews(item.id, currentUser);
           if (item.category === 'Events' && onDeleteEvent) {
             try {
               await onDeleteEvent(item.id);
@@ -515,8 +543,8 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           setActionModal({
             isOpen: true,
             type: 'success',
-            title: 'Announcement Deleted',
-            message: 'The announcement has been removed from the portal and calendar.',
+            title: 'Announcement Archived',
+            message: 'The announcement has been moved to the Archive & Trash Management recycling bin.',
             buttonText: 'OK',
             onClose: () => setActionModal({ isOpen: false }),
           });
@@ -524,8 +552,8 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           setActionModal({
             isOpen: true,
             type: 'error',
-            title: 'Delete Failed',
-            message: 'Unable to delete the announcement. Please try again.',
+            title: 'Archive Failed',
+            message: 'Unable to archive the announcement. Please try again.',
             buttonText: 'Close',
             onClose: () => setActionModal({ isOpen: false }),
           });
@@ -1591,6 +1619,45 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 <option value="pwds">Persons with Disabilities (PWD)</option>
               </select>
             </div>
+          </div>
+
+          {/* Posting Duration & Expiry Config */}
+          <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/50 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-500" />
+                <span>Posting Duration (Auto-Delete / Archive)</span>
+              </label>
+              <span className="text-[10px] font-semibold text-blue-600">
+                {Number(formData.duration_days) > 0 ? `Auto-archives in ${formData.duration_days} days` : 'Permanent (No Expiry)'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+              {[
+                { label: '3 Days', value: 3 },
+                { label: '7 Days', value: 7 },
+                { label: '14 Days', value: 14 },
+                { label: '30 Days', value: 30 },
+                { label: '60 Days', value: 60 },
+                { label: 'Permanent', value: 0 },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, duration_days: opt.value })}
+                  className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer text-center ${
+                    Number(formData.duration_days) === opt.value
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500">
+              When the duration expires, this announcement will automatically be moved to the centralized Archive recycling bin.
+            </p>
           </div>
 
           <div>

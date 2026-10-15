@@ -10,6 +10,7 @@ import ReportsView from './features/reports/ReportsView';
 import LogsView from './features/logs/LogsView';
 import UserManagementView from './features/users/UserManagementView';
 import AccountView from './features/account/AccountView';
+import ArchiveView from './features/archive/ArchiveView';
 import AdminLoginPage from './features/auth/AdminLoginPage';
 import { StorageService } from './core/storage';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
@@ -278,6 +279,7 @@ export default function App() {
     news: 'Barangay News & Public Bulletins',
     reports: 'Operational Processing Reports',
     users: 'User Account & Security Management',
+    archive: 'Archive & Trash Management',
     logs: 'Admin Action History Logs',
     account: 'Account Profile & Security Settings',
   };
@@ -368,6 +370,10 @@ export default function App() {
           )}
 
           {activeTab === 'users' && <UserManagementView currentUser={currentUser} />}
+
+          {activeTab === 'archive' && (
+            <ArchiveView currentUser={currentUser} isDarkMode={false} />
+          )}
 
           {activeTab === 'logs' && <LogsView logs={logs} />}
 

@@ -1055,50 +1055,8 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     const cleanEmail = (email || '').trim().toLowerCase();
 
     try {
-      if (isSupabaseConfigured()) {
-        const isUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-        if (supabaseAdmin && isUuid) {
-          try {
-            await supabaseAdmin.auth.admin.deleteUser(id);
-          } catch (admErr) {
-            console.warn('Supabase Admin auth delete notice:', admErr);
-          }
-        }
-
-        if (isUuid) {
-          try {
-            await supabase.rpc('delete_user_by_id', { user_id: id });
-          } catch (rErr) {
-            // RPC not created yet
-          }
-        }
-
-        if (cleanEmail) {
-          try {
-            await supabase.rpc('delete_user_by_email', { user_email: cleanEmail });
-          } catch (rErr) {
-            // RPC not created yet
-          }
-        }
-
-        if (isUuid) {
-          const { error: idDelErr } = await supabase.from('profiles').delete().eq('id', id);
-          if (idDelErr) {
-            console.warn('Supabase profiles delete by ID notice:', idDelErr.message);
-          }
-        }
-
-        if (cleanEmail) {
-          const { error: emailDelErr } = await supabase
-            .from('profiles')
-            .delete()
-            .eq('email', cleanEmail);
-          if (emailDelErr) {
-            console.warn('Supabase profiles delete by email notice:', emailDelErr.message);
-          }
-        }
-      }
+      // Soft-delete to Archive & Trash Management recycling bin
+      await StorageService.archiveUser(id, currentUser);
 
       // Record deletion in localStorage for cross-tab and login prevention
       if (typeof localStorage !== 'undefined') {

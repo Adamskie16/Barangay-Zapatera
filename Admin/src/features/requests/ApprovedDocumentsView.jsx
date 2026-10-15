@@ -200,8 +200,8 @@ export default function ApprovedDocumentsView({
       isOpen: true,
       type: 'confirmation',
       title: 'Delete Document Record?',
-      message: `Are you sure you want to delete tracking record ${req.tracking_number}? This action cannot be undone.`,
-      confirmText: 'Delete Record',
+      message: `Are you sure you want to remove tracking record ${req.tracking_number}? It will be safely moved to the Archive & Trash Management recycling bin.`,
+      confirmText: 'Move to Archive',
       cancelText: 'Cancel',
       isDestructive: true,
       isLoading: false,
@@ -214,8 +214,8 @@ export default function ApprovedDocumentsView({
           setActionModal({
             isOpen: true,
             type: 'success',
-            title: 'Record Deleted',
-            message: `Document request ${req.tracking_number} was successfully removed.`,
+            title: 'Moved to Archive',
+            message: `Document request ${req.tracking_number} was moved to the Archive & Trash Management bin.`,
             buttonText: 'OK',
             onClose: () => setActionModal({ isOpen: false }),
           });

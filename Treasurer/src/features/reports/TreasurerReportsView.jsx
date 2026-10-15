@@ -13,6 +13,7 @@ import {
   FileText,
   Clock,
   Gift,
+  ChevronDown,
 } from 'lucide-react';
 import PrintableFinancialModal, { PrintableFinancialDocument } from './PrintableFinancialModal';
 import { formatCurrency } from '../../core/security';
@@ -26,13 +27,176 @@ export default function TreasurerReportsView({
 }) {
   const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'month' | 'year'
 
-  // Direct print handler
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+
+  // Direct print handler with isolated iframe for clean official document printing
   const handlePrintOfficialReport = () => {
-    window.print();
+    const now = new Date();
+    const dateFormatted = now.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const timeFormatted = now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const barangayName = config.barangay_name || 'Barangay Zapatera';
+    const municipality = config.municipality || 'Cebu City';
+    const punongBarangay = config.punong_barangay || 'HON. DAVID M. AGRAVANTE';
+    const treasurerName = currentUser?.full_name || config.treasurer_name || 'HON. MA. LOURDES S. RAMOS';
+    const controlNo = `BZ-FIN-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const rowsHtml = filteredRequests.slice(0, 50).map((r, i) => {
+      const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
+      const isWaived = r.payment_status === 'waived' || r.is_waived === true;
+      const statusText = isPaid ? 'PAID' : isWaived ? 'WAIVED' : 'UNPAID';
+      const statusColor = isPaid ? '#059669' : isWaived ? '#7c3aed' : '#d97706';
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+          <td style="padding: 6px 8px; font-family: monospace;">${r.tracking_number || `REQ-${i + 1}`}</td>
+          <td style="padding: 6px 8px; font-weight: 600;">${r.full_name || r.user_name || r.resident_name || 'Resident'}</td>
+          <td style="padding: 6px 8px;">${r.document_type || r.document_name || 'Barangay Clearance'}</td>
+          <td style="padding: 6px 8px; text-align: right; font-weight: 700;">PHP ${Number(r.fee ?? r.amount ?? 0).toFixed(2)}</td>
+          <td style="padding: 6px 8px; text-align: center; color: ${statusColor}; font-weight: 700;">${statusText}</td>
+          <td style="padding: 6px 8px;">${r.payment_method || r.payment_mode || 'Cash on Pickup'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const printableHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Barangay Zapatera Financial Statement - ${controlNo}</title>
+        <style>
+          @page { size: A4 portrait; margin: 15mm 15mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; }
+          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; position: relative; }
+          .logo { width: 64px; height: 64px; object-fit: contain; }
+          .rep { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; margin: 0; }
+          .title { font-size: 22px; font-weight: 900; margin: 2px 0; text-transform: uppercase; font-family: Georgia, serif; }
+          .office { font-size: 12px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 1px; margin: 0; }
+          .sub { font-size: 10px; color: #64748b; margin-top: 4px; }
+          .meta-box { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 16px; font-size: 11px; }
+          .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+          .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; }
+          .kpi-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+          .kpi-value { font-size: 16px; font-weight: 900; color: #0f172a; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #f1f5f9; padding: 8px; text-align: left; font-size: 10px; font-weight: 800; text-transform: uppercase; border-bottom: 2px solid #cbd5e1; }
+          .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; page-break-inside: avoid; }
+          .sig-box { text-align: center; }
+          .sig-line { border-bottom: 1.5px solid #0f172a; margin-top: 40px; margin-bottom: 4px; font-weight: 800; font-size: 13px; text-transform: uppercase; }
+          .sig-title { font-size: 11px; color: #475569; font-weight: 600; text-transform: uppercase; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 6px;">
+            <img src="/logo.png" class="logo" alt="Seal" />
+            <div>
+              <p class="rep">Republic of the Philippines • City of Cebu</p>
+              <h1 class="title">${barangayName}</h1>
+              <p class="office">OFFICE OF THE BARANGAY TREASURER</p>
+            </div>
+          </div>
+          <p class="sub">Barangay Hall, 197 D. Jakosalem St., Cebu City • zapatera.lnb24@gmail.com</p>
+        </div>
+
+        <div class="meta-box">
+          <div>
+            <strong style="font-size: 13px; text-transform: uppercase;">Official Statement of Collections & Fees</strong><br />
+            <span style="color: #64748b;">Period Covered: <strong>${periodLabel}</strong></span>
+          </div>
+          <div style="text-align: right; font-family: monospace;">
+            <div>Control No: <strong>${controlNo}</strong></div>
+            <div>Generated: ${dateFormatted} at ${timeFormatted}</div>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Gross Revenue</div>
+            <div class="kpi-value">PHP ${filteredMetrics.totalRevenue.toFixed(2)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Paid Requests</div>
+            <div class="kpi-value">${filteredMetrics.paidCount}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Waived / Indigent</div>
+            <div class="kpi-value">PHP ${filteredMetrics.waivedAmount.toFixed(2)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total Audited</div>
+            <div class="kpi-value">${filteredRequests.length}</div>
+          </div>
+        </div>
+
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 14px; color: #334155;">
+          Collections Audit Log (${filteredRequests.length} Transactions)
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Tracking No.</th>
+              <th>Resident Name</th>
+              <th>Document Type</th>
+              <th style="text-align: right;">Fee Amount</th>
+              <th style="text-align: center;">Status</th>
+              <th>Payment Mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #94a3b8;">No collection records found for this period.</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="sig-grid">
+          <div class="sig-box">
+            <div class="sig-line">${treasurerName}</div>
+            <div class="sig-title">Barangay Treasurer</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-line">${punongBarangay}</div>
+            <div class="sig-title">Punong Barangay</div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(printableHtml);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+    }, 300);
   };
 
-  // Direct export report handler
-  const handleExportReport = () => {
+  // Direct export report handlers
+  const handleExportCSV = () => {
     const headers = ['Tracking Number', 'Resident Name', 'Document Type', 'Fee Amount (PHP)', 'Payment Status', 'Payment Mode', 'Date'];
     const rows = filteredRequests.map((r) => {
       const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
@@ -49,7 +213,7 @@ export default function TreasurerReportsView({
       ].join(',');
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,\ufeff' + [headers.join(','), ...rows].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -57,6 +221,49 @@ export default function TreasurerReportsView({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setIsExportMenuOpen(false);
+  };
+
+  const handleExportSummaryCSV = () => {
+    const summaryRows = [
+      ['Metric', 'Value'],
+      ['Period', `"${periodLabel}"`],
+      ['Total Gross Collections (PHP)', filteredMetrics.totalRevenue],
+      ['Total Paid Clearances', filteredMetrics.paidCount],
+      ['Waived / Indigent Total (PHP)', filteredMetrics.waivedAmount],
+      ['Waived Requests Count', filteredMetrics.waivedCount],
+      ['Pending Unpaid Amount (PHP)', filteredMetrics.unpaidAmount],
+      ['Pending Unpaid Count', filteredMetrics.unpaidCount],
+      ['Total Document Requests Audited', filteredRequests.length],
+      ['Report Date', `"${new Date().toLocaleString('en-US')}"`],
+    ];
+    const csvContent = 'data:text/csv;charset=utf-8,\ufeff' + summaryRows.map((r) => r.join(',')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Barangay_Zapatera_Collections_Summary_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setIsExportMenuOpen(false);
+  };
+
+  const handleExportJSON = () => {
+    const payload = {
+      period: periodLabel,
+      generated_at: new Date().toISOString(),
+      metrics: filteredMetrics,
+      requests_count: filteredRequests.length,
+      requests: filteredRequests,
+    };
+    const jsonString = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const link = document.createElement('a');
+    link.setAttribute('href', jsonString);
+    link.setAttribute('download', `Barangay_Zapatera_Financial_Audit_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setIsExportMenuOpen(false);
   };
 
   // Filter requests based on selected date range
@@ -125,22 +332,76 @@ export default function TreasurerReportsView({
             </select>
           </div>
 
-          {/* Export Report Button */}
-          <button
-            type="button"
-            onClick={handleExportReport}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Download Collection Report as CSV Spreadsheet"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export Report</span>
-          </button>
+          {/* Export to Downloads Dropdown Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+              title="Export report summaries directly to Downloads"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export to Downloads</span>
+              <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div
+                className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                onMouseLeave={() => setIsExportMenuOpen(false)}
+              >
+                <div className="px-3 py-1.5 border-b border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Select Download Format
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <p className="font-semibold">Collections Ledger (CSV)</p>
+                    <p className="text-[10px] text-slate-400">Detailed line-by-line transactions</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportSummaryCSV}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <p className="font-semibold">Executive KPI Summary (CSV)</p>
+                    <p className="text-[10px] text-slate-400">Total gross revenue & rates</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-slate-100 my-1" />
+
+                <button
+                  type="button"
+                  onClick={handleExportJSON}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-slate-600" />
+                  <div>
+                    <p className="font-semibold">Complete Audit Payload (JSON)</p>
+                    <p className="text-[10px] text-slate-400">Raw structured data backup</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Print Official Report Button (Direct Print) */}
           <button
             type="button"
             onClick={handlePrintOfficialReport}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
             title="Print Official Report Directly"
           >
             <Printer className="w-4 h-4" />

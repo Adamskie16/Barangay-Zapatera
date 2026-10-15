@@ -10,6 +10,7 @@ import {
   buildMonthlyCSV,
   buildRevenueAuditCSV,
   buildSummaryKPIsCSV,
+  generatePrintableHTML,
 } from './reportUtils';
 import { StorageService } from '../../core/storage';
 import {
@@ -358,6 +359,55 @@ export default function ReportsView({
     setIsExportMenuOpen(false);
   };
 
+  // Direct print handler for official government report
+  const handleDirectPrintOfficialReport = () => {
+    const html = generatePrintableHTML({
+      title: 'Official Barangay Operations & Audit Report',
+      config,
+      currentUser,
+      requests: filteredRequests.length > 0 ? filteredRequests : requests,
+      docTypes,
+      monthlyData,
+      statusCounts,
+      totalRevenue,
+      totalResidents,
+      periodLabel: `Calendar Year ${currentYear}`,
+      scope: 'all',
+    });
+
+    StorageService.addLog({
+      user_email: currentUser?.email,
+      action: 'Printed Official Operations Report',
+      feature: 'Reports & Analytics',
+      details: 'Generated and printed official government operations report directly',
+      level: 'info',
+    });
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+    }, 400);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner & Global Action Controls */}
@@ -461,11 +511,11 @@ export default function ReportsView({
             )}
           </div>
 
-          {/* Print Formal Government Report Button */}
+          {/* Print Formal Government Report Button (Direct Print) */}
           <button
-            onClick={() => setIsPrintModalOpen(true)}
+            onClick={handleDirectPrintOfficialReport}
             className="inline-flex items-center space-x-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            title="Open printable official Barangay Zapatera document preview"
+            title="Print Official Barangay Operations & Audit Report Directly"
           >
             <Printer className="w-4 h-4" />
             <span>Print Official Report</span>
