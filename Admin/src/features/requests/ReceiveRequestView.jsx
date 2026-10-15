@@ -53,8 +53,14 @@ import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documen
 import DocumentTemplate from '../documents/DocumentTemplate';
 import FilePreviewModal from '../../components/FilePreviewModal';
 import { downloadStoredAttachment, getSignedAttachmentUrl } from '../../core/storageService';
+import { generateDeclineNotice, DECLINE_PRESETS } from '../../core/administrativeAiService';
 
 const DECLINE_REASONS = [
+  'Document Image is Blurry / Unreadable',
+  'Document Edges Cut Off / Incomplete',
+  'Missing valid government-issued ID',
+  'Proof of residency not accepted or outdated',
+  'Incomplete required attachments',
   'Missing required document',
   'Invalid document',
   'Incorrect information',
@@ -108,8 +114,10 @@ export default function ReceiveRequestView({
 
   // Decline Modal State
   const [showDeclineModal, setShowDeclineModal] = useState(false);
-  const [declineReason, setDeclineReason] = useState('Missing required document');
+  const [declineReason, setDeclineReason] = useState('Document Image is Blurry / Unreadable');
   const [declineDetails, setDeclineDetails] = useState('');
+  const [declineLanguage, setDeclineLanguage] = useState('cebuano'); // 'cebuano' | 'tagalog' | 'english'
+  const [declinePreset, setDeclinePreset] = useState('blurry_image');
   const [declineError, setDeclineError] = useState('');
 
   // File Preview Modal
@@ -307,6 +315,7 @@ export default function ReceiveRequestView({
         file_size: fileObj.file_size,
         file_url: fileObj.file_url,
         storage_path: fileObj.storage_path,
+        ai_quality: fileObj.ai_quality,
         uploadDate: req.created_at ? formatDate(req.created_at) : formatDate(new Date()),
         status: fileObj.status || 'pending',
       }));
@@ -623,11 +632,50 @@ export default function ReceiveRequestView({
   };
 
   // Decline Document Request:
-  const handleOpenDeclineModal = () => {
-    setDeclineReason('Missing required document');
-    setDeclineDetails('Your submitted proof of residency is not valid. Please submit a current barangay certificate or other accepted proof of residency.');
+  const handleOpenDeclineModal = (initialPreset = 'blurry_image') => {
+    const preset = DECLINE_PRESETS.find((p) => p.id === initialPreset) || DECLINE_PRESETS[0];
+    const resName = extractResidentName(selectedReq);
+    setDeclinePreset(preset.id);
+    setDeclineReason(preset.reasonCategory);
+    setDeclineLanguage('cebuano');
+    setDeclineDetails(
+      generateDeclineNotice({
+        residentName: resName,
+        documentTitle: selectedReq?.document_type || 'Document Request',
+        reasonKey: preset.id,
+        language: 'cebuano',
+      })
+    );
     setDeclineError('');
     setShowDeclineModal(true);
+  };
+
+  const handleDeclinePresetSelect = (presetId, lang = declineLanguage) => {
+    setDeclinePreset(presetId);
+    const preset = DECLINE_PRESETS.find((p) => p.id === presetId);
+    if (preset) {
+      setDeclineReason(preset.reasonCategory);
+    }
+    const resName = extractResidentName(selectedReq);
+    const notice = generateDeclineNotice({
+      residentName: resName,
+      documentTitle: selectedReq?.document_type || 'Document Request',
+      reasonKey: presetId,
+      language: lang,
+    });
+    setDeclineDetails(notice);
+  };
+
+  const handleDeclineLanguageChange = (newLang) => {
+    setDeclineLanguage(newLang);
+    const resName = extractResidentName(selectedReq);
+    const notice = generateDeclineNotice({
+      residentName: resName,
+      documentTitle: selectedReq?.document_type || 'Document Request',
+      reasonKey: declinePreset,
+      language: newLang,
+    });
+    setDeclineDetails(notice);
   };
 
   const handleConfirmDecline = async (e) => {
@@ -1434,10 +1482,46 @@ export default function ReceiveRequestView({
                                         Pending Verification
                                       </span>
                                     )}
+
+                                    {/* AI Document Quality Inspection Badge */}
+                                    {item.ai_quality ? (
+                                      item.ai_quality.warnings && item.ai_quality.warnings.length > 0 ? (
+                                        <span
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300"
+                                          title={item.ai_quality.warnings.join(' • ')}
+                                        >
+                                          <AlertTriangle className="w-3 h-3 text-amber-700 shrink-0" />
+                                          <span>AI Flag: {item.ai_quality.isSharp === false ? 'Blurry' : 'Cut-off / Partial'}</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                          <Sparkles className="w-3 h-3 text-emerald-700 shrink-0" />
+                                          <span>AI: Sharp & Complete</span>
+                                        </span>
+                                      )
+                                    ) : null}
                                   </div>
                                   <span className="font-mono text-xs text-slate-500 truncate block">
                                     {item.fileName}
                                   </span>
+
+                                  {item.ai_quality && item.ai_quality.warnings && item.ai_quality.warnings.length > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                      <span className="text-amber-800 font-medium">
+                                        ⚠️ {item.ai_quality.warnings.join(', ')}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const presetKey = item.ai_quality.isSharp === false ? 'blurry_image' : 'cutoff_id';
+                                          handleOpenDeclineModal(presetKey);
+                                        }}
+                                        className="text-rose-600 hover:text-rose-700 font-bold underline cursor-pointer"
+                                      >
+                                        Draft Decline Notice with AI →
+                                      </button>
+                                    </div>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1856,8 +1940,66 @@ export default function ReceiveRequestView({
             <div>
               <h4 className="font-bold text-rose-900 text-sm">Decline Document Request</h4>
               <p className="text-rose-800 text-xs mt-0.5 leading-relaxed">
-                Please provide the reason why this document request cannot be approved. The resident will be notified with these instructions.
+                Please provide the reason why this document request cannot be approved. The resident will be notified with these instructions in their portal.
               </p>
+            </div>
+          </div>
+
+          {/* AI-Assisted Multilingual Notice Drafting Toolbar */}
+          <div className="p-3.5 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center space-x-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span className="font-bold text-indigo-950 text-xs">
+                  AI Copilot: Multilingual Notice Drafting
+                </span>
+              </div>
+
+              {/* Language Switcher Tabs */}
+              <div className="inline-flex rounded-lg border border-indigo-200 bg-white p-0.5 text-[11px] font-bold shadow-2xs">
+                {[
+                  { id: 'cebuano', label: '🇵🇭 Bisaya (Cebuano)' },
+                  { id: 'tagalog', label: 'Tagalog' },
+                  { id: 'english', label: 'English' },
+                ].map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => handleDeclineLanguageChange(l.id)}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      declineLanguage === l.id
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'text-slate-600 hover:text-indigo-600'
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Reason Presets (1-Click Apply) */}
+            <div className="space-y-1.5">
+              <span className="text-[10px] uppercase tracking-wider font-extrabold text-indigo-900">
+                1-Click Presets & AI Explanations:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {DECLINE_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleDeclinePresetSelect(p.id)}
+                    className={`px-2.5 py-1 text-xs rounded-lg border font-semibold inline-flex items-center space-x-1 cursor-pointer transition-all ${
+                      declinePreset === p.id
+                        ? 'bg-indigo-700 text-white border-indigo-700 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50'
+                    }`}
+                  >
+                    <span>{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1888,9 +2030,28 @@ export default function ReceiveRequestView({
           </div>
 
           <div>
-            <label htmlFor="decline-details-text" className="block text-xs font-bold text-slate-800 mb-1.5">
-              Additional Details / Explanation <span className="text-slate-400 font-normal">(Visible to Resident)</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="decline-details-text" className="block text-xs font-bold text-slate-800">
+                Drafted Notice / Instructions <span className="text-slate-400 font-normal">(Visible to Resident)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const resName = extractResidentName(selectedReq);
+                  const notice = generateDeclineNotice({
+                    residentName: resName,
+                    documentTitle: selectedReq?.document_type || 'Document Request',
+                    reasonKey: declinePreset,
+                    language: declineLanguage,
+                  });
+                  setDeclineDetails(notice);
+                }}
+                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center space-x-1 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Re-draft with AI</span>
+              </button>
+            </div>
             <textarea
               id="decline-details-text"
               rows={4}

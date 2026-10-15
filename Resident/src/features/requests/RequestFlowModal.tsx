@@ -43,6 +43,8 @@ import { formatCurrency, generateTrackingNumber } from '../../core/security';
 import { APPOINTMENT_TIME_SLOTS } from '../../core/portalData';
 import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/storageService';
 import ActionModal from '../../components/ActionModal';
+import { analyzeDocumentImage } from '../../core/documentAiService';
+import { checkContentModeration } from '../../core/contentModerationService';
 
 interface RequestFlowModalProps {
   visible: boolean;
@@ -221,6 +223,9 @@ export default function RequestFlowModal({
 
         const isPdf = result.fileType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
+        // Execute AI Document Quality & Blur/Cut-Off Inspection
+        const aiQuality = await analyzeDocumentImage(file);
+
         const newFile: UploadedRequirementFile = {
           requirement_name: reqName,
           file_name: result.fileName,
@@ -232,6 +237,7 @@ export default function RequestFlowModal({
           signed_url: result.signedUrl,
           status: 'uploaded',
           uploaded_at: new Date().toISOString(),
+          ai_quality: aiQuality,
         };
 
         setUploadedFiles((prev) => ({ ...prev, [reqName]: newFile }));
@@ -266,6 +272,14 @@ export default function RequestFlowModal({
         setUploadError('Please enter or select your purpose for requesting this document.');
         return;
       }
+
+      // AI Content Moderation Check
+      const modCheck = checkContentModeration(activePurpose);
+      if (!modCheck.isClean) {
+        setUploadError(`Inappropriate language detected in purpose (${modCheck.flaggedWords.join(', ')}). Please provide a formal, valid purpose.`);
+        return;
+      }
+
       setUploadError('');
       setCurrentStep(2);
     } else if (currentStep === 2) {
@@ -831,6 +845,45 @@ export default function RequestFlowModal({
                                   <Trash2 size={15} color="#ef4444" />
                                 </TouchableOpacity>
                               </View>
+
+                              {/* AI Document Quality Inspection Result */}
+                              {uploaded.ai_quality && (
+                                <View style={[
+                                  styles.aiQualityBox,
+                                  uploaded.ai_quality.status === 'passed' ? styles.aiQualityBoxPass : styles.aiQualityBoxWarn
+                                ]}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {uploaded.ai_quality.status === 'passed' ? (
+                                      <CheckCircle2 size={13} color="#15803d" />
+                                    ) : (
+                                      <AlertCircle size={13} color="#b45309" />
+                                    )}
+                                    <Text style={[
+                                      styles.aiQualityTitle,
+                                      uploaded.ai_quality.status === 'passed' ? styles.aiQualityTitlePass : styles.aiQualityTitleWarn
+                                    ]}>
+                                      {uploaded.ai_quality.status === 'passed'
+                                        ? `✨ AI Check: Sharp & Full Document (${uploaded.ai_quality.qualityScore}%)`
+                                        : `⚠️ AI Quality Check: ${uploaded.ai_quality.issues.join(', ') || 'Quality Notice'}`}
+                                    </Text>
+                                  </View>
+
+                                  {uploaded.ai_quality.status !== 'passed' && (
+                                    <View style={{ marginTop: 4, paddingLeft: 19 }}>
+                                      <Text style={styles.aiQualityWarningText}>
+                                        {uploaded.ai_quality.suggestions[0] || 'Please make sure all four corners are visible and text is sharp.'}
+                                      </Text>
+                                      <TouchableOpacity
+                                        style={styles.aiRetakeBtn}
+                                        onPress={() => handleRealFileUpload(item.name, 'camera')}
+                                      >
+                                        <Camera size={11} color="#92400e" />
+                                        <Text style={styles.aiRetakeBtnText}>Re-take / Replace Photo</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
                             </View>
                           ) : (
                             <View style={styles.uploadActionButtons}>
@@ -2293,5 +2346,52 @@ const styles = StyleSheet.create({
   nextBtnReady: {
     backgroundColor: '#15803d',
     shadowColor: '#15803d',
+  },
+  aiQualityBox: {
+    marginTop: 8,
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+  },
+  aiQualityBoxPass: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  aiQualityBoxWarn: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  aiQualityTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  aiQualityTitlePass: {
+    color: '#15803d',
+  },
+  aiQualityTitleWarn: {
+    color: '#92400e',
+  },
+  aiQualityWarningText: {
+    fontSize: 10,
+    color: '#78350f',
+    lineHeight: 14,
+    marginBottom: 6,
+  },
+  aiRetakeBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  aiRetakeBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400e',
   },
 });

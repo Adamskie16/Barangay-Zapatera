@@ -42,6 +42,7 @@ import {
   deleteBulletinComment,
 } from '../../core/commentService';
 import ActionModal from '../../components/ActionModal';
+import { checkContentModeration } from '../../core/contentModerationService';
 
 interface AnnouncementsViewProps {
   announcements: BarangayAnnouncement[];
@@ -77,6 +78,7 @@ export default function AnnouncementsView({
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [replyingTo, setReplyingTo] = useState<BulletinComment | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [commentModerationError, setCommentModerationError] = useState('');
 
   const commentInputRef = useRef<any>(null);
 
@@ -145,6 +147,7 @@ export default function AnnouncementsView({
     setActiveModalItem(null);
     setReplyingTo(null);
     setCommentInput('');
+    setCommentModerationError('');
     onCloseAnnouncementModal?.();
   };
 
@@ -155,6 +158,14 @@ export default function AnnouncementsView({
       alert('Please sign in to post a comment or inquiry on this announcement.');
       return;
     }
+
+    // AI Content Moderation: Check for foul / bad words in Cebuano, Tagalog, and English
+    const modResult = checkContentModeration(commentInput.trim());
+    if (!modResult.isClean) {
+      setCommentModerationError(modResult.warningMessage);
+      return;
+    }
+    setCommentModerationError('');
 
     setIsSubmittingComment(true);
     try {
@@ -637,6 +648,14 @@ export default function AnnouncementsView({
                   </View>
                 )}
 
+                {/* AI Content Moderation Warning Banner */}
+                {commentModerationError ? (
+                  <View style={styles.moderationAlertBox}>
+                    <AlertTriangle size={15} color="#b91c1c" />
+                    <Text style={styles.moderationAlertText}>{commentModerationError}</Text>
+                  </View>
+                ) : null}
+
                 {currentUser ? (
                   <View style={styles.commentInputRow}>
                     <TextInput
@@ -649,7 +668,10 @@ export default function AnnouncementsView({
                       }
                       placeholderTextColor="#94a3b8"
                       value={commentInput}
-                      onChangeText={setCommentInput}
+                      onChangeText={(text) => {
+                        setCommentInput(text);
+                        if (commentModerationError) setCommentModerationError('');
+                      }}
                       multiline
                       maxLength={500}
                     />
@@ -1305,6 +1327,25 @@ const styles = StyleSheet.create({
   },
   replyBannerClose: {
     padding: 2,
+  },
+  moderationAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+  },
+  moderationAlertText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#991b1b',
+    lineHeight: 15,
   },
   commentInputRow: {
     flexDirection: 'row',

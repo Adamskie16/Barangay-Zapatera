@@ -2,6 +2,7 @@
 // Real-time comments & official replies service for Barangay Zapatera bulletins
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import { checkContentModeration } from './contentModerationService';
 
 export interface BulletinComment {
   id: string;
@@ -181,7 +182,13 @@ export async function postBulletinComment(commentData: {
   parent_id?: string | null;
   reply_to_name?: string | null;
   is_official_response?: boolean;
-}): Promise<BulletinComment> {
+}) {
+  // AI Content Moderation & Profanity Guard
+  const modResult = checkContentModeration(commentData.content);
+  if (!modResult.isClean) {
+    throw new Error(modResult.warningMessage);
+  }
+
   const newComment: BulletinComment = {
     id: `cm-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     news_id: String(commentData.news_id),

@@ -36,6 +36,8 @@ import {
   ChevronsRight,
   LayoutGrid,
   Table as TableIcon,
+  Sparkles,
+  Globe,
 } from 'lucide-react';
 import {
   getBulletinComments,
@@ -44,6 +46,8 @@ import {
   deleteBulletinComment,
   subscribeToBulletinComments
 } from '../../core/commentService';
+import { translateCivicAnnouncement, CIVIC_ANNOUNCEMENT_TEMPLATES } from '../../core/administrativeAiService';
+import { checkContentModeration } from '../../core/contentModerationService';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import EventCalendar from '../../components/EventCalendar';
@@ -155,6 +159,13 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
   const handleSendAdminReply = async (e) => {
     e?.preventDefault();
     if (!adminReplyText.trim() || !selectedNewsForComments || submittingReply) return;
+
+    const modCheck = checkContentModeration(adminReplyText.trim());
+    if (!modCheck.isValid) {
+      alert(`Reply contains inappropriate or flagged language (${modCheck.flaggedWords.join(', ')}). Please use respectful official wording.`);
+      return;
+    }
+
     setSubmittingReply(true);
     try {
       const reply = await postOfficialReply({
@@ -1542,6 +1553,109 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
             </div>
           )}
 
+          {/* AI Civic Bulletin Assistant & Public Advisory Synthesizer Toolbar */}
+          <div className="p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50 border border-blue-200 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center space-x-1.5">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <span className="font-bold text-slate-900 text-xs">
+                  AI Assistant: LGU Bulletin Templates & Localization
+                </span>
+              </div>
+
+              {/* Quick Translation / Localization Bar */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Translate:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'cebuano',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className="px-2 py-1 text-[11px] font-bold bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 cursor-pointer shadow-2xs"
+                  title="Translate into Cebuano / Bisaya dialect"
+                >
+                  🇵🇭 Bisaya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'tagalog',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className="px-2 py-1 text-[11px] font-bold bg-white text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-50 cursor-pointer shadow-2xs"
+                  title="Translate into Tagalog"
+                >
+                  Tagalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'english',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className="px-2 py-1 text-[11px] font-bold bg-white text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 cursor-pointer shadow-2xs"
+                  title="Format as formal English advisory"
+                >
+                  English
+                </button>
+              </div>
+            </div>
+
+            {/* LGU Bulletin Quick Templates */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-blue-100/70">
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Smart Templates:</span>
+              {CIVIC_ANNOUNCEMENT_TEMPLATES.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: tmpl.title,
+                      category: tmpl.category,
+                      description: tmpl.description,
+                      content: tmpl.content,
+                    }));
+                  }}
+                  className="px-2 py-0.5 text-[11px] font-semibold bg-white text-slate-700 border border-slate-200 hover:border-blue-400 rounded-md cursor-pointer transition-colors"
+                >
+                  {tmpl.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               Announcement Title <span className="text-rose-500">*</span>
@@ -1886,22 +2000,29 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                   .map((rootComment) => {
                     const replies = bulletinComments.filter((c) => c.parent_id === rootComment.id);
                     const isRootOfficial = rootComment.is_official_response || rootComment.author_role === 'admin' || rootComment.author_role === 'super_admin';
+                    const rootMod = checkContentModeration(rootComment.content || '');
 
                     return (
                       <div key={rootComment.id} className="space-y-2">
                         {/* Root Comment Box */}
-                        <div className={`p-3.5 rounded-xl border ${isRootOfficial ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'} shadow-2xs`}>
+                        <div className={`p-3.5 rounded-xl border ${!rootMod.isValid ? 'bg-rose-50/50 border-rose-300' : isRootOfficial ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'} shadow-2xs`}>
                           <div className="flex items-start justify-between">
                             <div className="flex items-center space-x-2">
                               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isRootOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
                                 {isRootOfficial ? <ShieldCheck className="w-4 h-4" /> : rootComment.author_name.charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <div className="flex items-center space-x-1.5">
+                                <div className="flex items-center space-x-1.5 flex-wrap">
                                   <span className="text-xs font-bold text-slate-900">{rootComment.author_name}</span>
                                   {isRootOfficial && (
                                     <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-600 text-white">
                                       Official Response
+                                    </span>
+                                  )}
+                                  {!rootMod.isValid && (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300">
+                                      <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                      <span>AI Flag: Profanity ({rootMod.flaggedWords.join(', ')})</span>
                                     </span>
                                   )}
                                 </div>
@@ -1937,22 +2058,29 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                         {/* Nested Replies */}
                         {replies.map((reply) => {
                           const isReplyOfficial = reply.is_official_response || reply.author_role === 'admin' || reply.author_role === 'super_admin';
+                          const replyMod = checkContentModeration(reply.content || '');
 
                           return (
                             <div key={reply.id} className="flex items-start space-x-2 pl-6">
                               <CornerDownRight className="w-4 h-4 text-slate-400 mt-2 shrink-0" />
-                              <div className={`flex-1 p-3 rounded-xl border ${isReplyOfficial ? 'bg-blue-50/90 border-blue-300' : 'bg-white border-slate-200'} shadow-2xs`}>
+                              <div className={`flex-1 p-3 rounded-xl border ${!replyMod.isValid ? 'bg-rose-50/50 border-rose-300' : isReplyOfficial ? 'bg-blue-50/90 border-blue-300' : 'bg-white border-slate-200'} shadow-2xs`}>
                                 <div className="flex items-start justify-between">
                                   <div className="flex items-center space-x-2">
                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isReplyOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
                                       {isReplyOfficial ? <ShieldCheck className="w-3.5 h-3.5" /> : reply.author_name.charAt(0).toUpperCase()}
                                     </div>
                                     <div>
-                                      <div className="flex items-center space-x-1.5">
+                                      <div className="flex items-center space-x-1.5 flex-wrap">
                                         <span className="text-xs font-bold text-slate-900">{reply.author_name}</span>
                                         {isReplyOfficial && (
                                           <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-600 text-white">
                                             Official Response
+                                          </span>
+                                        )}
+                                        {!replyMod.isValid && (
+                                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300">
+                                            <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                            <span>AI Flag: Profanity ({replyMod.flaggedWords.join(', ')})</span>
                                           </span>
                                         )}
                                       </div>

@@ -96,13 +96,27 @@ export type RequestStatus =
   | 'cancelled'
   | 'issued';
 
+export interface DocumentQualityInfo {
+  isValid: boolean;
+  qualityScore: number;
+  status: 'passed' | 'warning' | 'needs_attention';
+  issues: string[];
+  suggestions: string[];
+  summary: string;
+}
+
 export interface UploadedRequirementFile {
   requirement_name: string;
   file_name: string;
   file_type: 'image/jpeg' | 'image/png' | 'application/pdf' | string;
   file_size?: string;
   file_url?: string;
+  storage_path?: string;
+  bucket?: string;
+  signed_url?: string;
   status: 'uploaded' | 'pending' | 'verified';
+  uploaded_at?: string;
+  ai_quality?: DocumentQualityInfo;
 }
 
 export interface RequestTimelineEvent {

@@ -2,6 +2,7 @@
 // Real-time comments & official replies service for Barangay Zapatera Bulletins (Admin / SuperAdmin)
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import { checkContentModeration } from './contentModerationService';
 
 const STORAGE_KEY = 'zapatera_bulletin_comments';
 
