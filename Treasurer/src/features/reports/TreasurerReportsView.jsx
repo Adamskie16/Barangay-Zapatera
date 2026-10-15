@@ -14,7 +14,7 @@ import {
   Clock,
   Gift,
 } from 'lucide-react';
-import PrintableFinancialModal from './PrintableFinancialModal';
+import PrintableFinancialModal, { PrintableFinancialDocument } from './PrintableFinancialModal';
 import { formatCurrency } from '../../core/security';
 import { StorageService } from '../../core/storage';
 
@@ -25,7 +25,39 @@ export default function TreasurerReportsView({
   currentUser = {},
 }) {
   const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'month' | 'year'
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // Direct print handler
+  const handlePrintOfficialReport = () => {
+    window.print();
+  };
+
+  // Direct export report handler
+  const handleExportReport = () => {
+    const headers = ['Tracking Number', 'Resident Name', 'Document Type', 'Fee Amount (PHP)', 'Payment Status', 'Payment Mode', 'Date'];
+    const rows = filteredRequests.map((r) => {
+      const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
+      const isWaived = r.payment_status === 'waived' || r.is_waived === true;
+      const statusStr = isPaid ? 'Paid' : isWaived ? 'Waived' : 'Unpaid';
+      return [
+        `"${r.tracking_number || ''}"`,
+        `"${r.full_name || r.user_name || r.resident_name || 'Resident'}"`,
+        `"${r.document_type || r.document_name || 'Clearance'}"`,
+        Number(r.fee ?? r.amount ?? 0),
+        `"${statusStr}"`,
+        `"${r.payment_method || r.payment_mode || 'Cash'}"`,
+        `"${r.payment_date || r.created_at || ''}"`,
+      ].join(',');
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Barangay_Zapatera_Financial_Ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Filter requests based on selected date range
   const filteredRequests = useMemo(() => {
@@ -93,9 +125,23 @@ export default function TreasurerReportsView({
             </select>
           </div>
 
+          {/* Export Report Button */}
           <button
-            onClick={() => setIsPrintModalOpen(true)}
+            type="button"
+            onClick={handleExportReport}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Download Collection Report as CSV Spreadsheet"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Report</span>
+          </button>
+
+          {/* Print Official Report Button (Direct Print) */}
+          <button
+            type="button"
+            onClick={handlePrintOfficialReport}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Print Official Report Directly"
           >
             <Printer className="w-4 h-4" />
             <span>Print Official Report</span>
@@ -215,16 +261,16 @@ export default function TreasurerReportsView({
         </div>
       </div>
 
-      {/* Printable Financial Modal */}
-      <PrintableFinancialModal
-        isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
-        config={config}
-        currentUser={currentUser}
-        requests={filteredRequests}
-        metrics={filteredMetrics}
-        periodLabel={periodLabel}
-      />
+      {/* Hidden container on screen, rendered exclusively during window.print() */}
+      <div className="print-only-container">
+        <PrintableFinancialDocument
+          config={config}
+          currentUser={currentUser}
+          requests={filteredRequests}
+          metrics={filteredMetrics}
+          periodLabel={periodLabel}
+        />
+      </div>
     </div>
   );
 }

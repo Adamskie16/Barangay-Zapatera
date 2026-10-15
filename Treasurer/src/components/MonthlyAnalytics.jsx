@@ -116,7 +116,7 @@ export default function MonthlyAnalytics({ requests = [] }) {
             title="Download Monthly Quantities as CSV Spreadsheet"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>Export Report</span>
           </button>
 
           <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg">

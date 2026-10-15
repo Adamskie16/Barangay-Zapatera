@@ -504,7 +504,7 @@ export default function ReportsView({
               title="Download Document Clearance Breakdown CSV"
             >
               <Download className="w-3 h-3" />
-              <span>Export CSV</span>
+              <span>Export Report</span>
             </button>
           </div>
 

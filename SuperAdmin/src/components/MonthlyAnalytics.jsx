@@ -131,7 +131,7 @@ function MonthlyAnalyticsContent({ requests = [] }) {
             title="Download Monthly Quantities as CSV Spreadsheet"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>Export Report</span>
           </button>
 
           <div className="flex items-center space-x-2">

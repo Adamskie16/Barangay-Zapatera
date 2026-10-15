@@ -18,6 +18,10 @@ import {
   ArrowUp,
   ArrowDown,
   Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../core/security';
 import MonthlyAnalytics from '../../components/MonthlyAnalytics';
@@ -36,7 +40,7 @@ export default function TreasurerDashboardView({
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -122,6 +126,19 @@ export default function TreasurerDashboardView({
     currentPage * itemsPerPage
   );
 
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+  };
+
   const renderSortIndicator = (field) => {
     if (sortField !== field) {
       return <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-60" />;
@@ -139,10 +156,6 @@ export default function TreasurerDashboardView({
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-blue-500/20 shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold mb-3">
-            <Receipt className="w-3.5 h-3.5 text-blue-400" />
-            Barangay Zapatera Treasury
-          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Document Fee Collections & Treasury
           </h1>
@@ -370,6 +383,25 @@ export default function TreasurerDashboardView({
                 </button>
               ))}
             </div>
+
+            {/* Rows Per Page Filter */}
+            <div className="flex items-center space-x-1.5 text-xs bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
+              <span className="text-slate-500 font-semibold">Rows:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
+              >
+                <option value={5}>5 rows</option>
+                <option value={10}>10 rows</option>
+                <option value={20}>20 rows</option>
+                <option value={50}>50 rows</option>
+                <option value={100}>100 rows</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -534,33 +566,91 @@ export default function TreasurerDashboardView({
 
         {/* Pagination & Count Footer */}
         {sortedPayments.length > 0 && (
-          <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 text-xs">
-            <span className="text-slate-500">
-              Showing <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-              <span className="font-bold text-slate-800">
-                {Math.min(currentPage * itemsPerPage, sortedPayments.length)}
-              </span>{' '}
-              of <span className="font-bold text-slate-800">{sortedPayments.length}</span> payments
-            </span>
+          <div className="p-4 border-t border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 text-xs">
+            <div className="flex items-center flex-wrap gap-3">
+              <span className="text-slate-500">
+                Showing <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="font-bold text-slate-800">
+                  {Math.min(currentPage * itemsPerPage, sortedPayments.length)}
+                </span>{' '}
+                of <span className="font-bold text-slate-800">{sortedPayments.length}</span> payments
+              </span>
+
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 pl-2 border-l border-slate-200">
+                <span>Per page:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 outline-none cursor-pointer shadow-2xs"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center space-x-1.5">
+              <div className="flex items-center space-x-1 self-center md:self-auto">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="First page"
+                >
+                  <ChevronsLeft className="w-3.5 h-3.5" />
+                </button>
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1"
+                  title="Previous page"
                 >
-                  Previous
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Prev</span>
                 </button>
-                <span className="px-2 font-bold text-slate-700">
-                  {currentPage} of {totalPages}
-                </span>
+
+                <div className="flex items-center space-x-1">
+                  {getPageNumbers().map((p, idx) => (
+                    p === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="px-2 py-1 text-slate-400 font-bold">...</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`min-w-7 h-7 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          currentPage === p
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  ))}
+                </div>
+
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1"
+                  title="Next page"
                 >
-                  Next
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="Last page"
+                >
+                  <ChevronsRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}

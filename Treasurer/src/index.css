@@ -68,6 +68,10 @@
   margin: 0;
 }
 
+.print-only-container {
+  display: none !important;
+}
+
 @media print {
   html, body {
     margin: 0 !important;
@@ -82,20 +86,27 @@
     visibility: hidden;
   }
 
+  /* Reveal print-only container and document */
+  .print-only-container {
+    display: block !important;
+    visibility: visible !important;
+  }
+
   /* Only render the printable document container */
   #printable-document-root,
   #printable-document-root * {
-    visibility: visible;
+    visibility: visible !important;
   }
 
   #printable-document-root {
+    display: block !important;
     position: absolute;
     left: 0;
     top: 0;
     width: 210mm !important;
     min-height: 297mm !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10mm !important;
     border: none !important;
     box-shadow: none !important;
     background: white !important;

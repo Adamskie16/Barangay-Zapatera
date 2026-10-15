@@ -71,12 +71,6 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Role Notice Pill */}
-        <div className="px-4 py-2 bg-blue-500/10 border-b border-blue-500/20 text-blue-300 text-[11px] font-medium flex items-center gap-2">
-          <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-          <span className="truncate">Barangay Zapatera Treasury</span>
-        </div>
-
         {/* Navigation Menu */}
         <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
           <div className="px-3 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-between">
