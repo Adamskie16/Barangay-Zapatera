@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   X,
-  FileCheck2,
   Newspaper,
   Users,
   Calendar,
@@ -44,13 +43,12 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const userRole = (currentUser?.role || '').toLowerCase();
   const hasAccess = userRole === 'super_admin' || userRole === 'admin';
 
-  // Active Tab state: 'announcements' | 'users' | 'documents'
+  // Active Tab state: 'announcements' | 'users'
   const [activeTab, setActiveTab] = useState('announcements');
 
   // Datasets
   const [archivedNews, setArchivedNews] = useState([]);
   const [archivedUsers, setArchivedUsers] = useState([]);
-  const [archivedDocs, setArchivedDocs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Search & Filters
@@ -91,15 +89,13 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const loadArchivedData = async () => {
     setLoading(true);
     try {
-      const [newsData, usersData, docsData] = await Promise.all([
+      const [newsData, usersData] = await Promise.all([
         StorageService.getArchivedAnnouncementsAsync ? StorageService.getArchivedAnnouncementsAsync() : Promise.resolve([]),
         StorageService.getArchivedUsersAsync ? StorageService.getArchivedUsersAsync() : Promise.resolve([]),
-        StorageService.getArchivedApprovedDocumentsAsync ? StorageService.getArchivedApprovedDocumentsAsync() : Promise.resolve([]),
       ]);
 
       setArchivedNews(Array.isArray(newsData) ? newsData : []);
       setArchivedUsers(Array.isArray(usersData) ? usersData : []);
-      setArchivedDocs(Array.isArray(docsData) ? docsData : []);
     } catch (err) {
       console.error('Failed to load archived records:', err);
       showToast('Failed to load archive repository data.', 'error');
@@ -132,7 +128,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     let dataset = [];
     if (activeTab === 'announcements') dataset = [...archivedNews];
     else if (activeTab === 'users') dataset = [...archivedUsers];
-    else if (activeTab === 'documents') dataset = [...archivedDocs];
 
     const q = searchQuery.trim().toLowerCase();
     if (q) {
@@ -152,14 +147,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             (u.role || '').toLowerCase().includes(q) ||
             (u.phone || u.contact_number || '').toLowerCase().includes(q)
         );
-      } else if (activeTab === 'documents') {
-        dataset = dataset.filter(
-          (d) =>
-            (d.tracking_number || '').toLowerCase().includes(q) ||
-            (d.resident_name || d.profiles?.full_name || '').toLowerCase().includes(q) ||
-            (d.document_title || d.document_types?.name || '').toLowerCase().includes(q) ||
-            (d.purpose || '').toLowerCase().includes(q)
-        );
       }
     }
 
@@ -169,7 +156,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
       let valB = b[sortKey];
 
       // Handle nested or date fields
-      if (sortKey === 'deleted_at' || sortKey === 'created_at' || sortKey === 'approved_at') {
+      if (sortKey === 'deleted_at' || sortKey === 'created_at') {
         valA = new Date(valA || 0).getTime();
         valB = new Date(valB || 0).getTime();
       } else if (typeof valA === 'string') {
@@ -183,7 +170,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     });
 
     return dataset;
-  }, [activeTab, archivedNews, archivedUsers, archivedDocs, searchQuery, sortKey, sortDirection]);
+  }, [activeTab, archivedNews, archivedUsers, searchQuery, sortKey, sortDirection]);
 
   // Strict 10-Row Pagination Calculations
   const totalEntries = processedData.length;
@@ -217,9 +204,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     const itemTitle =
       type === 'announcements'
         ? `announcement "${item.title}"`
-        : type === 'users'
-        ? `user account "${item.full_name || item.email}"`
-        : `approved document tracking record #${item.tracking_number}`;
+        : `user account "${item.full_name || item.email}"`;
 
     setActionModal({
       isOpen: true,
@@ -246,8 +231,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             await StorageService.restoreNews(item.id, currentUser);
           } else if (type === 'users') {
             await StorageService.restoreUser(item.id, currentUser);
-          } else if (type === 'documents') {
-            await StorageService.restoreApprovedDocument(item.id, item.tracking_number, currentUser);
           }
           await loadArchivedData();
           setActionModal({ isOpen: false });
@@ -267,9 +250,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     const itemTitle =
       type === 'announcements'
         ? `announcement "${item.title}"`
-        : type === 'users'
-        ? `user account "${item.full_name || item.email}"`
-        : `document #${item.tracking_number}`;
+        : `user account "${item.full_name || item.email}"`;
 
     setActionModal({
       isOpen: true,
@@ -299,8 +280,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             await StorageService.purgeNews(item.id, currentUser);
           } else if (type === 'users') {
             await StorageService.purgeUser(item.id, currentUser);
-          } else if (type === 'documents') {
-            await StorageService.purgeApprovedDocument(item.id, item.tracking_number, currentUser);
           }
           await loadArchivedData();
           setActionModal({ isOpen: false });
@@ -369,7 +348,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               Archive & Trash Management
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-              Inspect soft-deleted announcements, user accounts, and approved document requests. Items safely remain here for full recovery or permanent database purging.
+              Inspect soft-deleted announcements and user accounts. Items safely remain here for full recovery or permanent database purging.
             </p>
           </div>
 
@@ -398,7 +377,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         {[
           { id: 'announcements', label: 'Announcements Archive', icon: Newspaper, count: archivedNews.length, color: 'blue' },
           { id: 'users', label: 'User Accounts Archive', icon: Users, count: archivedUsers.length, color: 'indigo' },
-          { id: 'documents', label: 'Approved Documents Archive', icon: FileCheck2, count: archivedDocs.length, color: 'emerald' },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -439,9 +417,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             placeholder={`Search ${
               activeTab === 'announcements'
                 ? 'by title, category, author...'
-                : activeTab === 'users'
-                ? 'by name, email, role, phone...'
-                : 'by tracking number, resident, document type...'
+                : 'by name, email, role, phone...'
             }`}
             className={`w-full pl-9 pr-9 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
               isDarkMode
@@ -713,110 +689,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             </table>
           )}
 
-          {activeTab === 'documents' && (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
-                  isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('tracking_number')}>
-                    <div className="flex items-center space-x-1">
-                      <span>Tracking Number</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('resident_name')}>
-                    <div className="flex items-center space-x-1">
-                      <span>Resident Name</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('document_title')}>
-                    <div className="flex items-center space-x-1">
-                      <span>Document Type</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('approved_at')}>
-                    <div className="flex items-center space-x-1">
-                      <span>Approved Date</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
-                    <div className="flex items-center space-x-1 text-rose-500">
-                      <span>Date Deleted</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </div>
-                  </th>
-                  <th className="p-4">Deleted By</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                {paginatedData.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-400">
-                      <FileCheck2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived approved documents found</p>
-                      <p className="text-xs">Approved records deleted by Barangay Admin are preserved here for audit compliance.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedData.map((d) => (
-                    <tr key={d.id || d.tracking_number} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4 whitespace-nowrap font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {d.tracking_number}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-slate-900 dark:text-white">
-                        {d.resident_name || d.profiles?.full_name || 'Resident Applicant'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          {d.document_title || d.document_types?.name || 'Barangay Certificate'}
-                        </span>
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500">
-                        {formatDate(d.approved_at || d.created_at)}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                        {d.deleted_at ? formatDate(d.deleted_at) : 'Archived'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500 text-[11px]">
-                        {d.archived_by_name || d.deleted_by_profile?.full_name || 'Barangay Admin'}
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => setInspectItem({ ...d, _type: 'documents' })}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                            title="Inspect Request"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePromptRestore(d, 'documents')}
-                            className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
-                            title="Restore Document Record"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore</span>
-                          </button>
-                          <button
-                            onClick={() => handlePromptPurge(d, 'documents')}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                            title="Permanently Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
         </div>
 
         {/* 10-Row Standard Consistent Pagination Footer */}
