@@ -183,27 +183,15 @@ export default function DocumentTemplate({
         </div>
 
         {/* SIGNATURE & OFFICIAL SEAL SECTION */}
-        <div className="mt-8 pt-6 flex items-end justify-between">
-          {/* Official Seal Watermark / Box - Lower Left */}
-          <div className="flex flex-col items-center justify-center text-center">
-            <div className="w-28 h-28 border-2 border-dashed border-slate-400 rounded-full flex flex-col items-center justify-center p-1 bg-slate-50/60 shadow-xs relative">
-              <img
-                src={finalLogoUrl}
-                alt="Barangay Official Seal"
-                className="w-20 h-20 object-contain drop-shadow-xs"
-                onError={(e) => {
-                  e.target.src = '/logo.png';
-                }}
-              />
-            </div>
-            <div className="mt-1.5 text-center">
-              <span className="block text-[9px] font-sans font-bold uppercase tracking-wider text-slate-500">
-                NOT VALID WITHOUT
-              </span>
-              <span className="block text-[10px] font-sans font-black uppercase tracking-widest text-slate-800">
-                OFFICIAL SEAL
-              </span>
-            </div>
+        <div className="mt-auto pt-6 flex items-end justify-between">
+          {/* Official Seal Watermark / Box - Lowest Bottom Left */}
+          <div className="w-36 h-28 border-2 border-dashed border-slate-400 rounded-lg flex flex-col items-center justify-center text-center p-2 text-slate-400">
+            <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-slate-500">
+              NOT VALID WITHOUT
+            </span>
+            <span className="text-[11px] font-sans font-black uppercase tracking-widest text-slate-600 mt-0.5">
+              OFFICIAL SEAL
+            </span>
           </div>
 
           {/* Punong Barangay Signature */}
