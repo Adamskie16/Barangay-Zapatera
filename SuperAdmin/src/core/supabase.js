@@ -15,7 +15,45 @@ const resilientFetch = async (input, init) => {
   let lastError;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      return await fetch(input, init);
+      const response = await fetch(input, init);
+
+      // Gracefully handle 401 Unauthorized caused by expired or invalid JWT session tokens
+      if (response.status === 401) {
+        try {
+          const clone = response.clone();
+          const bodyText = await clone.text();
+          const isJwtExpiry =
+            bodyText.includes('PGRST301') ||
+            bodyText.includes('JWT expired') ||
+            bodyText.includes('bad_jwt') ||
+            bodyText.includes('token is expired') ||
+            bodyText.includes('No suitable key') ||
+            bodyText.includes('invalid claim');
+
+          if (isJwtExpiry) {
+            // 1. Purge stale Supabase auth tokens from localStorage
+            if (typeof localStorage !== 'undefined') {
+              Object.keys(localStorage).forEach((k) => {
+                if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                  localStorage.removeItem(k);
+                }
+              });
+            }
+
+            // 2. Retry once with clean anon key in Authorization header if present
+            if (init && init.headers) {
+              const newHeaders = new Headers(init.headers);
+              newHeaders.set('Authorization', `Bearer ${supabaseAnonKey}`);
+              const retryResponse = await fetch(input, { ...init, headers: newHeaders });
+              if (retryResponse.status !== 401) {
+                return retryResponse;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      return response;
     } catch (err) {
       lastError = err;
       const errMsg = String(err?.message || err || '').toLowerCase();

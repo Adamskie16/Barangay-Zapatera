@@ -48,6 +48,18 @@ export const StorageService = {
       } else {
         localStorage.removeItem(STORAGE_KEYS.SESSION);
         localStorage.removeItem('zapatera_session_user');
+        if (typeof localStorage !== 'undefined') {
+          Object.keys(localStorage).forEach((k) => {
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              localStorage.removeItem(k);
+            }
+          });
+        }
+        if (isSupabaseConfigured()) {
+          try {
+            supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          } catch (_) {}
+        }
       }
     } catch (e) {
       console.warn('Failed to update session:', e);

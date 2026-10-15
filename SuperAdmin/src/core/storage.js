@@ -1514,6 +1514,18 @@ export const StorageService = {
   setCurrentUser: (user) => {
     if (!user) {
       localStorage.removeItem(STORAGE_KEYS.SESSION);
+      if (typeof localStorage !== 'undefined') {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+            localStorage.removeItem(k);
+          }
+        });
+      }
+      if (isSupabaseConfigured()) {
+        try {
+          supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        } catch (_) {}
+      }
     } else {
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(user));
     }

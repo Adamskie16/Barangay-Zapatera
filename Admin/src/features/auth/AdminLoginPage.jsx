@@ -83,6 +83,19 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     let isMounted = true;
     setIsPictureLoading(true);
 
+    // If on login screen without an active session, ensure stale expired session tokens are cleared
+    if (!StorageService.getCurrentUser() && typeof localStorage !== 'undefined') {
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        if (error || !session) {
+          Object.keys(localStorage).forEach((k) => {
+            if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              localStorage.removeItem(k);
+            }
+          });
+        }
+      }).catch(() => {});
+    }
+
     StorageService.getSupabaseLoginAssetsAsync('admin')
       .then((assets) => {
         if (!isMounted) return;
