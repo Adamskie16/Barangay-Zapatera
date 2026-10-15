@@ -20,6 +20,8 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  Sparkles,
   ArrowRight,
   ArrowLeft,
   Camera,
@@ -339,7 +341,7 @@ export default function RequestFlowModal({
         pickup_date: selectedDate,
         pickup_time_slot: selectedSlot,
         status: 'pending',
-        pickup_location: 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+        pickup_location: '2nd Floor, Barangay Hall Lobby, Rahmann St.',
         pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
         timeline: [
           {
@@ -361,7 +363,7 @@ export default function RequestFlowModal({
           {
             status: 'ready_for_pickup',
             label: 'Ready for Pick up',
-            description: `Document printed, sealed, and approved for collection on ${selectedDate} at Express Window (${selectedSlot}).`,
+            description: `Document printed, sealed, and approved for collection on ${selectedDate} at 2nd Floor, Barangay Hall Lobby (${selectedSlot}).`,
             timestamp: 'Scheduled for ' + selectedDate,
             is_completed: false,
             is_current: false,
@@ -854,17 +856,17 @@ export default function RequestFlowModal({
                                 ]}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                     {uploaded.ai_quality.status === 'passed' ? (
-                                      <CheckCircle2 size={13} color="#15803d" />
+                                      <Sparkles size={14} color="#15803d" />
                                     ) : (
-                                      <AlertCircle size={13} color="#b45309" />
+                                      <AlertTriangle size={14} color="#b45309" />
                                     )}
                                     <Text style={[
                                       styles.aiQualityTitle,
                                       uploaded.ai_quality.status === 'passed' ? styles.aiQualityTitlePass : styles.aiQualityTitleWarn
                                     ]}>
                                       {uploaded.ai_quality.status === 'passed'
-                                        ? `✨ AI Check: Sharp & Full Document (${uploaded.ai_quality.qualityScore}%)`
-                                        : `⚠️ AI Quality Check: ${uploaded.ai_quality.issues.join(', ') || 'Quality Notice'}`}
+                                        ? `AI Check: Sharp & Full Document (${uploaded.ai_quality.qualityScore}%)`
+                                        : `AI Quality Check: ${uploaded.ai_quality.issues.join(', ') || 'Quality Notice'}`}
                                     </Text>
                                   </View>
 
@@ -972,7 +974,7 @@ export default function RequestFlowModal({
                 <View style={styles.scheduleNotice}>
                   <MapPin size={14} color="#1d4ed8" />
                   <Text style={styles.scheduleNoticeText}>
-                    Claiming Counter: Express Window 2, Barangay Hall Lobby, Rahmann St.
+                    Claiming Counter: 2nd Floor, Barangay Hall Lobby, Rahmann St.
                   </Text>
                 </View>
               </View>
@@ -2081,20 +2083,22 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    gap: 12,
+    gap: 16,
   },
   backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
     borderRadius: 10,
     backgroundColor: '#f1f5f9',
+    marginRight: 10,
   },
   backBtnText: {
     fontSize: 13,
@@ -2344,8 +2348,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   nextBtnReady: {
-    backgroundColor: '#15803d',
-    shadowColor: '#15803d',
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
   },
   aiQualityBox: {
     marginTop: 8,

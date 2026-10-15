@@ -87,7 +87,7 @@ export default function RequestTrackingModal({
         ? 'Document request was cancelled by the resident.'
         : isRejected
         ? (request.declined_reason || 'Application declined due to incomplete or invalid requirements.')
-        : `Document printed, sealed, and approved for pickup at Express Window (${request.pickup_time_slot || 'Regular Office Hours'}).`,
+        : `Document printed, sealed, and approved for pickup at 2nd Floor, Barangay Hall Lobby (${request.pickup_time_slot || 'Regular Office Hours'}).`,
       timestamp: isCancelled
         ? 'Cancelled'
         : (isReady || isCompleted || isRejected)
@@ -245,12 +245,10 @@ export default function RequestTrackingModal({
             {isUnderReview && !isRejected && (
               <View style={[styles.readyPassCard, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
                 <View style={styles.readyPassHeader}>
-                  <Clock size={20} color="#1d4ed8" />
                   <Text style={[styles.readyPassTitle, { color: '#1e40af' }]}>APPLICATION UNDER REVIEW</Text>
                 </View>
                 <Text style={[styles.readyPassDoc, { color: '#1e3a8a' }]}>{request.document_title}</Text>
                 <View style={[styles.claimNoticeBox, { backgroundColor: '#dbeafe', borderColor: '#93c5fd' }]}>
-                  <Info size={16} color="#1d4ed8" />
                   <Text style={[styles.claimNoticeText, { color: '#1e40af' }]}>
                     Your request is currently under review by the Barangay staff. Requirements and residency are being validated.
                   </Text>
@@ -263,11 +261,10 @@ export default function RequestTrackingModal({
               </View>
             )}
 
-            {/* READY FOR PICKUP PASS CARD (NO QR CODE) */}
+            {/* READY FOR PICKUP PASS CARD (NO QR CODE, NO ICONS) */}
             {isReady && (
               <View style={styles.readyPassCard}>
                 <View style={styles.readyPassHeader}>
-                  <ShieldCheck size={20} color="#15803d" />
                   <Text style={styles.readyPassTitle}>OFFICIAL CLAIMING PASS — READY FOR PICK UP</Text>
                 </View>
                 <Text style={styles.readyPassDoc}>{request.document_title}</Text>
@@ -284,15 +281,15 @@ export default function RequestTrackingModal({
                 </View>
 
                 <View style={styles.passLocationBox}>
-                  <MapPin size={14} color="#166534" />
                   <Text style={styles.passLocationText}>
-                    {request.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.'}
+                    {request.pickup_location && !request.pickup_location.toLowerCase().includes('express window')
+                      ? request.pickup_location
+                      : '2nd Floor, Barangay Hall Lobby, Rahmann St.'}
                   </Text>
                 </View>
 
-                {/* Instructions Box without QR */}
+                {/* Instructions Box without QR / icons */}
                 <View style={styles.claimNoticeBox}>
-                  <Info size={16} color="#15803d" />
                   <Text style={styles.claimNoticeText}>
                     Your document is ready for pick up. Please visit the Barangay office to claim your document. Present Tracking No. <Text style={{ fontWeight: '800', fontFamily: 'monospace' }}>{request.tracking_number}</Text> and your valid ID.
                   </Text>
@@ -314,7 +311,7 @@ export default function RequestTrackingModal({
                 const isLast = idx === timelineSteps.length - 1;
                 return (
                   <View key={idx} style={styles.timelineItem}>
-                    {/* Left Icon & Connecting Line */}
+                    {/* Left Indicator & Connecting Line (Clean dot, no icons) */}
                     <View style={styles.timelineLeftCol}>
                       <View
                         style={[
@@ -324,11 +321,7 @@ export default function RequestTrackingModal({
                           isRejected && step.status === request.status && styles.timelineDotRejected,
                         ]}
                       >
-                        {step.is_completed ? (
-                          <CheckCircle2 size={12} color="#ffffff" />
-                        ) : (
-                          <View style={styles.innerDot} />
-                        )}
+                        <View style={[styles.innerDot, step.is_completed && { backgroundColor: '#ffffff', width: 6, height: 6, borderRadius: 3 }]} />
                       </View>
                       {!isLast && (
                         <View

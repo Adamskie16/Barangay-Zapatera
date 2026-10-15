@@ -7,9 +7,10 @@ import { Clock, RefreshCw, CheckCircle2, PackageCheck, XCircle, AlertCircle } fr
 interface BadgeProps {
   status: RequestStatus | string;
   size?: 'sm' | 'md' | 'lg';
+  showIcon?: boolean;
 }
 
-export default function Badge({ status, size = 'md' }: BadgeProps) {
+export default function Badge({ status, size = 'md', showIcon = false }: BadgeProps) {
   const getStatusConfig = () => {
     switch (status) {
       case 'pending':
@@ -43,7 +44,7 @@ export default function Badge({ status, size = 'md' }: BadgeProps) {
           bg: '#dcfce7',
           border: '#86efac',
           text: '#15803d',
-          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🟢</Text>,
+          icon: null,
         };
       case 'completed':
       case 'issued':
@@ -99,7 +100,7 @@ export default function Badge({ status, size = 'md' }: BadgeProps) {
         },
       ]}
     >
-      {config.icon}
+      {showIcon && config.icon}
       <Text
         style={[
           styles.badgeText,

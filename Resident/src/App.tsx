@@ -953,27 +953,73 @@ export default function App() {
       }
     } catch {}
 
-    // Check for declined requests to generate notifications for this account
-    const declinedNotifications: ResidentNotification[] = [];
+    // Check for document request progress to generate in-app notifications for this account
+    const progressNotifications: ResidentNotification[] = [];
     try {
       const userRequestsKey = `zapatera_requests_db_${userScope}`;
       const storedReqs = await MobileStorage.getItem(userRequestsKey);
       const reqList: DocumentRequest[] = storedReqs ? JSON.parse(storedReqs) : [];
       reqList.forEach((req) => {
         const normStatus = (req.status || '').toLowerCase();
+        const dateStr = req.updated_at || req.created_at
+          ? new Date(req.updated_at || req.created_at || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
         if (normStatus === 'declined' || normStatus === 'rejected') {
           const declinedNotifId = `declined-req-${req.id || req.tracking_number}`;
           if (!erasedIds.has(declinedNotifId)) {
             const reason = req.declined_reason || req.rejection_reason || req.declined_details || 'Requirements did not meet verification criteria.';
-            declinedNotifications.push({
+            progressNotifications.push({
               id: declinedNotifId,
               user_id: authUserId,
-              title: 'Document Request Declined ❌',
+              title: 'Document Request Declined',
               message: `Your request for ${req.document_title} (Ref: ${req.tracking_number}) has been declined. Reason: ${reason}`,
               type: 'rejected',
               is_read: false,
               link_tab: 'requests',
-              created_at: req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              created_at: dateStr,
+            });
+          }
+        } else if (normStatus === 'ready_for_pickup') {
+          const readyNotifId = `ready-req-${req.id || req.tracking_number}`;
+          if (!erasedIds.has(readyNotifId)) {
+            progressNotifications.push({
+              id: readyNotifId,
+              user_id: authUserId,
+              title: 'Document Ready for Pick Up',
+              message: `Your ${req.document_title} (Ref: ${req.tracking_number}) is ready for pick up at 2nd Floor, Barangay Hall Lobby, Rahmann St.`,
+              type: 'ready_pickup',
+              is_read: false,
+              link_tab: 'requests',
+              created_at: dateStr,
+            });
+          }
+        } else if (normStatus === 'approved') {
+          const approvedNotifId = `approved-req-${req.id || req.tracking_number}`;
+          if (!erasedIds.has(approvedNotifId)) {
+            progressNotifications.push({
+              id: approvedNotifId,
+              user_id: authUserId,
+              title: 'Document Request Approved',
+              message: `Your request for ${req.document_title} (Ref: ${req.tracking_number}) has been approved and is being prepared for pick up.`,
+              type: 'ready_pickup',
+              is_read: false,
+              link_tab: 'requests',
+              created_at: dateStr,
+            });
+          }
+        } else if (normStatus === 'under_review' || normStatus === 'processing') {
+          const processingNotifId = `proc-req-${req.id || req.tracking_number}`;
+          if (!erasedIds.has(processingNotifId)) {
+            progressNotifications.push({
+              id: processingNotifId,
+              user_id: authUserId,
+              title: 'Document Request In Progress',
+              message: `Your request for ${req.document_title} (Ref: ${req.tracking_number}) is currently under review and being processed by the barangay desk officer.`,
+              type: 'status_update',
+              is_read: false,
+              link_tab: 'requests',
+              created_at: dateStr,
             });
           }
         }
@@ -1009,10 +1055,10 @@ export default function App() {
               created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
             }));
 
-          // Merge with declined notifications
+          // Merge with progress notifications
           const map = new Map<string, ResidentNotification>();
           formatted.forEach((n) => map.set(n.id, n));
-          declinedNotifications.forEach((n) => {
+          progressNotifications.forEach((n) => {
             if (!map.has(n.id)) map.set(n.id, n);
           });
 
@@ -1048,7 +1094,7 @@ export default function App() {
           map.set(n.id, n);
         }
       });
-      declinedNotifications.forEach((n) => {
+      progressNotifications.forEach((n) => {
         if (!map.has(n.id) && !erasedIds.has(n.id)) {
           map.set(n.id, n);
         }
@@ -1136,7 +1182,9 @@ export default function App() {
                 uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
                 pickup_date: req.pickup_date || 'To be scheduled',
                 pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
-                pickup_location: req.pickup_location || 'Express Window 2, Barangay Hall Lobby, Rahmann St.',
+                pickup_location: req.pickup_location && !req.pickup_location.toLowerCase().includes('express window')
+                  ? req.pickup_location
+                  : '2nd Floor, Barangay Hall Lobby, Rahmann St.',
                 pickup_instructions: req.pickup_instructions || '',
                 status: req.status || 'pending',
                 notes: req.notes || '',
@@ -1163,7 +1211,7 @@ export default function App() {
                   {
                     status: 'ready_for_pickup',
                     label: isDeclined ? 'Request Declined' : 'Ready for Pick up',
-                    description: isDeclined ? (req.declined_reason || 'Application declined due to incomplete or invalid requirements.') : `Document printed, sealed, and approved for pickup at Express Window (${req.pickup_time_slot || 'Window 2'}).`,
+                    description: isDeclined ? (req.declined_reason || 'Application declined due to incomplete or invalid requirements.') : `Document printed, sealed, and approved for pickup at 2nd Floor, Barangay Hall Lobby (${req.pickup_time_slot || 'Regular Office Hours'}).`,
                     timestamp: isReady || isClaimed || isDeclined ? (isDeclined ? 'Declined' : (req.pickup_date ? `${req.pickup_date}` : 'Approved')) : `Scheduled for ${req.pickup_date || 'Pickup'}`,
                     is_completed: isReady || isClaimed || isDeclined,
                     is_current: isReady || isDeclined,

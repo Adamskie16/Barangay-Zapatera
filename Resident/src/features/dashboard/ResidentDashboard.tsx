@@ -53,14 +53,13 @@ export default function ResidentDashboard({
   onViewRequestDetails,
   onViewAnnouncement,
 }: ResidentDashboardProps) {
-  // Greeting based on time of day
+  // Greeting based on exact time of day
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
-
 
   // Active request (highest priority: ready_for_pickup > processing > pending > under_review)
   const activeRequest =
@@ -81,15 +80,6 @@ export default function ResidentDashboard({
         <View style={styles.welcomeLeft}>
           <Text style={styles.greetingText}>{getGreeting()}, {currentUser.first_name || currentUser.full_name?.split(' ')[0] || 'Resident'}!</Text>
           <Text style={styles.greetingSubtitle}>How can we help you today with your official barangay documents?</Text>
-        </View>
-        <View style={styles.sealCircle}>
-          <Image
-            source={{
-              uri: config?.seal_url || config?.logo_url || '/zapatera_seal.png',
-            }}
-            style={styles.sealLogoImage}
-            resizeMode="cover"
-          />
         </View>
       </View>
 
@@ -154,7 +144,9 @@ export default function ResidentDashboard({
               <View style={styles.readyInstructionBox}>
                 <MapPin size={14} color="#166534" />
                 <Text style={styles.readyInstructionText}>
-                  Claim at: {activeRequest.pickup_location || 'Express Window, Barangay Hall Lobby'}
+                  Claim at: {activeRequest.pickup_location && !activeRequest.pickup_location.toLowerCase().includes('express window')
+                    ? activeRequest.pickup_location
+                    : '2nd Floor, Barangay Hall Lobby, Rahmann St.'}
                 </Text>
               </View>
             )}

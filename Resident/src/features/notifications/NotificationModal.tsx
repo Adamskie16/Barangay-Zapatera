@@ -19,15 +19,8 @@ import {
   ShieldCheck,
   CheckCheck,
   AlertTriangle,
-  Smartphone,
-  Volume2,
 } from 'lucide-react';
 import { ResidentNotification } from '../../types';
-import {
-  getNotificationPermissionStatus,
-  sendTestPhoneNotification,
-  requestPhoneNotificationPermission,
-} from '../../core/phoneNotification';
 
 interface NotificationModalProps {
   visible: boolean;
@@ -46,37 +39,6 @@ export default function NotificationModal({
   onMarkAllAsRead,
   onNotificationClick,
 }: NotificationModalProps) {
-  const [permissionStatus, setPermissionStatus] = useState<string>('default');
-  const [testFeedback, setTestFeedback] = useState<string>('');
-  const [isTesting, setIsTesting] = useState<boolean>(false);
-
-  useEffect(() => {
-    setPermissionStatus(getNotificationPermissionStatus());
-  }, [visible]);
-
-  const handleTestPhoneNotification = async () => {
-    setIsTesting(true);
-    try {
-      const res = await sendTestPhoneNotification();
-      setPermissionStatus(res.permission);
-      setTestFeedback('Phone alert sent! Chime played, phone vibrated, and notification triggered.');
-      setTimeout(() => setTestFeedback(''), 4500);
-    } catch {
-      setTestFeedback('Notification test completed.');
-      setTimeout(() => setTestFeedback(''), 3000);
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const handleEnableAlerts = async () => {
-    const granted = await requestPhoneNotificationPermission();
-    setPermissionStatus(granted ? 'granted' : 'denied');
-    if (granted) {
-      handleTestPhoneNotification();
-    }
-  };
-
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const renderIcon = (type: string) => {
@@ -119,32 +81,17 @@ export default function NotificationModal({
             </TouchableOpacity>
           </View>
 
-          {/* Cellphone Notification Status & Quick Test */}
-          <View style={styles.phoneAlertCard}>
-            <View style={styles.phoneAlertLeft}>
-              <View style={[styles.phoneAlertDot, { backgroundColor: permissionStatus === 'granted' ? '#22c55e' : '#f59e0b' }]} />
-              <View>
-                <Text style={styles.phoneAlertTitle}>
-                  {permissionStatus === 'granted' ? 'Cellphone Alerts: Active' : 'Cellphone Alerts: Off / Tap to Enable'}
-                </Text>
-                <Text style={styles.phoneAlertSub}>
-                  {testFeedback || (permissionStatus === 'granted'
-                    ? 'Receives instant vibration & chime for announcements'
-                    : 'Tap test or enable to receive notifications on your phone')}
+          {/* In-App Request Progress & Status Indicator */}
+          <View style={styles.inAppStatusCard}>
+            <View style={styles.inAppStatusLeft}>
+              <View style={styles.inAppStatusDot} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inAppStatusTitle}>In-App Progress Notifications Active</Text>
+                <Text style={styles.inAppStatusSub}>
+                  Real-time updates are sent here for document submissions, verification, approval, and pick up readiness.
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              style={[styles.testAlertBtn, isTesting && styles.btnDisabled]}
-              onPress={permissionStatus === 'granted' ? handleTestPhoneNotification : handleEnableAlerts}
-              disabled={isTesting}
-              activeOpacity={0.8}
-            >
-              <Volume2 size={13} color="#ffffff" style={{ marginRight: 4 }} />
-              <Text style={styles.testAlertBtnText}>
-                {isTesting ? 'Sending...' : permissionStatus === 'granted' ? 'Test Alert' : 'Enable & Test'}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Mark all as read bar */}
@@ -417,8 +364,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
   },
-  phoneAlertCard: {
-    backgroundColor: '#0f172a',
+  inAppStatusCard: {
+    backgroundColor: '#eff6ff',
     marginHorizontal: 16,
     marginTop: 10,
     marginBottom: 8,
@@ -429,44 +376,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#1e3a8a',
+    borderColor: '#bfdbfe',
   },
-  phoneAlertLeft: {
+  inAppStatusLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 8,
   },
-  phoneAlertDot: {
+  inAppStatusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: '#2563eb',
     marginRight: 8,
   },
-  phoneAlertTitle: {
+  inAppStatusTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#ffffff',
+    color: '#1e40af',
   },
-  phoneAlertSub: {
+  inAppStatusSub: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: '#3b82f6',
     marginTop: 1,
-  },
-  testAlertBtn: {
-    backgroundColor: '#2563eb',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  testAlertBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  btnDisabled: {
-    opacity: 0.6,
   },
 });
