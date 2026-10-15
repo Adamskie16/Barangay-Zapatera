@@ -362,14 +362,9 @@ export default function ReportsView({
       {/* Top Banner & Action Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <div className="flex items-center space-x-2">
-            <h2 className="text-xl font-bold text-slate-900">Admin Operations & Monthly Analytics Reports</h2>
-            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 rounded-full">
-              Admin Portal
-            </span>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900">Admin Operations & Monthly Analytics Reports</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Summary of verification throughput, monthly request volume quantities, daily clearance issuance totals, and audit logs.
+            View document requests, monthly counts, and daily issuance totals.
           </p>
         </div>
 

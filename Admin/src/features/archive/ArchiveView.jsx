@@ -230,7 +230,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             Are you sure you want to restore <strong>{itemTitle}</strong>?
           </p>
           <p className="text-xs text-slate-500">
-            This will remove the item from the recycling bin and return it to its active status in the system.
+            This will return the item back to the active list.
           </p>
         </div>
       ),
@@ -279,16 +279,16 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
           <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl flex items-start space-x-2.5">
             <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
             <div className="text-xs text-rose-900 dark:text-rose-200">
-              <span className="font-bold">CRITICAL WARNING:</span> This operation is completely permanent and cannot be undone. All database records and history will be irreversibly erased.
+              <span className="font-bold">Warning:</span> This will permanently delete this item. You cannot undo this action.
             </div>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Are you completely sure you want to permanently delete <strong>{itemTitle}</strong>?
+            Are you sure you want to permanently delete <strong>{itemTitle}</strong>?
           </p>
         </div>
       ),
-      confirmText: 'Permanently Erase',
-      cancelText: 'Keep in Archive',
+      confirmText: 'Permanently Delete',
+      cancelText: 'Cancel',
       isDestructive: true,
       isLoading: false,
       onConfirm: async () => {
@@ -322,9 +322,9 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
           <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto ring-4 ring-rose-500/10">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restricted Administrator Area</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restricted Area</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            You do not have administrative privileges to access the Archive & Trash Management recycling bin. Please contact Barangay Zapatera administration.
+            You do not have permission to view the archive. Please contact an administrator.
           </p>
         </div>
       </div>
@@ -360,15 +360,11 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
       }`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-xs font-extrabold uppercase tracking-wider">
-              <Archive className="w-3.5 h-3.5" />
-              <span>System Recycling Bin & Recovery Repository</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-              Archive & Trash Management
+              Archive & Trash
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-              Inspect soft-deleted announcements, user accounts, and approved document requests. Items safely remain here for full recovery or permanent database purging.
+              View deleted announcements, accounts, and documents. You can restore them or permanently delete them.
             </p>
           </div>
 
@@ -384,7 +380,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />
-              <span>Refresh Repository</span>
+              <span>Refresh</span>
             </button>
           </div>
         </div>
@@ -529,7 +525,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                     <td colSpan={7} className="p-12 text-center text-slate-400">
                       <Archive className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                       <p className="font-bold text-sm">No archived announcements found</p>
-                      <p className="text-xs">Deleted announcements and expired bulletins will appear in this recycling bin.</p>
+                      <p className="text-xs">Deleted announcements will appear here.</p>
                     </td>
                   </tr>
                 ) : (
@@ -640,8 +636,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   <tr>
                     <td colSpan={7} className="p-12 text-center text-slate-400">
                       <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived user accounts found</p>
-                      <p className="text-xs">Soft-deleted accounts will appear here and can be restored anytime.</p>
+                      <p className="font-bold text-sm">No archived accounts found</p>
+                      <p className="text-xs">Deleted accounts will appear here and can be restored anytime.</p>
                     </td>
                   </tr>
                 ) : (
@@ -757,8 +753,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   <tr>
                     <td colSpan={7} className="p-12 text-center text-slate-400">
                       <FileCheck2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived approved documents found</p>
-                      <p className="text-xs">Approved records deleted by Barangay Admin are preserved here for audit compliance.</p>
+                      <p className="font-bold text-sm">No archived documents found</p>
+                      <p className="text-xs">Deleted document records will appear here.</p>
                     </td>
                   </tr>
                 ) : (
@@ -942,7 +938,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         <Modal
           isOpen={!!inspectItem}
           onClose={() => setInspectItem(null)}
-          title="Archived Entity Inspection"
+          title="Item Details"
           darkMode={isDarkMode}
         >
           <div className="space-y-4 text-xs">
@@ -960,7 +956,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
             <div className="space-y-2">
               <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px]">
-                Full Item Metadata
+                Details
               </h4>
               <pre className="p-3 bg-slate-950 text-slate-200 rounded-xl overflow-x-auto text-[11px] font-mono max-h-60">
                 {JSON.stringify(inspectItem, null, 2)}

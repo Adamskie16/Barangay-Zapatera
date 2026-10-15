@@ -1348,7 +1348,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         <div>
           <h2 className="text-xl font-bold">User Account Management & Security</h2>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Create credentials, monitor 3-attempt account lockouts, and authorize unlock actions for Barangay Staff & Residents.
+            Create accounts, check locked accounts, and manage login access.
           </p>
         </div>
         <div className="flex items-center space-x-2">

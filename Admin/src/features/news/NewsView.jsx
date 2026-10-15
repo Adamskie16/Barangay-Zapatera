@@ -17,7 +17,6 @@ import {
   Upload,
   Image as ImageIcon,
   ExternalLink,
-  Megaphone,
   Radio,
   Clock,
   ChevronRight,
@@ -525,7 +524,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       isOpen: true,
       type: 'confirmation',
       title: 'Move Announcement to Archive?',
-      message: `Are you sure you want to remove "${item.title}"? It will be safely moved to the Archive & Trash Management recycling bin where it can be inspected or restored.`,
+      message: `Are you sure you want to move "${item.title}" to Archive & Trash? You can restore it anytime.`,
       confirmText: 'Move to Archive',
       cancelText: 'Cancel',
       isDestructive: true,
@@ -544,7 +543,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
             isOpen: true,
             type: 'success',
             title: 'Announcement Archived',
-            message: 'The announcement has been moved to the Archive & Trash Management recycling bin.',
+            message: 'The announcement has been moved to Archive & Trash.',
             buttonText: 'OK',
             onClose: () => setActionModal({ isOpen: false }),
           });
@@ -688,17 +687,9 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-6 md:p-8 rounded-2xl shadow-xl text-white border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2.5 mb-2">
-            <div className="p-2 bg-blue-500/20 border border-blue-400/30 rounded-lg text-blue-300">
-              <Megaphone className="w-5 h-5 text-blue-400" />
-            </div>
-            <span className="text-xs font-bold tracking-widest text-blue-400 uppercase">
-              Community Broadcast, Events & Information Center
-            </span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">News, Bulletins & Barangay Events</h1>
           <p className="text-slate-300 text-sm mt-1 max-w-2xl leading-relaxed">
-            Publish official announcements, public advisories, community programs, and scheduled events with integrated calendar dates for residents.
+            Create and manage announcements, advisories, and events for residents.
           </p>
         </div>
 
@@ -1656,7 +1647,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               ))}
             </div>
             <p className="text-[10px] text-slate-500">
-              When the duration expires, this announcement will automatically be moved to the centralized Archive recycling bin.
+              When the duration ends, this announcement will automatically move to Archive & Trash.
             </p>
           </div>
 

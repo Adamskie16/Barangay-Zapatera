@@ -8,7 +8,6 @@ import {
   Search,
   CheckCircle,
   XCircle,
-  Shield,
   Lock,
   Unlock,
   Eye,
@@ -614,12 +613,9 @@ export default function UserManagementView({ currentUser }) {
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <div className="flex items-center space-x-2">
-            <Shield className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-slate-900">User Account Management & Security</h2>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900">User Account Management & Security</h2>
           <p className="text-xs text-slate-500 mt-1">
-            View user credentials safely, monitor 3-attempt lockouts, and manage account lock/unlock access controls.
+            Manage user accounts, check login status, and unlock accounts.
           </p>
         </div>
         <button

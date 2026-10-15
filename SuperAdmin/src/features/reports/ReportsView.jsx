@@ -413,14 +413,9 @@ export default function ReportsView({
       {/* Header Banner & Global Action Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <div className="flex items-center space-x-2">
-            <h2 className="text-xl font-bold text-slate-900">Barangay System Reports & Analytics</h2>
-            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 rounded-full">
-              SuperAdmin Portal
-            </span>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900">Barangay System Reports & Analytics</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Issuance metrics breakdown, document demand statistics, monthly quantities, revenue audit reports, and resident engagement.
+            View document requests, monthly counts, revenue, and resident activity.
           </p>
         </div>
 

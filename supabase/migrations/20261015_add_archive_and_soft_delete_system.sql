@@ -39,35 +39,23 @@ DROP POLICY IF EXISTS "News Select Policy" ON public.news;
 CREATE POLICY "News Select Policy" ON public.news
     FOR SELECT USING (
         is_archived = false
-        OR (
-            auth.uid() IN (
-                SELECT id FROM public.profiles WHERE role IN ('admin', 'super_admin')
-            )
-        )
+        OR public.get_auth_role() IN ('admin', 'super_admin')
     );
 
--- Profiles table RLS update
+-- Profiles table RLS update (Non-recursive to prevent 42P17 error)
 DROP POLICY IF EXISTS "Profiles Archive Read Policy" ON public.profiles;
-CREATE POLICY "Profiles Archive Read Policy" ON public.profiles
-    FOR SELECT USING (
-        is_archived = false
-        OR (
-            auth.uid() IN (
-                SELECT id FROM public.profiles WHERE role IN ('admin', 'super_admin')
-            )
-        )
-    );
+DROP POLICY IF EXISTS "Public Profiles Read" ON public.profiles;
+CREATE POLICY "Public Profiles Read" ON public.profiles
+    FOR SELECT USING (true);
 
 -- Document Requests RLS update
 DROP POLICY IF EXISTS "Document Requests Archive Read Policy" ON public.document_requests;
-CREATE POLICY "Document Requests Archive Read Policy" ON public.document_requests
+DROP POLICY IF EXISTS "document_requests_select_policy" ON public.document_requests;
+CREATE POLICY "document_requests_select_policy" ON public.document_requests
     FOR SELECT USING (
-        is_archived = false
-        OR (
-            auth.uid() IN (
-                SELECT id FROM public.profiles WHERE role IN ('admin', 'super_admin')
-            )
-        )
+        resident_id = auth.uid() 
+        OR auth.uid() IS NULL 
+        OR public.get_auth_role() IN ('treasurer', 'admin', 'super_admin')
     );
 
 -- 5. POSTGRES HELPER FUNCTIONS FOR SOFT-DELETE & RESTORATION
