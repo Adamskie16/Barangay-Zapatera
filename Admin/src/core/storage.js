@@ -42,7 +42,7 @@ const DEFAULT_CONFIG = {
   province: 'Cebu',
   punong_barangay: 'HON. DAVID M. AGRAVANTE',
   signatory_title: 'Punong Barangay',
-  seal_url: '/zapatera_seal.png',
+  seal_url: '/logo.png',
   hall_address: '197 D. Jakosalem St., Cebu City',
   office_hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
   contact_email: 'zapatera.lnb24@gmail.com',

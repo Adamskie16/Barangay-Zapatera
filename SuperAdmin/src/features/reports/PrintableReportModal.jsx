@@ -62,7 +62,7 @@ export default function PrintableReportModal({
   const province = config.province || 'Cebu';
   const hallAddress = config.hall_address || '197 D. Jakosalem St., Cebu City';
   const punongBarangay = config.punong_barangay || 'HON. DAVID M. AGRAVANTE';
-  const sealUrl = config.seal_url || config.logo_url || '/zapatera_seal.png';
+  const sealUrl = config.seal_url || config.logo_url || '/logo.png';
   const adminName = currentUser?.full_name || currentUser?.email || 'Administrative Officer';
   const adminRole = currentUser?.role === 'super_admin' ? 'Super Administrator' : 'Barangay Administrator';
   const controlNo = `BZ-REP-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;

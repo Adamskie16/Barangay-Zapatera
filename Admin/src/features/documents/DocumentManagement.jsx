@@ -514,15 +514,6 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Live A4 Document Preview</span>
             </span>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-            >
-              <Printer size={14} />
-              <span>Print / Save PDF</span>
-            </button>
           </div>
 
           {/* Scaled Preview Frame */}

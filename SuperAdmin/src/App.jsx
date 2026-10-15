@@ -17,19 +17,14 @@ import './index.css';
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    return localStorage.getItem('zapatera_dark_mode') === 'true';
-  });
   // Mobile responsive drawer state (< 1024px)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode((prev) => {
-      const next = !prev;
-      localStorage.setItem('zapatera_dark_mode', String(next));
-      return next;
-    });
-  };
+  useEffect(() => {
+    try {
+      localStorage.removeItem('zapatera_dark_mode');
+    } catch {}
+  }, []);
 
   // Local State synchronized with Storage Engine & Supabase
   const [currentUser, setCurrentUser] = useState(StorageService.getCurrentUser());
@@ -301,16 +296,14 @@ export default function App() {
   };
 
   return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-200 ${
-      isDarkMode ? 'bg-slate-950 text-slate-100 dark' : 'bg-slate-100 text-slate-800'
-    }`}>
+    <div className="flex h-screen font-sans overflow-hidden bg-slate-100 text-slate-800">
       {/* Responsive Sidebar (Off-canvas drawer on mobile < 1024px, static on desktop >= 1024px) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         onLogout={handleLogoutRequest}
-        isDarkMode={isDarkMode}
+        isDarkMode={false}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
@@ -320,15 +313,11 @@ export default function App() {
         <Navbar
           activeTitle={tabTitles[activeTab]}
           notificationsCount={notifications.length}
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={toggleDarkMode}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
         />
 
-        <main className={`flex-1 overflow-y-auto p-4 sm:p-6 transition-colors duration-200 w-full max-w-full overflow-x-hidden ${
-          isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
-        }`}>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 transition-colors duration-200 w-full max-w-full overflow-x-hidden bg-slate-100 text-slate-800">
           {activeTab === 'dashboard' && (
             <DashboardView
               users={users}
@@ -356,7 +345,7 @@ export default function App() {
               events={events}
               onSaveEvent={handleSaveEvent}
               onDeleteEvent={handleDeleteEvent}
-              isDarkMode={isDarkMode}
+              isDarkMode={false}
             />
           )}
 
@@ -365,7 +354,7 @@ export default function App() {
               users={users}
               onSaveUser={handleSaveUser}
               onDeleteUser={handleDeleteUser}
-              isDarkMode={isDarkMode}
+              isDarkMode={false}
             />
           )}
 
@@ -393,7 +382,7 @@ export default function App() {
                 refreshState();
               }}
               onLogout={handleLogoutRequest}
-              isDarkMode={isDarkMode}
+              isDarkMode={false}
             />
           )}
         </main>
@@ -402,25 +391,19 @@ export default function App() {
       {/* Logout Confirmation Modal */}
       {isLogoutModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className={`rounded-2xl max-w-sm w-full p-6 shadow-2xl border text-center relative overflow-hidden transition-colors ${
-            isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-          }`}>
-            <div className="w-14 h-14 bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-200 dark:border-rose-900/60 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-              <LogOut className="w-7 h-7 text-rose-600 dark:text-rose-400" />
+          <div className="rounded-2xl max-w-sm w-full p-6 shadow-2xl border text-center relative overflow-hidden transition-colors bg-white border-slate-200 text-slate-900">
+            <div className="w-14 h-14 bg-rose-50 border-2 border-rose-200 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+              <LogOut className="w-7 h-7 text-rose-600" />
             </div>
             <h3 className="text-lg font-extrabold tracking-tight">Confirm Session Sign Out</h3>
-            <p className={`text-xs mt-1.5 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className="text-xs mt-1.5 leading-relaxed text-slate-500">
               Are you sure you want to sign out of your Super Admin session? You will need your credentials to log back in.
             </p>
             <div className="mt-6 flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsLogoutModalOpen(false)}
-                className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                  isDarkMode
-                    ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-                }`}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold border transition-colors cursor-pointer bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
               >
                 Stay Signed In
               </button>

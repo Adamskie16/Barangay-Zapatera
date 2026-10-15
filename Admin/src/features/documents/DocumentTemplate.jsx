@@ -33,7 +33,7 @@ export default function DocumentTemplate({
 
   const finalSignatoryName = signatoryName || config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE';
   const finalSignatoryTitle = signatoryTitle || config?.signatory_title || 'Punong Barangay';
-  const finalLogoUrl = logoUrl || config?.seal_url || '/zapatera_seal.png';
+  const finalLogoUrl = logoUrl || (config?.seal_url && !config.seal_url.includes('gstatic') && config.seal_url !== '/zapatera_seal.png' ? config.seal_url : '/logo.png');
   const finalBarangayName = config?.barangay_name || 'Barangay Zapatera';
   const finalHallAddress = config?.hall_address || '197 D. Jakosalem St., Cebu City';
   const finalContactPhone = config?.contact_phone || '(032)503-6465';
@@ -53,7 +53,7 @@ export default function DocumentTemplate({
                 alt={`${finalBarangayName} Seal`}
                 className="w-22 h-22 object-contain"
                 onError={(e) => {
-                  e.target.src = '/logo.jpg';
+                  e.target.src = '/logo.png';
                 }}
               />
             </div>
