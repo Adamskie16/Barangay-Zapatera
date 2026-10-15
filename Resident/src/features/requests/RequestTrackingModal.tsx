@@ -34,6 +34,7 @@ interface RequestTrackingModalProps {
   config: BarangayConfig;
   onClose: () => void;
   onReRequest?: (req: DocumentRequest) => void;
+  onCancelRequest?: (req: DocumentRequest) => void;
 }
 
 export default function RequestTrackingModal({
@@ -42,15 +43,19 @@ export default function RequestTrackingModal({
   config,
   onClose,
   onReRequest,
+  onCancelRequest,
 }: RequestTrackingModalProps) {
+  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
   if (!request) return null;
 
   const normStatus = (request.status || 'pending').toLowerCase();
   const isClaimed = normStatus === 'completed' || normStatus === 'issued' || Boolean(request.is_claimed) || Boolean(request.claimed_at);
   const isRejected = normStatus === 'rejected' || normStatus === 'declined';
-  const isReady = (normStatus === 'ready_for_pickup' || normStatus === 'approved') && !isClaimed && !isRejected;
+  const isCancelled = normStatus === 'cancelled';
+  const isReady = (normStatus === 'ready_for_pickup' || normStatus === 'approved') && !isClaimed && !isRejected && !isCancelled;
   const isUnderReview = normStatus === 'under_review' || normStatus === 'processing';
   const isCompleted = isClaimed;
+  const canCancel = !isClaimed && !isRejected && !isCancelled && normStatus !== 'completed' && normStatus !== 'issued';
 
   const declineReasonText = request.declined_reason || request.rejection_reason || 'Missing valid proof of residency.';
   const declineDetailsText = request.declined_details || '';
@@ -71,21 +76,25 @@ export default function RequestTrackingModal({
       status: 'under_review',
       label: 'Under Review',
       description: 'Barangay staff is reviewing resident information and verifying submitted documents.',
-      timestamp: (isUnderReview || isReady || isCompleted || isRejected) ? (request.updated_at ? new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'In Review') : 'Pending Staff Review',
+      timestamp: (isUnderReview || isReady || isCompleted || isRejected || isCancelled) ? (request.updated_at ? new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'In Review') : 'Pending Staff Review',
       is_completed: isUnderReview || isReady || isCompleted || isRejected,
-      is_current: isUnderReview && !isRejected,
+      is_current: isUnderReview && !isRejected && !isCancelled,
     },
     {
-      status: 'ready_for_pickup',
-      label: isRejected ? 'Request Declined' : 'Ready for Pick up',
-      description: isRejected
+      status: isCancelled ? 'cancelled' : 'ready_for_pickup',
+      label: isCancelled ? 'Request Cancelled' : isRejected ? 'Request Declined' : 'Ready for Pick up',
+      description: isCancelled
+        ? 'Document request was cancelled by the resident.'
+        : isRejected
         ? (request.declined_reason || 'Application declined due to incomplete or invalid requirements.')
         : `Document printed, sealed, and approved for pickup at Express Window (${request.pickup_time_slot || 'Regular Office Hours'}).`,
-      timestamp: (isReady || isCompleted || isRejected)
+      timestamp: isCancelled
+        ? 'Cancelled'
+        : (isReady || isCompleted || isRejected)
         ? (isRejected ? 'Declined' : (request.approved_at ? new Date(request.approved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : (request.pickup_date || 'Approved')))
         : `Scheduled for ${request.pickup_date || 'Pickup'}`,
-      is_completed: isReady || isCompleted || isRejected,
-      is_current: isReady || isRejected,
+      is_completed: isReady || isCompleted || isRejected || isCancelled,
+      is_current: isReady || isRejected || isCancelled,
     },
     {
       status: 'completed',
@@ -184,6 +193,26 @@ export default function RequestTrackingModal({
                     <ArrowRight size={14} color="#ffffff" />
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* CANCELLED REQUEST CARD */}
+            {isCancelled && (
+              <View style={styles.cancelledCard}>
+                <View style={styles.cancelledHeader}>
+                  <XCircle size={22} color="#64748b" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cancelledTitle}>Document Request Cancelled</Text>
+                    <Text style={styles.cancelledSubtitle}>
+                      This application was cancelled by the resident applicant. The request has been archived under your request history.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.cancelledMetaBox}>
+                  <Text style={styles.cancelledMetaLine}>
+                    Date Cancelled: <Text style={{ fontWeight: '700' }}>{request.updated_at ? new Date(request.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Cancelled'}</Text>
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -442,12 +471,64 @@ export default function RequestTrackingModal({
 
           {/* Footer */}
           <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.closeModalBtn} onPress={onClose}>
-              <Text style={styles.closeModalBtnText}>Close Tracking</Text>
-            </TouchableOpacity>
+            <View style={styles.modalFooterRow}>
+              {canCancel && onCancelRequest ? (
+                <TouchableOpacity
+                  style={styles.cancelRequestBtn}
+                  onPress={() => setShowCancelConfirm(true)}
+                  activeOpacity={0.8}
+                >
+                  <XCircle size={15} color="#dc2626" />
+                  <Text style={styles.cancelRequestBtnText}>Cancel Request</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.closeModalBtn, canCancel && onCancelRequest ? styles.closeModalBtnFlex : null]}
+                onPress={onClose}
+              >
+                <Text style={styles.closeModalBtnText}>Close Tracking</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
+
+      {/* Confirmation Modal for Request Cancellation */}
+      {showCancelConfirm && (
+        <Modal visible={true} transparent animationType="fade" onRequestClose={() => setShowCancelConfirm(false)}>
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmBox}>
+              <View style={styles.confirmIconCircle}>
+                <AlertTriangle size={26} color="#dc2626" />
+              </View>
+              <Text style={styles.confirmTitle}>Cancel Document Request?</Text>
+              <Text style={styles.confirmMessage}>
+                Are you sure you want to cancel your request for "{request.document_title}" (Ref: {request.tracking_number})?
+                {'\n\n'}
+                This request will be deleted from your active queue and stored under your request history.
+              </Text>
+              <View style={styles.confirmBtnRow}>
+                <TouchableOpacity
+                  style={styles.confirmCancelBtn}
+                  onPress={() => setShowCancelConfirm(false)}
+                >
+                  <Text style={styles.confirmCancelBtnText}>Keep Request</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmProceedBtn}
+                  onPress={() => {
+                    setShowCancelConfirm(false);
+                    onCancelRequest?.(request);
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.confirmProceedBtnText}>Yes, Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Modal>
   );
 }
@@ -861,15 +942,147 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
+  modalFooterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  cancelRequestBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1.5,
+    borderColor: '#fca5a5',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  cancelRequestBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#b91c1c',
+  },
   closeModalBtn: {
     backgroundColor: '#f1f5f9',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
+  closeModalBtnFlex: {
+    flex: 1,
+  },
   closeModalBtnText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#475569',
+  },
+  cancelledCard: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 8,
+  },
+  cancelledHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  cancelledTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  cancelledSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  cancelledMetaBox: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  cancelledMetaLine: {
+    fontSize: 11,
+    color: '#475569',
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    maxWidth: 400,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+  },
+  confirmIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#fef2f2',
+    borderWidth: 2,
+    borderColor: '#fecaca',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmMessage: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmProceedBtn: {
+    flex: 1,
+    backgroundColor: '#dc2626',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmProceedBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

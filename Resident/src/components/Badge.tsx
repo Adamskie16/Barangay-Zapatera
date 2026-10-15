@@ -64,6 +64,14 @@ export default function Badge({ status, size = 'md' }: BadgeProps) {
           text: '#991b1b',
           icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>🔴</Text>,
         };
+      case 'cancelled':
+        return {
+          label: 'Cancelled',
+          bg: '#f1f5f9',
+          border: '#cbd5e1',
+          text: '#64748b',
+          icon: <Text style={{ fontSize: size === 'sm' ? 9 : 11 }}>⚪</Text>,
+        };
       default:
         return {
           label: status,

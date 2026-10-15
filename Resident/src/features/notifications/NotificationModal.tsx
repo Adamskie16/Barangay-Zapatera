@@ -148,11 +148,11 @@ export default function NotificationModal({
           </View>
 
           {/* Mark all as read bar */}
-          {unreadCount > 0 && (
+          {notifications.length > 0 && (
             <View style={styles.markAllBar}>
               <TouchableOpacity style={styles.markAllBtn} onPress={onMarkAllAsRead}>
                 <CheckCheck size={14} color="#1d4ed8" />
-                <Text style={styles.markAllBtnText}>Mark all as read</Text>
+                <Text style={styles.markAllBtnText}>Mark all as read (Clear all)</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -190,7 +190,20 @@ export default function NotificationModal({
                       {!notif.is_read && <View style={styles.unreadDot} />}
                     </View>
                     <Text style={styles.notifMessage}>{notif.message}</Text>
-                    <Text style={styles.notifTime}>{notif.created_at}</Text>
+                    <View style={styles.notifFooterRow}>
+                      <Text style={styles.notifTime}>{notif.created_at}</Text>
+                      <TouchableOpacity
+                        style={styles.markAsReadBtn}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          onMarkAsRead(notif.id);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <CheckCircle2 size={12} color="#1d4ed8" />
+                        <Text style={styles.markAsReadBtnText}>Mark as read</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))
@@ -348,7 +361,29 @@ const styles = StyleSheet.create({
   notifTime: {
     fontSize: 10,
     color: '#94a3b8',
-    marginTop: 4,
+  },
+  notifFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc',
+  },
+  markAsReadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    backgroundColor: '#eff6ff',
+  },
+  markAsReadBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1d4ed8',
   },
   emptyBox: {
     alignItems: 'center',

@@ -223,18 +223,21 @@ export default function ResidentDashboard({
       </View>
 
 
-      {/* Official Barangay Documents (Live from Supabase CMS) */}
-      {docTypes && docTypes.length > 0 && (
-        <>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeading}>Official Barangay Documents</Text>
-            <TouchableOpacity onPress={() => onNavigateTab('documents')}>
-              <Text style={styles.seeAllText}>View All ({docTypes.length}) →</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docTypesScroll}>
-            {docTypes.map((doc) => (
-              <View key={doc.id} style={styles.docTypeCard}>
+      {/* Official Barangay Documents (Live from Supabase CMS / Document Information Management) */}
+      {(() => {
+        const availableDocTypes = (docTypes || []).filter((doc) => doc.is_active !== false && (doc as any).is_available !== false);
+        if (availableDocTypes.length === 0) return null;
+        return (
+          <>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeading}>Official Barangay Documents</Text>
+              <TouchableOpacity onPress={() => onNavigateTab('documents')}>
+                <Text style={styles.seeAllText}>View All ({availableDocTypes.length}) →</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docTypesScroll}>
+              {availableDocTypes.map((doc) => (
+                <View key={doc.id} style={styles.docTypeCard}>
                 <View style={styles.docTypeHeader}>
                   <View style={styles.docIconBox}>
                     <FileText size={18} color="#1d4ed8" />
@@ -265,7 +268,8 @@ export default function ResidentDashboard({
             ))}
           </ScrollView>
         </>
-      )}
+      );
+    })()}
 
       {/* Recent Announcements Section */}
       <View style={styles.sectionHeaderRow}>

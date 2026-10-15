@@ -91,7 +91,10 @@ export type RequestStatus =
   | 'processing'
   | 'ready_for_pickup'
   | 'completed'
-  | 'rejected';
+  | 'rejected'
+  | 'declined'
+  | 'cancelled'
+  | 'issued';
 
 export interface UploadedRequirementFile {
   requirement_name: string;

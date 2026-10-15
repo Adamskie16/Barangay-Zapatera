@@ -42,6 +42,7 @@ const HISTORY_STATUS_FILTERS: { label: string; value: string }[] = [
   { label: 'All History', value: 'all' },
   { label: 'Claimed Documents', value: 'claimed' },
   { label: 'Declined', value: 'declined' },
+  { label: 'Cancelled', value: 'cancelled' },
 ];
 
 export default function MyRequestsView({
@@ -58,14 +59,27 @@ export default function MyRequestsView({
     return r.status === 'issued' || r.status === 'completed' || !!r.is_claimed;
   };
 
-  // Filter Active vs Request History (Claimed / Completed / Declined)
-  const activeRequestsList = requests.filter(
-    (r) => !isClaimed(r) && r.status !== 'rejected' && r.status !== 'declined'
-  );
+  // Filter Active vs Request History (Claimed / Completed / Declined / Cancelled)
+  const activeRequestsList = requests
+    .filter(
+      (r) => !isClaimed(r) && r.status !== 'rejected' && r.status !== 'declined' && r.status !== 'cancelled'
+    )
+    .sort((a, b) => {
+      const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
+      return timeB - timeA;
+    });
 
-  const historyRequestsList = requests.filter(
-    (r) => isClaimed(r) || r.status === 'rejected' || r.status === 'declined'
-  );
+  // History sorted from the most recent ones
+  const historyRequestsList = requests
+    .filter(
+      (r) => isClaimed(r) || r.status === 'rejected' || r.status === 'declined' || r.status === 'cancelled'
+    )
+    .sort((a, b) => {
+      const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
+      const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
+      return timeB - timeA;
+    });
 
   const baseList = activeTab === 'active' ? activeRequestsList : historyRequestsList;
   const currentFilters = activeTab === 'active' ? ACTIVE_STATUS_FILTERS : HISTORY_STATUS_FILTERS;
@@ -84,6 +98,8 @@ export default function MyRequestsView({
         matchesStatus = claimed;
       } else if (statusFilter === 'declined') {
         matchesStatus = normStatus === 'declined' || normStatus === 'rejected';
+      } else if (statusFilter === 'cancelled') {
+        matchesStatus = normStatus === 'cancelled';
       } else if (statusFilter === 'pending') {
         matchesStatus = (normStatus === 'pending' || normStatus === 'under_review') && !claimed;
       } else if (statusFilter === 'processing') {
@@ -182,6 +198,7 @@ export default function MyRequestsView({
           filteredRequests.map((req) => {
             const claimed = isClaimed(req);
             const isDeclined = req.status === 'declined' || req.status === 'rejected';
+            const isCancelled = req.status === 'cancelled';
             const isApproved = (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
             const declineReasonText = req.declined_details || req.declined_reason || req.rejection_reason || 'Missing required residency documents or incomplete attachments.';
             const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -195,6 +212,7 @@ export default function MyRequestsView({
                   isApproved && styles.requestCardReady,
                   claimed && styles.requestCardClaimed,
                   isDeclined && styles.requestCardRejected,
+                  isCancelled && styles.requestCardCancelled,
                 ]}
                 onPress={() => onViewRequestDetails(req)}
                 activeOpacity={0.8}
@@ -233,6 +251,16 @@ export default function MyRequestsView({
                   </View>
                 )}
 
+                {/* Cancelled Box */}
+                {isCancelled && (
+                  <View style={styles.cancelledHighlightBanner}>
+                    <AlertTriangle size={14} color="#64748b" />
+                    <Text style={styles.cancelledHighlightText}>
+                      Request Cancelled by Resident.
+                    </Text>
+                  </View>
+                )}
+
                 {/* 6. Resident-Side Declined Notification Box */}
                 {isDeclined && (
                   <View style={styles.declinedDetailedBox}>
@@ -267,7 +295,7 @@ export default function MyRequestsView({
                   </Text>
                   <View style={styles.viewDetailsBtn}>
                     <Text style={styles.viewDetailsBtnText}>
-                      {claimed ? 'View Release Details' : isDeclined ? 'View Decline Details' : isApproved ? 'View Claim Pass' : 'Track Progress'}
+                      {claimed ? 'View Release Details' : isDeclined ? 'View Decline Details' : isCancelled ? 'View Details' : isApproved ? 'View Claim Pass' : 'Track Progress'}
                     </Text>
                     <ArrowRight size={13} color="#1d4ed8" />
                   </View>
@@ -440,6 +468,11 @@ const styles = StyleSheet.create({
   requestCardRejected: {
     borderColor: '#fca5a5',
   },
+  requestCardCancelled: {
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    opacity: 0.9,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -518,6 +551,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#15803d',
+    flex: 1,
+  },
+  cancelledHighlightBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f1f5f9',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  cancelledHighlightText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
     flex: 1,
   },
   rejectedBanner: {

@@ -463,92 +463,66 @@ export default function RequestFlowModal({
             {currentStep === 1 && (
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>
-                  {showDocSelector ? 'Select Document & Purpose' : 'Document & Request Purpose'}
+                  Select Document & Purpose
                 </Text>
                 <Text style={styles.stepSubtitle}>
-                  {showDocSelector
-                    ? 'Select from available barangay clearance certificates and provide the official purpose of this application.'
-                    : 'Please review your requested document and provide the official purpose of this application.'}
+                  Choose from available official documents and provide the purpose of your application.
                 </Text>
 
-                {/* Available Document Selection (When opened from Requests Page) */}
-                {showDocSelector ? (
-                  <View style={{ marginBottom: 14 }}>
-                    <Text style={styles.inputLabel}>Available Documents *</Text>
-                    <View style={{ gap: 8, marginTop: 6 }}>
-                      {docTypes.map((dt) => {
-                        const isSelected = selectedDoc.id === dt.id;
-                        return (
-                          <TouchableOpacity
-                            key={dt.id}
-                            style={[
-                              styles.docSelectCard,
-                              isSelected && styles.docSelectCardActive,
-                            ]}
-                            onPress={() => setSelectedDocId(dt.id)}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.docSelectCardLeft}>
-                              <View
-                                style={[
-                                  styles.radioOuter,
-                                  isSelected && styles.radioOuterActive,
-                                ]}
-                              >
-                                {isSelected && <View style={styles.radioInner} />}
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={[
-                                    styles.docSelectTitle,
-                                    isSelected && styles.docSelectTitleActive,
-                                  ]}
-                                >
-                                  {dt.title}
-                                </Text>
-                                {dt.description ? (
-                                  <Text style={styles.docSelectDesc} numberOfLines={2}>
-                                    {dt.description}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            </View>
-                            <View style={styles.docSelectCardRight}>
-                              <Text
-                                style={[
-                                  styles.docSelectFee,
-                                  isSelected && styles.docSelectFeeActive,
-                                ]}
-                              >
-                                {dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)}
-                              </Text>
-                              <Text style={styles.docSelectTime}>
-                                {dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                {/* Available Documents Dropbox Filter */}
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={styles.inputLabel}>Available Documents (Select from List) *</Text>
+                  <View style={{
+                    marginTop: 6,
+                    borderWidth: 1.5,
+                    borderColor: '#93c5fd',
+                    backgroundColor: '#eff6ff',
+                    borderRadius: 12,
+                    padding: 4,
+                  }}>
+                    <select
+                      value={selectedDoc.id}
+                      onChange={(e) => setSelectedDocId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: '700',
+                        color: '#1e3a8a',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {docTypes
+                        .filter((dt) => dt.is_active !== false && (dt as any).is_available !== false)
+                        .map((dt) => (
+                          <option key={dt.id} value={dt.id}>
+                            {dt.title} — {dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)} ({dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'})
+                          </option>
+                        ))}
+                    </select>
                   </View>
-                ) : (
-                  /* Single Pre-Selected Document Card (When opened from Dashboard or Catalog) */
-                  <View style={styles.selectedDocCard}>
-                    <View style={styles.selectedDocHeader}>
-                      <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
-                      <Text style={styles.selectedDocFee}>
-                        {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
-                      </Text>
-                    </View>
-                    <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
-                    <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Clock size={12} color="#1d4ed8" />
-                      <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
-                        Standard Processing Time: {selectedDoc.processing_days || 1} Working Day
-                      </Text>
-                    </View>
+                </View>
+
+                {/* Selected Document Overview Card */}
+                <View style={styles.selectedDocCard}>
+                  <View style={styles.selectedDocHeader}>
+                    <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
+                    <Text style={styles.selectedDocFee}>
+                      {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
+                    </Text>
                   </View>
-                )}
+                  <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
+                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Clock size={12} color="#1d4ed8" />
+                    <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
+                      Standard Processing Time: {selectedDoc.processing_days || 1} Working Day{Number(selectedDoc.processing_days) > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                </View>
 
                 {/* Purpose of Request - Manual Text Input Field */}
                 <View style={{ marginTop: 14 }}>

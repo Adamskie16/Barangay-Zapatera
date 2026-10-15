@@ -937,7 +937,48 @@ export default function App() {
       }
     }
 
-    const userNotifsKey = `zapatera_notifications_db_${authUserId || user.email}`;
+    const userScope = authUserId || user.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+    const userErasedKey = `zapatera_erased_notifs_${userScope}`;
+
+    // Load account-specific erased notification IDs
+    const erasedIds = new Set<string>();
+    try {
+      const erasedRaw = await MobileStorage.getItem(userErasedKey);
+      if (erasedRaw) {
+        const parsed = JSON.parse(erasedRaw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((id: string) => erasedIds.add(id));
+        }
+      }
+    } catch {}
+
+    // Check for declined requests to generate notifications for this account
+    const declinedNotifications: ResidentNotification[] = [];
+    try {
+      const userRequestsKey = `zapatera_requests_db_${userScope}`;
+      const storedReqs = await MobileStorage.getItem(userRequestsKey);
+      const reqList: DocumentRequest[] = storedReqs ? JSON.parse(storedReqs) : [];
+      reqList.forEach((req) => {
+        const normStatus = (req.status || '').toLowerCase();
+        if (normStatus === 'declined' || normStatus === 'rejected') {
+          const declinedNotifId = `declined-req-${req.id || req.tracking_number}`;
+          if (!erasedIds.has(declinedNotifId)) {
+            const reason = req.declined_reason || req.rejection_reason || req.declined_details || 'Requirements did not meet verification criteria.';
+            declinedNotifications.push({
+              id: declinedNotifId,
+              user_id: authUserId,
+              title: 'Document Request Declined ❌',
+              message: `Your request for ${req.document_title} (Ref: ${req.tracking_number}) has been declined. Reason: ${reason}`,
+              type: 'rejected',
+              is_read: false,
+              link_tab: 'requests',
+              created_at: req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            });
+          }
+        }
+      });
+    } catch {}
 
     try {
       if (isSupabaseConfigured() && authUserId) {
@@ -955,18 +996,34 @@ export default function App() {
 
         const { data, error } = await query;
         if (!error && Array.isArray(data)) {
-          const formatted: ResidentNotification[] = data.map((n: any) => ({
-            id: n.id,
-            user_id: n.user_id || authUserId,
-            title: n.title,
-            message: n.message,
-            type: n.type || 'info',
-            is_read: n.is_read || false,
-            link_tab: (n.link_tab as any) || (n.type === 'announcement' || n.type === 'warning' ? 'announcements' : 'requests'),
-            created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          }));
-          setNotifications(formatted);
-          await MobileStorage.setItem(userNotifsKey, JSON.stringify(formatted));
+          const formatted: ResidentNotification[] = data
+            .filter((n: any) => !erasedIds.has(n.id))
+            .map((n: any) => ({
+              id: n.id,
+              user_id: n.user_id || authUserId,
+              title: n.title,
+              message: n.message,
+              type: n.type || 'info',
+              is_read: n.is_read || false,
+              link_tab: (n.link_tab as any) || (n.type === 'announcement' || n.type === 'warning' ? 'announcements' : 'requests'),
+              created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            }));
+
+          // Merge with declined notifications
+          const map = new Map<string, ResidentNotification>();
+          formatted.forEach((n) => map.set(n.id, n));
+          declinedNotifications.forEach((n) => {
+            if (!map.has(n.id)) map.set(n.id, n);
+          });
+
+          const combined = Array.from(map.values()).sort((a, b) => {
+            const timeA = new Date(a.created_at || 0).getTime();
+            const timeB = new Date(b.created_at || 0).getTime();
+            return timeB - timeA;
+          });
+
+          setNotifications(combined);
+          await MobileStorage.setItem(userNotifsKey, JSON.stringify(combined));
           return;
         }
       }
@@ -983,12 +1040,20 @@ export default function App() {
       const genList: ResidentNotification[] = genStored ? JSON.parse(genStored) : [];
 
       const map = new Map<string, ResidentNotification>();
-      userList.forEach((n) => map.set(n.id, n));
+      userList.forEach((n) => {
+        if (!erasedIds.has(n.id)) map.set(n.id, n);
+      });
       genList.forEach((n) => {
-        if (!map.has(n.id)) {
+        if (!map.has(n.id) && !erasedIds.has(n.id)) {
           map.set(n.id, n);
         }
       });
+      declinedNotifications.forEach((n) => {
+        if (!map.has(n.id) && !erasedIds.has(n.id)) {
+          map.set(n.id, n);
+        }
+      });
+
       const combined = Array.from(map.values()).sort((a, b) => {
         const timeA = new Date(a.created_at || 0).getTime();
         const timeB = new Date(b.created_at || 0).getTime();
@@ -996,7 +1061,7 @@ export default function App() {
       });
       setNotifications(combined);
     } catch {
-      setNotifications([]);
+      setNotifications(declinedNotifications);
     }
   };
 
@@ -1370,43 +1435,155 @@ export default function App() {
     setIsTrackingModalOpen(true);
   };
 
-  const handleMarkAsRead = async (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+  const handleCancelRequest = async (req: DocumentRequest) => {
+    if (!currentUser || !req) return;
+    const authUserId = currentUser.id;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userRequestsKey = `zapatera_requests_db_${userScope}`;
+
+    const updatedReq: DocumentRequest = {
+      ...req,
+      status: 'cancelled',
+      updated_at: new Date().toISOString(),
+      notes: (req.notes ? `${req.notes} | ` : '') + 'Request cancelled by resident',
+      timeline: [
+        ...(req.timeline || []).map((t) => ({ ...t, is_current: false })),
+        {
+          status: 'cancelled',
+          label: 'Request Cancelled',
+          description: 'Document request cancelled by resident.',
+          timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          is_completed: true,
+          is_current: true,
+        },
+      ],
+    };
+
+    // 1. Update active requests state
+    setRequests((prev) =>
+      prev.map((r) => (r.id === req.id || r.tracking_number === req.tracking_number ? updatedReq : r))
     );
+    setSelectedRequestForTracking(updatedReq);
+
+    // 2. Persist update in account-scoped local storage
+    try {
+      const stored = await MobileStorage.getItem(userRequestsKey);
+      if (stored) {
+        const list = JSON.parse(stored);
+        const updatedList = list.map((r: DocumentRequest) =>
+          r.id === req.id || r.tracking_number === req.tracking_number ? updatedReq : r
+        );
+        await MobileStorage.setItem(userRequestsKey, JSON.stringify(updatedList));
+      }
+    } catch {}
+
+    // 3. Update status in Supabase document_requests table
+    try {
+      if (isSupabaseConfigured()) {
+        const payload: any = {
+          status: 'cancelled',
+          updated_at: new Date().toISOString(),
+        };
+        if (req.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id)) {
+          await supabase.from('document_requests').update(payload).eq('id', req.id);
+        } else if (req.tracking_number) {
+          await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+        }
+      }
+    } catch (err) {
+      console.warn('Error updating cancelled request in Supabase:', err);
+    }
+
+    // 4. Broadcast live update across tabs
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUEST_UPDATED',
+          request: updatedReq,
+        });
+        bc.close();
+      } catch {}
+    }
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    // 1. Erase notification data immediately for this resident account
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+
     if (!currentUser) return;
     const authUserId = currentUser.id;
-    const userNotifsKey = `zapatera_notifications_db_${authUserId || currentUser.email}`;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+    const userErasedKey = `zapatera_erased_notifs_${userScope}`;
+
     try {
+      // 2. Store erased notification ID in account-specific registry so it is never recreated
+      let erasedList: string[] = [];
+      const erasedRaw = await MobileStorage.getItem(userErasedKey);
+      if (erasedRaw) {
+        try { erasedList = JSON.parse(erasedRaw); } catch {}
+      }
+      if (!erasedList.includes(id)) {
+        erasedList.push(id);
+        await MobileStorage.setItem(userErasedKey, JSON.stringify(erasedList));
+      }
+
+      // 3. Erase from account-scoped notifications storage
       const stored = await MobileStorage.getItem(userNotifsKey);
       if (stored) {
         const parsed = JSON.parse(stored);
-        const updated = parsed.map((n: any) => (n.id === id ? { ...n, is_read: true } : n));
+        const updated = parsed.filter((n: any) => n.id !== id);
         await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
       }
+
+      // 4. In Supabase: delete or mark read for this specific account
       if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-        await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+        try {
+          await supabase.from('notifications').delete().eq('id', id);
+        } catch {
+          try {
+            await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+          } catch {}
+        }
       }
     } catch {}
   };
 
   const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    const idsToErase = notifications.map((n) => n.id);
+    // 1. Erase all notifications from state for this resident account
+    setNotifications([]);
+
     if (!currentUser) return;
     const authUserId = currentUser.id;
-    const userNotifsKey = `zapatera_notifications_db_${authUserId || currentUser.email}`;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+    const userErasedKey = `zapatera_erased_notifs_${userScope}`;
+
     try {
-      const stored = await MobileStorage.getItem(userNotifsKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const updated = parsed.map((n: any) => ({ ...n, is_read: true }));
-        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      // 2. Persist all erased IDs to account-specific erased registry
+      let erasedList: string[] = [];
+      const erasedRaw = await MobileStorage.getItem(userErasedKey);
+      if (erasedRaw) {
+        try { erasedList = JSON.parse(erasedRaw); } catch {}
       }
+      idsToErase.forEach((id) => {
+        if (!erasedList.includes(id)) erasedList.push(id);
+      });
+      await MobileStorage.setItem(userErasedKey, JSON.stringify(erasedList));
+
+      // 3. Wipe account-scoped notifications storage
+      await MobileStorage.setItem(userNotifsKey, JSON.stringify([]));
+
+      // 4. Update Supabase
       if (isSupabaseConfigured() && authUserId) {
-        await supabase
-          .from('notifications')
-          .update({ is_read: true })
-          .or(`user_id.eq.${authUserId},role_target.eq.resident`);
+        try {
+          await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .or(`user_id.eq.${authUserId},role_target.eq.resident`);
+        } catch {}
       }
     } catch {}
   };
@@ -1682,6 +1859,7 @@ export default function App() {
           setIsTrackingModalOpen(false);
           handleOpenRequestFlow(req.document_type_id);
         }}
+        onCancelRequest={handleCancelRequest}
       />
 
       {/* 4. Notification Center Modal */}
