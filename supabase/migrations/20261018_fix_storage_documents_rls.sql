@@ -30,10 +30,7 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = 20971520,
   allowed_mime_types = NULL;
 
--- Step 2: Ensure Row Level Security is active on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
--- Step 3: Clean up all legacy / restrictive / dashboard-generated policies for 'documents'
+-- Step 2: Clean up all legacy / restrictive / dashboard-generated policies for 'documents'
 DROP POLICY IF EXISTS "Resident Read Own Documents" ON storage.objects;
 DROP POLICY IF EXISTS "Resident Upload Own Documents" ON storage.objects;
 DROP POLICY IF EXISTS "Resident Update Own Documents" ON storage.objects;
