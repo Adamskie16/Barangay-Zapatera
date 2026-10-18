@@ -132,7 +132,11 @@ export default function RequirementsModal({
 
     return rawList
       .map((r) => (typeof r === 'string' ? r.trim() : ''))
-      .filter(Boolean)
+      .filter((r) => {
+        if (!r) return false;
+        const s = r.toLowerCase();
+        return s !== 'none' && !s.includes('no required document') && !s.startsWith('none (');
+      })
       .map((reqName, idx) => ({
         id: `req-${activeDoc.id || activeDoc.code}-${idx}`,
         name: reqName,

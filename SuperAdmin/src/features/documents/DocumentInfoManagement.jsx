@@ -26,6 +26,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
   const [statusFilter, setStatusFilter] = useState('all');
 
   const STANDARD_REQUIRED_DOCS = [
+    'No Required Documents (None)',
     'Valid Government-Issued ID (PhilSys / Driver\'s License / Passport / UMID)',
     'Proof of Residency (Utility Bill / Lease Contract / Certificate of Tenancy)',
     'Community Tax Certificate (Cedula)',
@@ -61,10 +62,17 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
     }
     const cleanList = list.map((r) => (typeof r === 'string' ? r.trim() : '')).filter(Boolean);
 
-    if (cleanList.length === 0) {
+    // If cleanList is empty or explicitly contains "None" / "No Required Documents", return No Required Documents option
+    if (
+      cleanList.length === 0 ||
+      (cleanList.length === 1 && (
+        cleanList[0].toLowerCase().includes('no required document') ||
+        cleanList[0].toLowerCase() === 'none' ||
+        cleanList[0].toLowerCase().startsWith('none (')
+      ))
+    ) {
       return [
-        { id: `req-init-1`, selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
-        { id: `req-init-2`, selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+        { id: `req-none-${Date.now()}`, selectedOption: 'No Required Documents (None)', customText: '' },
       ];
     }
 
@@ -92,24 +100,28 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
     fee: 0,
     processing_days: 1,
     requirementsList: [
-      { id: 'req-init-1', selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
-      { id: 'req-init-2', selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+      { id: 'req-init-1', selectedOption: 'No Required Documents (None)', customText: '' },
     ],
     is_active: true,
   });
 
   const handleAddRequirement = () => {
-    setFormData((prev) => ({
-      ...prev,
-      requirementsList: [
-        ...prev.requirementsList,
-        {
-          id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          selectedOption: STANDARD_REQUIRED_DOCS[0],
-          customText: '',
-        },
-      ],
-    }));
+    setFormData((prev) => {
+      const filtered = prev.requirementsList.filter(
+        (item) => item.selectedOption !== 'No Required Documents (None)'
+      );
+      return {
+        ...prev,
+        requirementsList: [
+          ...filtered,
+          {
+            id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            selectedOption: STANDARD_REQUIRED_DOCS[1] || 'Valid Government-Issued ID (PhilSys / Driver\'s License / Passport / UMID)',
+            customText: '',
+          },
+        ],
+      };
+    });
   };
 
   const handleRemoveRequirement = (id) => {
@@ -164,8 +176,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       fee: 0,
       processing_days: 1,
       requirementsList: [
-        { id: `req-create-1`, selectedOption: STANDARD_REQUIRED_DOCS[0], customText: '' },
-        { id: `req-create-2`, selectedOption: STANDARD_REQUIRED_DOCS[1], customText: '' },
+        { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
       ],
       is_active: true,
     });
@@ -193,6 +204,9 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
 
     const requirementsList = formData.requirementsList
       .map((item) => {
+        if (item.selectedOption === 'No Required Documents (None)') {
+          return null;
+        }
         if (item.selectedOption === 'Other / Custom Document...') {
           return item.customText.trim();
         }
@@ -360,19 +374,23 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <ul className="space-y-1 max-w-xs">
-                            {doc.requirements?.slice(0, 2).map((req, idx) => (
-                              <li key={idx} className="flex items-center text-[11px] text-slate-600 truncate">
-                                <CheckCircle className="w-3 h-3 text-emerald-500 mr-1.5 shrink-0" />
-                                <span className="truncate">{req}</span>
-                              </li>
-                            ))}
-                            {(doc.requirements?.length || 0) > 2 && (
-                              <li className="text-[10px] text-slate-400 font-semibold pl-4">
-                                +{(doc.requirements?.length || 0) - 2} more requirement(s)
-                              </li>
-                            )}
-                          </ul>
+                          {(!doc.requirements || doc.requirements.length === 0 || (doc.requirements.length === 1 && (doc.requirements[0].toLowerCase().includes('no required document') || doc.requirements[0].toLowerCase() === 'none' || doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
+                            <span className="text-[11px] text-slate-400 italic">None required</span>
+                          ) : (
+                            <ul className="space-y-1 max-w-xs">
+                              {doc.requirements?.slice(0, 2).map((req, idx) => (
+                                <li key={idx} className="flex items-center text-[11px] text-slate-600 truncate">
+                                  <CheckCircle className="w-3 h-3 text-emerald-500 mr-1.5 shrink-0" />
+                                  <span className="truncate">{req}</span>
+                                </li>
+                              ))}
+                              {(doc.requirements?.length || 0) > 2 && (
+                                <li className="text-[10px] text-slate-400 font-semibold pl-4">
+                                  +{(doc.requirements?.length || 0) - 2} more requirement(s)
+                                </li>
+                              )}
+                            </ul>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <Badge variant={doc.is_active ? 'active' : 'inactive'}>
@@ -520,30 +538,37 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
             </div>
 
             <div className="space-y-2">
-              {formData.requirementsList.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
-                      {index + 1}
-                    </span>
-                    <div className="flex-1">
-                      <select
-                        value={item.selectedOption}
-                        onChange={(e) => handleRequirementChange(item.id, 'selectedOption', e.target.value)}
-                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
-                      >
-                        <option value="" disabled>-- Select Required Document --</option>
-                        {STANDARD_REQUIRED_DOCS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {formData.requirementsList.length > 1 && (
+              {formData.requirementsList.length === 0 ? (
+                <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
+                  <p className="text-xs font-bold text-emerald-800">No Required Documents Set</p>
+                  <p className="text-[11px] text-emerald-600 mt-0.5">
+                    Residents will not be required to attach or upload any supporting files when requesting this document.
+                  </p>
+                </div>
+              ) : (
+                formData.requirementsList.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                        {index + 1}
+                      </span>
+                      <div className="flex-1">
+                        <select
+                          value={item.selectedOption}
+                          onChange={(e) => handleRequirementChange(item.id, 'selectedOption', e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                        >
+                          <option value="" disabled>-- Select Required Document --</option>
+                          {STANDARD_REQUIRED_DOCS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleRemoveRequirement(item.id)}
@@ -552,23 +577,30 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                    </div>
+
+                    {item.selectedOption === 'No Required Documents (None)' && (
+                      <div className="pl-7 text-[11px] text-emerald-700 font-medium flex items-center space-x-1.5">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>No attachments required. Residents can submit their request without uploading files.</span>
+                      </div>
+                    )}
+
+                    {item.selectedOption === 'Other / Custom Document...' && (
+                      <div className="pl-7">
+                        <input
+                          type="text"
+                          required
+                          value={item.customText}
+                          onChange={(e) => handleRequirementChange(item.id, 'customText', e.target.value)}
+                          placeholder="Specify custom requirement name..."
+                          className="w-full px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
                     )}
                   </div>
-
-                  {item.selectedOption === 'Other / Custom Document...' && (
-                    <div className="pl-7">
-                      <input
-                        type="text"
-                        required
-                        value={item.customText}
-                        onChange={(e) => handleRequirementChange(item.id, 'customText', e.target.value)}
-                        placeholder="Specify custom requirement name..."
-                        className="w-full px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
 
               {/* Ghost Button to add more required documents */}
               <button
@@ -577,7 +609,11 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 className="w-full py-2.5 px-3 border border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/40 hover:bg-blue-50 text-blue-600 hover:text-blue-700 font-semibold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.99]"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Add More Required Documents</span>
+                <span>
+                  {formData.requirementsList.length === 0
+                    ? '+ Add Required Document'
+                    : '+ Add More Required Documents'}
+                </span>
               </button>
             </div>
           </div>

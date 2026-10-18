@@ -382,17 +382,22 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       }
 
       // 2. Update local storage & session state
-      const updatedUser = StorageService.saveUser({
-        ...currentUser,
-        role: profile.role,
+      const effectiveRole = currentUser?.role || profile.role || 'admin';
+      const cleanUpdatedUser = {
+        ...(currentUser || {}),
+        ...profile,
+        role: effectiveRole,
         full_name: profile.full_name,
         username: profile.username,
         phone: profile.phone,
         avatar_url: profile.avatar_url,
         updated_at: now,
-      });
+      };
 
-      StorageService.setCurrentUser(updatedUser);
+      if (typeof StorageService.saveUser === 'function') {
+        StorageService.saveUser(cleanUpdatedUser);
+      }
+      StorageService.setCurrentUser(cleanUpdatedUser);
 
       // Sync active sessions
       try {
@@ -404,11 +409,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               k,
               JSON.stringify({
                 ...existing,
-                full_name: profile.full_name,
-                username: profile.username,
-                phone: profile.phone,
-                avatar_url: profile.avatar_url,
-                updated_at: now,
+                ...cleanUpdatedUser,
               })
             );
           }
@@ -417,7 +418,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
       setProfile(updatedPayload);
 
-      if (onUserUpdated) onUserUpdated(updatedUser);
+      if (onUserUpdated) onUserUpdated(cleanUpdatedUser);
       setActionModal({
         isOpen: true,
         type: 'success',

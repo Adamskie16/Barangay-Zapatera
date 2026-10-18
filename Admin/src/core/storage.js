@@ -914,6 +914,35 @@ export const StorageService = {
     }
   },
 
+  getArchivedActivityLogsAsync: async () => {
+    let arcList = [];
+    try {
+      arcList = JSON.parse(localStorage.getItem('zapatera_activity_logs_archive_db') || '[]');
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .or('is_archived.eq.true,deleted_at.not.is.null')
+          .order('deleted_at', { ascending: false });
+
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const combined = [...data];
+          arcList.forEach((localItem) => {
+            if (!combined.some((c) => String(c.id) === String(localItem.id))) {
+              combined.push(localItem);
+            }
+          });
+          return combined;
+        }
+      }
+    } catch {}
+
+    return arcList;
+  },
+
   archiveNews: async (newsId, adminUser) => {
     const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
     const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
@@ -1374,16 +1403,176 @@ export const StorageService = {
     });
   },
 
+  archiveActivityLog: async (logId, adminUser, logItem = null) => {
+    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const deletedAt = new Date().toISOString();
+
+    // 1. Remove from local active logs
+    let logs = [];
+    try {
+      logs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+    } catch {}
+    const existing = logItem || logs.find((l) => String(l.id) === String(logId));
+    logs = logs.filter((l) => String(l.id) !== String(logId));
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+
+    // 2. Track deleted ID
+    try {
+      const deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+      if (!deletedIds.includes(String(logId))) {
+        deletedIds.push(String(logId));
+        localStorage.setItem('zapatera_deleted_activity_logs', JSON.stringify(deletedIds));
+      }
+    } catch {}
+
+    // 3. Add to archive db
+    const archiveItem = {
+      ...(existing || { id: logId }),
+      is_archived: true,
+      deleted_at: deletedAt,
+      deleted_by: actorId,
+      archived_by_name: actorName,
+    };
+    try {
+      const arcList = JSON.parse(localStorage.getItem('zapatera_activity_logs_archive_db') || '[]');
+      if (!arcList.some((a) => String(a.id) === String(logId))) {
+        arcList.unshift(archiveItem);
+        localStorage.setItem('zapatera_activity_logs_archive_db', JSON.stringify(arcList));
+      }
+    } catch {}
+
+    // 4. Try updating in Supabase if columns exist
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase
+          .from('activity_logs')
+          .update({
+            is_archived: true,
+            deleted_at: deletedAt,
+            deleted_by: actorId,
+          })
+          .eq('id', logId);
+      }
+    } catch {}
+
+    // 5. Broadcast channel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({ type: 'ACTIVITY_LOG_ARCHIVED', logId });
+        bc.close();
+      } catch {}
+    }
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Archived Activity Log',
+      feature: 'Archive & Trash Management',
+      details: `Soft-deleted activity log "${existing?.action || logId}" to recycling bin`,
+      level: 'warning',
+    });
+
+    return archiveItem;
+  },
+
+  restoreActivityLog: async (logId, adminUser) => {
+    let restored = null;
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_activity_logs_archive_db') || '[]');
+      const item = arcList.find((l) => String(l.id) === String(logId));
+      arcList = arcList.filter((l) => String(l.id) !== String(logId));
+      localStorage.setItem('zapatera_activity_logs_archive_db', JSON.stringify(arcList));
+
+      const deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+      const updatedDeletedIds = deletedIds.filter((id) => String(id) !== String(logId));
+      localStorage.setItem('zapatera_deleted_activity_logs', JSON.stringify(updatedDeletedIds));
+
+      if (item) {
+        restored = { ...item, is_archived: false, deleted_at: null, deleted_by: null };
+        let logs = [];
+        try {
+          logs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+        } catch {}
+        if (!logs.some((l) => String(l.id) === String(logId))) {
+          logs.unshift(restored);
+          localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
+        }
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase
+          .from('activity_logs')
+          .update({
+            is_archived: false,
+            deleted_at: null,
+            deleted_by: null,
+          })
+          .eq('id', logId);
+      }
+    } catch {}
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Restored Activity Log',
+      feature: 'Archive & Trash Management',
+      details: `Restored activity log ${logId} from recycling bin`,
+      level: 'info',
+    });
+
+    return restored;
+  },
+
+  purgeActivityLog: async (logId, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_activity_logs_archive_db') || '[]');
+      arcList = arcList.filter((l) => String(l.id) !== String(logId));
+      localStorage.setItem('zapatera_activity_logs_archive_db', JSON.stringify(arcList));
+
+      const deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+      const updatedDeletedIds = deletedIds.filter((id) => String(id) !== String(logId));
+      localStorage.setItem('zapatera_deleted_activity_logs', JSON.stringify(updatedDeletedIds));
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase.from('activity_logs').delete().eq('id', logId);
+      }
+    } catch {}
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Permanently Purged Activity Log',
+      feature: 'Archive & Trash Management',
+      details: `Permanently erased activity log ${logId} from database`,
+      level: 'danger',
+    });
+  },
+
   // AUDIT LOGS
   getLogs: () => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+      const logs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+      let deletedIds = [];
+      try {
+        deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+      } catch {}
+      const deletedSet = new Set(deletedIds.map((id) => String(id)));
+      return logs.filter((log) => !log.is_archived && !log.deleted_at && !deletedSet.has(String(log.id)));
     } catch {
       return [];
     }
   },
 
   getLogsAsync: async () => {
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+    } catch {}
+    const deletedSet = new Set(deletedIds.map((id) => String(id)));
+
     try {
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase
@@ -1392,14 +1581,16 @@ export const StorageService = {
           .order('created_at', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(data));
-          return data;
+          const activeLogs = data.filter((log) => !log.is_archived && !log.deleted_at && !deletedSet.has(String(log.id)));
+          localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(activeLogs));
+          return activeLogs;
         }
       }
     } catch {
       // fallback
     }
-    return StorageService.getLogs();
+    const localLogs = StorageService.getLogs();
+    return localLogs.filter((log) => !log.is_archived && !log.deleted_at && !deletedSet.has(String(log.id)));
   },
 
   addLog: async (log) => {
@@ -1436,6 +1627,38 @@ export const StorageService = {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]');
     } catch {
       return [];
+    }
+  },
+
+  getUsers: () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.ADMINS);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // fallback
+    }
+    return [];
+  },
+
+  saveUser: (user) => {
+    if (!user) return null;
+    try {
+      let users = StorageService.getUsers();
+      if (!Array.isArray(users)) users = [];
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      const existingIdx = users.findIndex(
+        (u) => (cleanEmail && (u.email || '').toLowerCase().trim() === cleanEmail) || (user.id && u.id === user.id)
+      );
+      if (existingIdx >= 0) {
+        users[existingIdx] = { ...users[existingIdx], ...user };
+      } else {
+        users.push(user);
+      }
+      localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
+      return user;
+    } catch (err) {
+      console.warn('StorageService.saveUser warning:', err);
+      return user;
     }
   },
 

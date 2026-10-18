@@ -114,11 +114,23 @@ export default function RequestDocumentView({
 
           <Text style={styles.sectionLabel}>2. Document Requirements</Text>
           <View style={styles.reqCard}>
-            {selectedDoc?.requirements?.map((req, idx) => (
-              <Text key={idx} style={styles.reqText}>
-                • {req}
+            {(!selectedDoc?.requirements ||
+              selectedDoc.requirements.length === 0 ||
+              (selectedDoc.requirements.length === 1 && (
+                selectedDoc.requirements[0].toLowerCase().includes('no required document') ||
+                selectedDoc.requirements[0].toLowerCase() === 'none' ||
+                selectedDoc.requirements[0].toLowerCase().startsWith('none (')
+              ))) ? (
+              <Text style={[styles.reqText, { fontStyle: 'italic', color: '#64748b' }]}>
+                • No attachments or supporting documents required for this document.
               </Text>
-            ))}
+            ) : (
+              selectedDoc.requirements.map((req, idx) => (
+                <Text key={idx} style={styles.reqText}>
+                  • {req}
+                </Text>
+              ))
+            )}
           </View>
 
           <Text style={styles.sectionLabel}>3. Purpose of Request *</Text>

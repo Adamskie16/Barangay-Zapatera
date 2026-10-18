@@ -159,16 +159,22 @@ export default function RequestFlowModal({
 
   // Requirements list normalized from selectedDoc
   const requirementsToUpload = (selectedDoc?.requirements && Array.isArray(selectedDoc.requirements) && selectedDoc.requirements.length > 0)
-    ? selectedDoc.requirements.map((r, i) => {
-        const name = typeof r === 'string' ? r : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
-        const isReq = typeof r === 'object' && 'is_required' in (r as any) ? !!(r as any).is_required : true;
-        return {
-          id: `req-${i}`,
-          name: name,
-          description: 'Original or clear digital scanned copy / camera photo',
-          is_required: isReq,
-        };
-      })
+    ? selectedDoc.requirements
+        .filter((r) => {
+          const str = typeof r === 'string' ? r : (r as any).name || (r as any).title || '';
+          const s = str.trim().toLowerCase();
+          return s && s !== 'none' && !s.includes('no required document') && !s.startsWith('none (');
+        })
+        .map((r, i) => {
+          const name = typeof r === 'string' ? r : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
+          const isReq = typeof r === 'object' && 'is_required' in (r as any) ? !!(r as any).is_required : true;
+          return {
+            id: `req-${i}`,
+            name: name,
+            description: 'Original or clear digital scanned copy / camera photo',
+            is_required: isReq,
+          };
+        })
     : (selectedDoc?.requirement_items || []);
 
   // Mandatory requirements calculation for Step 3 progress
