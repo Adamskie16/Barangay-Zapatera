@@ -63,6 +63,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS position TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS privacy_policy_accepted BOOLEAN DEFAULT true;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS failed_attempts INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_edited_at TIMESTAMPTZ;
 
 -- 2. DOCUMENT TYPES TABLE (Templates & Fees)
 CREATE TABLE IF NOT EXISTS public.document_types (
@@ -71,6 +72,8 @@ CREATE TABLE IF NOT EXISTS public.document_types (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     fee NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    fee_type TEXT NOT NULL DEFAULT 'fixed', -- 'fixed' or 'variable' (depends upon claim)
+    is_variable_fee BOOLEAN NOT NULL DEFAULT false,
     processing_days INTEGER NOT NULL DEFAULT 1,
     requirements JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -97,6 +100,16 @@ CREATE TABLE IF NOT EXISTS public.document_requests (
     processed_by UUID REFERENCES public.profiles(id),
     approved_at TIMESTAMPTZ,
     issued_at TIMESTAMPTZ,
+    is_claimed BOOLEAN DEFAULT false,
+    claimed_at TIMESTAMPTZ,
+    claimed_by_admin TEXT,
+    claimed_fee NUMERIC(10, 2) DEFAULT NULL,
+    is_variable_fee BOOLEAN DEFAULT false,
+    is_resubmitted BOOLEAN DEFAULT false,
+    resubmitted_at TIMESTAMPTZ DEFAULT NULL,
+    resubmission_count INTEGER DEFAULT 0,
+    resubmission_notes TEXT DEFAULT NULL,
+    previous_decline_reason TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -272,11 +285,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- Profiles Policies
 CREATE POLICY "Public Profiles Read" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Public Profiles Insert" ON public.profiles FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Profiles Delete" ON public.profiles FOR DELETE USING (true);
-CREATE POLICY "Users Update Own Profile" ON public.profiles FOR UPDATE USING (auth.uid() = id OR auth.uid() IS NULL);
-CREATE POLICY "SuperAdmin Admin Profile All" ON public.profiles FOR ALL USING (
-    public.is_admin_or_superadmin(auth.uid())
-);
+CREATE POLICY "Public Profiles Update" ON public.profiles FOR UPDATE USING (auth.uid() = id OR auth.uid() IS NULL OR public.get_auth_role() IN ('super_admin', 'admin')) WITH CHECK (auth.uid() = id OR auth.uid() IS NULL OR public.get_auth_role() IN ('super_admin', 'admin'));
+CREATE POLICY "Public Profiles Delete" ON public.profiles FOR DELETE USING (public.get_auth_role() IN ('super_admin', 'admin') OR auth.uid() IS NULL);
 
 -- Document Types Policies
 CREATE POLICY "Doc Types Read All" ON public.document_types FOR SELECT USING (true);

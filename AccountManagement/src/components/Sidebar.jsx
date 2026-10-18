@@ -14,9 +14,9 @@ export default function Sidebar({
 }) {
   const menuItems = [
     { id: 'accounts', label: 'User Account', icon: Users },
-    { id: 'archive', label: 'Archive & Trash', icon: Archive },
     { id: 'login_design', label: 'Login Screen Design', icon: ImageIcon },
     { id: 'logs', label: 'Activity Logs', icon: History },
+    { id: 'archive', label: 'Archive & Trash', icon: Archive },
   ];
 
   return (
@@ -84,7 +84,7 @@ export default function Sidebar({
                 }}
                 className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer group ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-400/30 font-bold'
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-600/30 ring-1 ring-blue-400/30 font-bold'
                     : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
                 }`}
               >

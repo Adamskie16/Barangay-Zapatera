@@ -1,6 +1,7 @@
 // Admin/src/core/storage.js
 import { supabase, isSupabaseConfigured } from './supabase';
 
+let isPickupEmailFunctionAvailable = true;
 
 export const isRequestDeleted = (req, deletedList) => {
   if (!req) return true;
@@ -93,27 +94,38 @@ export const StorageService = {
   saveUser: async (user) => {
     const users = StorageService.getUsers();
     const existingIndex = users.findIndex((u) => u.id === user.id || (u.email && u.email.toLowerCase() === (user.email || '').toLowerCase()));
+    let saved = { ...user };
     if (existingIndex >= 0) {
-      users[existingIndex] = { ...users[existingIndex], ...user };
+      const originalCreatedAt = users[existingIndex].created_at || user.created_at;
+      users[existingIndex] = {
+        ...users[existingIndex],
+        ...user,
+        created_at: originalCreatedAt || users[existingIndex].created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_edited_at: new Date().toISOString(),
+      };
+      saved = users[existingIndex];
     } else {
-      user.id = user.id || `adm-${Date.now()}`;
-      user.created_at = new Date().toISOString();
-      users.push(user);
+      saved.id = saved.id || `adm-${Date.now()}`;
+      saved.created_at = saved.created_at || new Date().toISOString();
+      saved.updated_at = saved.created_at;
+      users.push(saved);
     }
     localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase.from('profiles').upsert({
-          ...user,
-          updated_at: new Date().toISOString()
-        });
+        const profilePayload = { ...saved, updated_at: new Date().toISOString() };
+        if (existingIndex >= 0) {
+          delete profilePayload.created_at;
+        }
+        await supabase.from('profiles').upsert(profilePayload, { onConflict: 'email' });
       }
     } catch {
       // Ignore
     }
 
-    return user;
+    return saved;
   },
 
   // DOCUMENT TYPES (Directly maps to public.document_types)
@@ -166,6 +178,8 @@ export const StorageService = {
           title: saved.title,
           description: saved.description || '',
           fee: parseFloat(saved.fee) || 0,
+          fee_type: saved.fee_type || (saved.is_variable_fee ? 'variable' : 'fixed'),
+          is_variable_fee: Boolean(saved.is_variable_fee || saved.fee_type === 'variable'),
           processing_days: parseInt(saved.processing_days) || 1,
           requirements: Array.isArray(saved.requirements) ? saved.requirements : [],
           is_active: saved.is_active !== false,
@@ -174,7 +188,13 @@ export const StorageService = {
         if (isUuid) {
           payload.id = saved.id;
         }
-        await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+        const { error } = await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+        if (error) {
+          // Retry without fee_type and is_variable_fee in case table migration is pending
+          delete payload.fee_type;
+          delete payload.is_variable_fee;
+          await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+        }
       }
     } catch {
       // handled
@@ -333,21 +353,46 @@ export const StorageService = {
         }
         if (dbStatus === 'approved') {
           payload.approved_at = req.approved_at || new Date().toISOString();
-          payload.is_claimed = false;
+          if (req.is_claimed === false) {
+            payload.is_claimed = false;
+          }
         }
-        if (dbStatus === 'completed' || dbStatus === 'issued') {
+        if (req.claimed_by_admin) {
+          payload.claimed_by_admin = req.claimed_by_admin;
+        }
+        if (req.claimed_fee !== undefined && req.claimed_fee !== null) {
+          payload.claimed_fee = Number(req.claimed_fee);
+        }
+        if (dbStatus === 'completed' || dbStatus === 'issued' || req.is_claimed) {
           payload.issued_at = req.issued_at || req.claimed_at || new Date().toISOString();
           payload.claimed_at = req.claimed_at || req.issued_at || new Date().toISOString();
           payload.is_claimed = true;
           payload.payment_status = 'paid';
           payload.is_paid = true;
-          if (req.fee && Number(req.fee) > 0) {
-            payload.fee = Number(req.fee);
-            payload.amount_paid = Number(req.fee);
-          }
+          const finalFee = req.claimed_fee !== undefined && req.claimed_fee !== null
+            ? Number(req.claimed_fee)
+            : (req.amount_paid !== undefined && req.amount_paid !== null ? Number(req.amount_paid) : Number(req.fee || 0));
+          payload.fee = finalFee;
+          payload.amount_paid = finalFee;
+          payload.claimed_fee = finalFee;
         }
         if (dbStatus === 'declined') {
           payload.decline_reason = req.decline_reason || req.declined_reason || req.rejection_reason || 'Incomplete requirements';
+        }
+        if (req.is_resubmitted !== undefined) {
+          payload.is_resubmitted = Boolean(req.is_resubmitted);
+        }
+        if (req.resubmitted_at) {
+          payload.resubmitted_at = req.resubmitted_at;
+        }
+        if (req.resubmission_count !== undefined) {
+          payload.resubmission_count = Number(req.resubmission_count);
+        }
+        if (req.resubmission_notes) {
+          payload.resubmission_notes = req.resubmission_notes;
+        }
+        if (req.previous_decline_reason) {
+          payload.previous_decline_reason = req.previous_decline_reason;
         }
 
         let updateRes;
@@ -414,23 +459,31 @@ export const StorageService = {
         // Automated Transactional Email Notification Trigger (Dual-Path: DB Webhook + Direct Invoke Fallback)
         if (dbStatus === 'approved' || req.status === 'ready_for_pickup' || req.status === 'approved') {
           try {
-            supabase.functions.invoke('send-pickup-email', {
-              body: {
-                record: {
-                  ...req,
-                  status: req.status || dbStatus,
+            if (isPickupEmailFunctionAvailable !== false) {
+              supabase.functions.invoke('send-pickup-email', {
+                body: {
+                  record: {
+                    ...req,
+                    status: req.status || dbStatus,
+                  },
+                  old_record: existingRequest ? { status: existingRequest.status } : null,
                 },
-                old_record: existingRequest ? { status: existingRequest.status } : null,
-              },
-            }).then((res) => {
-              if (res.data?.simulated) {
-                console.log('[Pickup Email Notification] Simulated delivery:', res.data);
-              } else if (res.data?.success) {
-                console.log('[Pickup Email Notification] Dispatched successfully:', res.data);
-              }
-            }).catch((fnErr) => {
-              console.log('[Pickup Email Notification] Webhook fallback active:', fnErr?.message || fnErr);
-            });
+              }).then((res) => {
+                if (res?.error) {
+                  isPickupEmailFunctionAvailable = false;
+                  console.info('[Pickup Email Notification] Edge Function "send-pickup-email" is not deployed yet on Supabase project (HTTP 404). In-app notifications active.');
+                  return;
+                }
+                if (res.data?.simulated) {
+                  console.log('[Pickup Email Notification] Simulated delivery:', res.data);
+                } else if (res.data?.success) {
+                  console.log('[Pickup Email Notification] Dispatched successfully:', res.data);
+                }
+              }).catch(() => {
+                isPickupEmailFunctionAvailable = false;
+                console.info('[Pickup Email Notification] Edge Function "send-pickup-email" not deployed on Supabase. In-app notifications active.');
+              });
+            }
           } catch {
             // Non-blocking
           }
@@ -1111,6 +1164,16 @@ export const StorageService = {
           users.unshift(restored);
           localStorage.setItem(STORAGE_KEYS.ADMINS, JSON.stringify(users));
         }
+
+        // Also purge from zapatera_deleted_accounts so localStorage doesn't block display
+        try {
+          const delList = JSON.parse(localStorage.getItem('zapatera_deleted_accounts') || '[]');
+          if (Array.isArray(delList)) {
+            const userEmail = (item.email || '').toLowerCase().trim();
+            const cleaned = delList.filter((d) => (d.email || d).toLowerCase() !== userEmail && String(d.id || '') !== String(userId));
+            localStorage.setItem('zapatera_deleted_accounts', JSON.stringify(cleaned));
+          }
+        } catch (_) {}
       }
     } catch {}
 

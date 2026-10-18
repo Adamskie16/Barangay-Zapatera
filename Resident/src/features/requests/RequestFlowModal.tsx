@@ -348,7 +348,10 @@ export default function RequestFlowModal({
         pickup_time_slot: selectedSlot,
         status: 'pending',
         pickup_location: '2nd Floor, Barangay Hall Lobby, Rahmann St.',
-        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
+        is_variable_fee: Boolean(selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee),
+        pickup_instructions: (selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee)
+          ? `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID; the processing fee will be assessed and collected upon claiming at counter.`
+          : `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
         timeline: [
           {
             status: 'pending',
@@ -522,7 +525,7 @@ export default function RequestFlowModal({
                         .filter((dt) => dt.is_active !== false && (dt as any).is_available !== false)
                         .map((dt) => (
                           <option key={dt.id} value={dt.id}>
-                            {dt.title} — {dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)} ({dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'})
+                            {dt.title} — {dt.fee_type === 'variable' || dt.is_variable_fee ? 'Depends upon claim' : dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)} ({dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'})
                           </option>
                         ))}
                     </select>
@@ -534,7 +537,7 @@ export default function RequestFlowModal({
                   <View style={styles.selectedDocHeader}>
                     <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
                     <Text style={styles.selectedDocFee}>
-                      {selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
+                      {selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee ? 'Depends upon claim' : selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
                     </Text>
                   </View>
                   <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
@@ -1000,7 +1003,7 @@ export default function RequestFlowModal({
                     <Text style={styles.summaryMainText}>{selectedDoc.title}</Text>
                     <Text style={styles.summarySubText}>Purpose: {purpose === 'Other Official Purpose' ? customPurpose : purpose}</Text>
                     <Text style={styles.summaryFeeText}>
-                      Document Fee: <Text style={{ color: '#1d4ed8', fontWeight: '800' }}>{selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}</Text>
+                      Document Fee: <Text style={{ color: '#1d4ed8', fontWeight: '800' }}>{selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee ? 'Depends upon claim' : selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}</Text>
                     </Text>
                   </View>
 
@@ -1154,7 +1157,11 @@ export default function RequestFlowModal({
                           submittedReq.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid,
                         ]}
                       >
-                        {submittedReq.fee === 0 ? 'FREE OF CHARGE' : `${formatCurrency(submittedReq.fee)} (Pay at Counter)`}
+                        {submittedReq.is_variable_fee || submittedReq.fee_type === 'variable'
+                          ? 'FEE ASSESSED UPON CLAIM'
+                          : submittedReq.fee === 0
+                          ? 'FREE OF CHARGE'
+                          : `${formatCurrency(submittedReq.fee)} (Pay at Counter)`}
                       </Text>
                     </View>
                   </View>

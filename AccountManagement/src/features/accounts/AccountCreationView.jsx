@@ -168,6 +168,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
 
   // Security Verification Modal State (Save/Create/Edit)
   const [isSaveSecurityModalOpen, setIsSaveSecurityModalOpen] = useState(false);
@@ -283,42 +284,82 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         }
         const { data: dbProfile } = await query.maybeSingle();
         if (dbProfile) {
-          enriched = { ...enriched, ...dbProfile };
+          enriched = {
+            ...enriched,
+            ...dbProfile,
+            created_at: dbProfile.created_at || enriched.created_at,
+            updated_at: dbProfile.updated_at || enriched.updated_at,
+            last_edited_at: dbProfile.last_edited_at || enriched.last_edited_at,
+          };
         }
       } catch (err) {
         console.warn('Notice: Error fetching full resident profile:', err);
       }
     }
 
-    // 2. Fetch and merge resident signup credentials from local storage
+    // 2. Fetch and merge credentials from local storage (residents, admins, super_admins)
     try {
-      const stored = localStorage.getItem('zapatera_residents_db');
-      if (stored) {
-        const residents = JSON.parse(stored);
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      let match = null;
+
+      // Check residents db
+      const storedRes = localStorage.getItem('zapatera_residents_db');
+      if (storedRes) {
+        const residents = JSON.parse(storedRes);
         if (Array.isArray(residents)) {
-          const match = residents.find(
-            (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
-                   (r.id && r.id === user.id)
+          match = residents.find(
+            (r) => (r.email && r.email.toLowerCase() === cleanEmail) || (r.id && r.id === user.id)
           );
-          if (match && enriched.role === 'resident') {
-            enriched = {
-              ...match,
-              ...enriched,
-              first_name: enriched.first_name || match.first_name,
-              last_name: enriched.last_name || match.last_name,
-              middle_initial: enriched.middle_initial || match.middle_initial,
-              birth_date: enriched.birth_date || match.birth_date || match.birthdate,
-              civil_status: enriched.civil_status || match.civil_status,
-              sitio: enriched.sitio || match.sitio,
-              voter_status: enriched.voter_status || match.voter_status,
-              phone: enriched.phone || match.phone,
-              address: enriched.address || match.address,
-            };
-          } else if (enriched.role !== 'resident') {
-            enriched.voter_status = null;
-            enriched.sitio = null;
+        }
+      }
+
+      // If not found or user is admin/treasurer, check admins db
+      if (!match) {
+        const storedAdmins = localStorage.getItem('zapatera_admins_db');
+        if (storedAdmins) {
+          const admins = JSON.parse(storedAdmins);
+          if (Array.isArray(admins)) {
+            match = admins.find(
+              (a) => (a.email && a.email.toLowerCase() === cleanEmail) || (a.id && a.id === user.id)
+            );
           }
         }
+      }
+
+      // If still not found, check super admins db
+      if (!match) {
+        const storedSAs = localStorage.getItem('zapatera_super_admins_db');
+        if (storedSAs) {
+          const superAdmins = JSON.parse(storedSAs);
+          if (Array.isArray(superAdmins)) {
+            match = superAdmins.find(
+              (s) => (s.email && s.email.toLowerCase() === cleanEmail) || (s.id && s.id === user.id)
+            );
+          }
+        }
+      }
+
+      if (match) {
+        enriched = {
+          ...match,
+          ...enriched,
+          created_at: enriched.created_at || match.created_at,
+          updated_at: enriched.updated_at || match.updated_at,
+          last_edited_at: enriched.last_edited_at || match.last_edited_at,
+          first_name: enriched.first_name || match.first_name,
+          last_name: enriched.last_name || match.last_name,
+          middle_initial: enriched.middle_initial || match.middle_initial,
+          birth_date: enriched.birth_date || match.birth_date || match.birthdate,
+          civil_status: enriched.civil_status || match.civil_status,
+          sitio: enriched.sitio || match.sitio,
+          voter_status: enriched.voter_status || match.voter_status,
+          phone: enriched.phone || match.phone,
+          address: enriched.address || match.address,
+        };
+      }
+      if (enriched.role !== 'resident') {
+        enriched.voter_status = null;
+        enriched.sitio = null;
       }
     } catch (e) {}
 
@@ -552,13 +593,14 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           });
         }
 
-        let localResidents = [];
+        let localAccounts = [];
         try {
-          const storedRes = localStorage.getItem('zapatera_residents_db');
-          if (storedRes) {
-            const parsed = JSON.parse(storedRes);
-            if (Array.isArray(parsed)) localResidents = parsed;
-          }
+          const storedRes = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+          const storedAdm = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+          const storedSA = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+          if (Array.isArray(storedRes)) localAccounts.push(...storedRes);
+          if (Array.isArray(storedAdm)) localAccounts.push(...storedAdm);
+          if (Array.isArray(storedSA)) localAccounts.push(...storedSA);
         } catch (e) {}
 
         if (!error && supaProfiles) {
@@ -567,20 +609,26 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
           for (const p of supaProfiles) {
             const cleanEmail = (p.email || '').toLowerCase().trim();
-            const localMatch = localResidents.find(
-              (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
+            const localMatch = localAccounts.find(
+              (la) => (la.email && la.email.toLowerCase() === cleanEmail) || (la.id && la.id === p.id)
             );
-            if (localMatch && p.role === 'resident') {
-              p.first_name = p.first_name || localMatch.first_name;
-              p.last_name = p.last_name || localMatch.last_name;
-              p.middle_initial = p.middle_initial || localMatch.middle_initial;
-              p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
-              p.civil_status = p.civil_status || localMatch.civil_status;
-              p.sitio = p.sitio || localMatch.sitio;
-              p.voter_status = p.voter_status || localMatch.voter_status;
-              p.phone = p.phone || localMatch.phone;
-              p.address = p.address || localMatch.address;
-            } else if (p.role !== 'resident') {
+            if (localMatch) {
+              if (p.role === 'resident') {
+                p.first_name = p.first_name || localMatch.first_name;
+                p.last_name = p.last_name || localMatch.last_name;
+                p.middle_initial = p.middle_initial || localMatch.middle_initial;
+                p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
+                p.civil_status = p.civil_status || localMatch.civil_status;
+                p.sitio = p.sitio || localMatch.sitio;
+                p.voter_status = p.voter_status || localMatch.voter_status;
+                p.phone = p.phone || localMatch.phone;
+                p.address = p.address || localMatch.address;
+              }
+              p.created_at = p.created_at || localMatch.created_at;
+              p.updated_at = p.updated_at || localMatch.updated_at;
+              p.last_edited_at = p.last_edited_at || localMatch.last_edited_at;
+            }
+            if (p.role !== 'resident') {
               p.voter_status = null;
               p.sitio = null;
             }
@@ -775,11 +823,23 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
     try {
       if (isSupabaseConfigured()) {
-        if (editingId) {
-          const { error } = await supabase
-            .from('profiles')
-            .update(pendingUserPayload)
-            .eq('id', editingId);
+        if (editingId || editingUser) {
+          const updatePayload = {
+            ...pendingUserPayload,
+            updated_at: new Date().toISOString(),
+          };
+          // Explicitly delete created_at so editing NEVER alters or overwrites the registration date
+          delete updatePayload.created_at;
+
+          const targetId = editingId || editingUser?.id;
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+          let updateQuery = supabase.from('profiles').update(updatePayload);
+          if (isUuid) {
+            updateQuery = updateQuery.eq('id', targetId);
+          } else {
+            updateQuery = updateQuery.eq('email', pendingUserPayload.email);
+          }
+          const { error } = await updateQuery;
 
           if (error) {
             console.error('Supabase profile update error:', error);
@@ -848,6 +908,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 id: newId,
                 ...pendingUserPayload,
                 created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               },
             ],
             { onConflict: 'email' }
@@ -862,10 +923,15 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       console.error('Supabase users write notice:', err);
     }
 
+    const nowIso = new Date().toISOString();
+
     if (onSaveUser) {
       onSaveUser({
-        id: editingId || undefined,
+        id: editingId || editingUser?.id || undefined,
         ...pendingUserPayload,
+        created_at: editingUser?.created_at,
+        updated_at: nowIso,
+        last_edited_at: (editingId || editingUser) ? nowIso : undefined,
         password: formData.password || 'password123',
       });
     }
@@ -876,14 +942,23 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         let residents = storedDb ? JSON.parse(storedDb) : [];
         if (!Array.isArray(residents)) residents = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = residents.findIndex((r) => (r.email && r.email.toLowerCase() === cleanEmail) || (editingId && r.id === editingId));
+        const existingIdx = residents.findIndex(
+          (r) => (r.email && r.email.toLowerCase() === cleanEmail) ||
+                 (editingId && r.id === editingId) ||
+                 (editingUser?.id && r.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? residents[existingIdx].created_at : null) || editingUser?.created_at;
+
         const residentEntry = {
-          id: editingId || assignedId || `res-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? residents[existingIdx].id : `res-${Date.now()}`),
           ...pendingUserPayload,
+          created_at: originalCreatedAt || (existingIdx >= 0 ? residents[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? residents[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          residents[existingIdx] = { ...residents[existingIdx], ...residentEntry };
+          residents[existingIdx] = { ...residents[existingIdx], ...residentEntry, created_at: residents[existingIdx].created_at || residentEntry.created_at };
         } else {
           residents.unshift(residentEntry);
         }
@@ -899,7 +974,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           if (Array.isArray(residents)) {
             const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
             const filtered = residents.filter(
-              (r) => (r.email && r.email.toLowerCase() !== cleanEmail) && (!editingId || r.id !== editingId)
+              (r) => (r.email && r.email.toLowerCase() !== cleanEmail) && (!editingId || r.id !== editingId) && (!editingUser?.id || r.id !== editingUser.id)
             );
             localStorage.setItem('zapatera_residents_db', JSON.stringify(filtered));
           }
@@ -913,14 +988,23 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         let admins = storedAdmins ? JSON.parse(storedAdmins) : [];
         if (!Array.isArray(admins)) admins = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = admins.findIndex((a) => (a.email && a.email.toLowerCase() === cleanEmail) || (editingId && a.id === editingId));
+        const existingIdx = admins.findIndex(
+          (a) => (a.email && a.email.toLowerCase() === cleanEmail) ||
+                 (editingId && a.id === editingId) ||
+                 (editingUser?.id && a.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? admins[existingIdx].created_at : null) || editingUser?.created_at;
+
         const adminEntry = {
-          id: editingId || assignedId || `adm-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? admins[existingIdx].id : `adm-${Date.now()}`),
           ...pendingUserPayload,
+          created_at: originalCreatedAt || (existingIdx >= 0 ? admins[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? admins[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          admins[existingIdx] = { ...admins[existingIdx], ...adminEntry };
+          admins[existingIdx] = { ...admins[existingIdx], ...adminEntry, created_at: admins[existingIdx].created_at || adminEntry.created_at };
         } else {
           admins.unshift(adminEntry);
         }
@@ -936,15 +1020,24 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         let superAdmins = storedSAs ? JSON.parse(storedSAs) : [];
         if (!Array.isArray(superAdmins)) superAdmins = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = superAdmins.findIndex((s) => (s.email && s.email.toLowerCase() === cleanEmail) || (editingId && s.id === editingId));
+        const existingIdx = superAdmins.findIndex(
+          (s) => (s.email && s.email.toLowerCase() === cleanEmail) ||
+                 (editingId && s.id === editingId) ||
+                 (editingUser?.id && s.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? superAdmins[existingIdx].created_at : null) || editingUser?.created_at;
+
         const saEntry = {
-          id: editingId || assignedId || `sa-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? superAdmins[existingIdx].id : `sa-${Date.now()}`),
           ...pendingUserPayload,
           role: 'super_admin',
+          created_at: originalCreatedAt || (existingIdx >= 0 ? superAdmins[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? superAdmins[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          superAdmins[existingIdx] = { ...superAdmins[existingIdx], ...saEntry };
+          superAdmins[existingIdx] = { ...superAdmins[existingIdx], ...saEntry, created_at: superAdmins[existingIdx].created_at || saEntry.created_at };
         } else {
           superAdmins.unshift(saEntry);
         }
@@ -966,10 +1059,11 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         : pendingUserPayload.role === 'treasurer'
         ? 'Barangay Treasurer'
         : 'Resident';
-    const isNew = !editingId;
+    const isNew = !editingId && !editingUser;
 
     setIsSaveSecurityModalOpen(false);
     setEditingId(null);
+    setEditingUser(null);
     setIsModalOpen(false);
     setPendingUserPayload(null);
     setSavePasswordInput('');
@@ -992,6 +1086,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
   // 3. EDIT USER SELECTION
   function handleEdit(user) {
     setEditingId(user.id);
+    setEditingUser(user);
     setFieldErrors({});
     setFormGeneralError('');
     setShowProvisionPassword(false);
@@ -1132,6 +1227,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
   const openCreateModal = () => {
     setEditingId(null);
+    setEditingUser(null);
     setFieldErrors({});
     setFormGeneralError('');
     setShowProvisionPassword(false);
@@ -2040,8 +2136,12 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
       {/* CRUD Account Provision Form Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingId ? 'Edit User Profile & Role' : 'Create New Account'}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingId(null);
+          setEditingUser(null);
+        }}
+        title={(editingId || editingUser) ? 'Edit User Profile & Role' : 'Create New Account'}
         darkMode={isDarkMode}
       >
         <form onSubmit={handleFormSubmit} noValidate className="space-y-4 text-xs">
@@ -2297,10 +2397,10 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                       onClick={() => handleFieldChange('voter_status', 'Registered Voter')}
                       className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         formData.voter_status === 'Registered Voter'
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDarkMode
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-white border-slate-300 text-slate-700'
+                          ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                          : 'bg-white border-slate-300 text-slate-700 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
                       <Vote className="w-3.5 h-3.5" />
@@ -2311,10 +2411,10 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                       onClick={() => handleFieldChange('voter_status', 'Not Registered Voter')}
                       className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         formData.voter_status === 'Not Registered Voter'
-                          ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDarkMode
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-white border-slate-300 text-slate-700'
+                          ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                          : 'bg-white border-slate-300 text-slate-700 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
                       <Vote className="w-3.5 h-3.5 opacity-60" />
@@ -2783,7 +2883,11 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end space-x-3">
             <button
               type="button"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingId(null);
+                setEditingUser(null);
+              }}
               className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
             >
               Cancel
@@ -2902,9 +3006,27 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                         </>
                       )}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
-                    </span>
+                    {(() => {
+                      const registeredDate = viewingUser.created_at || viewingUser.registered_at || viewingUser.date_registered;
+                      const editDate = viewingUser.last_edited_at || viewingUser.updated_at;
+                      const isEdited = Boolean(
+                        viewingUser.last_edited_at ||
+                        (editDate && registeredDate && (new Date(editDate).getTime() - new Date(registeredDate).getTime() > 2000))
+                      );
+
+                      return (
+                        <div className="flex flex-col items-start sm:items-end gap-0.5 mt-0.5">
+                          <span className="text-[11px] text-slate-400">
+                            Registered: {registeredDate ? formatDate(registeredDate) : (editDate ? formatDate(editDate) : 'Not recorded')}
+                          </span>
+                          {isEdited && editDate && (
+                            <span className="text-[11px] text-slate-400">
+                              Latest Edit: {formatDate(editDate)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 

@@ -246,9 +246,9 @@ export default function DocumentCatalogView({
                       <Text style={styles.docTitle}>{doc.title}</Text>
                       <Text style={styles.docCategoryBadge}>{docCategory}</Text>
                     </View>
-                    <View style={[styles.feeBadge, doc.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid]}>
-                      <Text style={[styles.feeBadgeText, doc.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid]}>
-                        {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                    <View style={[styles.feeBadge, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeBadgePaid : (doc.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid)]}>
+                      <Text style={[styles.feeBadgeText, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeBadgeTextPaid : (doc.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid)]}>
+                        {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
                       </Text>
                     </View>
                   </View>

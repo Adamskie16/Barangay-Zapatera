@@ -1036,9 +1036,20 @@ export default function ReceiveRequestView({
                     <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
                       {/* Tracking Number */}
                       <td className="p-4">
-                        <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                          {req.tracking_number}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                            {req.tracking_number}
+                          </span>
+                          {req.is_resubmitted && (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200"
+                              title={`Resubmitted by resident${req.resubmitted_at ? ` on ${formatDate(req.resubmitted_at)}` : ''}`}
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                              <span>Resubmitted #{req.resubmission_count || 1}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Resident Applicant */}
@@ -1069,7 +1080,15 @@ export default function ReceiveRequestView({
 
                       {/* Status Badges */}
                       <td className="p-4">
-                        <Badge variant={normalizedStatus}>{normalizedStatus.replace('_', ' ')}</Badge>
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant={normalizedStatus}>{normalizedStatus.replace('_', ' ')}</Badge>
+                          {req.is_resubmitted && normalizedStatus === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Compliance Fix</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Date Submitted */}
@@ -1290,6 +1309,56 @@ export default function ReceiveRequestView({
                   </div>
                   <span className="text-[11px] font-medium text-blue-700">Resident Details & Requirements</span>
                 </div>
+
+                {/* Resident Resubmission Compliance Alert Banner */}
+                {selectedReq.is_resubmitted && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                          <RotateCcw className="w-4 h-4 text-amber-700" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-amber-900">
+                            Resident Resubmission (Compliance Fix — Attempt #{selectedReq.resubmission_count || 1})
+                          </h4>
+                          <p className="text-[11px] text-amber-700">
+                            The resident updated their requirements and resubmitted for staff evaluation.
+                          </p>
+                        </div>
+                      </div>
+                      {selectedReq.resubmitted_at && (
+                        <span className="text-[10px] font-semibold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200">
+                          {formatDate(selectedReq.resubmitted_at)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Previous Decline Reason */}
+                    {(selectedReq.previous_decline_reason || selectedReq.declined_reason || selectedReq.rejection_reason) && (
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200/70 text-xs">
+                        <span className="font-bold text-amber-900 uppercase text-[10px] block mb-0.5">
+                          Previous Decline Reason:
+                        </span>
+                        <span className="text-amber-800 font-medium">
+                          {selectedReq.previous_decline_reason || selectedReq.declined_reason || selectedReq.rejection_reason}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Resident Compliance Notes */}
+                    {selectedReq.resubmission_notes && (
+                      <div className="bg-white p-2.5 rounded-xl border border-amber-200/70 text-xs">
+                        <span className="font-bold text-slate-700 uppercase text-[10px] block mb-0.5">
+                          Resident Compliance Note:
+                        </span>
+                        <span className="text-slate-800 italic font-medium">
+                          "{selectedReq.resubmission_notes}"
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* 1. Complete Resident Profile Card */}
                 <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3.5">

@@ -150,6 +150,9 @@ export interface DocumentRequest {
   notes?: string;
   rejection_reason?: string;
   rejected_at?: string;
+  declined_reason?: string;
+  declined_details?: string;
+  declined_at?: string;
   required_action?: string;
   processed_by?: string;
   approved_at?: string;
@@ -158,6 +161,15 @@ export interface DocumentRequest {
   pickup_location?: string;
   pickup_instructions?: string;
   timeline?: RequestTimelineEvent[];
+  is_claimed?: boolean;
+  claimed_at?: string;
+  claimed_fee?: number;
+  is_variable_fee?: boolean;
+  is_resubmitted?: boolean;
+  resubmitted_at?: string;
+  resubmission_count?: number;
+  resubmission_notes?: string;
+  previous_decline_reason?: string;
   created_at: string;
   updated_at?: string;
 }

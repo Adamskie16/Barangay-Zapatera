@@ -378,7 +378,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'logs' && <LogsView logs={logs} />}
+          {activeTab === 'logs' && <LogsView logs={logs} currentUser={currentUser} />}
 
           {activeTab === 'account' && (
             <AccountView

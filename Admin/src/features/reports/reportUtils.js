@@ -73,23 +73,30 @@ export function exportToHTML(filename, htmlContent) {
  * Build CSV records for Applications Pipeline Log
  */
 export function buildApplicationsCSV(requests = []) {
-  return requests.map((r, idx) => ({
-    'No.': idx + 1,
-    'Tracking Number': r.tracking_number || 'N/A',
-    'Resident Name': r.resident_name || 'N/A',
-    'Email Address': r.resident_email || '',
-    'Contact Number': r.resident_phone || '',
-    'Sitio / Address': r.resident_address || '',
-    'Document Type': r.document_title || 'N/A',
-    'Purpose': r.purpose || 'Official Use',
-    'Fee (PHP)': Number(r.fee) || 0,
-    'Status': (r.status || 'pending').toUpperCase(),
-    'Claimed / Issued': (r.status === 'issued' || r.status === 'completed' || r.is_claimed) ? 'YES' : 'NO',
-    'Pickup Date': r.pickup_date || 'To be scheduled',
-    'Pickup Slot': r.pickup_time_slot || 'Regular Office Hours',
-    'Submission Date': r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A',
-    'Last Updated': r.updated_at ? new Date(r.updated_at).toLocaleString('en-US') : (r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A'),
-  }));
+  return requests.map((r, idx) => {
+    const feeVal = r.claimed_fee !== undefined && r.claimed_fee !== null
+      ? Number(r.claimed_fee)
+      : (r.amount_paid !== undefined && r.amount_paid !== null ? Number(r.amount_paid) : Number(r.fee || 0));
+
+    return {
+      'No.': idx + 1,
+      'Tracking Number': r.tracking_number || 'N/A',
+      'Resident Name': r.resident_name || 'N/A',
+      'Email Address': r.resident_email || '',
+      'Contact Number': r.resident_phone || '',
+      'Sitio / Address': r.resident_address || '',
+      'Document Type': r.document_title || 'N/A',
+      'Purpose': r.purpose || 'Official Use',
+      'Fee (PHP)': feeVal,
+      'Status': (r.status || 'pending').toUpperCase(),
+      'Claimed / Issued': (r.status === 'issued' || r.status === 'completed' || r.is_claimed) ? 'YES' : 'NO',
+      'Claimed Fee (PHP)': (r.status === 'issued' || r.status === 'completed' || r.is_claimed) ? feeVal : 'N/A',
+      'Pickup Date': r.pickup_date || 'To be scheduled',
+      'Pickup Slot': r.pickup_time_slot || 'Regular Office Hours',
+      'Submission Date': r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A',
+      'Last Updated': r.updated_at ? new Date(r.updated_at).toLocaleString('en-US') : (r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A'),
+    };
+  });
 }
 
 /**

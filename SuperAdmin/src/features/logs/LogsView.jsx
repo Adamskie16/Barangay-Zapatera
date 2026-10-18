@@ -1,11 +1,13 @@
 // SuperAdmin/src/features/logs/LogsView.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../../components/Badge';
-import { RefreshCw, Terminal, Calendar, User, FileText, Newspaper, UserPlus, Clock, Settings } from 'lucide-react';
+import { RefreshCw, Terminal, Calendar, User, FileText, Newspaper, UserPlus, Clock, Settings, Trash2 } from 'lucide-react';
 import { formatDate } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { TableSkeleton } from '../../components/SkeletonLoader';
 import DataTable from '../../components/DataTable';
+import ActionModal from '../../components/ActionModal';
+import { StorageService, STORAGE_KEYS } from '../../core/storage';
 
 /**
  * Filter activity logs for creations, edits, and deletions:
@@ -118,10 +120,25 @@ export const getLogCategory = (log) => {
   return 'General';
 };
 
-export default function LogsView() {
+export default function LogsView({ logs, currentUser }) {
   const [logsList, setLogsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
+
+  // Delete Action Modal state
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    log: null,
+    isProcessing: false,
+  });
+
+  // Action Feedback Modal state
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+  });
 
   // Date Filter States
   const [startDate, setStartDate] = useState('');
@@ -131,6 +148,11 @@ export default function LogsView() {
   const fetchLiveLogs = async () => {
     setLoading(true);
     try {
+      let deletedIds = [];
+      try {
+        deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+      } catch {}
+
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('activity_logs')
@@ -138,8 +160,12 @@ export default function LogsView() {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          // Strictly filter so it only stores creation of event, bulletin, account, document template
-          const filtered = data.filter(isPermittedActivityLog);
+          // Strictly filter so it only stores permitted activity logs and excludes soft-deleted items
+          const filtered = data.filter((log) => {
+            if (log.is_archived === true || log.deleted_at != null) return false;
+            if (deletedIds.includes(String(log.id))) return false;
+            return isPermittedActivityLog(log);
+          });
           setLogsList(filtered);
           setLoading(false);
           return;
@@ -152,12 +178,60 @@ export default function LogsView() {
     } finally {
       setLoading(false);
     }
-    setLogsList([]);
+
+    // Local storage fallback
+    let localLogs = [];
+    try {
+      localLogs = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGS) || '[]');
+    } catch {}
+    let deletedIds = [];
+    try {
+      deletedIds = JSON.parse(localStorage.getItem('zapatera_deleted_activity_logs') || '[]');
+    } catch {}
+    const filtered = localLogs.filter((log) => {
+      if (log.is_archived === true || log.deleted_at != null) return false;
+      if (deletedIds.includes(String(log.id))) return false;
+      return isPermittedActivityLog(log);
+    });
+    setLogsList(filtered);
   };
 
   useEffect(() => {
     fetchLiveLogs();
   }, []);
+
+  const promptDeleteLog = (log) => {
+    setDeleteModal({
+      isOpen: true,
+      log,
+      isProcessing: false,
+    });
+  };
+
+  const confirmDeleteLog = async () => {
+    if (!deleteModal.log) return;
+    setDeleteModal((prev) => ({ ...prev, isProcessing: true }));
+    try {
+      await StorageService.archiveActivityLog(deleteModal.log.id, currentUser, deleteModal.log);
+      setDeleteModal({ isOpen: false, log: null, isProcessing: false });
+      await fetchLiveLogs();
+      setFeedbackModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Activity Log Moved to Archive',
+        message: 'The selected activity log record has been moved to Archive & Trash where authorized administrators can restore or permanently purge it.',
+      });
+    } catch (err) {
+      console.error('Failed to archive activity log:', err);
+      setDeleteModal({ isOpen: false, log: null, isProcessing: false });
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Failed to Archive Log',
+        message: 'An error occurred while moving the activity log to the Archive. Please try again.',
+      });
+    }
+  };
 
   const handlePresetChange = (preset) => {
     setDatePreset(preset);
@@ -183,31 +257,36 @@ export default function LogsView() {
 
   // Filter logs by category and date
   const processedLogs = useMemo(() => {
-    return logsList.filter((log) => {
-      // Category filter
-      const category = getLogCategory(log);
-      if (activeCategory === 'events' && category !== 'Event') return false;
-      if (activeCategory === 'bulletins' && category !== 'Bulletin') return false;
-      if (activeCategory === 'accounts' && category !== 'User Account') return false;
-      if (activeCategory === 'templates' && category !== 'Document Template') return false;
+    return logsList
+      .filter((log) => {
+        // Category filter
+        const category = getLogCategory(log);
+        if (activeCategory === 'events' && category !== 'Event') return false;
+        if (activeCategory === 'bulletins' && category !== 'Bulletin') return false;
+        if (activeCategory === 'accounts' && category !== 'User Account') return false;
+        if (activeCategory === 'templates' && category !== 'Document Template') return false;
 
-      // Date filter
-      if (log.created_at) {
-        const logDate = new Date(log.created_at);
-        if (startDate) {
-          const start = new Date(startDate);
-          start.setHours(0, 0, 0, 0);
-          if (logDate < start) return false;
+        // Date filter
+        if (log.created_at) {
+          const logDate = new Date(log.created_at);
+          if (startDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            if (logDate < start) return false;
+          }
+          if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            if (logDate > end) return false;
+          }
         }
-        if (endDate) {
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          if (logDate > end) return false;
-        }
-      }
 
-      return true;
-    });
+        return true;
+      })
+      .map((log) => ({
+        ...log,
+        rowTitle: `${log.action || 'Activity'} | Performed by: ${log.user_email || log.user || 'Admin'} | Date: ${formatDate(log.created_at)} | Details: ${log.details || 'No details'}`,
+      }));
   }, [logsList, activeCategory, startDate, endDate]);
 
   // Tab counts
@@ -226,6 +305,7 @@ export default function LogsView() {
   const columns = useMemo(() => [
     {
       key: 'created_at',
+      header: 'Date & Time',
       label: 'Date & Time',
       sortable: true,
       render: (log) => (
@@ -237,13 +317,14 @@ export default function LogsView() {
     },
     {
       key: 'user_email',
+      header: 'Performed By',
       label: 'Performed By',
       sortable: true,
       render: (log) => {
-        const userEmail = log.user_email || log.user || 'mardee131@gmail.com';
+        const userEmail = log.user_email || log.user || 'admin@zapatera.gov';
         const initial = userEmail.charAt(0).toUpperCase();
         return (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2" title={`Performed by: ${userEmail}`}>
             <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
               {initial}
             </div>
@@ -256,6 +337,7 @@ export default function LogsView() {
     },
     {
       key: 'category',
+      header: 'Category',
       label: 'Category',
       sortable: true,
       getValue: (log) => getLogCategory(log),
@@ -291,6 +373,7 @@ export default function LogsView() {
     },
     {
       key: 'action',
+      header: 'Action',
       label: 'Action',
       sortable: true,
       render: (log) => {
@@ -321,12 +404,35 @@ export default function LogsView() {
     },
     {
       key: 'details',
+      header: 'Activity Details',
       label: 'Activity Details',
       sortable: false,
       render: (log) => (
-        <span className="text-slate-700 text-xs font-sans max-w-sm line-clamp-2 leading-relaxed">
+        <span className="text-slate-700 text-xs font-sans max-w-sm line-clamp-2 leading-relaxed" title={log.details}>
           {log.details || 'Activity record successfully committed to system database.'}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      label: 'Actions',
+      sortable: false,
+      align: 'right',
+      render: (log) => (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              promptDeleteLog(log);
+            }}
+            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer group"
+            title="Delete Activity Log (Forward to Archive & Trash)"
+          >
+            <Trash2 className="w-4 h-4 transition-transform group-hover:scale-110" />
+          </button>
+        </div>
       ),
     },
   ], []);
@@ -433,13 +539,37 @@ export default function LogsView() {
         defaultSortKey="created_at"
         defaultSortDirection="desc"
         loading={loading}
-        loadingSkeleton={<TableSkeleton rows={8} cols={5} isDarkMode={false} />}
+        loadingSkeleton={<TableSkeleton rows={8} cols={6} isDarkMode={false} />}
         emptyTitle="No Activity Logs Found"
         emptySubtitle="Activity logs for events, bulletins, user accounts, and templates will appear here."
         onResetFilters={() => {
           setActiveCategory('all');
           handlePresetChange('all');
         }}
+      />
+
+      {/* Confirmation Modal for Moving Activity Log to Archive */}
+      <ActionModal
+        isOpen={deleteModal.isOpen}
+        type="confirmation"
+        isDestructive={true}
+        isProcessing={deleteModal.isProcessing}
+        title="Move Activity Log to Archive & Trash"
+        message={`Are you sure you want to delete this activity log: "${deleteModal.log?.action || 'Activity'}"? It will be forwarded to Archive & Trash where authorized administrators can restore or permanently purge it.`}
+        confirmText="Delete & Archive"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteLog}
+        onClose={() => setDeleteModal({ isOpen: false, log: null, isProcessing: false })}
+      />
+
+      {/* Action Feedback Modal */}
+      <ActionModal
+        isOpen={feedbackModal.isOpen}
+        type={feedbackModal.type}
+        title={feedbackModal.title}
+        message={feedbackModal.message}
+        buttonText="OK"
+        onClose={() => setFeedbackModal({ isOpen: false, type: 'success', title: '', message: '' })}
       />
     </div>
   );

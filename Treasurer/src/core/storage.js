@@ -372,6 +372,7 @@ export const StorageService = {
 
     // Helper to get fee for request
     const getRequestFee = (req) => {
+      if (req.claimed_fee !== undefined && req.claimed_fee !== null && Number(req.claimed_fee) >= 0) return Number(req.claimed_fee);
       if (Number(req.amount_paid) > 0) return Number(req.amount_paid);
       if (Number(req.fee) > 0) return Number(req.fee);
       if (Number(req.amount) > 0) return Number(req.amount);

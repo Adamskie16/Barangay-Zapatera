@@ -221,42 +221,82 @@ export default function UserManagementView({ currentUser }) {
         }
         const { data: dbProfile } = await query.maybeSingle();
         if (dbProfile) {
-          enriched = { ...enriched, ...dbProfile };
+          enriched = {
+            ...enriched,
+            ...dbProfile,
+            created_at: dbProfile.created_at || enriched.created_at,
+            updated_at: dbProfile.updated_at || enriched.updated_at,
+            last_edited_at: dbProfile.last_edited_at || enriched.last_edited_at,
+          };
         }
       } catch (err) {
         console.warn('Notice: Error fetching full resident profile:', err);
       }
     }
 
-    // 2. Fetch and merge resident signup credentials from local storage
+    // 2. Fetch and merge credentials from local storage (residents, admins, super_admins)
     try {
-      const stored = localStorage.getItem('zapatera_residents_db');
-      if (stored) {
-        const residents = JSON.parse(stored);
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      let match = null;
+
+      // Check residents db
+      const storedRes = localStorage.getItem('zapatera_residents_db');
+      if (storedRes) {
+        const residents = JSON.parse(storedRes);
         if (Array.isArray(residents)) {
-          const match = residents.find(
-            (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
-                   (r.id && r.id === user.id)
+          match = residents.find(
+            (r) => (r.email && r.email.toLowerCase() === cleanEmail) || (r.id && r.id === user.id)
           );
-          if (match && enriched.role === 'resident') {
-            enriched = {
-              ...match,
-              ...enriched,
-              first_name: enriched.first_name || match.first_name,
-              last_name: enriched.last_name || match.last_name,
-              middle_initial: enriched.middle_initial || match.middle_initial,
-              birth_date: enriched.birth_date || match.birth_date || match.birthdate,
-              civil_status: enriched.civil_status || match.civil_status,
-              sitio: enriched.sitio || match.sitio,
-              voter_status: enriched.voter_status || match.voter_status,
-              phone: enriched.phone || match.phone,
-              address: enriched.address || match.address,
-            };
-          } else if (enriched.role !== 'resident') {
-            enriched.voter_status = null;
-            enriched.sitio = null;
+        }
+      }
+
+      // If not found or user is admin/treasurer, check admins db
+      if (!match) {
+        const storedAdmins = localStorage.getItem('zapatera_admins_db');
+        if (storedAdmins) {
+          const admins = JSON.parse(storedAdmins);
+          if (Array.isArray(admins)) {
+            match = admins.find(
+              (a) => (a.email && a.email.toLowerCase() === cleanEmail) || (a.id && a.id === user.id)
+            );
           }
         }
+      }
+
+      // If still not found, check super admins db
+      if (!match) {
+        const storedSAs = localStorage.getItem('zapatera_super_admins_db');
+        if (storedSAs) {
+          const superAdmins = JSON.parse(storedSAs);
+          if (Array.isArray(superAdmins)) {
+            match = superAdmins.find(
+              (s) => (s.email && s.email.toLowerCase() === cleanEmail) || (s.id && s.id === user.id)
+            );
+          }
+        }
+      }
+
+      if (match) {
+        enriched = {
+          ...match,
+          ...enriched,
+          created_at: enriched.created_at || match.created_at,
+          updated_at: enriched.updated_at || match.updated_at,
+          last_edited_at: enriched.last_edited_at || match.last_edited_at,
+          first_name: enriched.first_name || match.first_name,
+          last_name: enriched.last_name || match.last_name,
+          middle_initial: enriched.middle_initial || match.middle_initial,
+          birth_date: enriched.birth_date || match.birth_date || match.birthdate,
+          civil_status: enriched.civil_status || match.civil_status,
+          sitio: enriched.sitio || match.sitio,
+          voter_status: enriched.voter_status || match.voter_status,
+          phone: enriched.phone || match.phone,
+          address: enriched.address || match.address,
+        };
+      }
+      if (enriched.role !== 'resident') {
+        enriched.voter_status = null;
+        enriched.sitio = null;
       }
     } catch (e) {}
 
@@ -816,7 +856,7 @@ export default function UserManagementView({ currentUser }) {
                           {isLocked ? (
                             <button
                               onClick={() => initiateAction(u, 'unlock')}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                               title="Unlock Resident Account"
                             >
                               <Unlock className="w-3.5 h-3.5" />
@@ -1011,9 +1051,27 @@ export default function UserManagementView({ currentUser }) {
                         </>
                       )}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
-                    </span>
+                    {(() => {
+                      const registeredDate = viewingUser.created_at || viewingUser.registered_at || viewingUser.date_registered;
+                      const editDate = viewingUser.last_edited_at || viewingUser.updated_at;
+                      const isEdited = Boolean(
+                        viewingUser.last_edited_at ||
+                        (editDate && registeredDate && (new Date(editDate).getTime() - new Date(registeredDate).getTime() > 2000))
+                      );
+
+                      return (
+                        <div className="flex flex-col items-start sm:items-end gap-0.5 mt-0.5">
+                          <span className="text-[11px] text-slate-400">
+                            Registered: {registeredDate ? formatDate(registeredDate) : (editDate ? formatDate(editDate) : 'Not recorded')}
+                          </span>
+                          {isEdited && editDate && (
+                            <span className="text-[11px] text-slate-400">
+                              Latest Edit: {formatDate(editDate)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1147,7 +1205,7 @@ export default function UserManagementView({ currentUser }) {
                           setIsViewModalOpen(false);
                           initiateAction(viewingUser, 'unlock');
                         }}
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                       >
                         <Unlock className="w-3.5 h-3.5" />
                         <span>Authorize Unlock Account</span>
@@ -1250,9 +1308,9 @@ export default function UserManagementView({ currentUser }) {
                 type="button"
                 onClick={handleExecuteSecurityAction}
                 disabled={isProcessing || !adminPassword.trim()}
-                className={`px-6 py-2 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer text-xs flex items-center space-x-1.5 ${
+                className={`px-6 py-2 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer text-xs flex items-center space-x-1.5 active:scale-95 ${
                   actionType === 'unlock'
-                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
                     : 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
                 }`}
               >

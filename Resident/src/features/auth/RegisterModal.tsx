@@ -363,14 +363,30 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">Registered Voter Status *</label>
-                <select
-                  value={formData.voter_status}
-                  onChange={(e) => setFormData({ ...formData, voter_status: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
-                >
-                  <option value="Registered Voter">Yes (Registered Voter)</option>
-                  <option value="Not Registered Voter">No (Non-Voter)</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, voter_status: 'Registered Voter' })}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      formData.voter_status === 'Registered Voter'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                    }`}
+                  >
+                    Yes (Voter)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, voter_status: 'Not Registered Voter' })}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      formData.voter_status === 'Not Registered Voter'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                    }`}
+                  >
+                    No (Non-Voter)
+                  </button>
+                </div>
               </div>
 
               <div>

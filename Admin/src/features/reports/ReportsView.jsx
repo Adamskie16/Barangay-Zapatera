@@ -81,6 +81,17 @@ export default function ReportsView({
     };
   }, [requests]);
 
+  // Helper to resolve actual fee or claimed fee for a request
+  const getRequestRevenue = (r) => {
+    if (r.claimed_fee !== undefined && r.claimed_fee !== null && !isNaN(Number(r.claimed_fee))) {
+      return Number(r.claimed_fee);
+    }
+    if (r.amount_paid !== undefined && r.amount_paid !== null && !isNaN(Number(r.amount_paid))) {
+      return Number(r.amount_paid);
+    }
+    return Number(r.fee) || 0;
+  };
+
   // Monthly Processing Data
   const monthlyData = useMemo(() => {
     const monthNames = [
@@ -97,7 +108,7 @@ export default function ReportsView({
 
       const totalQuantity = monthRequests.length;
       const approvedQuantity = monthRequests.filter(
-        (r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed'
+        (r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed' || r.is_claimed
       ).length;
       const pendingQuantity = monthRequests.filter(
         (r) => r.status === 'pending' || r.status === 'under_review'
@@ -106,8 +117,8 @@ export default function ReportsView({
         (r) => r.status === 'declined' || r.status === 'rejected'
       ).length;
       const revenue = monthRequests
-        .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed')
-        .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+        .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed' || r.is_claimed)
+        .reduce((sum, r) => sum + getRequestRevenue(r), 0);
 
       return {
         monthIndex: idx,
@@ -128,14 +139,14 @@ export default function ReportsView({
         (r) => r.document_type_id === dt.id || r.document_title === dt.title
       );
       const approvedCount = matchedRequests.filter(
-        (r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed'
+        (r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed' || r.is_claimed
       ).length;
       const pendingCount = matchedRequests.filter(
         (r) => r.status === 'pending' || r.status === 'under_review'
       ).length;
       const revenue = matchedRequests
-        .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed')
-        .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+        .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed' || r.is_claimed)
+        .reduce((sum, r) => sum + getRequestRevenue(r), 0);
 
       return {
         ...dt,
@@ -149,8 +160,8 @@ export default function ReportsView({
 
   const totalRevenue = useMemo(() => {
     return requests
-      .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed')
-      .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+      .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed' || r.is_claimed)
+      .reduce((sum, r) => sum + getRequestRevenue(r), 0);
   }, [requests]);
 
   // Filtered Applications Pipeline Log

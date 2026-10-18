@@ -353,9 +353,9 @@ export default function DataTable({
                           className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
                             isActiveSort ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-blue-600'
                           }`}
-                          title={`Sort by ${typeof col.header === 'string' ? col.header : col.key}`}
+                          title={`Sort by ${typeof (col.header || col.label || col.title || col.key) === 'string' ? (col.header || col.label || col.title || col.key) : col.key}`}
                         >
-                          <span>{col.header}</span>
+                          <span>{col.header || col.label || col.title || col.key}</span>
                           <span className={`inline-block transition-transform p-0.5 rounded ${isActiveSort ? 'bg-blue-50 text-blue-600' : ''}`}>
                             {isActiveSort ? (
                               sortDirection === 'asc' ? (
@@ -369,7 +369,7 @@ export default function DataTable({
                           </span>
                         </button>
                       ) : (
-                        <span>{col.header}</span>
+                        <span>{col.header || col.label || col.title || col.key}</span>
                       )}
                     </th>
                   );
@@ -412,6 +412,7 @@ export default function DataTable({
                   return (
                     <tr
                       key={rowKey}
+                      title={row.rowTitle || row.title || (row.action ? `${row.action}${row.user_email || row.user ? ` - ${row.user_email || row.user}` : ''}` : undefined)}
                       className={`hover:bg-slate-50/80 transition-colors ${
                         isZebra ? 'bg-slate-50/40' : 'bg-white'
                       }`}

@@ -48,6 +48,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import ActionModal from '../../components/ActionModal';
+import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import { validateEmail, sanitizeInput, unlockUserAccount, lockUserAccount, formatDate } from '../../core/security';
 import { supabase, supabaseAdmin, signUpUserWithoutPersistSession, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
@@ -166,6 +167,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
 
   // Security Verification Modal State (Save/Create/Edit)
   const [isSaveSecurityModalOpen, setIsSaveSecurityModalOpen] = useState(false);
@@ -281,42 +283,82 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         }
         const { data: dbProfile } = await query.maybeSingle();
         if (dbProfile) {
-          enriched = { ...enriched, ...dbProfile };
+          enriched = {
+            ...enriched,
+            ...dbProfile,
+            created_at: dbProfile.created_at || enriched.created_at,
+            updated_at: dbProfile.updated_at || enriched.updated_at,
+            last_edited_at: dbProfile.last_edited_at || enriched.last_edited_at,
+          };
         }
       } catch (err) {
         console.warn('Notice: Error fetching full resident profile:', err);
       }
     }
 
-    // 2. Fetch and merge resident signup credentials from local storage
+    // 2. Fetch and merge credentials from local storage (residents, admins, super_admins)
     try {
-      const stored = localStorage.getItem('zapatera_residents_db');
-      if (stored) {
-        const residents = JSON.parse(stored);
+      const cleanEmail = (user.email || '').toLowerCase().trim();
+      let match = null;
+
+      // Check residents db
+      const storedRes = localStorage.getItem('zapatera_residents_db');
+      if (storedRes) {
+        const residents = JSON.parse(storedRes);
         if (Array.isArray(residents)) {
-          const match = residents.find(
-            (r) => (r.email && r.email.toLowerCase() === (user.email || '').toLowerCase().trim()) ||
-                   (r.id && r.id === user.id)
+          match = residents.find(
+            (r) => (r.email && r.email.toLowerCase() === cleanEmail) || (r.id && r.id === user.id)
           );
-          if (match && enriched.role === 'resident') {
-            enriched = {
-              ...match,
-              ...enriched,
-              first_name: enriched.first_name || match.first_name,
-              last_name: enriched.last_name || match.last_name,
-              middle_initial: enriched.middle_initial || match.middle_initial,
-              birth_date: enriched.birth_date || match.birth_date || match.birthdate,
-              civil_status: enriched.civil_status || match.civil_status,
-              sitio: enriched.sitio || match.sitio,
-              voter_status: enriched.voter_status || match.voter_status,
-              phone: enriched.phone || match.phone,
-              address: enriched.address || match.address,
-            };
-          } else if (enriched.role !== 'resident') {
-            enriched.voter_status = null;
-            enriched.sitio = null;
+        }
+      }
+
+      // If not found or user is admin/treasurer, check admins db
+      if (!match) {
+        const storedAdmins = localStorage.getItem('zapatera_admins_db');
+        if (storedAdmins) {
+          const admins = JSON.parse(storedAdmins);
+          if (Array.isArray(admins)) {
+            match = admins.find(
+              (a) => (a.email && a.email.toLowerCase() === cleanEmail) || (a.id && a.id === user.id)
+            );
           }
         }
+      }
+
+      // If still not found, check super admins db
+      if (!match) {
+        const storedSAs = localStorage.getItem('zapatera_super_admins_db');
+        if (storedSAs) {
+          const superAdmins = JSON.parse(storedSAs);
+          if (Array.isArray(superAdmins)) {
+            match = superAdmins.find(
+              (s) => (s.email && s.email.toLowerCase() === cleanEmail) || (s.id && s.id === user.id)
+            );
+          }
+        }
+      }
+
+      if (match) {
+        enriched = {
+          ...match,
+          ...enriched,
+          created_at: enriched.created_at || match.created_at,
+          updated_at: enriched.updated_at || match.updated_at,
+          last_edited_at: enriched.last_edited_at || match.last_edited_at,
+          first_name: enriched.first_name || match.first_name,
+          last_name: enriched.last_name || match.last_name,
+          middle_initial: enriched.middle_initial || match.middle_initial,
+          birth_date: enriched.birth_date || match.birth_date || match.birthdate,
+          civil_status: enriched.civil_status || match.civil_status,
+          sitio: enriched.sitio || match.sitio,
+          voter_status: enriched.voter_status || match.voter_status,
+          phone: enriched.phone || match.phone,
+          address: enriched.address || match.address,
+        };
+      }
+      if (enriched.role !== 'resident') {
+        enriched.voter_status = null;
+        enriched.sitio = null;
       }
     } catch (e) {}
 
@@ -547,13 +589,14 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           });
         }
 
-        let localResidents = [];
+        let localAccounts = [];
         try {
-          const storedRes = localStorage.getItem('zapatera_residents_db');
-          if (storedRes) {
-            const parsed = JSON.parse(storedRes);
-            if (Array.isArray(parsed)) localResidents = parsed;
-          }
+          const storedRes = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+          const storedAdm = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+          const storedSA = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+          if (Array.isArray(storedRes)) localAccounts.push(...storedRes);
+          if (Array.isArray(storedAdm)) localAccounts.push(...storedAdm);
+          if (Array.isArray(storedSA)) localAccounts.push(...storedSA);
         } catch (e) {}
 
         const deletedAccountsSet = new Set();
@@ -582,25 +625,44 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             const cleanEmail = (p.email || '').toLowerCase().trim();
             const pId = p.id ? String(p.id).trim() : '';
 
-            // Strictly filter out archived and soft-deleted accounts
-            if (p.is_archived === true || p.deleted_at != null || deletedAccountsSet.has(cleanEmail) || deletedAccountsSet.has(pId)) {
+            // Strictly filter out accounts marked as archived or soft-deleted in Supabase
+            if (p.is_archived === true || p.deleted_at != null) {
               continue;
             }
 
-            const localMatch = localResidents.find(
-              (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
+            // If account is active in Supabase, ensure it is not blocked by stale browser localStorage deletion caches
+            if (deletedAccountsSet.has(cleanEmail) || deletedAccountsSet.has(pId)) {
+              deletedAccountsSet.delete(cleanEmail);
+              deletedAccountsSet.delete(pId);
+              try {
+                const delList = JSON.parse(localStorage.getItem('zapatera_deleted_accounts') || '[]');
+                if (Array.isArray(delList)) {
+                  const cleaned = delList.filter((d) => (d.email || d).toLowerCase() !== cleanEmail && String(d.id || '') !== pId);
+                  localStorage.setItem('zapatera_deleted_accounts', JSON.stringify(cleaned));
+                }
+              } catch (_) {}
+            }
+
+            const localMatch = localAccounts.find(
+              (la) => (la.email && la.email.toLowerCase() === cleanEmail) || (la.id && la.id === p.id)
             );
-            if (localMatch && p.role === 'resident') {
-              p.first_name = p.first_name || localMatch.first_name;
-              p.last_name = p.last_name || localMatch.last_name;
-              p.middle_initial = p.middle_initial || localMatch.middle_initial;
-              p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
-              p.civil_status = p.civil_status || localMatch.civil_status;
-              p.sitio = p.sitio || localMatch.sitio;
-              p.voter_status = p.voter_status || localMatch.voter_status;
-              p.phone = p.phone || localMatch.phone;
-              p.address = p.address || localMatch.address;
-            } else if (p.role !== 'resident') {
+            if (localMatch) {
+              if (p.role === 'resident') {
+                p.first_name = p.first_name || localMatch.first_name;
+                p.last_name = p.last_name || localMatch.last_name;
+                p.middle_initial = p.middle_initial || localMatch.middle_initial;
+                p.birth_date = p.birth_date || localMatch.birth_date || localMatch.birthdate;
+                p.civil_status = p.civil_status || localMatch.civil_status;
+                p.sitio = p.sitio || localMatch.sitio;
+                p.voter_status = p.voter_status || localMatch.voter_status;
+                p.phone = p.phone || localMatch.phone;
+                p.address = p.address || localMatch.address;
+              }
+              p.created_at = p.created_at || localMatch.created_at;
+              p.updated_at = p.updated_at || localMatch.updated_at;
+              p.last_edited_at = p.last_edited_at || localMatch.last_edited_at;
+            }
+            if (p.role !== 'resident') {
               p.voter_status = null;
               p.sitio = null;
             }
@@ -651,6 +713,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       errors.email = 'Email address is required.';
     } else if (!validateEmail(emailVal)) {
       errors.email = 'Please enter a valid email address (e.g. resident@gmail.com).';
+    } else if (!editingId && !editingUser && users.some((u) => u.email && u.email.toLowerCase().trim() === emailVal)) {
+      errors.email = 'This Gmail address has already been used for an existing account.';
     }
 
     // Common: Phone Number validation
@@ -736,12 +800,90 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
   };
 
   // Handle Main Form Submission -> Trigger Dedicated Security Modal
-  function handleFormSubmit(e) {
+  async function handleFormSubmit(e) {
     e.preventDefault();
 
     const isValid = validateProvisionForm();
     if (!isValid) {
       return;
+    }
+
+    const cleanEmail = sanitizeInput((formData.email || '').toLowerCase().trim());
+    const isNew = !editingId && !editingUser;
+
+    // Check if Gmail / Email is already in use
+    if (isNew) {
+      const emailInUseInState = users.some(
+        (u) => u.email && u.email.toLowerCase().trim() === cleanEmail
+      );
+
+      const emailInUseInLocalDbs = (() => {
+        try {
+          const residents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+          const admins = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+          const superAdmins = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+          return (
+            (Array.isArray(residents) && residents.some((r) => r.email && r.email.toLowerCase().trim() === cleanEmail)) ||
+            (Array.isArray(admins) && admins.some((a) => a.email && a.email.toLowerCase().trim() === cleanEmail)) ||
+            (Array.isArray(superAdmins) && superAdmins.some((s) => s.email && s.email.toLowerCase().trim() === cleanEmail))
+          );
+        } catch {
+          return false;
+        }
+      })();
+
+      if (emailInUseInState || emailInUseInLocalDbs) {
+        setActionModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Gmail / Email Already in Use',
+          message: `The email address "${formData.email.trim()}" has already been used for an existing account. Please enter a different Gmail or email address to create this account.`,
+          buttonText: 'OK',
+          onClose: () => setActionModal({ isOpen: false }),
+        });
+        return;
+      }
+
+      // Check against Supabase profiles table
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id, email, full_name')
+            .eq('email', cleanEmail)
+            .maybeSingle();
+
+          if (existingProfile) {
+            setActionModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Gmail / Email Already in Use',
+              message: `The email address "${formData.email.trim()}" has already been registered in the database for "${existingProfile.full_name || existingProfile.email}". Please enter a different Gmail address.`,
+              buttonText: 'OK',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+            return;
+          }
+        } catch (chkErr) {
+          console.warn('Supabase email uniqueness check notice:', chkErr);
+        }
+      }
+    } else {
+      const targetId = editingId || editingUser?.id;
+      const emailConflict = users.some(
+        (u) => u.id !== targetId && u.email && u.email.toLowerCase().trim() === cleanEmail
+      );
+      if (emailConflict) {
+        setActionModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Gmail / Email Already in Use',
+          message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
+          buttonText: 'OK',
+          onClose: () => setActionModal({ isOpen: false }),
+        });
+        return;
+      }
     }
 
     const cleanMI = (formData.middle_initial || '').trim().toUpperCase().replace(/\.$/, '');
@@ -754,7 +896,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     const ageNum = formData.age ? parseInt(formData.age, 10) : (calculateAge(formData.birth_date) || null);
 
     const payload = {
-      email: sanitizeInput(formData.email.toLowerCase().trim()),
+      email: cleanEmail,
       full_name: computedFullName,
       first_name: cleanFirst || null,
       middle_initial: cleanMI || null,
@@ -785,14 +927,17 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
   }
 
   // Execute Save after Password Authorization in Dedicated Security Modal
-  async function handleSaveExecute() {
-    if (!savePasswordInput.trim() || !pendingUserPayload) return;
+  async function handleSaveExecute(skipPasswordCheck = false) {
+    if (!pendingUserPayload) return;
     setSaveAuthError('');
 
-    const isPasswordValid = await verifyLoggedInPassword(savePasswordInput);
-    if (!isPasswordValid) {
-      setSaveAuthError('Security Verification Failed: Incorrect logged-in account password.');
-      return;
+    if (!skipPasswordCheck) {
+      if (!savePasswordInput.trim()) return;
+      const isPasswordValid = await verifyLoggedInPassword(savePasswordInput);
+      if (!isPasswordValid) {
+        setSaveAuthError('Security Verification Failed: Incorrect logged-in account password.');
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -802,11 +947,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     try {
       if (isSupabaseConfigured()) {
-        if (editingId) {
-          const { error } = await supabase
-            .from('profiles')
-            .update(pendingUserPayload)
-            .eq('id', editingId);
+        if (editingId || editingUser) {
+          const updatePayload = {
+            ...pendingUserPayload,
+            updated_at: new Date().toISOString(),
+          };
+          // Explicitly delete created_at so editing NEVER alters or overwrites the registration date
+          delete updatePayload.created_at;
+
+          const targetId = editingId || editingUser?.id;
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+          let updateQuery = supabase.from('profiles').update(updatePayload);
+          if (isUuid) {
+            updateQuery = updateQuery.eq('id', targetId);
+          } else {
+            updateQuery = updateQuery.eq('email', pendingUserPayload.email);
+          }
+          const { error } = await updateQuery;
 
           if (error) {
             console.error('Supabase profile update error:', error);
@@ -836,6 +993,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   phone: pendingUserPayload.phone,
                 },
               });
+              if (adminErr) {
+                const errMsg = (adminErr.message || '').toLowerCase();
+                if (errMsg.includes('already') || errMsg.includes('exists') || adminErr.status === 422) {
+                  setIsSaveSecurityModalOpen(false);
+                  setIsSaving(false);
+                  setIsProcessing(false);
+                  setActionModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: 'Gmail / Email Already in Use',
+                    message: `The Gmail address "${pendingUserPayload.email}" has already been registered in the system. Please use a different Gmail address.`,
+                    buttonText: 'OK',
+                    onClose: () => setActionModal({ isOpen: false }),
+                  });
+                  return;
+                }
+              }
               if (!adminErr && adminCreated?.user?.id) {
                 assignedId = adminCreated.user.id;
               }
@@ -863,6 +1037,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                 phone: pendingUserPayload.phone,
               },
             });
+            if (res?.error) {
+              const errMsg = (res.error.message || '').toLowerCase();
+              if (errMsg.includes('already') || errMsg.includes('exists')) {
+                setIsSaveSecurityModalOpen(false);
+                setIsSaving(false);
+                setIsProcessing(false);
+                setActionModal({
+                  isOpen: true,
+                  type: 'error',
+                  title: 'Gmail / Email Already in Use',
+                  message: `The Gmail address "${pendingUserPayload.email}" has already been registered in the system. Please use a different Gmail address.`,
+                  buttonText: 'OK',
+                  onClose: () => setActionModal({ isOpen: false }),
+                });
+                return;
+              }
+            }
             if (res?.id) {
               assignedId = res.id;
             }
@@ -875,6 +1066,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                 id: newId,
                 ...pendingUserPayload,
                 created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               },
             ],
             { onConflict: 'email' }
@@ -882,6 +1074,21 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
           if (error) {
             console.error('Supabase profile insert/upsert error:', error);
+            const errStr = (error.message || '').toLowerCase();
+            if (errStr.includes('already') || errStr.includes('unique') || error.code === '23505') {
+              setIsSaveSecurityModalOpen(false);
+              setIsSaving(false);
+              setIsProcessing(false);
+              setActionModal({
+                isOpen: true,
+                type: 'error',
+                title: 'Gmail / Email Already in Use',
+                message: `The Gmail address "${pendingUserPayload.email}" has already been registered in the database. Please use a different Gmail address.`,
+                buttonText: 'OK',
+                onClose: () => setActionModal({ isOpen: false }),
+              });
+              return;
+            }
           }
         }
       }
@@ -889,10 +1096,15 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       console.error('Supabase users write notice:', err);
     }
 
+    const nowIso = new Date().toISOString();
+
     if (onSaveUser) {
       onSaveUser({
-        id: editingId || undefined,
+        id: editingId || editingUser?.id || undefined,
         ...pendingUserPayload,
+        created_at: editingUser?.created_at,
+        updated_at: nowIso,
+        last_edited_at: (editingId || editingUser) ? nowIso : undefined,
         password: formData.password || 'password123',
       });
     }
@@ -903,14 +1115,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         let residents = storedDb ? JSON.parse(storedDb) : [];
         if (!Array.isArray(residents)) residents = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = residents.findIndex((r) => (r.email && r.email.toLowerCase() === cleanEmail) || (editingId && r.id === editingId));
+        const existingIdx = residents.findIndex(
+          (r) => (r.email && r.email.toLowerCase() === cleanEmail) ||
+                 (editingId && r.id === editingId) ||
+                 (editingUser?.id && r.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? residents[existingIdx].created_at : null) || editingUser?.created_at;
+
         const residentEntry = {
-          id: editingId || assignedId || `res-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? residents[existingIdx].id : `res-${Date.now()}`),
           ...pendingUserPayload,
+          created_at: originalCreatedAt || (existingIdx >= 0 ? residents[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? residents[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          residents[existingIdx] = { ...residents[existingIdx], ...residentEntry };
+          residents[existingIdx] = { ...residents[existingIdx], ...residentEntry, created_at: residents[existingIdx].created_at || residentEntry.created_at };
         } else {
           residents.unshift(residentEntry);
         }
@@ -926,7 +1147,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           if (Array.isArray(residents)) {
             const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
             const filtered = residents.filter(
-              (r) => (r.email && r.email.toLowerCase() !== cleanEmail) && (!editingId || r.id !== editingId)
+              (r) => (r.email && r.email.toLowerCase() !== cleanEmail) && (!editingId || r.id !== editingId) && (!editingUser?.id || r.id !== editingUser.id)
             );
             localStorage.setItem('zapatera_residents_db', JSON.stringify(filtered));
           }
@@ -940,14 +1161,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         let admins = storedAdmins ? JSON.parse(storedAdmins) : [];
         if (!Array.isArray(admins)) admins = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = admins.findIndex((a) => (a.email && a.email.toLowerCase() === cleanEmail) || (editingId && a.id === editingId));
+        const existingIdx = admins.findIndex(
+          (a) => (a.email && a.email.toLowerCase() === cleanEmail) ||
+                 (editingId && a.id === editingId) ||
+                 (editingUser?.id && a.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? admins[existingIdx].created_at : null) || editingUser?.created_at;
+
         const adminEntry = {
-          id: editingId || assignedId || `adm-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? admins[existingIdx].id : `adm-${Date.now()}`),
           ...pendingUserPayload,
+          created_at: originalCreatedAt || (existingIdx >= 0 ? admins[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? admins[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          admins[existingIdx] = { ...admins[existingIdx], ...adminEntry };
+          admins[existingIdx] = { ...admins[existingIdx], ...adminEntry, created_at: admins[existingIdx].created_at || adminEntry.created_at };
         } else {
           admins.unshift(adminEntry);
         }
@@ -963,15 +1193,24 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         let superAdmins = storedSAs ? JSON.parse(storedSAs) : [];
         if (!Array.isArray(superAdmins)) superAdmins = [];
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
-        const existingIdx = superAdmins.findIndex((s) => (s.email && s.email.toLowerCase() === cleanEmail) || (editingId && s.id === editingId));
+        const existingIdx = superAdmins.findIndex(
+          (s) => (s.email && s.email.toLowerCase() === cleanEmail) ||
+                 (editingId && s.id === editingId) ||
+                 (editingUser?.id && s.id === editingUser.id)
+        );
+        const originalCreatedAt = (existingIdx >= 0 ? superAdmins[existingIdx].created_at : null) || editingUser?.created_at;
+
         const saEntry = {
-          id: editingId || assignedId || `sa-${Date.now()}`,
+          id: editingId || editingUser?.id || assignedId || (existingIdx >= 0 ? superAdmins[existingIdx].id : `sa-${Date.now()}`),
           ...pendingUserPayload,
           role: 'super_admin',
+          created_at: originalCreatedAt || (existingIdx >= 0 ? superAdmins[existingIdx].created_at : nowIso) || nowIso,
+          updated_at: nowIso,
+          last_edited_at: (existingIdx >= 0 || editingId || editingUser) ? nowIso : undefined,
           password: formData.password || (existingIdx >= 0 ? superAdmins[existingIdx].password : 'password123'),
         };
         if (existingIdx >= 0) {
-          superAdmins[existingIdx] = { ...superAdmins[existingIdx], ...saEntry };
+          superAdmins[existingIdx] = { ...superAdmins[existingIdx], ...saEntry, created_at: superAdmins[existingIdx].created_at || saEntry.created_at };
         } else {
           superAdmins.unshift(saEntry);
         }
@@ -993,10 +1232,11 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         : pendingUserPayload.role === 'treasurer'
         ? 'Barangay Treasurer'
         : 'Resident';
-    const isNew = !editingId;
+    const isNew = !editingId && !editingUser;
 
     setIsSaveSecurityModalOpen(false);
     setEditingId(null);
+    setEditingUser(null);
     setIsModalOpen(false);
     setPendingUserPayload(null);
     setSavePasswordInput('');
@@ -1007,9 +1247,9 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setActionModal({
       isOpen: true,
       type: 'success',
-      title: isNew ? 'Account Created' : 'Account Updated',
+      title: isNew ? 'Account Created Successfully' : 'Account Updated Successfully',
       message: isNew
-        ? `The ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
+        ? `The new ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
         : `The profile details for "${savedName}" (${savedEmail}) were updated successfully.`,
       buttonText: 'Done',
       onClose: () => setActionModal({ isOpen: false }),
@@ -1019,6 +1259,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
   // 3. EDIT USER SELECTION
   function handleEdit(user) {
     setEditingId(user.id);
+    setEditingUser(user);
     setFieldErrors({});
     setFormGeneralError('');
     setShowProvisionPassword(false);
@@ -1062,14 +1303,17 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setIsDeleteModalOpen(true);
   };
 
-  async function handleDeleteExecute() {
-    if (!deletingUser || !adminPasswordInput.trim()) return;
+  async function handleDeleteExecute(skipPasswordCheck = false) {
+    if (!deletingUser) return;
     setDeleteAuthError('');
 
-    const isPasswordValid = await verifyLoggedInPassword(adminPasswordInput);
-    if (!isPasswordValid) {
-      setDeleteAuthError('Security Verification Failed: Incorrect logged-in account password.');
-      return;
+    if (!skipPasswordCheck) {
+      if (!adminPasswordInput.trim()) return;
+      const isPasswordValid = await verifyLoggedInPassword(adminPasswordInput);
+      if (!isPasswordValid) {
+        setDeleteAuthError('Security Verification Failed: Incorrect logged-in account password.');
+        return;
+      }
     }
 
     setDeleting(true);
@@ -1167,6 +1411,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
   const openCreateModal = () => {
     setEditingId(null);
+    setEditingUser(null);
     setFieldErrors({});
     setFormGeneralError('');
     setShowProvisionPassword(false);
@@ -1215,14 +1460,17 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setIsSecurityActionModalOpen(true);
   };
 
-  const handleExecuteSecurityAction = async () => {
-    if (!securityActionPassword.trim() || !securityActionTargetUser) return;
+  const handleExecuteSecurityAction = async (skipPasswordCheck = false) => {
+    if (!securityActionTargetUser) return;
     setSecurityActionError('');
 
-    const isValid = await verifyLoggedInPassword(securityActionPassword);
-    if (!isValid) {
-      setSecurityActionError('Security Authorization Failed: Incorrect administrator password.');
-      return;
+    if (!skipPasswordCheck) {
+      if (!securityActionPassword.trim()) return;
+      const isValid = await verifyLoggedInPassword(securityActionPassword);
+      if (!isValid) {
+        setSecurityActionError('Security Authorization Failed: Incorrect administrator password.');
+        return;
+      }
     }
 
     setActionProcessing(true);
@@ -1246,8 +1494,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       });
 
       await fetchUsers();
-    } catch (err) {
-      console.warn('Security action error:', err);
+
       setActionProcessing(false);
       setIsSecurityActionModalOpen(false);
       setSecurityActionTargetUser(null);
@@ -1260,6 +1507,17 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         message: securityActionType === 'unlock'
           ? `The user account for "${targetEmail}" has been unlocked and restored to active login status.`
           : `The user account for "${targetEmail}" has been locked and access has been restricted.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.warn('Security action error:', err);
+      setActionProcessing(false);
+      setActionModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Action Failed',
+        message: err?.message || 'Could not perform the account security action. Please try again.',
         buttonText: 'OK',
         onClose: () => setActionModal({ isOpen: false }),
       });
@@ -1744,7 +2002,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       </div>
 
       {/* Dedicated Security Verification - Save/Create Account Modal */}
-      <Modal
+      <SecurityVerificationModal
         isOpen={isSaveSecurityModalOpen}
         onClose={() => {
           setIsSaveSecurityModalOpen(false);
@@ -1752,196 +2010,37 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           setSaveAuthError('');
           setIsModalOpen(true);
         }}
-        title={`Security Verification - ${editingId ? 'Update' : 'Create'} Account`}
-        darkMode={isDarkMode}
-      >
-        <div className="space-y-4 text-xs">
-          <div className="p-4 bg-blue-950/60 border border-blue-800/80 rounded-xl text-blue-200 flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-sm text-blue-100">{editingId ? 'Authorize Account Update' : 'Authorize Account Creation'}</p>
-              <p className="text-xs text-blue-300 mt-1">
-                Please confirm your logged-in account password to authorize {editingId ? 'updating' : 'creating'} access credentials for{' '}
-                <strong className="text-white">{formData.full_name || 'Account User'}</strong> (
-                <span className="font-mono text-blue-200">{formData.email || 'N/A'}</span>).
-              </p>
-            </div>
-          </div>
-
-          {saveAuthError && (
-            <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-              <span>{saveAuthError}</span>
-            </div>
-          )}
-
-          <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 space-y-2">
-            <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-              <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Account Password (Required to Authorize)
-            </label>
-            <div className="relative">
-              <input
-                type={showSavePassword ? 'text' : 'password'}
-                name="save_security_password"
-                autoComplete="current-password"
-                required
-                autoFocus
-                value={savePasswordInput}
-                onChange={(e) => {
-                  setSavePasswordInput(e.target.value);
-                  setSaveAuthError('');
-                }}
-                placeholder="Enter your logged-in account password"
-                className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowSavePassword(!showSavePassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                {showSavePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => {
-                setIsSaveSecurityModalOpen(false);
-                setSavePasswordInput('');
-                setSaveAuthError('');
-                setIsModalOpen(true);
-              }}
-              className={`px-4 py-2 font-medium rounded-lg cursor-pointer ${
-                isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={isSaving || !savePasswordInput.trim()}
-              onClick={handleSaveExecute}
-              className="px-4 py-2 font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md shadow-blue-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
-            >
-              {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Authorize & Save</span>
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onVerified={() => handleSaveExecute(true)}
+        currentUser={currentUser}
+        targetUser={pendingUserPayload}
+        title={`Security Verification: ${editingId ? 'Update' : 'Create'} Account`}
+        message={`Please confirm your administrator password to authorize ${editingId ? 'updating' : 'creating'} this user account.`}
+        confirmText={editingId ? 'Verify & Update' : 'Verify & Create'}
+        isDestructive={false}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Dedicated Security Delete Modal */}
-      <Modal
+      <SecurityVerificationModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false);
           setAdminPasswordInput('');
           setDeleteAuthError('');
+          setDeletingUser(null);
         }}
-        title="Security Verification - Delete Account"
-        darkMode={isDarkMode}
-      >
-        {deletingUser && (
-          <div className="space-y-4 text-xs">
-            <div className={`p-4 rounded-xl border flex items-start space-x-3 ${
-              isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-800'
-            }`}>
-              <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-sm">Authorize Permanent Account Deletion</p>
-                <p className="text-xs opacity-90 mt-1">
-                  You are requesting to permanently delete the account for{' '}
-                  <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>{deletingUser.full_name || 'Selected User'}</strong> (
-                  <span className="font-mono">{deletingUser.email || 'N/A'}</span>).
-                  Please verify your logged-in administrator password to authorize this action.
-                </p>
-              </div>
-            </div>
-
-            {deleteAuthError && (
-              <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{deleteAuthError}</span>
-              </div>
-            )}
-
-            <div className={`p-3.5 rounded-xl border space-y-2 ${
-              isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Administrator Password (Required)
-              </label>
-              <div className="relative">
-                <input
-                  type={showDeletePassword ? 'text' : 'password'}
-                  name="delete_security_password"
-                  autoComplete="current-password"
-                  required
-                  autoFocus
-                  value={adminPasswordInput}
-                  onChange={(e) => {
-                    setAdminPasswordInput(e.target.value);
-                    setDeleteAuthError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && adminPasswordInput.trim() && !deleting) {
-                      e.preventDefault();
-                      handleDeleteExecute();
-                    }
-                  }}
-                  placeholder="Enter your administrator password"
-                  className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-rose-500 font-mono text-xs ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowDeletePassword(!showDeletePassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
-                >
-                  {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className={`pt-3 border-t flex items-center justify-end space-x-3 ${
-              isDarkMode ? 'border-slate-800' : 'border-slate-200'
-            }`}>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setAdminPasswordInput('');
-                  setDeleteAuthError('');
-                }}
-                className={`px-4 py-2 font-medium rounded-lg cursor-pointer ${
-                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleting || !adminPasswordInput.trim()}
-                onClick={handleDeleteExecute}
-                className="px-4 py-2 font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow-md shadow-rose-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
-              >
-                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Authorize & Delete</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onVerified={() => handleDeleteExecute(true)}
+        currentUser={currentUser}
+        targetUser={deletingUser}
+        title="Security Verification: Permanent Deletion"
+        message="Warning: This will permanently delete this record from the database. Please enter your password to confirm."
+        confirmText="Verify & Permanently Delete"
+        isDestructive={true}
+        isDarkMode={isDarkMode}
+      />
 
       {/* Dedicated Security Verification - Unlock / Lock Account Modal */}
-      <Modal
+      <SecurityVerificationModal
         isOpen={isSecurityActionModalOpen}
         onClose={() => {
           setIsSecurityActionModalOpen(false);
@@ -1949,113 +2048,25 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           setSecurityActionError('');
           setSecurityActionTargetUser(null);
         }}
-        title={`Security Verification - ${securityActionType === 'unlock' ? 'Unlock Account' : 'Lock Account'}`}
-        darkMode={isDarkMode}
-      >
-        {securityActionTargetUser && (
-          <div className="space-y-4 text-xs">
-            <div className={`p-4 rounded-xl border flex items-start space-x-3 ${
-              securityActionType === 'unlock'
-                ? isDarkMode ? 'bg-blue-950/30 border-blue-800/60 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'
-                : isDarkMode ? 'bg-rose-950/30 border-rose-800/60 text-rose-300' : 'bg-rose-50 border-rose-200 text-rose-800'
-            }`}>
-              <ShieldCheck className="w-5 h-5 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-sm">
-                  {securityActionType === 'unlock' ? 'Authorize Account Unlock' : 'Authorize Account Lockout'}
-                </p>
-                <p className="text-xs opacity-90 mt-1">
-                  You are requesting to {securityActionType === 'unlock' ? 'unlock' : 'lock'} the account for{' '}
-                  <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>{securityActionTargetUser.full_name || 'User'}</strong> (
-                  <span className="font-mono">{securityActionTargetUser.email}</span>).
-                  Please verify your logged-in administrator password to authorize this action.
-                </p>
-              </div>
-            </div>
-
-            {securityActionError && (
-              <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{securityActionError}</span>
-              </div>
-            )}
-
-            <div className={`p-3.5 rounded-xl border space-y-2 ${
-              isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Administrator Password (Required)
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecurityActionPassword ? 'text' : 'password'}
-                  required
-                  autoFocus
-                  value={securityActionPassword}
-                  onChange={(e) => {
-                    setSecurityActionPassword(e.target.value);
-                    setSecurityActionError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && securityActionPassword.trim()) {
-                      e.preventDefault();
-                      handleExecuteSecurityAction();
-                    }
-                  }}
-                  placeholder="Enter your administrator password"
-                  className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
-                    isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSecurityActionPassword(!showSecurityActionPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
-                >
-                  {showSecurityActionPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
-              <button
-                type="button"
-                disabled={actionProcessing}
-                onClick={() => {
-                  setIsSecurityActionModalOpen(false);
-                  setSecurityActionPassword('');
-                  setSecurityActionError('');
-                  setSecurityActionTargetUser(null);
-                }}
-                className={`px-4 py-2 font-medium rounded-lg cursor-pointer ${
-                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={actionProcessing || !securityActionPassword.trim()}
-                onClick={handleExecuteSecurityAction}
-                className={`px-4 py-2 font-semibold text-white rounded-lg shadow-md disabled:opacity-50 flex items-center space-x-2 cursor-pointer ${
-                  securityActionType === 'unlock'
-                    ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'
-                    : 'bg-rose-600 hover:bg-rose-500 shadow-rose-900/20'
-                }`}
-              >
-                {actionProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>{securityActionType === 'unlock' ? 'Authorize & Unlock' : 'Authorize & Lock'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onVerified={() => handleExecuteSecurityAction(true)}
+        currentUser={currentUser}
+        targetUser={securityActionTargetUser}
+        title={`Security Verification: ${securityActionType === 'unlock' ? 'Unlock Account' : 'Lock Account'}`}
+        message={`Warning: This will ${securityActionType === 'unlock' ? 'unlock' : 'lock'} this account and adjust access permissions. Please enter your password to confirm.`}
+        confirmText={securityActionType === 'unlock' ? 'Verify & Unlock' : 'Verify & Lock'}
+        isDestructive={securityActionType === 'lock'}
+        isDarkMode={isDarkMode}
+      />
 
       {/* CRUD Account Provision Form Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingId ? 'Edit User Profile & Role' : 'Create New Account'}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingId(null);
+          setEditingUser(null);
+        }}
+        title={(editingId || editingUser) ? 'Edit User Profile & Role' : 'Create New Account'}
         darkMode={isDarkMode}
       >
         <form onSubmit={handleFormSubmit} noValidate className="space-y-4 text-xs">
@@ -2311,10 +2322,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       onClick={() => handleFieldChange('voter_status', 'Registered Voter')}
                       className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         formData.voter_status === 'Registered Voter'
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDarkMode
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-white border-slate-300 text-slate-700'
+                          ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                          : 'bg-white border-slate-300 text-slate-700 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
                       <Vote className="w-3.5 h-3.5" />
@@ -2325,10 +2336,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       onClick={() => handleFieldChange('voter_status', 'Not Registered Voter')}
                       className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                         formData.voter_status === 'Not Registered Voter'
-                          ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                           : isDarkMode
-                          ? 'bg-slate-900 border-slate-800 text-slate-300'
-                          : 'bg-white border-slate-300 text-slate-700'
+                          ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
+                          : 'bg-white border-slate-300 text-slate-700 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
                       <Vote className="w-3.5 h-3.5 opacity-60" />
@@ -2797,7 +2808,11 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end space-x-3">
             <button
               type="button"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingId(null);
+                setEditingUser(null);
+              }}
               className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
             >
               Cancel
@@ -2916,9 +2931,27 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                         </>
                       )}
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      Registered: {formatDate(viewingUser.created_at || new Date().toISOString())}
-                    </span>
+                    {(() => {
+                      const registeredDate = viewingUser.created_at || viewingUser.registered_at || viewingUser.date_registered;
+                      const editDate = viewingUser.last_edited_at || viewingUser.updated_at;
+                      const isEdited = Boolean(
+                        viewingUser.last_edited_at ||
+                        (editDate && registeredDate && (new Date(editDate).getTime() - new Date(registeredDate).getTime() > 2000))
+                      );
+
+                      return (
+                        <div className="flex flex-col items-start sm:items-end gap-0.5 mt-0.5">
+                          <span className="text-[11px] text-slate-400">
+                            Registered: {registeredDate ? formatDate(registeredDate) : (editDate ? formatDate(editDate) : 'Not recorded')}
+                          </span>
+                          {isEdited && editDate && (
+                            <span className="text-[11px] text-slate-400">
+                              Latest Edit: {formatDate(editDate)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 

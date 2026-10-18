@@ -332,6 +332,7 @@ export default function App() {
           {activeTab === 'approved_documents' && (
             <ApprovedDocumentsView
               requests={requests}
+              docTypes={docTypes}
               onUpdateRequestStatus={handleUpdateRequestStatus}
               onDeleteRequest={handleDeleteRequest}
               config={config}

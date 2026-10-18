@@ -64,9 +64,14 @@ export default function DashboardView({
   const totalFeesCollected = requests
     .filter((r) => {
       const s = String(r.status || '').toLowerCase().trim();
-      return s === 'completed' || s === 'released' || Boolean(r.is_claimed);
+      return s === 'completed' || s === 'issued' || s === 'released' || Boolean(r.is_claimed);
     })
-    .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
+    .reduce((sum, r) => {
+      const feeVal = r.claimed_fee !== undefined && r.claimed_fee !== null
+        ? Number(r.claimed_fee)
+        : (r.amount_paid !== undefined && r.amount_paid !== null ? Number(r.amount_paid) : Number(r.fee || 0));
+      return sum + (isNaN(feeVal) ? 0 : feeVal);
+    }, 0);
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');

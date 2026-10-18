@@ -19,6 +19,7 @@ import {
   PackageCheck,
   CheckCircle2,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { DocumentRequest, RequestStatus } from '../../types';
 import Badge from '../../components/Badge';
@@ -29,6 +30,7 @@ interface MyRequestsViewProps {
   requests: DocumentRequest[];
   onViewRequestDetails: (req: DocumentRequest) => void;
   onRequestNew: () => void;
+  onOpenResubmit?: (req: DocumentRequest) => void;
 }
 
 const ACTIVE_STATUS_FILTERS: { label: string; value: string }[] = [
@@ -49,6 +51,7 @@ export default function MyRequestsView({
   requests,
   onViewRequestDetails,
   onRequestNew,
+  onOpenResubmit,
 }: MyRequestsViewProps) {
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,7 +225,15 @@ export default function MyRequestsView({
                     <Text style={styles.cardDocTitle}>{req.document_title}</Text>
                     <Text style={styles.cardTrackingNo}>Ref: <Text style={styles.trackingCodeText}>{req.tracking_number}</Text></Text>
                   </View>
-                  <Badge status={claimed ? 'issued' : req.status} size="sm" />
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Badge status={claimed ? 'issued' : req.status} size="sm" />
+                    {req.is_resubmitted && req.status === 'pending' && (
+                      <View style={styles.resubmittedBadgePill}>
+                        <RotateCcw size={10} color="#b45309" />
+                        <Text style={styles.resubmittedBadgePillText}>Resubmitted</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
                 <Text style={styles.cardPurpose} numberOfLines={2}>
@@ -272,10 +283,40 @@ export default function MyRequestsView({
                       <Text style={styles.declinedFieldLabel}>Reason for Declining:</Text>
                       <Text style={styles.declinedFieldVal}>{declineReasonText}</Text>
                     </View>
+                    {req.declined_details ? (
+                      <View style={styles.declinedDetailItem}>
+                        <Text style={styles.declinedFieldLabel}>Details / Instructions:</Text>
+                        <Text style={styles.declinedFieldVal}>{req.declined_details}</Text>
+                      </View>
+                    ) : null}
                     <View style={styles.declinedMetaRow}>
                       <Text style={styles.declinedMetaText}>Date Declined: <Text style={{ fontWeight: '700' }}>{dateDeclinedFormatted}</Text></Text>
                       <Text style={styles.declinedMetaText}>Processed By: <Text style={{ fontWeight: '700' }}>{adminProcessor}</Text></Text>
                     </View>
+
+                    {/* Resubmit & Fix Incomplete Requirements Button */}
+                    {onOpenResubmit && (
+                      <TouchableOpacity
+                        style={styles.resubmitCardBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onOpenResubmit(req);
+                        }}
+                      >
+                        <RotateCcw size={13} color="#ffffff" />
+                        <Text style={styles.resubmitCardBtnText}>Resubmit & Fix Requirements</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                {/* Resubmitted Pending Banner */}
+                {req.is_resubmitted && req.status === 'pending' && (
+                  <View style={styles.resubmittedHighlightBanner}>
+                    <RotateCcw size={13} color="#b45309" />
+                    <Text style={styles.resubmittedHighlightText}>
+                      Application Resubmitted (Attempt #{req.resubmission_count || 1}). Pending review by Barangay Staff.
+                    </Text>
                   </View>
                 )}
 
@@ -291,7 +332,16 @@ export default function MyRequestsView({
 
                 <View style={styles.cardFooter}>
                   <Text style={styles.feeText}>
-                    Fee: <Text style={styles.feeValue}>{req.fee === 0 ? 'FREE' : formatCurrency(req.fee)}</Text>
+                    {claimed ? 'Claimed Fee: ' : 'Fee: '}
+                    <Text style={styles.feeValue}>
+                      {claimed && (req.claimed_fee !== undefined && req.claimed_fee !== null)
+                        ? formatCurrency(req.claimed_fee)
+                        : (req.is_variable_fee || req.fee_type === 'variable') && !claimed
+                        ? 'Depends upon claim'
+                        : req.fee === 0
+                        ? 'FREE'
+                        : formatCurrency(req.fee)}
+                    </Text>
                   </Text>
                   <View style={styles.viewDetailsBtn}>
                     <Text style={styles.viewDetailsBtnText}>
@@ -668,6 +718,61 @@ const styles = StyleSheet.create({
   declinedMetaText: {
     fontSize: 10,
     color: '#9f1239',
+  },
+  resubmitCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  resubmitCardBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  resubmittedBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  resubmittedBadgePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  resubmittedHighlightBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  resubmittedHighlightText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400e',
+    flex: 1,
   },
 });
 

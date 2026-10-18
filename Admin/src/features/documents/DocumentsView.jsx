@@ -14,8 +14,8 @@ import {
   AlertTriangle,
   Lock,
   Loader2,
-  Printer,
   Sliders,
+  AlertCircle,
 } from 'lucide-react';
 import { formatCurrency, sanitizeInput } from '../../core/security';
 import { StorageService } from '../../core/storage';
@@ -133,6 +133,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     title: '',
     description: '',
     fee: 0,
+    fee_type: 'fixed',
+    is_variable_fee: false,
     processing_days: 1,
     requirementsList: [
       { id: 'req-init-1', selectedOption: 'No Required Documents (None)', customText: '' },
@@ -212,6 +214,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       title: '',
       description: '',
       fee: 0,
+      fee_type: 'fixed',
+      is_variable_fee: false,
       processing_days: 1,
       requirementsList: [
         { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
@@ -223,11 +227,14 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
   const openEditModal = (doc) => {
     setEditingDoc(doc);
+    const isVar = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
     setFormData({
       code: doc.code || '',
       title: doc.title || '',
       description: doc.description || '',
-      fee: doc.fee || 0,
+      fee: isVar ? 0 : (doc.fee || 0),
+      fee_type: isVar ? 'variable' : 'fixed',
+      is_variable_fee: isVar,
       processing_days: doc.processing_days || 1,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
@@ -257,12 +264,15 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       })
       .filter(Boolean);
 
+    const isVar = Boolean(formData.fee_type === 'variable' || formData.is_variable_fee);
     const docPayload = {
       id: editingDoc ? editingDoc.id : undefined,
       code: sanitizeInput(formData.code).toUpperCase(),
       title: sanitizeInput(formData.title),
       description: sanitizeInput(formData.description),
-      fee: Number(formData.fee) || 0,
+      fee: isVar ? 0 : (Number(formData.fee) || 0),
+      fee_type: isVar ? 'variable' : 'fixed',
+      is_variable_fee: isVar,
       processing_days: Number(formData.processing_days) || 1,
       requirements: requirementsList,
       is_active: formData.is_active,
@@ -478,11 +488,19 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
                     {/* Issuance Fee Info */}
                     <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center space-x-2">
-                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
                       <div>
-                        <p className="text-[10px] uppercase font-bold text-slate-400">Issuance Fee</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400">Processing Fee</p>
                         <p className="text-xs font-bold text-slate-800">
-                          {doc.fee > 0 ? formatCurrency(doc.fee) : 'FREE / Exempt'}
+                          {doc.fee_type === 'variable' || doc.is_variable_fee ? (
+                            <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              Depends upon claim
+                            </span>
+                          ) : doc.fee > 0 ? (
+                            formatCurrency(doc.fee)
+                          ) : (
+                            'FREE / Exempt'
+                          )}
                         </p>
                       </div>
                     </div>
@@ -719,7 +737,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             title={editingDoc ? 'Edit Document Template' : 'Add New Document Template'}
           >
             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Document Code</label>
                   <input
@@ -732,7 +750,49 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Fee (PHP)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Fee Option</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, fee_type: 'fixed', is_variable_fee: false })}
+                      className={`px-2.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center ${
+                        formData.fee_type !== 'variable' && !formData.is_variable_fee
+                          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-2xs font-bold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Fixed Fee
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, fee_type: 'variable', is_variable_fee: true, fee: 0 })}
+                      className={`px-2.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center ${
+                        formData.fee_type === 'variable' || formData.is_variable_fee
+                          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-2xs font-bold'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      Depends on Claim
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {formData.fee_type === 'variable' || formData.is_variable_fee ? (
+                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-xs">Fee Depends on Claim (Variable)</p>
+                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                      The processing fee will be assessed and entered by the admin when the document is officially marked as claimed. The claimed fee will then automatically reflect in all document fee collections.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -741,9 +801,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     value={formData.fee}
                     onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
                   />
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Document Title</label>

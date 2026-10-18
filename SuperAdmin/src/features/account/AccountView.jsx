@@ -29,6 +29,7 @@ import { formatDate } from '../../core/security';
 import { uploadSuperAdminAvatar } from '../../core/storageService';
 import UserAvatar from '../../components/UserAvatar';
 import Modal from '../../components/Modal';
+import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
   const [loading, setLoading] = useState(true);
@@ -1250,102 +1251,21 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       )}
 
       {/* Security Verification Modal - Save Profile Changes */}
-      <Modal
+      <SecurityVerificationModal
         isOpen={isSecurityModalOpen}
         onClose={() => {
           setIsSecurityModalOpen(false);
           setSecurityPassword('');
           setSecurityError('');
         }}
-        title="Security Verification - Save Profile Changes"
-        darkMode={isDarkMode}
-      >
-        <div className="space-y-4 text-xs">
-          <div className="p-4 bg-blue-950/60 border border-blue-800/80 rounded-xl text-blue-200 flex items-start space-x-3">
-            <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold text-sm text-blue-100">Authorize Profile Changes</p>
-              <p className="text-xs text-blue-300 mt-1">
-                Please enter your logged-in account password to verify your administrative credentials and save your profile modifications.
-              </p>
-            </div>
-          </div>
-
-          {securityError && (
-            <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-              <span>{securityError}</span>
-            </div>
-          )}
-
-          <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 space-y-2">
-            <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-              <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Account Password (Required to Authorize)
-            </label>
-            <div className="relative">
-              <input
-                type={showSecurityPassword ? 'text' : 'password'}
-                required
-                autoFocus
-                value={securityPassword}
-                onChange={(e) => {
-                  setSecurityPassword(e.target.value);
-                  setSecurityError('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleConfirmSaveProfile();
-                  }
-                }}
-                placeholder="Enter your logged-in account password"
-                className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
-                  isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowSecurityPassword(!showSecurityPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
-              >
-                {showSecurityPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSecurityModalOpen(false);
-                setSecurityPassword('');
-                setSecurityError('');
-              }}
-              className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={isVerifyingPassword || !securityPassword.trim()}
-              onClick={handleConfirmSaveProfile}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center space-x-2 transition-all cursor-pointer"
-            >
-              {isVerifyingPassword ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Verifying…</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Authorize & Save Changes</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onVerified={executeSaveProfile}
+        currentUser={currentUser}
+        title="Security Verification: Save Profile Changes"
+        message="Please confirm your administrator password to verify your administrative credentials and save your profile modifications."
+        confirmText="Verify & Save Changes"
+        isDestructive={false}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

@@ -234,9 +234,9 @@ export default function ResidentDashboard({
                   <View style={styles.docIconBox}>
                     <FileText size={18} color="#1d4ed8" />
                   </View>
-                  <View style={[styles.feeTag, doc.fee === 0 ? styles.feeTagFree : styles.feeTagPaid]}>
-                    <Text style={[styles.feeTagText, doc.fee === 0 ? styles.feeTagTextFree : styles.feeTagTextPaid]}>
-                      {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                  <View style={[styles.feeTag, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagPaid : (doc.fee === 0 ? styles.feeTagFree : styles.feeTagPaid)]}>
+                    <Text style={[styles.feeTagText, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagTextPaid : (doc.fee === 0 ? styles.feeTagTextFree : styles.feeTagTextPaid)]}>
+                      {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
                     </Text>
                   </View>
                 </View>

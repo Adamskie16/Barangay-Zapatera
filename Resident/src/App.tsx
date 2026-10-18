@@ -36,6 +36,7 @@ import DocumentCatalogView from './features/documents/DocumentCatalogView';
 import RequirementsModal from './features/documents/RequirementsModal';
 import RequestFlowModal from './features/requests/RequestFlowModal';
 import RequestTrackingModal from './features/requests/RequestTrackingModal';
+import ResubmitRequestModal from './features/requests/ResubmitRequestModal';
 import MyRequestsView from './features/requests/MyRequestsView';
 import AnnouncementsView from './features/announcements/AnnouncementsView';
 import NotificationModal from './features/notifications/NotificationModal';
@@ -69,6 +70,9 @@ export default function App() {
 
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState<boolean>(false);
   const [selectedRequestForTracking, setSelectedRequestForTracking] = useState<DocumentRequest | null>(null);
+
+  const [isResubmitModalOpen, setIsResubmitModalOpen] = useState<boolean>(false);
+  const [selectedRequestForResubmit, setSelectedRequestForResubmit] = useState<DocumentRequest | null>(null);
 
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState<boolean>(false);
   const [accountDeletedNotice, setAccountDeletedNotice] = useState<string | null>(null);
@@ -1594,6 +1598,106 @@ export default function App() {
     }
   };
 
+  const handleOpenResubmit = (req: DocumentRequest) => {
+    setIsTrackingModalOpen(false);
+    setSelectedRequestForResubmit(req);
+    setIsResubmitModalOpen(true);
+  };
+
+  const handleResubmitSuccess = async (updatedReq: DocumentRequest) => {
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userRequestsKey = `zapatera_requests_db_${userScope}`;
+
+    // 1. Update active requests state
+    setRequests((prev) =>
+      prev.map((r) => (r.id === updatedReq.id || r.tracking_number === updatedReq.tracking_number ? updatedReq : r))
+    );
+    setSelectedRequestForTracking(updatedReq);
+    setSelectedRequestForResubmit(null);
+
+    // 2. Persist update in account-scoped local storage
+    try {
+      const stored = await MobileStorage.getItem(userRequestsKey);
+      if (stored) {
+        const list = JSON.parse(stored);
+        const updatedList = list.map((r: DocumentRequest) =>
+          r.id === updatedReq.id || r.tracking_number === updatedReq.tracking_number ? updatedReq : r
+        );
+        await MobileStorage.setItem(userRequestsKey, JSON.stringify(updatedList));
+      }
+    } catch {}
+
+    // 3. Update in Supabase document_requests table
+    try {
+      if (isSupabaseConfigured()) {
+        const payload: any = {
+          status: 'pending',
+          is_resubmitted: true,
+          resubmitted_at: updatedReq.resubmitted_at || new Date().toISOString(),
+          resubmission_count: updatedReq.resubmission_count || 1,
+          resubmission_notes: updatedReq.resubmission_notes || null,
+          previous_decline_reason: updatedReq.previous_decline_reason || null,
+          purpose: updatedReq.purpose,
+          requirements_attached: updatedReq.requirements_attached || [],
+          uploaded_files: updatedReq.uploaded_files || [],
+          updated_at: new Date().toISOString(),
+        };
+
+        let updateRes;
+        if (updatedReq.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedReq.id)) {
+          updateRes = await supabase.from('document_requests').update(payload).eq('id', updatedReq.id);
+        } else if (updatedReq.tracking_number) {
+          updateRes = await supabase.from('document_requests').update(payload).eq('tracking_number', updatedReq.tracking_number);
+        }
+
+        if (updateRes?.error) {
+          console.warn('Supabase resubmit update note (retrying with core columns):', updateRes.error);
+          const fallbackPayload: any = {
+            status: 'pending',
+            purpose: updatedReq.purpose,
+            requirements_attached: updatedReq.requirements_attached || [],
+            uploaded_files: updatedReq.uploaded_files || [],
+            updated_at: new Date().toISOString(),
+          };
+          if (updatedReq.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedReq.id)) {
+            await supabase.from('document_requests').update(fallbackPayload).eq('id', updatedReq.id);
+          } else if (updatedReq.tracking_number) {
+            await supabase.from('document_requests').update(fallbackPayload).eq('tracking_number', updatedReq.tracking_number);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Error updating resubmitted request in Supabase:', err);
+    }
+
+    // 4. Add resident in-app notification & alert
+    const newNotif: ResidentNotification = {
+      id: `notif-${Date.now()}`,
+      user_id: authUserId,
+      title: 'Application Resubmitted 🔄',
+      message: `Your ${updatedReq.document_title} (Ref: ${updatedReq.tracking_number}) has been resubmitted and returned to Pending status for review.`,
+      type: 'info',
+      link_tab: 'requests',
+      is_read: false,
+      created_at: new Date().toISOString(),
+    };
+    setNotifications((prev) => [newNotif, ...prev]);
+
+    // 5. Broadcast live update across tabs
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUEST_UPDATED',
+          request: updatedReq,
+        });
+        bc.close();
+      } catch {}
+    }
+  };
+
   const handleMarkAsRead = async (id: string) => {
     // 1. Erase notification data immediately for this resident account
     setNotifications((prev) => prev.filter((n) => n.id !== id));
@@ -1871,6 +1975,7 @@ export default function App() {
             requests={requests}
             onViewRequestDetails={handleViewRequestDetails}
             onRequestNew={() => handleOpenRequestFlow(undefined, true)}
+            onOpenResubmit={handleOpenResubmit}
           />
         )}
 
@@ -1942,14 +2047,22 @@ export default function App() {
         request={selectedRequestForTracking}
         config={config}
         onClose={() => setIsTrackingModalOpen(false)}
-        onReRequest={(req) => {
-          setIsTrackingModalOpen(false);
-          handleOpenRequestFlow(req.document_type_id);
-        }}
+        onOpenResubmit={handleOpenResubmit}
+        onReRequest={handleOpenResubmit}
         onCancelRequest={handleCancelRequest}
       />
 
-      {/* 4. Notification Center Modal */}
+      {/* 4. Resubmit / Requirement Compliance Modal */}
+      <ResubmitRequestModal
+        visible={isResubmitModalOpen}
+        request={selectedRequestForResubmit}
+        docTypes={docTypes}
+        currentUser={currentUser}
+        onClose={() => setIsResubmitModalOpen(false)}
+        onResubmitSuccess={handleResubmitSuccess}
+      />
+
+      {/* 5. Notification Center Modal */}
       <NotificationModal
         visible={isNotificationModalOpen}
         notifications={notifications}

@@ -34,6 +34,7 @@ import {
   Flame,
   AlertCircle,
   FileBadge,
+  Activity,
 } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
@@ -43,6 +44,7 @@ import UserAvatar from '../../components/UserAvatar';
 import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import { getLogCategory } from '../logs/LogsView';
 
 export default function ArchiveView({ currentUser, isDarkMode = false }) {
   // RBAC Guard - strictly accessible ONLY by admin and super_admin
@@ -55,6 +57,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   // Datasets
   const [archivedNews, setArchivedNews] = useState([]);
   const [archivedUsers, setArchivedUsers] = useState([]);
+  const [archivedActivityLogs, setArchivedActivityLogs] = useState([]);
   const [profilesMap, setProfilesMap] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -135,13 +138,15 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
       });
       setProfilesMap(lookup);
 
-      const [newsData, usersData] = await Promise.all([
+      const [newsData, usersData, activityLogsData] = await Promise.all([
         StorageService.getArchivedAnnouncementsAsync ? StorageService.getArchivedAnnouncementsAsync() : Promise.resolve([]),
         StorageService.getArchivedUsersAsync ? StorageService.getArchivedUsersAsync() : Promise.resolve([]),
+        StorageService.getArchivedActivityLogsAsync ? StorageService.getArchivedActivityLogsAsync() : Promise.resolve([]),
       ]);
 
       setArchivedNews(Array.isArray(newsData) ? newsData : []);
       setArchivedUsers(Array.isArray(usersData) ? usersData : []);
+      setArchivedActivityLogs(Array.isArray(activityLogsData) ? activityLogsData : []);
     } catch (err) {
       console.error('Failed to load archived records:', err);
       showToast('Failed to load archive repository data.', 'error');
@@ -174,6 +179,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     let dataset = [];
     if (activeTab === 'announcements') dataset = [...archivedNews];
     else if (activeTab === 'users') dataset = [...archivedUsers];
+    else if (activeTab === 'activity_logs') dataset = [...archivedActivityLogs];
 
     const q = searchQuery.trim().toLowerCase();
     if (q) {
@@ -195,6 +201,15 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             (u.phone || u.contact_number || '').toLowerCase().includes(q) ||
             (u.address || '').toLowerCase().includes(q) ||
             (u.sitio || '').toLowerCase().includes(q)
+        );
+      } else if (activeTab === 'activity_logs') {
+        dataset = dataset.filter(
+          (l) =>
+            (l.action || '').toLowerCase().includes(q) ||
+            (l.feature || '').toLowerCase().includes(q) ||
+            (l.details || '').toLowerCase().includes(q) ||
+            (l.user_email || l.user || '').toLowerCase().includes(q) ||
+            (l.category || '').toLowerCase().includes(q)
         );
       }
     }
@@ -218,7 +233,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     });
 
     return dataset;
-  }, [activeTab, archivedNews, archivedUsers, searchQuery, sortKey, sortDirection]);
+  }, [activeTab, archivedNews, archivedUsers, archivedActivityLogs, searchQuery, sortKey, sortDirection]);
 
   // Strict 10-Row Pagination Calculations
   const totalEntries = processedData.length;
@@ -275,6 +290,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         await StorageService.restoreNews(item.id, currentUser);
       } else if (dataType === 'users') {
         await StorageService.restoreUser(item.id, currentUser);
+      } else if (dataType === 'activity_logs') {
+        await StorageService.restoreActivityLog(item.id, currentUser);
       }
 
       await loadArchivedData();
@@ -282,11 +299,12 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         setInspectItem(null);
       }
 
+      const itemLabel = dataType === 'announcements' ? 'announcement' : dataType === 'users' ? 'user account' : 'activity log';
       setActionModal({
         isOpen: true,
         type: 'success',
         title: 'Record Restored Successfully',
-        message: `The ${dataType === 'announcements' ? 'announcement' : 'user account'} has been restored back to active status.`,
+        message: `The ${itemLabel} has been restored back to active status.`,
         buttonText: 'OK',
         onClose: () => setActionModal({ isOpen: false }),
       });
@@ -313,6 +331,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         await StorageService.purgeNews(item.id, currentUser);
       } else if (dataType === 'users') {
         await StorageService.purgeUser(item.id, currentUser);
+      } else if (dataType === 'activity_logs') {
+        await StorageService.purgeActivityLog(item.id, currentUser);
       }
 
       await loadArchivedData();
@@ -320,11 +340,12 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         setInspectItem(null);
       }
 
+      const itemLabel = dataType === 'announcements' ? 'announcement' : dataType === 'users' ? 'user account' : 'activity log';
       setActionModal({
         isOpen: true,
         type: 'success',
         title: 'Record Permanently Deleted',
-        message: `The ${dataType === 'announcements' ? 'announcement' : 'user account'} has been permanently erased from the database.`,
+        message: `The ${itemLabel} has been permanently erased from the database.`,
         buttonText: 'OK',
         onClose: () => setActionModal({ isOpen: false }),
       });
@@ -383,7 +404,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
       <div className={`p-6 sm:p-8 rounded-3xl border shadow-sm relative overflow-hidden transition-colors ${
         isDarkMode
           ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800/80 border-slate-800'
-          : 'bg-gradient-to-br from-white via-slate-50 to-purple-50/30 border-slate-200'
+          : 'bg-gradient-to-br from-white via-slate-50 to-blue-50/30 border-slate-200'
       }`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1.5">
@@ -391,7 +412,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               Archive & Trash Management
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-              Inspect archived news announcements and soft-deleted user accounts. Authorized administrators can inspect full profile details, restore accounts, or permanently purge records.
+              Inspect archived news announcements, soft-deleted user accounts, and activity logs. Authorized administrators can inspect full details, restore records, or permanently purge them.
             </p>
           </div>
 
@@ -406,7 +427,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 shadow-xs'
               }`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-purple-500' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />
               <span>Refresh</span>
             </button>
           </div>
@@ -420,6 +441,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         {[
           { id: 'announcements', label: 'Announcements Archive', icon: Newspaper, count: archivedNews.length, color: 'blue' },
           { id: 'users', label: 'User Accounts Archive', icon: Users, count: archivedUsers.length, color: 'indigo' },
+          { id: 'activity_logs', label: 'Activity Logs Archive', icon: Activity, count: archivedActivityLogs.length, color: 'purple' },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -429,7 +451,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-2.5 transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-500/20'
+                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-500/20'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
               }`}
             >
@@ -462,7 +484,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 ? 'by title, category, author...'
                 : 'by name, email, role, phone...'
             }`}
-            className={`w-full pl-9 pr-9 py-2 text-xs rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors ${
+            className={`w-full pl-9 pr-9 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
               isDarkMode
                 ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
                 : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
@@ -484,7 +506,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             onClick={() => handleSort('deleted_at')}
             className={`px-3 py-1.5 rounded-lg border font-semibold flex items-center space-x-1 transition-colors cursor-pointer ${
               sortKey === 'deleted_at'
-                ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-300 dark:border-purple-800 text-purple-600 dark:text-purple-300'
+                ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-300'
                 : isDarkMode
                 ? 'border-slate-800 hover:bg-slate-800'
                 : 'border-slate-200 hover:bg-slate-100'
@@ -594,7 +616,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                           <div className="flex items-center justify-end space-x-1.5">
                             <button
                               onClick={() => setInspectItem({ ...item, _type: 'announcements' })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/60 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
                               title="Inspect Details"
                             >
                               <Eye className="w-4 h-4" />
@@ -689,10 +711,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                         <td className="p-4 whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
                             u.role === 'admin' || u.role === 'super_admin'
-                              ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200'
+                              ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200'
                               : u.role === 'treasurer'
                               ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200'
-                              : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
                           }`}>
                             {u.role || 'resident'}
                           </span>
@@ -711,7 +733,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                           <div className="flex items-center justify-end space-x-1.5">
                             <button
                               onClick={() => setInspectItem({ ...u, _type: 'users' })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/60 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
                               title="Inspect Full Profile"
                             >
                               <Eye className="w-4 h-4" />
@@ -726,6 +748,146 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                             </button>
                             <button
                               onClick={() => handlePromptPurge(u, 'users')}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              title="Permanently Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {/* Activity Logs Table */}
+          {activeTab === 'activity_logs' && (
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
+                  isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('created_at')}>
+                    <div className="flex items-center space-x-1">
+                      <span>Date & Time</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('user_email')}>
+                    <div className="flex items-center space-x-1">
+                      <span>Performed By</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('category')}>
+                    <div className="flex items-center space-x-1">
+                      <span>Category</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('action')}>
+                    <div className="flex items-center space-x-1">
+                      <span>Action</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
+                  <th className="p-4">Activity Details</th>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
+                    <div className="flex items-center space-x-1 text-rose-500">
+                      <span>Date Archived</span>
+                      <ArrowUpDown className="w-3 h-3" />
+                    </div>
+                  </th>
+                  <th className="p-4">Archived By</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                {paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-12 text-center text-slate-400">
+                      <Archive className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                      <p className="font-bold text-sm">No archived activity logs found</p>
+                      <p className="text-xs">Deleted activity logs will appear here.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedData.map((item) => {
+                    const archivedByName = resolveActorName(item.archived_by_name || item.deleted_by);
+                    const userEmail = item.user_email || item.user || 'admin@zapatera.gov';
+                    const initial = userEmail.charAt(0).toUpperCase();
+                    const cat = item.category || getLogCategory(item);
+                    return (
+                      <tr
+                        key={item.id}
+                        title={`Archived Activity: ${item.action || 'Activity'} by ${userEmail} (${formatDate(item.created_at)})`}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{formatDate(item.created_at)}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                              {initial}
+                            </div>
+                            <span className="font-semibold text-slate-900 dark:text-white text-xs truncate max-w-[170px]" title={userEmail}>
+                              {userEmail}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${
+                            cat === 'Event'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : cat === 'Bulletin'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : cat === 'User Account'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            {cat}
+                          </span>
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-bold text-slate-900 dark:text-white">
+                          {item.action || 'Log Entry'}
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <span className="text-slate-600 dark:text-slate-300 text-xs line-clamp-2 leading-relaxed" title={item.details}>
+                            {item.details || 'Activity record successfully committed.'}
+                          </span>
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
+                          {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                          {archivedByName}
+                        </td>
+                        <td className="p-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => setInspectItem({ ...item, _type: 'activity_logs' })}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              title="Inspect Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handlePromptRestore(item, 'activity_logs')}
+                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              title="Restore Activity Log"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              onClick={() => handlePromptPurge(item, 'activity_logs')}
                               className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
                               title="Permanently Delete"
                             >
@@ -788,7 +950,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                     onClick={() => setCurrentPage(num)}
                     className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
                       safeCurrentPage === num
-                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
                         : isDarkMode
                         ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
                         : 'border-slate-200 hover:bg-slate-100 text-slate-700'
@@ -832,7 +994,13 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         <Modal
           isOpen={!!inspectItem}
           onClose={() => setInspectItem(null)}
-          title={inspectItem._type === 'users' ? 'Archived User Profile' : 'Archived Announcement Details'}
+          title={
+            inspectItem._type === 'users'
+              ? 'Archived User Profile'
+              : inspectItem._type === 'activity_logs'
+              ? 'Archived Activity Log Details'
+              : 'Archived Announcement Details'
+          }
           darkMode={isDarkMode}
         >
           <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
@@ -840,7 +1008,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             <div className="p-4 bg-slate-100 dark:bg-slate-800/80 rounded-2xl space-y-1.5 border border-slate-200/80 dark:border-slate-700/60">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="font-extrabold text-slate-900 dark:text-white text-base">
-                  {inspectItem.full_name || inspectItem.title || inspectItem.email}
+                  {inspectItem.full_name || inspectItem.action || inspectItem.title || inspectItem.email}
                 </p>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
                   Archived Record
@@ -858,8 +1026,61 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               </p>
             </div>
 
-            {/* A. Rich User Profile View */}
-            {inspectItem._type === 'users' ? (
+            {/* A. Rich Activity Log View */}
+            {inspectItem._type === 'activity_logs' ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center space-x-4 shadow-2xs">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-lg border border-purple-200 dark:border-purple-800 shrink-0">
+                    <Activity className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base truncate">
+                      {inspectItem.action || 'Activity Log'}
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 font-mono text-xs truncate">
+                      {inspectItem.user_email || inspectItem.user || 'admin@zapatera.gov'}
+                    </p>
+                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                      Category: {inspectItem.category || getLogCategory(inspectItem)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Performed By</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.user_email || inspectItem.user || 'Admin'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Date & Time Logged</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {formatDate(inspectItem.created_at)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Feature / Module</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.feature || 'General'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Log Reference ID</span>
+                    <span className="font-mono text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.id}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Activity Details</span>
+                  <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                    {inspectItem.details || 'Activity record successfully committed to system database.'}
+                  </div>
+                </div>
+              </div>
+            ) : inspectItem._type === 'users' ? (
               <div className="space-y-4">
                 {/* Profile Card */}
                 <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center space-x-4 shadow-2xs">
@@ -869,7 +1090,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                       {inspectItem.full_name || `${inspectItem.first_name || ''} ${inspectItem.last_name || ''}`}
                     </h3>
                     <p className="text-slate-500 dark:text-slate-400 font-mono text-xs">{inspectItem.email}</p>
-                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                       Role: {inspectItem.role || 'resident'}
                     </span>
                   </div>
@@ -1032,10 +1253,18 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         onClose={() => setSecurityVerification({ isOpen: false, item: null, actionType: null, dataType: null })}
         onVerified={securityVerification.actionType === 'restore' ? executeVerifiedRestore : executeVerifiedPurge}
         currentUser={currentUser}
+        item={securityVerification.item}
+        targetUser={securityVerification.dataType === 'users' ? securityVerification.item : null}
         title={securityVerification.actionType === 'restore' ? 'Security Verification: Restore Record' : 'Security Verification: Permanent Deletion'}
         message={
           securityVerification.actionType === 'restore'
-            ? `Please confirm your password to verify restoring this ${securityVerification.dataType === 'announcements' ? 'announcement' : 'user account'} to active status.`
+            ? `Please confirm your password to verify restoring this ${
+                securityVerification.dataType === 'announcements'
+                  ? 'announcement'
+                  : securityVerification.dataType === 'users'
+                  ? 'user account'
+                  : 'activity log'
+              } to active status.`
             : `Warning: This will permanently delete this record from the database. Please enter your password to confirm.`
         }
         confirmText={securityVerification.actionType === 'restore' ? 'Verify & Restore' : 'Verify & Permanently Delete'}

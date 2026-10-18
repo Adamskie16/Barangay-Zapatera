@@ -20,9 +20,9 @@ import {
   ShieldCheck,
   Download,
   Info,
-  ArrowRight,
   User,
   Paperclip,
+  RotateCcw,
 } from 'lucide-react';
 import { DocumentRequest, BarangayConfig } from '../../types';
 import Badge from '../../components/Badge';
@@ -34,6 +34,7 @@ interface RequestTrackingModalProps {
   config: BarangayConfig;
   onClose: () => void;
   onReRequest?: (req: DocumentRequest) => void;
+  onOpenResubmit?: (req: DocumentRequest) => void;
   onCancelRequest?: (req: DocumentRequest) => void;
 }
 
@@ -43,6 +44,7 @@ export default function RequestTrackingModal({
   config,
   onClose,
   onReRequest,
+  onOpenResubmit,
   onCancelRequest,
 }: RequestTrackingModalProps) {
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
@@ -171,7 +173,7 @@ export default function RequestTrackingModal({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rejectionActionHeader}>What you need to do:</Text>
                     <Text style={styles.rejectionActionText}>
-                      Please submit a valid and current proof of residency and create a new request.
+                      You can edit this request, replace or upload clear copies of the required documents, and resubmit it directly for barangay review.
                     </Text>
                   </View>
                 </View>
@@ -181,18 +183,47 @@ export default function RequestTrackingModal({
                   <Text style={styles.declineMetaLine}>Processed By: <Text style={{ fontWeight: '700' }}>{processedByAdmin}</Text></Text>
                 </View>
 
-                {onReRequest && (
+                {(onOpenResubmit || onReRequest) && (
                   <TouchableOpacity
                     style={styles.reRequestBtn}
                     onPress={() => {
                       onClose();
-                      onReRequest(request);
+                      if (onOpenResubmit) {
+                        onOpenResubmit(request);
+                      } else if (onReRequest) {
+                        onReRequest(request);
+                      }
                     }}
                   >
-                    <Text style={styles.reRequestBtnText}>Submit New Corrected Request</Text>
-                    <ArrowRight size={14} color="#ffffff" />
+                    <RotateCcw size={15} color="#ffffff" />
+                    <Text style={styles.reRequestBtnText}>Resubmit Request (Fix Requirements)</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* RESUBMITTED NOTICE CARD */}
+            {request.is_resubmitted && !isRejected && (
+              <View style={styles.resubmissionNoticeCard}>
+                <View style={styles.resubmissionHeader}>
+                  <RotateCcw size={16} color="#2563eb" />
+                  <Text style={styles.resubmissionTitle}>
+                    Application Resubmitted (Attempt #{request.resubmission_count || 1})
+                  </Text>
+                </View>
+                {request.previous_decline_reason ? (
+                  <Text style={styles.resubmissionPrevReason}>
+                    Previous Issue: <Text style={{ fontWeight: '600' }}>{request.previous_decline_reason}</Text>
+                  </Text>
+                ) : null}
+                {request.resubmission_notes ? (
+                  <Text style={styles.resubmissionNotes}>
+                    Resident Compliance Note: "{request.resubmission_notes}"
+                  </Text>
+                ) : null}
+                <Text style={styles.resubmissionDate}>
+                  Resubmitted on: {request.resubmitted_at ? new Date(request.resubmitted_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric' }) : 'Recent'}
+                </Text>
               </View>
             )}
 
@@ -296,9 +327,17 @@ export default function RequestTrackingModal({
                 </View>
 
                 <View style={styles.readyFeeRow}>
-                  <Text style={styles.readyFeeLabel}>Fee to Prepare:</Text>
+                  <Text style={styles.readyFeeLabel}>
+                    {request.is_claimed ? 'Fee Collected:' : 'Fee to Prepare:'}
+                  </Text>
                   <Text style={styles.readyFeeValue}>
-                    {request.fee === 0 ? 'FREE (₱0.00)' : formatCurrency(request.fee)}
+                    {request.is_claimed && (request.claimed_fee !== undefined && request.claimed_fee !== null)
+                      ? formatCurrency(request.claimed_fee)
+                      : (request.is_variable_fee || request.fee_type === 'variable') && !request.is_claimed
+                      ? 'Depends upon claim (Assessed at counter)'
+                      : request.fee === 0
+                      ? 'FREE (₱0.00)'
+                      : formatCurrency(request.fee)}
                   </Text>
                 </View>
               </View>
@@ -1077,5 +1116,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  resubmissionNoticeCard: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 16,
+  },
+  resubmissionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  resubmissionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  resubmissionPrevReason: {
+    fontSize: 11,
+    color: '#1e40af',
+    marginBottom: 4,
+  },
+  resubmissionNotes: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: '#2563eb',
+    marginBottom: 6,
+  },
+  resubmissionDate: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
   },
 });
