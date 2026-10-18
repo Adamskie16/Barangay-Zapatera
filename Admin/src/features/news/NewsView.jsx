@@ -469,14 +469,22 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     setFormError('');
 
     try {
-      const durationNum = Number(formData.duration_days !== undefined ? formData.duration_days : 7);
-      const expiresAt = durationNum > 0
-        ? new Date(Date.now() + durationNum * 86400000).toISOString()
-        : null;
+      let expiresAt = null;
+      let durationVal = formData.duration_days;
+      if (formData.duration_days === 'custom' || formData.expires_at) {
+        expiresAt = formData.expires_at ? new Date(formData.expires_at).toISOString() : null;
+        durationVal = 'custom';
+      } else {
+        const durationNum = Number(formData.duration_days !== undefined ? formData.duration_days : 7);
+        expiresAt = durationNum > 0
+          ? new Date(Date.now() + durationNum * 86400000).toISOString()
+          : null;
+        durationVal = durationNum;
+      }
 
       const payload = {
         ...formData,
-        duration_days: durationNum,
+        duration_days: durationVal,
         expires_at: expiresAt,
         id: editingItem ? editingItem.id : undefined,
         event_date: formData.event_date ? new Date(formData.event_date).toISOString() : null,

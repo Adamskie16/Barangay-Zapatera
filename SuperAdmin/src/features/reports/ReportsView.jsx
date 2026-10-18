@@ -36,6 +36,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Table,
+  LayoutGrid,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../core/security';
 
@@ -49,11 +51,19 @@ export default function ReportsView({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
-  // Table filters
+  // Table filters for applications pipeline
   const [statusFilter, setStatusFilter] = useState('all');
   const [docFilter, setDocFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState('all');
+
+  // Issuance Volume by Document Type Table & Filter States
+  const [docTypeSearch, setDocTypeSearch] = useState('');
+  const [docTypeFilter, setDocTypeFilter] = useState('all'); // 'all' | 'with_volume' | 'paid' | 'free'
+  const [docTypeSort, setDocTypeSort] = useState('volume_desc'); // 'volume_desc' | 'volume_asc' | 'revenue_desc' | 'name_asc' | 'fee_desc'
+  const [docTypeViewMode, setDocTypeViewMode] = useState('table'); // 'table' | 'bars'
+  const [docTypePage, setDocTypePage] = useState(1);
+  const [docTypePageSize, setDocTypePageSize] = useState(5);
 
   const currentYear = new Date().getFullYear();
 
@@ -133,21 +143,80 @@ export default function ReportsView({
         (r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed'
       ).length;
       const pendingCount = matchedRequests.filter(
-        (r) => r.status === 'pending' || r.status === 'under_review'
+        (r) => r.status === 'pending' || r.status === 'under_review' || r.status === 'under review' || r.status === 'processing'
+      ).length;
+      const declinedCount = matchedRequests.filter(
+        (r) => r.status === 'declined' || r.status === 'rejected'
       ).length;
       const revenue = matchedRequests
         .filter((r) => r.status === 'approved' || r.status === 'issued' || r.status === 'completed')
         .reduce((sum, r) => sum + (Number(r.fee) || 0), 0);
 
+      const totalReqs = matchedRequests.length;
+      const sharePercentage = requests.length ? Math.round((totalReqs / requests.length) * 100) : 0;
+
       return {
         ...dt,
-        request_count: matchedRequests.length,
+        request_count: totalReqs,
         approved_count: approvedCount,
         pending_count: pendingCount,
+        declined_count: declinedCount,
         total_revenue: revenue,
+        share_percentage: sharePercentage,
       };
     });
   }, [docTypes, requests]);
+
+  // Filtered & Sorted Document Types for Table View
+  const filteredDocTypeCounts = useMemo(() => {
+    let result = docTypeCounts.filter((dt) => {
+      if (docTypeSearch.trim()) {
+        const q = docTypeSearch.toLowerCase().trim();
+        const titleMatch = (dt.title || '').toLowerCase().includes(q);
+        const codeMatch = (dt.code || '').toLowerCase().includes(q);
+        if (!titleMatch && !codeMatch) return false;
+      }
+      if (docTypeFilter === 'with_volume' && dt.request_count === 0) return false;
+      if (docTypeFilter === 'paid' && (!dt.fee || Number(dt.fee) <= 0)) return false;
+      if (docTypeFilter === 'free' && Number(dt.fee) > 0) return false;
+      return true;
+    });
+
+    result.sort((a, b) => {
+      if (docTypeSort === 'volume_desc') return b.request_count - a.request_count;
+      if (docTypeSort === 'volume_asc') return a.request_count - b.request_count;
+      if (docTypeSort === 'revenue_desc') return b.total_revenue - a.total_revenue;
+      if (docTypeSort === 'name_asc') return (a.title || '').localeCompare(b.title || '');
+      if (docTypeSort === 'fee_desc') return (Number(b.fee) || 0) - (Number(a.fee) || 0);
+      return 0;
+    });
+
+    return result;
+  }, [docTypeCounts, docTypeSearch, docTypeFilter, docTypeSort]);
+
+  const docTypeTotalPages = docTypePageSize === 'all'
+    ? 1
+    : Math.max(1, Math.ceil(filteredDocTypeCounts.length / Number(docTypePageSize)));
+  const safeDocTypePage = Math.min(Math.max(1, docTypePage), docTypeTotalPages);
+  const paginatedDocTypeCounts = docTypePageSize === 'all'
+    ? filteredDocTypeCounts
+    : filteredDocTypeCounts.slice(
+        (safeDocTypePage - 1) * Number(docTypePageSize),
+        safeDocTypePage * Number(docTypePageSize)
+      );
+
+  const docTypeTotals = useMemo(() => {
+    return filteredDocTypeCounts.reduce(
+      (acc, dt) => ({
+        requests: acc.requests + dt.request_count,
+        approved: acc.approved + dt.approved_count,
+        pending: acc.pending + dt.pending_count,
+        declined: acc.declined + (dt.declined_count || 0),
+        revenue: acc.revenue + dt.total_revenue,
+      }),
+      { requests: 0, approved: 0, pending: 0, declined: 0, revenue: 0 }
+    );
+  }, [filteredDocTypeCounts]);
 
   const totalRevenue = useMemo(() => {
     return requests
@@ -534,88 +603,392 @@ export default function ReportsView({
       {/* Dedicated Monthly Quantity Analytics Component */}
       <MonthlyAnalytics requests={requests} />
 
-      {/* Analytics Breakdown Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Document Breakdown */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
+      {/* Request Status Pipeline */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm">Request Status Pipeline</h3>
+            <p className="text-[11px] text-slate-400">Current active workload across document verification stages</p>
+          </div>
+          <PieChart className="w-4 h-4 text-slate-400" />
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-center">
+            <p className="text-2xl font-extrabold text-amber-700">{statusCounts.pending}</p>
+            <p className="text-[11px] font-semibold uppercase text-amber-800 mt-1">Pending Queue</p>
+          </div>
+
+          <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-center">
+            <p className="text-2xl font-extrabold text-blue-700">{statusCounts.under_review}</p>
+            <p className="text-[11px] font-semibold uppercase text-blue-800 mt-1">Under Verification</p>
+          </div>
+
+          <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
+            <p className="text-2xl font-extrabold text-emerald-700">{statusCounts.approved}</p>
+            <p className="text-[11px] font-semibold uppercase text-emerald-800 mt-1">Approved & Ready</p>
+          </div>
+
+          <div className="p-4 bg-purple-50 rounded-xl border border-purple-200 text-center">
+            <p className="text-2xl font-extrabold text-purple-700">{statusCounts.issued}</p>
+            <p className="text-[11px] font-semibold uppercase text-purple-800 mt-1">Officially Issued</p>
+          </div>
+
+          <div className="p-4 bg-rose-50 rounded-xl border border-rose-200 text-center col-span-2 sm:col-span-1">
+            <p className="text-2xl font-extrabold text-rose-700">{statusCounts.declined}</p>
+            <p className="text-[11px] font-semibold uppercase text-rose-800 mt-1">Declined</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Issuance Volume by Document Type (Table & Filter System) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        {/* Section Header with Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center space-x-2">
               <h3 className="font-bold text-slate-800 text-sm">Issuance Volume by Document Type</h3>
-              <p className="text-[11px] text-slate-400">Clearances breakdown and fee audit ({currentYear})</p>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded-full border border-blue-100">
+                {filteredDocTypeCounts.length} {filteredDocTypeCounts.length === 1 ? 'type' : 'types'}
+              </span>
             </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Clearances breakdown, fee audit, and issuance volume metrics ({currentYear})
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2 self-start sm:self-auto">
+            {/* View Mode Toggle: Table vs Bars */}
+            <div className="flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setDocTypeViewMode('table')}
+                className={`flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                  docTypeViewMode === 'table'
+                    ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="View as detailed data table"
+              >
+                <Table className="w-3.5 h-3.5" />
+                <span>Table</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocTypeViewMode('bars')}
+                className={`flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                  docTypeViewMode === 'bars'
+                    ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="View as comparative progress bars"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Bars</span>
+              </button>
+            </div>
+
+            {/* Export CSV Button */}
             <button
               onClick={handleExportDocAuditCSV}
-              className="inline-flex items-center space-x-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer"
+              className="inline-flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
               title="Download Document Clearance Breakdown CSV"
             >
-              <Download className="w-3 h-3" />
-              <span>Export Report</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
             </button>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            {docTypeCounts.map((dt) => {
-              const percentage = requests.length ? Math.round((dt.request_count / requests.length) * 100) : 0;
-              return (
-                <div key={dt.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-800">
-                      {dt.title} {dt.code ? `(${dt.code})` : ''}
-                    </span>
-                    <div className="space-x-2">
-                      <span className="font-mono text-slate-600 font-semibold">{dt.request_count} reqs</span>
-                      <span className="font-bold text-blue-600">{formatCurrency(dt.total_revenue)}</span>
+        {/* Filter and Search Bar for Document Types */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 bg-slate-50/70 border border-slate-200/80 rounded-xl">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={docTypeSearch}
+              onChange={(e) => {
+                setDocTypeSearch(e.target.value);
+                setDocTypePage(1);
+              }}
+              placeholder="Search document name or code (e.g., BC-01, Clearance)..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-700"
+            />
+            {docTypeSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDocTypeSearch('');
+                  setDocTypePage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Filter, Sort & Page Size Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filter Dropdown */}
+            <div className="flex items-center space-x-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={docTypeFilter}
+                onChange={(e) => {
+                  setDocTypeFilter(e.target.value);
+                  setDocTypePage(1);
+                }}
+                className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="all">All Documents</option>
+                <option value="with_volume">With Volume (&gt; 0)</option>
+                <option value="paid">Paid Only (&gt; ₱0)</option>
+                <option value="free">Free Only (₱0)</option>
+              </select>
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center space-x-1.5">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={docTypeSort}
+                onChange={(e) => setDocTypeSort(e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="volume_desc">Volume: High to Low</option>
+                <option value="volume_asc">Volume: Low to High</option>
+                <option value="revenue_desc">Revenue: High to Low</option>
+                <option value="name_asc">Name: A to Z</option>
+                <option value="fee_desc">Fee: High to Low</option>
+              </select>
+            </div>
+
+            {/* Rows Per Page */}
+            {docTypeViewMode === 'table' && (
+              <select
+                value={docTypePageSize}
+                onChange={(e) => {
+                  setDocTypePageSize(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                  setDocTypePage(1);
+                }}
+                className="px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                title="Rows per page"
+              >
+                <option value={5}>5 rows</option>
+                <option value={10}>10 rows</option>
+                <option value={20}>20 rows</option>
+                <option value="all">Show All</option>
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* CONTENT VIEW: Table View */}
+        {docTypeViewMode === 'table' && (
+          <div className="space-y-3">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]">
+                  <tr>
+                    <th className="py-2.5 px-3">Document Title & Code</th>
+                    <th className="py-2.5 px-3">Standard Fee</th>
+                    <th className="py-2.5 px-3 text-center">Total Requests</th>
+                    <th className="py-2.5 px-3 text-center">Approved & Issued</th>
+                    <th className="py-2.5 px-3 text-center">Pending / Review</th>
+                    <th className="py-2.5 px-3 text-center">Declined</th>
+                    <th className="py-2.5 px-3 text-right">Total Revenue</th>
+                    <th className="py-2.5 px-3">Volume Share</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {paginatedDocTypeCounts.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                        <FileText className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                        <p className="font-semibold text-slate-600">No matching document types found</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search query or filter</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedDocTypeCounts.map((dt) => {
+                      const percentage = requests.length ? Math.round((dt.request_count / requests.length) * 100) : 0;
+                      return (
+                        <tr key={dt.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                              <span>{dt.title}</span>
+                              {dt.code && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-slate-100 text-slate-700 rounded border border-slate-200">
+                                  {dt.code}
+                                </span>
+                              )}
+                            </div>
+                            {dt.category && (
+                              <span className="text-[10px] text-slate-400">{dt.category}</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {Number(dt.fee) > 0 ? (
+                              <span className="font-mono font-semibold text-slate-700">
+                                {formatCurrency(Number(dt.fee))}
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+                                Free
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold font-mono rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              {dt.request_count}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold font-mono rounded-full bg-emerald-50 text-emerald-700">
+                              {dt.approved_count}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold font-mono rounded-full bg-amber-50 text-amber-700">
+                              {dt.pending_count}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold font-mono rounded-full bg-rose-50 text-rose-700">
+                              {dt.declined_count || 0}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className="font-bold font-mono text-blue-700">
+                              {formatCurrency(dt.total_revenue)}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 min-w-[120px]">
+                            <div className="flex items-center space-x-2">
+                              <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-blue-600 h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.max(percentage, 3)}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-500 w-8 text-right font-semibold">
+                                {percentage}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+                {filteredDocTypeCounts.length > 0 && (
+                  <tfoot className="bg-slate-50 font-bold text-slate-800 border-t border-slate-200 text-xs">
+                    <tr>
+                      <td className="py-2.5 px-3">
+                        Total Across Filtered ({filteredDocTypeCounts.length})
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400">—</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-blue-700">
+                        {docTypeTotals.requests}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono text-emerald-700">
+                        {docTypeTotals.approved}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono text-amber-700">
+                        {docTypeTotals.pending}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono text-rose-700">
+                        {docTypeTotals.declined}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-blue-800">
+                        {formatCurrency(docTypeTotals.revenue)}
+                      </td>
+                      <td className="py-2.5 px-3 text-[10px] text-slate-500">
+                        {requests.length > 0 ? `${Math.round((docTypeTotals.requests / requests.length) * 100)}% of total` : '100%'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {docTypePageSize !== 'all' && docTypeTotalPages > 1 && (
+              <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
+                <span>
+                  Showing {Math.min((safeDocTypePage - 1) * Number(docTypePageSize) + 1, filteredDocTypeCounts.length)} to{' '}
+                  {Math.min(safeDocTypePage * Number(docTypePageSize), filteredDocTypeCounts.length)} of{' '}
+                  {filteredDocTypeCounts.length} document types
+                </span>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    disabled={safeDocTypePage <= 1}
+                    onClick={() => setDocTypePage((p) => Math.max(1, p - 1))}
+                    className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-2 py-0.5 text-xs font-semibold text-slate-700">
+                    Page {safeDocTypePage} of {docTypeTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeDocTypePage >= docTypeTotalPages}
+                    onClick={() => setDocTypePage((p) => Math.min(docTypeTotalPages, p + 1))}
+                    className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTENT VIEW: Comparative Visual Bars */}
+        {docTypeViewMode === 'bars' && (
+          <div className="space-y-4 pt-1">
+            {filteredDocTypeCounts.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                <p className="font-semibold text-slate-600">No matching document types found</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Try adjusting your search query or filter</p>
+              </div>
+            ) : (
+              filteredDocTypeCounts.map((dt) => {
+                const percentage = requests.length ? Math.round((dt.request_count / requests.length) * 100) : 0;
+                return (
+                  <div key={dt.id} className="space-y-1.5 p-3 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-slate-800">{dt.title}</span>
+                        {dt.code && (
+                          <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-slate-100 text-slate-600 rounded">
+                            {dt.code}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">({Number(dt.fee) > 0 ? formatCurrency(dt.fee) : 'Free'})</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="font-mono text-slate-600 font-semibold">{dt.request_count} reqs ({percentage}%)</span>
+                        <span className="font-bold text-blue-600">{formatCurrency(dt.total_revenue)}</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(percentage, 3)}%` }}
+                      />
                     </div>
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(percentage, 5)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
-        </div>
-
-        {/* Processing Status Distribution */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm">Request Status Pipeline</h3>
-              <p className="text-[11px] text-slate-400">Current active workload across verification stages</p>
-            </div>
-            <PieChart className="w-4 h-4 text-slate-400" />
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-center">
-              <p className="text-2xl font-extrabold text-amber-700">{statusCounts.pending}</p>
-              <p className="text-[11px] font-semibold uppercase text-amber-800 mt-1">Pending Queue</p>
-            </div>
-
-            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-center">
-              <p className="text-2xl font-extrabold text-blue-700">{statusCounts.under_review}</p>
-              <p className="text-[11px] font-semibold uppercase text-blue-800 mt-1">Under Verification</p>
-            </div>
-
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
-              <p className="text-2xl font-extrabold text-emerald-700">{statusCounts.approved}</p>
-              <p className="text-[11px] font-semibold uppercase text-emerald-800 mt-1">Approved & Ready</p>
-            </div>
-
-            <div className="p-4 bg-purple-50 rounded-xl border border-purple-200 text-center">
-              <p className="text-2xl font-extrabold text-purple-700">{statusCounts.issued}</p>
-              <p className="text-[11px] font-semibold uppercase text-purple-800 mt-1">Officially Issued</p>
-            </div>
-
-            <div className="p-4 bg-rose-50 rounded-xl border border-rose-200 text-center col-span-2 sm:col-span-1">
-              <p className="text-2xl font-extrabold text-rose-700">{statusCounts.declined}</p>
-              <p className="text-[11px] font-semibold uppercase text-rose-800 mt-1">Declined</p>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Applications Pipeline Log with Live Filtering & Section Export */}

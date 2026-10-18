@@ -185,7 +185,41 @@ export default function App() {
       });
     }
 
-    // 3. Immediately refresh announcements & notifications
+    // Add directly to in-app resident notifications list (so notification bell updates with unread count)
+    const newNotifItem: ResidentNotification = {
+      id: `ann-notif-${newsItem.id || Date.now()}`,
+      user_id: currentUserRef.current?.id,
+      title: bannerTitle,
+      message: bannerMessage,
+      type: isEmergency ? 'warning' : 'announcement',
+      is_read: false,
+      link_tab: 'announcements',
+      created_at: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setNotifications((prev) => {
+      if (prev.some((n) => n.id === newNotifItem.id || (n.title === bannerTitle && n.message === bannerMessage))) {
+        return prev;
+      }
+      return [newNotifItem, ...prev];
+    });
+
+    // Also persist into current user's local notification database
+    if (currentUserRef.current) {
+      const userScope = currentUserRef.current.id || currentUserRef.current.email || 'resident';
+      const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+      MobileStorage.getItem(userNotifsKey).then((raw) => {
+        try {
+          const list: ResidentNotification[] = raw ? JSON.parse(raw) : [];
+          if (!list.some((n) => n.id === newNotifItem.id || (n.title === bannerTitle && n.message === bannerMessage))) {
+            list.unshift(newNotifItem);
+            MobileStorage.setItem(userNotifsKey, JSON.stringify(list));
+          }
+        } catch {}
+      });
+    }
+
+    // Immediately refresh announcements & notifications
     fetchAnnouncements();
     if (currentUserRef.current) {
       fetchResidentNotifications(currentUserRef.current);
@@ -309,17 +343,19 @@ export default function App() {
                   id: `notif-${Date.now()}`,
                   title: event.data.title,
                   message: event.data.message || 'You received a new update from Barangay Zapatera.',
-                  isEmergency: false,
+                  isEmergency: !!event.data?.is_emergency,
                   category: 'Official Reply',
                   url: '/?tab=profile',
                 });
 
-                setActiveAnnouncementBanner({
-                  id: `banner-${Date.now()}`,
-                  title: event.data.title,
-                  message: event.data.message || 'You received a new response.',
-                  type: 'announcement',
-                });
+                if (event.data?.is_emergency) {
+                  setActiveAnnouncementBanner({
+                    id: `banner-${Date.now()}`,
+                    title: event.data.title,
+                    message: event.data.message || 'You received a new response.',
+                    type: 'warning',
+                  });
+                }
               }
             }
           } else if (event.data?.type === 'NEWS_DELETED') {
