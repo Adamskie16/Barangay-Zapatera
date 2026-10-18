@@ -11,8 +11,8 @@ import {
   CheckCircle2,
   X,
   FileCheck2,
+  FileText,
   Newspaper,
-  Users,
   Calendar,
   Clock,
   User,
@@ -31,26 +31,33 @@ import {
   Mail,
   Phone,
   Hash,
+  MapPin,
+  Flame,
+  AlertCircle,
+  FileBadge,
+  DollarSign,
 } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import ActionModal from '../../components/ActionModal';
-import UserAvatar from '../../components/UserAvatar';
+import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import { StorageService } from '../../core/storage';
-import { formatDate } from '../../core/security';
+import { formatDate, formatCurrency } from '../../core/security';
+import { supabase, isSupabaseConfigured } from '../../core/supabase';
 
 export default function ArchiveView({ currentUser, isDarkMode = false }) {
   // RBAC Guard - strictly accessible ONLY by admin and super_admin
   const userRole = (currentUser?.role || '').toLowerCase();
   const hasAccess = userRole === 'admin' || userRole === 'super_admin';
 
-  // Active Tab state: 'announcements' | 'users' | 'documents'
+  // Active Tab state: 'announcements' | 'requests' | 'documents'
   const [activeTab, setActiveTab] = useState('announcements');
 
   // Datasets
   const [archivedNews, setArchivedNews] = useState([]);
-  const [archivedUsers, setArchivedUsers] = useState([]);
+  const [archivedDocRequests, setArchivedDocRequests] = useState([]);
   const [archivedDocs, setArchivedDocs] = useState([]);
+  const [profilesMap, setProfilesMap] = useState({});
   const [loading, setLoading] = useState(true);
 
   // Search & Filters
@@ -62,7 +69,15 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Feedback & Action Modals
+  // Security Verification Modal State
+  const [securityVerification, setSecurityVerification] = useState({
+    isOpen: false,
+    item: null,
+    actionType: null, // 'restore' | 'purge'
+    dataType: null,   // 'announcements' | 'requests' | 'documents'
+  });
+
+  // Action Confirmation & Feedback Modal
   const [actionModal, setActionModal] = useState({
     isOpen: false,
     type: 'info',
@@ -70,6 +85,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     message: '',
     confirmText: 'Confirm',
     cancelText: 'Cancel',
+    buttonText: 'OK',
     isDestructive: false,
     isLoading: false,
     onConfirm: null,
@@ -87,18 +103,48 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // Load archived datasets from StorageService
+  // Resolve actor name from UUID or object
+  const resolveActorName = (actorIdOrName) => {
+    if (!actorIdOrName) return 'Administrator';
+    if (typeof actorIdOrName === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actorIdOrName)) {
+      const match = profilesMap[actorIdOrName];
+      if (match?.full_name) return match.full_name;
+      if (match?.email) return match.email;
+    }
+    return actorIdOrName;
+  };
+
+  // Load archived datasets & user profiles lookup from StorageService & Supabase
   const loadArchivedData = async () => {
     setLoading(true);
     try {
-      const [newsData, usersData, docsData] = await Promise.all([
+      // Build profiles lookup map
+      const lookup = {};
+      try {
+        if (isSupabaseConfigured()) {
+          const { data: profs } = await supabase.from('profiles').select('id, full_name, email, role');
+          if (Array.isArray(profs)) {
+            profs.forEach((p) => {
+              lookup[p.id] = p;
+            });
+          }
+        }
+      } catch (e) {}
+
+      const localUsers = StorageService.getUsers ? StorageService.getUsers() : [];
+      localUsers.forEach((u) => {
+        if (u.id) lookup[u.id] = u;
+      });
+      setProfilesMap(lookup);
+
+      const [newsData, reqsData, docsData] = await Promise.all([
         StorageService.getArchivedAnnouncementsAsync ? StorageService.getArchivedAnnouncementsAsync() : Promise.resolve([]),
-        StorageService.getArchivedUsersAsync ? StorageService.getArchivedUsersAsync() : Promise.resolve([]),
+        StorageService.getArchivedDocumentRequestsAsync ? StorageService.getArchivedDocumentRequestsAsync() : Promise.resolve([]),
         StorageService.getArchivedApprovedDocumentsAsync ? StorageService.getArchivedApprovedDocumentsAsync() : Promise.resolve([]),
       ]);
 
       setArchivedNews(Array.isArray(newsData) ? newsData : []);
-      setArchivedUsers(Array.isArray(usersData) ? usersData : []);
+      setArchivedDocRequests(Array.isArray(reqsData) ? reqsData : []);
       setArchivedDocs(Array.isArray(docsData) ? docsData : []);
     } catch (err) {
       console.error('Failed to load archived records:', err);
@@ -131,7 +177,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const processedData = useMemo(() => {
     let dataset = [];
     if (activeTab === 'announcements') dataset = [...archivedNews];
-    else if (activeTab === 'users') dataset = [...archivedUsers];
+    else if (activeTab === 'requests') dataset = [...archivedDocRequests];
     else if (activeTab === 'documents') dataset = [...archivedDocs];
 
     const q = searchQuery.trim().toLowerCase();
@@ -142,22 +188,24 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             (item.title || '').toLowerCase().includes(q) ||
             (item.category || '').toLowerCase().includes(q) ||
             (item.author || '').toLowerCase().includes(q) ||
-            (item.description || '').toLowerCase().includes(q)
+            (item.description || '').toLowerCase().includes(q) ||
+            (item.content || '').toLowerCase().includes(q)
         );
-      } else if (activeTab === 'users') {
+      } else if (activeTab === 'requests') {
         dataset = dataset.filter(
-          (u) =>
-            (u.full_name || '').toLowerCase().includes(q) ||
-            (u.email || '').toLowerCase().includes(q) ||
-            (u.role || '').toLowerCase().includes(q) ||
-            (u.phone || u.contact_number || '').toLowerCase().includes(q)
+          (r) =>
+            (r.tracking_number || '').toLowerCase().includes(q) ||
+            (r.resident_name || r.profiles?.full_name || '').toLowerCase().includes(q) ||
+            (r.resident_email || r.profiles?.email || '').toLowerCase().includes(q) ||
+            (r.document_title || r.document_types?.title || r.document_type || '').toLowerCase().includes(q) ||
+            (r.purpose || '').toLowerCase().includes(q)
         );
       } else if (activeTab === 'documents') {
         dataset = dataset.filter(
           (d) =>
             (d.tracking_number || '').toLowerCase().includes(q) ||
             (d.resident_name || d.profiles?.full_name || '').toLowerCase().includes(q) ||
-            (d.document_title || d.document_types?.name || '').toLowerCase().includes(q) ||
+            (d.document_title || d.document_types?.title || d.document_type || '').toLowerCase().includes(q) ||
             (d.purpose || '').toLowerCase().includes(q)
         );
       }
@@ -182,14 +230,12 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     });
 
     return dataset;
-  }, [activeTab, archivedNews, archivedUsers, archivedDocs, searchQuery, sortKey, sortDirection]);
+  }, [activeTab, archivedNews, archivedDocRequests, archivedDocs, searchQuery, sortKey, sortDirection]);
 
   // Strict 10-Row Pagination Calculations
   const totalEntries = processedData.length;
   const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
-  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
   const paginatedData = useMemo(() => {
     const start = (safeCurrentPage - 1) * pageSize;
     return processedData.slice(start, start + pageSize);
@@ -211,107 +257,104 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     return pages;
   };
 
-  // Restore Action Handler
+  // Trigger Security Verification for Restore
   const handlePromptRestore = (item, type) => {
-    const itemTitle =
-      type === 'announcements'
-        ? `announcement "${item.title}"`
-        : type === 'users'
-        ? `user account "${item.full_name || item.email}"`
-        : `approved document tracking record #${item.tracking_number}`;
-
-    setActionModal({
+    setSecurityVerification({
       isOpen: true,
-      type: 'confirmation',
-      title: 'Restore Record?',
-      message: (
-        <div className="space-y-2 text-left">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Are you sure you want to restore <strong>{itemTitle}</strong>?
-          </p>
-          <p className="text-xs text-slate-500">
-            This will return the item back to the active list.
-          </p>
-        </div>
-      ),
-      confirmText: 'Restore Record',
-      cancelText: 'Cancel',
-      isDestructive: false,
-      isLoading: false,
-      onConfirm: async () => {
-        setActionModal((prev) => ({ ...prev, isLoading: true }));
-        try {
-          if (type === 'announcements') {
-            await StorageService.restoreNews(item.id, currentUser);
-          } else if (type === 'users') {
-            await StorageService.restoreUser(item.id, currentUser);
-          } else if (type === 'documents') {
-            await StorageService.restoreApprovedDocument(item.id, item.tracking_number, currentUser);
-          }
-          await loadArchivedData();
-          setActionModal({ isOpen: false });
-          showToast(`Successfully restored ${itemTitle} to active records!`, 'success');
-        } catch (err) {
-          console.error('Failed to restore item:', err);
-          setActionModal({ isOpen: false });
-          showToast('Failed to restore item. Please try again.', 'error');
-        }
-      },
-      onClose: () => setActionModal({ isOpen: false }),
+      item,
+      actionType: 'restore',
+      dataType: type || activeTab,
     });
   };
 
-  // Permanent Purge Action Handler
+  // Trigger Security Verification for Permanent Purge
   const handlePromptPurge = (item, type) => {
-    const itemTitle =
-      type === 'announcements'
-        ? `announcement "${item.title}"`
-        : type === 'users'
-        ? `user account "${item.full_name || item.email}"`
-        : `document #${item.tracking_number}`;
-
-    setActionModal({
+    setSecurityVerification({
       isOpen: true,
-      type: 'warning',
-      title: 'Permanently Purge Record?',
-      message: (
-        <div className="space-y-3 text-left">
-          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl flex items-start space-x-2.5">
-            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-            <div className="text-xs text-rose-900 dark:text-rose-200">
-              <span className="font-bold">Warning:</span> This will permanently delete this item. You cannot undo this action.
-            </div>
-          </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Are you sure you want to permanently delete <strong>{itemTitle}</strong>?
-          </p>
-        </div>
-      ),
-      confirmText: 'Permanently Delete',
-      cancelText: 'Cancel',
-      isDestructive: true,
-      isLoading: false,
-      onConfirm: async () => {
-        setActionModal((prev) => ({ ...prev, isLoading: true }));
-        try {
-          if (type === 'announcements') {
-            await StorageService.purgeNews(item.id, currentUser);
-          } else if (type === 'users') {
-            await StorageService.purgeUser(item.id, currentUser);
-          } else if (type === 'documents') {
-            await StorageService.purgeApprovedDocument(item.id, item.tracking_number, currentUser);
-          }
-          await loadArchivedData();
-          setActionModal({ isOpen: false });
-          showToast(`Permanently deleted ${itemTitle} from the database.`, 'success');
-        } catch (err) {
-          console.error('Failed to purge item:', err);
-          setActionModal({ isOpen: false });
-          showToast('Failed to purge record. Please try again.', 'error');
-        }
-      },
-      onClose: () => setActionModal({ isOpen: false }),
+      item,
+      actionType: 'purge',
+      dataType: type || activeTab,
     });
+  };
+
+  // Execute Verified Restore Action
+  const executeVerifiedRestore = async () => {
+    const { item, dataType } = securityVerification;
+    if (!item) return;
+
+    try {
+      if (dataType === 'announcements') {
+        await StorageService.restoreNews(item.id, currentUser);
+      } else if (dataType === 'requests') {
+        await StorageService.restoreDocumentRequest(item.id, item.tracking_number, currentUser);
+      } else if (dataType === 'documents') {
+        await StorageService.restoreApprovedDocument(item.id, item.tracking_number, currentUser);
+      }
+
+      await loadArchivedData();
+      if (inspectItem?.id === item.id) {
+        setInspectItem(null);
+      }
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Record Restored Successfully',
+        message: `The ${dataType === 'announcements' ? 'announcement' : 'document record'} has been restored back to active records.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.error('Failed to restore record:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Restore Failed',
+        message: 'Could not restore the item from archive. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    }
+  };
+
+  // Execute Verified Purge Action
+  const executeVerifiedPurge = async () => {
+    const { item, dataType } = securityVerification;
+    if (!item) return;
+
+    try {
+      if (dataType === 'announcements') {
+        await StorageService.purgeNews(item.id, currentUser);
+      } else if (dataType === 'requests') {
+        await StorageService.purgeDocumentRequest(item.id, item.tracking_number, currentUser);
+      } else if (dataType === 'documents') {
+        await StorageService.purgeApprovedDocument(item.id, item.tracking_number, currentUser);
+      }
+
+      await loadArchivedData();
+      if (inspectItem?.id === item.id) {
+        setInspectItem(null);
+      }
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Record Permanently Deleted',
+        message: `The ${dataType === 'announcements' ? 'announcement' : 'document record'} has been permanently erased from the database.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.error('Failed to purge record:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Purge Failed',
+        message: 'Could not permanently delete the record. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    }
   };
 
   // Unauthorized Access Guard UI
@@ -361,10 +404,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1.5">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-              Archive & Trash
+              Archive & Trash Management
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-              View deleted announcements, accounts, and documents. You can restore them or permanently delete them.
+              Centralized repository for deleted announcements, document requests, and approved documents. Items can be inspected, restored, or permanently deleted with password authorization.
             </p>
           </div>
 
@@ -392,7 +435,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
       }`}>
         {[
           { id: 'announcements', label: 'Announcements Archive', icon: Newspaper, count: archivedNews.length, color: 'blue' },
-          { id: 'users', label: 'User Accounts Archive', icon: Users, count: archivedUsers.length, color: 'indigo' },
+          { id: 'requests', label: 'Document Requests Archive', icon: FileText, count: archivedDocRequests.length, color: 'indigo' },
           { id: 'documents', label: 'Approved Documents Archive', icon: FileCheck2, count: archivedDocs.length, color: 'emerald' },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -403,7 +446,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-2.5 transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-md ring-1 ring-slate-950/5'
+                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-500/20'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
               }`}
             >
@@ -411,7 +454,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               <span>{tab.label}</span>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                 isActive
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  ? 'bg-white/20 text-white'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
               }`}>
                 {tab.count}
@@ -434,9 +477,9 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             placeholder={`Search ${
               activeTab === 'announcements'
                 ? 'by title, category, author...'
-                : activeTab === 'users'
-                ? 'by name, email, role, phone...'
-                : 'by tracking number, resident, document type...'
+                : activeTab === 'requests'
+                ? 'by tracking number, resident, document type...'
+                : 'by tracking number, resident name...'
             }`}
             className={`w-full pl-9 pr-9 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
               isDarkMode
@@ -447,7 +490,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -479,6 +522,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
       }`}>
         <div className="overflow-x-auto min-w-full">
+          {/* 1. Announcements Table */}
           {activeTab === 'announcements' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
@@ -525,102 +569,111 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                     <td colSpan={7} className="p-12 text-center text-slate-400">
                       <Archive className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                       <p className="font-bold text-sm">No archived announcements found</p>
-                      <p className="text-xs">Deleted announcements will appear here.</p>
+                      <p className="text-xs">Deleted announcements from News & Bulletins will appear here.</p>
                     </td>
                   </tr>
                 ) : (
-                  paginatedData.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4 max-w-xs">
-                        <div className="flex items-center space-x-3">
-                          {item.banner_url ? (
-                            <img src={item.banner_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                              <Newspaper className="w-5 h-5 text-slate-400" />
+                  paginatedData.map((item) => {
+                    const archivedByName = resolveActorName(item.archived_by_name || item.deleted_by);
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-4 max-w-xs">
+                          <div className="flex items-center space-x-3">
+                            {item.banner_url ? (
+                              <img src={item.banner_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-700" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                                <Newspaper className="w-5 h-5 text-slate-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
+                              <p className="text-[11px] text-slate-400 truncate max-w-[240px]">{item.description || item.content}</p>
                             </div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-[240px]">{item.description || item.content}</p>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
-                          {item.category || 'General'}
-                        </span>
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-medium text-slate-600 dark:text-slate-300">
-                        {item.author || item.created_by_name || 'Administration'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500">
-                        {formatDate(item.created_at)}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                        {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500 text-[11px]">
-                        {item.archived_by_name || item.profiles?.full_name || 'System Auto-Expire'}
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => setInspectItem({ ...item, _type: 'announcements' })}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                            title="Inspect Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePromptRestore(item, 'announcements')}
-                            className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
-                            title="Restore Announcement"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore</span>
-                          </button>
-                          <button
-                            onClick={() => handlePromptPurge(item, 'announcements')}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                            title="Permanently Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
+                            {item.category || 'General'}
+                          </span>
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-medium text-slate-600 dark:text-slate-300">
+                          {item.author || item.created_by_name || 'Administration'}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-500">
+                          {formatDate(item.created_at)}
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
+                          {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                          {archivedByName}
+                        </td>
+                        <td className="p-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => setInspectItem({ ...item, _type: 'announcements' })}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              title="Inspect Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handlePromptRestore(item, 'announcements')}
+                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              title="Restore Announcement"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              onClick={() => handlePromptPurge(item, 'announcements')}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              title="Permanently Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           )}
 
-          {activeTab === 'users' && (
+          {/* 2. Document Requests Table */}
+          {activeTab === 'requests' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
                   isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
                 }`}>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('full_name')}>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('tracking_number')}>
                     <div className="flex items-center space-x-1">
-                      <span>User Account</span>
+                      <span>Tracking # / Document</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('email')}>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('resident_name')}>
                     <div className="flex items-center space-x-1">
-                      <span>Email</span>
+                      <span>Resident Name</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('role')}>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('status')}>
                     <div className="flex items-center space-x-1">
-                      <span>Role</span>
+                      <span>Status When Deleted</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
-                  <th className="p-4">Contact Number</th>
+                  <th className="p-4 cursor-pointer" onClick={() => handleSort('created_at')}>
+                    <div className="flex items-center space-x-1">
+                      <span>Date Submitted</span>
+                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </th>
                   <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
                     <div className="flex items-center space-x-1 text-rose-500">
                       <span>Date Archived</span>
@@ -635,79 +688,91 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 {paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-12 text-center text-slate-400">
-                      <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived accounts found</p>
-                      <p className="text-xs">Deleted accounts will appear here and can be restored anytime.</p>
+                      <FileText className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                      <p className="font-bold text-sm">No archived document requests found</p>
+                      <p className="text-xs">Deleted document requests will appear here and can be restored.</p>
                     </td>
                   </tr>
                 ) : (
-                  paginatedData.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center space-x-3">
-                          <UserAvatar user={u} size="sm" />
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-900 dark:text-white truncate">{u.full_name || 'Barangay Citizen'}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">ID: {u.id?.slice(0, 8)}...</p>
+                  paginatedData.map((req) => {
+                    const residentName = req.resident_name || req.profiles?.full_name || 'Resident';
+                    const docTitle = req.document_title || req.document_types?.title || req.document_type || 'Document Request';
+                    const archivedByName = resolveActorName(req.archived_by_name || req.deleted_by);
+
+                    return (
+                      <tr key={req.id || req.tracking_number} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-900/60">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold font-mono text-slate-900 dark:text-white truncate">
+                                {req.tracking_number || `#${req.id?.slice(0, 8)}`}
+                              </p>
+                              <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{docTitle}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-mono text-[11px]">
-                        {u.email}
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
-                          u.role === 'admin' || u.role === 'super_admin'
-                            ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200'
-                            : u.role === 'treasurer'
-                            ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200'
-                            : 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200'
-                        }`}>
-                          {u.role || 'resident'}
-                        </span>
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500">
-                        {u.phone || u.contact_number || 'N/A'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                        {u.deleted_at ? formatDate(u.deleted_at) : 'Archived'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500 text-[11px]">
-                        {u.archived_by_name || u.deleted_by || 'Admin'}
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => setInspectItem({ ...u, _type: 'users' })}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                            title="Inspect Profile"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePromptRestore(u, 'users')}
-                            className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
-                            title="Restore User Account"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore</span>
-                          </button>
-                          <button
-                            onClick={() => handlePromptPurge(u, 'users')}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                            title="Permanently Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <p className="font-bold text-slate-800 dark:text-slate-200">{residentName}</p>
+                          <p className="text-[10px] text-slate-400">{req.resident_email || req.profiles?.email || 'N/A'}</p>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
+                            req.status === 'declined'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : req.status === 'under_review' || req.status === 'processing'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {req.status || 'pending'}
+                          </span>
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-500">
+                          {formatDate(req.created_at)}
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
+                          {req.deleted_at ? formatDate(req.deleted_at) : 'Archived'}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                          {archivedByName}
+                        </td>
+                        <td className="p-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => setInspectItem({ ...req, _type: 'requests' })}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              title="Inspect Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handlePromptRestore(req, 'requests')}
+                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              title="Restore Document Request"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              onClick={() => handlePromptPurge(req, 'requests')}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              title="Permanently Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           )}
 
+          {/* 3. Approved Documents Table */}
           {activeTab === 'documents' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
@@ -728,7 +793,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   </th>
                   <th className="p-4 cursor-pointer" onClick={() => handleSort('document_title')}>
                     <div className="flex items-center space-x-1">
-                      <span>Document Type</span>
+                      <span>Document Title</span>
                       <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
@@ -740,11 +805,11 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   </th>
                   <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
                     <div className="flex items-center space-x-1 text-rose-500">
-                      <span>Date Deleted</span>
+                      <span>Date Archived</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
-                  <th className="p-4">Deleted By</th>
+                  <th className="p-4">Archived By</th>
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -753,99 +818,90 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   <tr>
                     <td colSpan={7} className="p-12 text-center text-slate-400">
                       <FileCheck2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived documents found</p>
-                      <p className="text-xs">Deleted document records will appear here.</p>
+                      <p className="font-bold text-sm">No archived approved documents found</p>
+                      <p className="text-xs">Deleted approved certificates will appear here.</p>
                     </td>
                   </tr>
                 ) : (
-                  paginatedData.map((d) => (
-                    <tr key={d.id || d.tracking_number} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-4 whitespace-nowrap font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {d.tracking_number}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-slate-900 dark:text-white">
-                        {d.resident_name || d.profiles?.full_name || 'Resident Applicant'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                          {d.document_title || d.document_types?.name || 'Barangay Certificate'}
-                        </span>
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500">
-                        {formatDate(d.approved_at || d.created_at)}
-                      </td>
-                      <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                        {d.deleted_at ? formatDate(d.deleted_at) : 'Archived'}
-                      </td>
-                      <td className="p-4 whitespace-nowrap text-slate-500 text-[11px]">
-                        {d.archived_by_name || d.deleted_by_profile?.full_name || 'Barangay Admin'}
-                      </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => setInspectItem({ ...d, _type: 'documents' })}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
-                            title="Inspect Request"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePromptRestore(d, 'documents')}
-                            className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
-                            title="Restore Document Record"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore</span>
-                          </button>
-                          <button
-                            onClick={() => handlePromptPurge(d, 'documents')}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                            title="Permanently Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedData.map((doc) => {
+                    const residentName = doc.resident_name || doc.profiles?.full_name || 'Resident';
+                    const docTitle = doc.document_title || doc.document_types?.title || doc.document_type || 'Official Certificate';
+                    const archivedByName = resolveActorName(doc.archived_by_name || doc.deleted_by);
+
+                    return (
+                      <tr key={doc.id || doc.tracking_number} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-900/60">
+                              <FileCheck2 className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold font-mono text-slate-900 dark:text-white">
+                                {doc.tracking_number}
+                              </p>
+                              <span className="text-[10px] text-emerald-600 font-semibold uppercase">Approved Clearance</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 whitespace-nowrap">
+                          <p className="font-bold text-slate-800 dark:text-slate-200">{residentName}</p>
+                          <p className="text-[10px] text-slate-400">{doc.resident_email || doc.profiles?.email || 'N/A'}</p>
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
+                          {docTitle}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-500">
+                          {formatDate(doc.approved_at || doc.created_at)}
+                        </td>
+                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
+                          {doc.deleted_at ? formatDate(doc.deleted_at) : 'Archived'}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                          {archivedByName}
+                        </td>
+                        <td className="p-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => setInspectItem({ ...doc, _type: 'documents' })}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              title="Inspect Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handlePromptRestore(doc, 'documents')}
+                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              title="Restore Document Record"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore</span>
+                            </button>
+                            <button
+                              onClick={() => handlePromptPurge(doc, 'documents')}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              title="Permanently Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           )}
         </div>
 
-        {/* 10-Row Standard Consistent Pagination Footer */}
+        {/* 10-Row Standard Pagination Footer */}
         <div className={`p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs transition-colors ${
-          isDarkMode ? 'bg-slate-950/40 border-slate-800 text-slate-400' : 'bg-slate-50/60 border-slate-200 text-slate-600'
+          isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'
         }`}>
-          <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-            <span className="font-medium">
-              Showing <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{startIndex}</span> to{' '}
-              <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{endIndex}</span> of{' '}
-              <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalEntries}</span> entries
-            </span>
-
-            <div className="flex items-center space-x-1.5 text-xs">
-              <span className="hidden md:inline text-slate-500">Rows per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className={`px-2 py-1 text-xs border rounded-md font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
-                  isDarkMode
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-white border-slate-300 text-slate-800'
-                }`}
-              >
-                {[10, 25, 50].map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            Showing <span className="font-bold text-slate-700 dark:text-slate-200">{paginatedData.length > 0 ? (safeCurrentPage - 1) * pageSize + 1 : 0}</span> to{' '}
+            <span className="font-bold text-slate-700 dark:text-slate-200">{Math.min(safeCurrentPage * pageSize, totalEntries)}</span> of{' '}
+            <span className="font-bold text-slate-700 dark:text-slate-200">{totalEntries}</span> records
           </div>
 
           <div className="flex items-center space-x-1">
@@ -854,9 +910,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
               className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
               }`}
               title="First page"
             >
@@ -868,9 +922,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
               className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
               }`}
               title="Previous page"
             >
@@ -880,9 +932,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             <div className="flex items-center space-x-1">
               {getPageNumbers().map((num, i) =>
                 num === '...' ? (
-                  <span key={`dots-${i}`} className="px-2 py-1 text-slate-400">
-                    …
-                  </span>
+                  <span key={`dots-${i}`} className="px-2 py-1 text-slate-400">…</span>
                 ) : (
                   <button
                     key={`page-${num}`}
@@ -907,9 +957,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
               className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
               }`}
               title="Next page"
             >
@@ -921,9 +969,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
               className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode
-                  ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                  : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
               }`}
               title="Last page"
             >
@@ -933,7 +979,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         </div>
       </div>
 
-      {/* Item Inspect Modal */}
+      {/* Rich Human-Readable Item Details Modal */}
       {inspectItem && (
         <Modal
           isOpen={!!inspectItem}
@@ -941,33 +987,231 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
           title="Item Details"
           darkMode={isDarkMode}
         >
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1">
-              <p className="font-bold text-slate-900 dark:text-white text-sm">
-                {inspectItem.title || inspectItem.full_name || inspectItem.tracking_number}
-              </p>
-              <p className="text-slate-500">
-                Archived at: {formatDate(inspectItem.deleted_at)} by{' '}
+          <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
+            {/* Header info box */}
+            <div className="p-4 bg-slate-100 dark:bg-slate-800/80 rounded-2xl space-y-1.5 border border-slate-200/80 dark:border-slate-700/60">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="font-extrabold text-slate-900 dark:text-white text-base">
+                  {inspectItem.title || inspectItem.tracking_number}
+                </p>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                  Archived Record
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs">
+                Archived at:{' '}
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {inspectItem.archived_by_name || inspectItem.deleted_by || 'System'}
+                  {formatDate(inspectItem.deleted_at)}
+                </span>{' '}
+                by{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {resolveActorName(inspectItem.archived_by_name || inspectItem.deleted_by)}
                 </span>
               </p>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px]">
-                Details
-              </h4>
-              <pre className="p-3 bg-slate-950 text-slate-200 rounded-xl overflow-x-auto text-[11px] font-mono max-h-60">
-                {JSON.stringify(inspectItem, null, 2)}
-              </pre>
-            </div>
+            {/* A. Rich News & Bulletins View */}
+            {inspectItem._type === 'announcements' && (
+              <div className="space-y-4">
+                {/* Banner Preview if available */}
+                {inspectItem.banner_url && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-48">
+                    <img
+                      src={inspectItem.banner_url}
+                      alt={inspectItem.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
 
-            <div className="pt-3 border-t flex items-center justify-between">
+                {/* Badges / Category bar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center space-x-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>{inspectItem.category || 'General Advisory'}</span>
+                  </span>
+
+                  {inspectItem.is_emergency && (
+                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-1.5 animate-pulse">
+                      <Flame className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Emergency Alert</span>
+                    </span>
+                  )}
+
+                  {inspectItem.is_important && (
+                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center space-x-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Important Notice</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Author / Issuer</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.author || inspectItem.created_by_name || 'Barangay Administration'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Audience</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs capitalize">
+                      {inspectItem.target_audience || 'All Residents'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Location</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.location || 'Barangay Zapatera, Cebu City'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Date Posted</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {formatDate(inspectItem.created_at)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Description Box */}
+                {inspectItem.description && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Summary / Description</span>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                      {inspectItem.description}
+                    </div>
+                  </div>
+                )}
+
+                {/* Content Box */}
+                {inspectItem.content && inspectItem.content !== inspectItem.description && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Full Content</span>
+                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      {inspectItem.content}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* B. Rich Document Requests View */}
+            {inspectItem._type === 'requests' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Tracking Number</span>
+                    <span className="font-bold font-mono text-blue-600 dark:text-blue-400 text-xs">
+                      {inspectItem.tracking_number}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Document Type</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.document_title || inspectItem.document_types?.title || inspectItem.document_type || 'Certificate'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Resident Name</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.resident_name || inspectItem.profiles?.full_name || 'Resident'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Contact Email</span>
+                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                      {inspectItem.resident_email || inspectItem.profiles?.email || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                      {inspectItem.resident_phone || inspectItem.profiles?.phone || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Sitio / Address</span>
+                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                      {inspectItem.sitio || inspectItem.profiles?.sitio || inspectItem.resident_address || 'Barangay Zapatera'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Purpose and details */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Purpose of Request</span>
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-semibold">
+                    {inspectItem.purpose || 'Local Requirement / Employment / Verification'}
+                  </div>
+                </div>
+
+                {inspectItem.rejection_reason && (
+                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs space-y-1">
+                    <span className="font-bold text-rose-900 dark:text-rose-200 uppercase text-[10px]">Decline Reason</span>
+                    <p className="text-rose-700 dark:text-rose-300">{inspectItem.rejection_reason}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* C. Rich Approved Documents View */}
+            {inspectItem._type === 'documents' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Tracking Number</span>
+                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 text-xs">
+                      {inspectItem.tracking_number}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Document Title</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.document_title || inspectItem.document_types?.title || 'Official Document'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Resident Recipient</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.resident_name || inspectItem.profiles?.full_name || 'Resident'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Approved Date</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                      {formatDate(inspectItem.approved_at || inspectItem.created_at)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Processed By</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                      {inspectItem.processed_by || 'Barangay Administrator'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Release Status</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs uppercase">
+                      {inspectItem.is_claimed ? 'Claimed & Released' : 'Ready for Pickup'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Purpose / Remarks</span>
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-semibold">
+                    {inspectItem.purpose || 'Official Barangay Clearance & Certification'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer with Actions */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setInspectItem(null)}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
               >
                 Close
               </button>
@@ -976,10 +1220,9 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                   type="button"
                   onClick={() => {
                     const it = inspectItem;
-                    setInspectItem(null);
                     handlePromptRestore(it, it._type);
                   }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Restore Now</span>
@@ -990,7 +1233,24 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         </Modal>
       )}
 
-      {/* Global Action Confirmation Modal */}
+      {/* Security Verification Modal for Restore & Purge Actions */}
+      <SecurityVerificationModal
+        isOpen={securityVerification.isOpen}
+        onClose={() => setSecurityVerification({ isOpen: false, item: null, actionType: null, dataType: null })}
+        onVerified={securityVerification.actionType === 'restore' ? executeVerifiedRestore : executeVerifiedPurge}
+        currentUser={currentUser}
+        title={securityVerification.actionType === 'restore' ? 'Security Verification: Restore Record' : 'Security Verification: Permanent Deletion'}
+        message={
+          securityVerification.actionType === 'restore'
+            ? `Please confirm your password to verify restoring this ${securityVerification.dataType === 'announcements' ? 'announcement' : 'document record'} to active status.`
+            : `Warning: This will permanently delete this record from the database. Please enter your password to confirm.`
+        }
+        confirmText={securityVerification.actionType === 'restore' ? 'Verify & Restore' : 'Verify & Permanently Delete'}
+        isDestructive={securityVerification.actionType === 'purge'}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* Global Accessible Action Confirmation Modal */}
       <ActionModal
         isOpen={actionModal.isOpen}
         type={actionModal.type}
@@ -998,10 +1258,11 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         message={actionModal.message}
         confirmText={actionModal.confirmText}
         cancelText={actionModal.cancelText}
+        buttonText={actionModal.buttonText}
         isDestructive={actionModal.isDestructive}
         isLoading={actionModal.isLoading}
         onConfirm={actionModal.onConfirm}
-        onClose={actionModal.onClose}
+        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
         isDarkMode={isDarkMode}
       />
     </div>

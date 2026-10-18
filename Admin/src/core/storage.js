@@ -463,75 +463,14 @@ export const StorageService = {
   },
 
   deleteRequest: async (requestId, trackingNumber, adminUser) => {
-    // If deleting an approved document, soft-archive it for compliance and recovery!
+    // If deleting an approved document, soft-archive it to approved documents archive
     const allRequests = StorageService.getRequests();
     const req = allRequests.find((r) => (requestId && r.id === requestId) || (trackingNumber && r.tracking_number === trackingNumber));
     if (req && (req.status === 'approved' || req.status === 'completed' || req.status === 'issued' || req.status === 'ready_for_pickup')) {
       return StorageService.archiveApprovedDocument(requestId, trackingNumber, adminUser);
     }
-
-    // 1. Record in zapatera_deleted_requests registry
-    try {
-      const deletedList = JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
-      const entry = {
-        id: requestId,
-        tracking_number: trackingNumber,
-        deleted_at: new Date().toISOString(),
-      };
-      if (!deletedList.some((d) => (d.id && d.id === requestId) || (d.tracking_number && d.tracking_number === trackingNumber))) {
-        deletedList.push(entry);
-        localStorage.setItem('zapatera_deleted_requests', JSON.stringify(deletedList));
-      }
-    } catch (e) {}
-
-    // 2. Filter local storage
-    const filteredRequests = allRequests.filter((r) => r.id !== requestId && r.tracking_number !== trackingNumber);
-    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(filteredRequests));
-
-    // 3. Delete from Supabase by ID and by tracking number
-    try {
-      if (isSupabaseConfigured()) {
-        if (requestId) {
-          try {
-            await supabase.from('document_requests').delete().eq('id', requestId);
-          } catch (e) {}
-        }
-        if (trackingNumber) {
-          try {
-            await supabase.from('document_requests').delete().eq('tracking_number', trackingNumber.trim());
-          } catch (e) {}
-        }
-      }
-    } catch (err) {
-      console.error('Error deleting document request from Supabase:', err);
-    }
-
-    // 4. Cross-tab & cross-app BroadcastChannel notification
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        const bc = new BroadcastChannel('zapatera_security_channel');
-        bc.postMessage({
-          type: 'DOCUMENT_REQUEST_DELETED',
-          requestId,
-          trackingNumber,
-        });
-        bc.close();
-      } catch (e) {}
-    }
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('zapatera_request_deleted', {
-        detail: { requestId, trackingNumber }
-      }));
-    }
-
-    StorageService.addLog({
-      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
-      action: 'Deleted Approved Document Record',
-      feature: 'Approved Documents',
-      details: `Tracking: ${trackingNumber || requestId}, Deleted by ${adminUser?.full_name || adminUser?.email || 'Admin'}`,
-      level: 'warning',
-    });
+    // Otherwise soft-archive non-approved document requests into the Document Request Archive
+    return StorageService.archiveDocumentRequest(requestId, trackingNumber, adminUser);
   },
 
   // EVENTS & ANNOUNCEMENTS
@@ -925,15 +864,47 @@ export const StorageService = {
     }
   },
 
+  getArchivedDocumentRequestsAsync: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase
+          .from('document_requests')
+          .select('*, profiles:resident_id(full_name, email, phone, address, sitio), deleted_by_profile:deleted_by(full_name, email), document_types(*)')
+          .or('is_archived.eq.true,deleted_at.not.is.null')
+          .order('deleted_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          // Non-approved requests (pending, under_review, declined, cancelled, etc.)
+          const nonApproved = data.filter(
+            (d) => !['approved', 'completed', 'issued', 'ready_for_pickup'].includes(String(d.status || '').toLowerCase())
+          );
+          if (nonApproved.length > 0) return nonApproved;
+        }
+      }
+    } catch {}
+    try {
+      return JSON.parse(localStorage.getItem('zapatera_doc_requests_archive_db') || '[]');
+    } catch {
+      return [];
+    }
+  },
+
   getArchivedApprovedDocumentsAsync: async () => {
     try {
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('document_requests')
-          .select('*, profiles:resident_id(full_name, email, phone), deleted_by_profile:deleted_by(full_name, email), document_types(*)')
+          .select('*, profiles:resident_id(full_name, email, phone, address, sitio), deleted_by_profile:deleted_by(full_name, email), document_types(*)')
           .or('is_archived.eq.true,deleted_at.not.is.null')
           .order('deleted_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data;
+
+        if (!error && Array.isArray(data)) {
+          // Approved documents only
+          const approved = data.filter(
+            (d) => ['approved', 'completed', 'issued', 'ready_for_pickup'].includes(String(d.status || '').toLowerCase())
+          );
+          if (approved.length > 0) return approved;
+        }
       }
     } catch {}
     try {
@@ -1161,6 +1132,127 @@ export const StorageService = {
     });
   },
 
+  archiveDocumentRequest: async (requestId, trackingNumber, adminUser) => {
+    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const deletedAt = new Date().toISOString();
+
+    let requests = StorageService.getRequests();
+    const target = requests.find((r) => (requestId && r.id === requestId) || (trackingNumber && r.tracking_number === trackingNumber));
+    requests = requests.filter((r) => (requestId ? r.id !== requestId : true) && (trackingNumber ? r.tracking_number !== trackingNumber : true));
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+
+    const archiveReqItem = {
+      ...(target || { id: requestId, tracking_number: trackingNumber }),
+      is_archived: true,
+      deleted_at: deletedAt,
+      deleted_by: actorId,
+      archived_by_name: actorName,
+    };
+    try {
+      const arcList = JSON.parse(localStorage.getItem('zapatera_doc_requests_archive_db') || '[]');
+      if (!arcList.some((d) => (requestId && d.id === requestId) || (trackingNumber && d.tracking_number === trackingNumber))) {
+        arcList.unshift(archiveReqItem);
+        localStorage.setItem('zapatera_doc_requests_archive_db', JSON.stringify(arcList));
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Archived Document Request',
+      feature: 'Archive & Trash Management',
+      details: `Soft-deleted document request ${trackingNumber || requestId} to recycling bin`,
+      level: 'warning',
+    });
+  },
+
+  restoreDocumentRequest: async (requestId, trackingNumber, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_doc_requests_archive_db') || '[]');
+      const item = arcList.find((d) => (requestId && d.id === requestId) || (trackingNumber && d.tracking_number === trackingNumber));
+      arcList = arcList.filter((d) => (requestId ? d.id !== requestId : true) && (trackingNumber ? d.tracking_number !== trackingNumber : true));
+      localStorage.setItem('zapatera_doc_requests_archive_db', JSON.stringify(arcList));
+
+      try {
+        const deletedReqs = JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+        const updatedDeletedReqs = deletedReqs.filter((d) => {
+          const dId = (typeof d === 'object' && d !== null ? d.id : d);
+          const dTrack = (typeof d === 'object' && d !== null ? d.tracking_number : '');
+          if (requestId && dId === requestId) return false;
+          if (trackingNumber && dTrack === trackingNumber) return false;
+          return true;
+        });
+        localStorage.setItem('zapatera_deleted_requests', JSON.stringify(updatedDeletedReqs));
+      } catch {}
+
+      if (item) {
+        const restored = { ...item, is_archived: false, deleted_at: null, deleted_by: null };
+        const requests = StorageService.getRequests();
+        if (!requests.some((r) => (requestId && r.id === requestId) || (trackingNumber && r.tracking_number === trackingNumber))) {
+          requests.unshift(restored);
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+        }
+      }
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').update({ is_archived: false, deleted_at: null, deleted_by: null }).eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').update({ is_archived: false, deleted_at: null, deleted_by: null }).eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Restored Document Request',
+      feature: 'Archive & Trash Management',
+      details: `Restored document request ${trackingNumber || requestId} from archive`,
+      level: 'info',
+    });
+  },
+
+  purgeDocumentRequest: async (requestId, trackingNumber, adminUser) => {
+    try {
+      let arcList = JSON.parse(localStorage.getItem('zapatera_doc_requests_archive_db') || '[]');
+      arcList = arcList.filter((d) => (requestId ? d.id !== requestId : true) && (trackingNumber ? d.tracking_number !== trackingNumber : true));
+      localStorage.setItem('zapatera_doc_requests_archive_db', JSON.stringify(arcList));
+    } catch {}
+
+    try {
+      if (isSupabaseConfigured()) {
+        if (requestId) {
+          await supabase.from('document_requests').delete().eq('id', requestId);
+        }
+        if (trackingNumber) {
+          await supabase.from('document_requests').delete().eq('tracking_number', trackingNumber.trim());
+        }
+      }
+    } catch {}
+
+    StorageService.addLog({
+      user_email: adminUser?.email || 'admin@zapatera.gov.ph',
+      action: 'Permanently Purged Document Request',
+      feature: 'Archive & Trash Management',
+      details: `Permanently erased document request ${trackingNumber || requestId} from database`,
+      level: 'danger',
+    });
+  },
+
   archiveApprovedDocument: async (requestId, trackingNumber, adminUser) => {
     const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
     const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
@@ -1212,6 +1304,18 @@ export const StorageService = {
       const item = arcList.find((d) => (requestId && d.id === requestId) || (trackingNumber && d.tracking_number === trackingNumber));
       arcList = arcList.filter((d) => (requestId ? d.id !== requestId : true) && (trackingNumber ? d.tracking_number !== trackingNumber : true));
       localStorage.setItem('zapatera_approved_docs_archive_db', JSON.stringify(arcList));
+
+      try {
+        const deletedReqs = JSON.parse(localStorage.getItem('zapatera_deleted_requests') || '[]');
+        const updatedDeletedReqs = deletedReqs.filter((d) => {
+          const dId = (typeof d === 'object' && d !== null ? d.id : d);
+          const dTrack = (typeof d === 'object' && d !== null ? d.tracking_number : '');
+          if (requestId && dId === requestId) return false;
+          if (trackingNumber && dTrack === trackingNumber) return false;
+          return true;
+        });
+        localStorage.setItem('zapatera_deleted_requests', JSON.stringify(updatedDeletedReqs));
+      } catch {}
 
       if (item) {
         const restored = { ...item, is_archived: false, deleted_at: null, deleted_by: null };

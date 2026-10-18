@@ -556,12 +556,37 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           }
         } catch (e) {}
 
+        const deletedAccountsSet = new Set();
+        try {
+          const delList = JSON.parse(localStorage.getItem('zapatera_deleted_accounts') || '[]');
+          if (Array.isArray(delList)) {
+            delList.forEach((d) => {
+              if (d.email) deletedAccountsSet.add(d.email.toLowerCase().trim());
+              if (d.id) deletedAccountsSet.add(String(d.id).trim());
+            });
+          }
+          const arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+          if (Array.isArray(arcList)) {
+            arcList.forEach((d) => {
+              if (d.email) deletedAccountsSet.add(d.email.toLowerCase().trim());
+              if (d.id) deletedAccountsSet.add(String(d.id).trim());
+            });
+          }
+        } catch (_) {}
+
         if (!error && supaProfiles) {
           const seenEmails = new Set();
           const uniqueProfiles = [];
 
           for (const p of supaProfiles) {
             const cleanEmail = (p.email || '').toLowerCase().trim();
+            const pId = p.id ? String(p.id).trim() : '';
+
+            // Strictly filter out archived and soft-deleted accounts
+            if (p.is_archived === true || p.deleted_at != null || deletedAccountsSet.has(cleanEmail) || deletedAccountsSet.has(pId)) {
+              continue;
+            }
+
             const localMatch = localResidents.find(
               (lr) => (lr.email && lr.email.toLowerCase() === cleanEmail) || (lr.id && lr.id === p.id)
             );
@@ -583,7 +608,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             seenEmails.add(cleanEmail);
 
             const hasPendingUnlock = lockedEmailMap.has(cleanEmail);
-            const isLocked = p.is_locked || (p.failed_attempts || 0) >= 3 || p.is_active === false || hasPendingUnlock;
+            const isLocked = p.is_locked || (p.failed_attempts || 0) >= 3 || hasPendingUnlock;
 
             uniqueProfiles.push({
               ...p,
@@ -606,7 +631,12 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     // Fallback if Supabase fetch failed or returned error
     const fallbackList = (Array.isArray(users) && users.length > 0) ? users : StorageService.getUsers();
-    setUsersList(fallbackList || []);
+    const activeFallback = (fallbackList || []).filter((u) => {
+      const cleanEmail = (u.email || '').toLowerCase().trim();
+      const uId = u.id ? String(u.id).trim() : '';
+      return u.is_archived !== true && !u.deleted_at;
+    });
+    setUsersList(activeFallback);
     setLoadingUsers(false);
   }
 
@@ -1115,8 +1145,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       onDeleteUser(id);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
+    const targetName = deletingUser?.full_name || deletingUser?.email || 'User Account';
     setIsDeleteModalOpen(false);
     setDeletingUser(null);
     setAdminPasswordInput('');
@@ -1124,7 +1153,16 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setSearch('');
     setDeleting(false);
     setIsProcessing(false);
-    fetchUsers();
+    await fetchUsers();
+
+    setActionModal({
+      isOpen: true,
+      type: 'success',
+      title: 'User Account Archived',
+      message: `The user account for "${targetName}" has been successfully forwarded to Archive & Trash.`,
+      buttonText: 'OK',
+      onClose: () => setActionModal({ isOpen: false }),
+    });
   }
 
   const openCreateModal = () => {
@@ -1210,11 +1248,21 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       await fetchUsers();
     } catch (err) {
       console.warn('Security action error:', err);
-    } finally {
       setActionProcessing(false);
       setIsSecurityActionModalOpen(false);
       setSecurityActionTargetUser(null);
       setSecurityActionPassword('');
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: securityActionType === 'unlock' ? 'Account Unlocked' : 'Account Locked',
+        message: securityActionType === 'unlock'
+          ? `The user account for "${targetEmail}" has been unlocked and restored to active login status.`
+          : `The user account for "${targetEmail}" has been locked and access has been restricted.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
     }
   };
 

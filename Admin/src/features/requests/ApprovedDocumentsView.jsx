@@ -1,6 +1,7 @@
 // Admin/src/features/requests/ApprovedDocumentsView.jsx
 import React, { useState, useMemo, useEffect } from 'react';
 import ActionModal from '../../components/ActionModal';
+import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import DataTable from '../../components/DataTable';
 import {
   FileCheck2,
@@ -51,6 +52,12 @@ export default function ApprovedDocumentsView({
     onClose: null,
     isDestructive: false,
     isLoading: false,
+  });
+
+  // Security Verification Modal State for Deletion
+  const [securityModal, setSecurityModal] = useState({
+    isOpen: false,
+    item: null,
   });
 
   // Filter only approved, issued, or completed requests
@@ -194,45 +201,39 @@ export default function ApprovedDocumentsView({
     }
   };
 
-  // Prompt Delete Request with confirmation
+  // Prompt Delete Request with Security Verification
   const handlePromptDelete = (req) => {
-    setActionModal({
+    setSecurityModal({
       isOpen: true,
-      type: 'confirmation',
-      title: 'Delete Document Record?',
-      message: `Are you sure you want to remove tracking record ${req.tracking_number}? It will be safely moved to the Archive & Trash Management recycling bin.`,
-      confirmText: 'Move to Archive',
-      cancelText: 'Cancel',
-      isDestructive: true,
-      isLoading: false,
-      onConfirm: async () => {
-        setActionModal((prev) => ({ ...prev, isLoading: true }));
-        try {
-          if (onDeleteRequest) {
-            await onDeleteRequest(req.id, req.tracking_number);
-          }
-          setActionModal({
-            isOpen: true,
-            type: 'success',
-            title: 'Moved to Archive',
-            message: `Document request ${req.tracking_number} was moved to the Archive & Trash Management bin.`,
-            buttonText: 'OK',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-        } catch (err) {
-          console.error('Error deleting document request:', err);
-          setActionModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Delete Failed',
-            message: 'The request could not be deleted. Please try again.',
-            buttonText: 'Close',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-        }
-      },
-      onClose: () => setActionModal({ isOpen: false }),
+      item: req,
     });
+  };
+
+  const handleConfirmVerifiedDelete = async (req) => {
+    if (!req) return;
+    try {
+      if (onDeleteRequest) {
+        await onDeleteRequest(req.id, req.tracking_number);
+      }
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Moved to Archive',
+        message: `Approved document tracking record #${req.tracking_number} was safely moved to Archive & Trash.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.error('Error deleting document request:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Archive Failed',
+        message: 'The approved document could not be moved to archive. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    }
   };
 
   // Filter dataset by claimFilter and docTypeFilter
@@ -522,6 +523,18 @@ export default function ApprovedDocumentsView({
         onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
         isDestructive={actionModal.isDestructive}
         isLoading={actionModal.isLoading}
+      />
+
+      {/* Security Verification Modal for Deleting Approved Documents */}
+      <SecurityVerificationModal
+        isOpen={securityModal.isOpen}
+        onClose={() => setSecurityModal({ isOpen: false, item: null })}
+        onVerified={() => handleConfirmVerifiedDelete(securityModal.item)}
+        currentUser={currentUser}
+        title="Security Verification Required"
+        message={`Please confirm your administrator password to move approved document #${securityModal.item?.tracking_number} to Archive & Trash.`}
+        confirmText="Verify & Move to Archive"
+        isDestructive={true}
       />
     </div>
   );

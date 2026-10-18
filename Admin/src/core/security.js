@@ -489,3 +489,49 @@ export const lockUserAccount = async (targetEmail, adminIdentifier = null, reaso
   } catch (err) {}
   return true;
 };
+
+export const verifyLoggedInPassword = async (inputPassword, currentUser = null) => {
+  if (!inputPassword || typeof inputPassword !== 'string' || !inputPassword.trim()) {
+    return false;
+  }
+  const cleanPass = inputPassword.trim();
+  let session = currentUser;
+  if (!session && typeof localStorage !== 'undefined') {
+    try {
+      session = JSON.parse(
+        localStorage.getItem('zapatera_admin_session') ||
+        localStorage.getItem('zapatera_superadmin_session') ||
+        localStorage.getItem('zapatera_session_user') ||
+        'null'
+      );
+    } catch (_) {}
+  }
+
+  const loggedInEmail = (session?.email || '').trim().toLowerCase();
+  if (!loggedInEmail) return false;
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loggedInEmail,
+        password: cleanPass,
+      });
+      if (!error && data?.user) return true;
+    } catch (e) {
+      // Handled
+    }
+  }
+
+  if (session?.password && session.password === cleanPass) {
+    return true;
+  }
+
+  try {
+    const localUsers = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+    const match = localUsers.find((u) => (u.email || '').toLowerCase() === loggedInEmail);
+    if (match?.password && match.password === cleanPass) return true;
+  } catch (_) {}
+
+  return false;
+};
+

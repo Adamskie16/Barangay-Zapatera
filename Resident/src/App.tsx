@@ -161,26 +161,29 @@ export default function App() {
       url: '/?tab=announcements',
     });
 
-    // 2. Display the sleek in-app mobile push banner at top of phone screen
-    setActiveAnnouncementBanner({
-      id: newsItem.id || `ann-${Date.now()}`,
-      title: bannerTitle,
-      message: bannerMessage,
-      type: isEmergency ? 'warning' : 'announcement',
-      announcement: {
-        id: newsItem.id,
-        title: newsItem.title,
-        category: newsItem.category || 'Public Advisory',
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        description: newsItem.description || '',
-        content: newsItem.content || newsItem.description || '',
-        banner_url: newsItem.banner_url || '',
-        location: newsItem.location || 'Barangay Zapatera, Cebu City',
-        author: newsItem.author || 'Barangay Administration',
-        is_important: !!newsItem.is_important,
-        is_emergency: !!newsItem.is_emergency,
-      },
-    });
+    // 2. Display the in-app mobile push banner at top of screen ONLY for emergencies
+    // Non-emergency announcements are delivered quietly into the Notification center without intruding on the dashboard
+    if (isEmergency) {
+      setActiveAnnouncementBanner({
+        id: newsItem.id || `ann-${Date.now()}`,
+        title: bannerTitle,
+        message: bannerMessage,
+        type: 'warning',
+        announcement: {
+          id: newsItem.id,
+          title: newsItem.title,
+          category: newsItem.category || 'Public Advisory',
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          description: newsItem.description || '',
+          content: newsItem.content || newsItem.description || '',
+          banner_url: newsItem.banner_url || '',
+          location: newsItem.location || 'Barangay Zapatera, Cebu City',
+          author: newsItem.author || 'Barangay Administration',
+          is_important: !!newsItem.is_important,
+          is_emergency: true,
+        },
+      });
+    }
 
     // 3. Immediately refresh announcements & notifications
     fetchAnnouncements();
@@ -824,7 +827,7 @@ export default function App() {
             date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             description: item.description,
             content: item.content || item.description,
-            banner_url: item.banner_url || 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=800&q=80',
+            banner_url: item.banner_url || '',
             location: item.location || 'Barangay Zapatera, Cebu City',
             author: item.author || 'Barangay Administration',
             is_important: !!item.is_important,
@@ -841,7 +844,7 @@ export default function App() {
               : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             description: evt.description,
             content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
-            banner_url: evt.image_url || 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80',
+            banner_url: evt.image_url || '',
             location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
             author: evt.created_by_name || 'Barangay Office',
             is_important: false,

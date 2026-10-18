@@ -47,6 +47,7 @@ import {
   ChevronsRight,
 } from 'lucide-react';
 import ActionModal from '../../components/ActionModal';
+import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
 import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documentTemplates';
@@ -110,6 +111,12 @@ export default function ReceiveRequestView({
     onConfirm: null,
     isDestructive: false,
     isProcessing: false,
+  });
+
+  // Security Verification Modal State for Deletion
+  const [securityModal, setSecurityModal] = useState({
+    isOpen: false,
+    item: null,
   });
 
   // Decline Modal State
@@ -735,45 +742,39 @@ export default function ReceiveRequestView({
     }
   };
 
-  // Delete Request with confirmation
+  // Delete Request with Security Verification
   const handlePromptDelete = (req) => {
-    setActionModal({
+    setSecurityModal({
       isOpen: true,
-      type: 'confirmation',
-      title: 'Delete Document Request?',
-      message: 'Are you sure you want to delete this request? This action cannot be undone.',
-      confirmText: 'Delete Request',
-      cancelText: 'Cancel',
-      isDestructive: true,
-      isProcessing: false,
-      onConfirm: async () => {
-        setActionModal((prev) => ({ ...prev, isProcessing: true }));
-        try {
-          if (onDeleteRequest) {
-            await onDeleteRequest(req.id, req.tracking_number);
-          }
-          setActionModal({
-            isOpen: true,
-            type: 'success',
-            title: 'Request Deleted',
-            message: 'The document request has been removed successfully.',
-            buttonText: 'OK',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-        } catch (err) {
-          console.error('Error deleting document request:', err);
-          setActionModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Delete Failed',
-            message: 'The request could not be deleted. Please try again.',
-            buttonText: 'Close',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-        }
-      },
-      onClose: () => setActionModal({ isOpen: false }),
+      item: req,
     });
+  };
+
+  const handleConfirmVerifiedDelete = async (req) => {
+    if (!req) return;
+    try {
+      if (onDeleteRequest) {
+        await onDeleteRequest(req.id, req.tracking_number);
+      }
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Document Request Archived',
+        message: `Document request #${req.tracking_number} has been safely moved to Archive & Trash.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    } catch (err) {
+      console.error('Error deleting document request:', err);
+      setActionModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Archive Failed',
+        message: 'The request could not be moved to archive. Please try again.',
+        buttonText: 'Close',
+        onClose: () => setActionModal({ isOpen: false }),
+      });
+    }
   };
 
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
@@ -821,7 +822,7 @@ export default function ReceiveRequestView({
               onClick={() => setStatusFilter(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
                 statusFilter === tab.id
-                  ? 'bg-slate-900 text-white shadow-sm'
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -2095,6 +2096,18 @@ export default function ReceiveRequestView({
         onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
         isDestructive={actionModal.isDestructive}
         isLoading={actionModal.isProcessing}
+      />
+
+      {/* Security Verification Modal for Deleting Requests */}
+      <SecurityVerificationModal
+        isOpen={securityModal.isOpen}
+        onClose={() => setSecurityModal({ isOpen: false, item: null })}
+        onVerified={() => handleConfirmVerifiedDelete(securityModal.item)}
+        currentUser={currentUser}
+        title="Security Verification Required"
+        message={`Please confirm your administrator password to move document request #${securityModal.item?.tracking_number} to Archive & Trash.`}
+        confirmText="Verify & Move to Archive"
+        isDestructive={true}
       />
 
       {/* Requirement File Preview Modal with Supabase Storage Support */}
