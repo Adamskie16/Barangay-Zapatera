@@ -142,10 +142,16 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
 
     try {
       if (isSupabaseConfigured()) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? `${window.location.origin}/`
+            : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
+
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email.trim().toLowerCase(),
           password: formData.password,
           options: {
+            emailRedirectTo: redirectUrl,
             data: {
               display_name: displayName,
               full_name: formattedFullName,

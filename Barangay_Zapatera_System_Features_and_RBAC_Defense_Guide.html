@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barangay Zapatera System Features & RBAC Defense Guide</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+    
+    :root {
+      --primary: #1b365d;
+      --primary-light: #2b6cb0;
+      --accent: #0284c7;
+      --success: #166534;
+      --danger: #991b1b;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background-color: var(--bg);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      padding: 50px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+    }
+
+    .header {
+      text-align: center;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 30px;
+      margin-bottom: 40px;
+    }
+
+    .header-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: #e0f2fe;
+      color: #0369a1;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      color: var(--primary);
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.3;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+
+    .meta-box {
+      background: #f1f5f9;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--primary-light);
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    h2 {
+      color: var(--primary);
+      font-size: 20px;
+      font-weight: 800;
+      margin: 36px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .role-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .role-resident { background: #dbeafe; color: #1e40af; }
+    .role-admin { background: #fef3c7; color: #92400e; }
+    .role-treasurer { background: #dcfce7; color: #166534; }
+    .role-account { background: #fae8ff; color: #86198f; }
+    .role-superadmin { background: #fee2e2; color: #991b1b; }
+
+    .role-portal {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary-light);
+      margin-bottom: 8px;
+    }
+
+    .role-overview {
+      font-size: 14px;
+      color: var(--text);
+      background: #f8fafc;
+      padding: 14px 18px;
+      border-left: 4px solid var(--primary-light);
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 24px;
+    }
+
+    .feature-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+      page-break-inside: avoid;
+    }
+
+    .feature-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .feature-item {
+      font-size: 13.5px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .feature-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .label-desc { font-weight: 700; color: #334155; }
+    .label-perm { font-weight: 700; color: var(--success); }
+    .label-rest { font-weight: 700; color: var(--danger); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+      font-size: 12px;
+      page-break-inside: auto;
+    }
+
+    tr { page-break-inside: avoid; page-break-after: auto; }
+
+    th {
+      background-color: var(--primary);
+      color: #ffffff;
+      text-align: center;
+      padding: 10px 8px;
+      font-weight: 700;
+      border: 1px solid #0f172a;
+    }
+
+    th:first-child { text-align: left; }
+
+    td {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    tr:nth-child(even) td { background-color: #f8fafc; }
+
+    .td-yes { color: var(--success); font-weight: 700; text-align: center; }
+    .td-no { color: #94a3b8; text-align: center; }
+    .td-special { color: var(--primary-light); font-weight: 700; text-align: center; }
+
+    .callout-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-left: 4px solid #2563eb;
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+      font-size: 13.5px;
+    }
+
+    .callout-title {
+      font-weight: 700;
+      color: #1e40af;
+      margin-bottom: 4px;
+    }
+
+    .print-btn {
+      position: fixed;
+      bottom: 25px;
+      right: 25px;
+      background: #1b365d;
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: 50px;
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 4px 15px rgba(27, 54, 93, 0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      z-index: 100;
+    }
+
+    .print-btn:hover {
+      background: #0f172a;
+      transform: translateY(-2px);
+    }
+
+    @media print {
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .print-btn {
+        display: none;
+      }
+      h2 {
+        page-break-before: always;
+      }
+      h2:first-of-type {
+        page-break-before: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <button class="print-btn" onclick="window.print()">
+    🖨️ Save as PDF / Print
+  </button>
+
+  <div class="container">
+    <div class="header">
+      <div class="header-badge">Barangay Zapatera E-Governance Platform</div>
+      <h1>System Features, User Roles & Access Control Guide</h1>
+      <div class="subtitle">Comprehensive System Specification and Defense Presentation Script</div>
+      <div class="meta-box">
+        Barangay Zapatera, Cebu City, Philippines • Capstone Defense Documentation
+      </div>
+    </div>
+
+    <h2>1. Executive System Overview</h2>
+    <div class="role-overview">
+      The Barangay Zapatera E-Governance and Document Management System is an automated web and mobile platform engineered to modernize public governance, document issuance, resident management, and revenue auditing for Barangay Zapatera in Cebu City, Philippines. The system replaces manual paper transactions with an automated, tamper-resistant digital workflow governed by strict Role-Based Access Control (RBAC). In order to maintain institutional accountability, data privacy compliance under Republic Act 10173, and financial integrity, the platform partitions system capabilities across five distinct user roles: Resident, Barangay Administrative Staff (Admin), Barangay Treasurer, Account Management Specialist, and Super Administrator.
+    </div>
+
+    <h2>2. Role: Resident <span class="role-badge role-resident">Resident</span></h2>
+    <div class="role-portal">Portal: Native Mobile (React Native / Expo) and Responsive Web Application</div>
+    <div class="role-overview">
+      The Resident is the primary citizen client of the barangay who uses the mobile and web application to access public services, submit certification requests, track processing status in real time, and receive community advisories without waiting in long queues at the Barangay Hall.
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.1: Resident Registration and Identity Verification</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature enables residents residing within Barangay Zapatera to establish an authenticated digital identity by providing their personal demographics and uploading digital proof of residency.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can create a new registration record, input personal details including full name, birthdate, civil status, gender, specific sitio address, residency length, and voter status, and upload government-issued identification cards and proof of residency. The resident can view their own profile information and update personal contact details, civil status, and profile pictures.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot create administrative or staff credentials, cannot view records of other residents, and cannot bypass identity verification.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.2: Multi-Factor Authentication and Security Lockout Guard</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature protects resident accounts against brute-force intrusion by monitoring failed login attempts and locking accounts after three consecutive wrong password submissions.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can log into the system using their registered email and password, view active mobile or web session telemetry, and trigger an automated account unlock request to the barangay administration if their account becomes locked due to failed attempts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot unlock their own locked account without administrative intervention, cannot view security audit logs, and cannot bypass server-side rate limits.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.3: Resident Operations Dashboard</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature serves as the resident's home screen, offering quick visual summaries of active applications, barangay emergency telephone hotlines, and published advisories.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can view personalized greeting information, track the real-time processing stage of ongoing requests, view instant hotline numbers for the Barangay Hall, Cebu City Police, and emergency medical responders, and access direct navigation shortcuts to document filing.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot view global barangay statistics, other residents' applications, or internal administrative metrics.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.4: Official Document Catalog and Requirements Checklist</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides transparent public information regarding all official certifications issued by Barangay Zapatera, including Barangay Clearance, Certificate of Indigency, Certificate of Residency, Business Clearance, Barangay ID, and etc.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can browse the complete catalog of official documents, view applicable statutory fees, examine estimated processing turnaround times, and review required supporting attachments prior to filing.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot modify document guidelines, cannot alter official fees, and cannot delete document offerings from the catalog.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.5: Online Document Application and Attachment Submission</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature guides the resident through a step-by-step digital application workflow to file formal certificate requests from any smartphone or computer.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can select a desired certificate, specify the exact legal purpose of request, input required application details, attach scanned images or photos of required documents such as CEDULA or valid IDs, select pickup preferences, review the application summary, and submit the request. Upon submission, the resident receives a unique tracking number formatted as BZ-YYYY-XXXX.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot approve their own request, cannot generate or print official certifications, cannot alter assessed fees, and cannot edit submitted applications once administrative review has commenced.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.6: Live Request Lifecycle Tracker and Resubmission Workflow</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows residents to monitor the progress of their submitted requests from initial pending submission to final document pickup, and permits correction of flawed submissions.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can view the real-time processing status across all stages including Pending, In Review, Approved, Ready for Pickup, and Claimed. If an application is marked as declined or flagged for resubmission due to invalid or blurry attachments, the resident can view specific administrative remarks, replace or upload corrected documents, and resubmit the application under the exact same tracking number without starting a new request.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot view or track applications submitted by other residents, cannot alter administrative notes, and cannot delete requests that have already been approved or processed.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.7: Barangay Public Bulletins, Announcements, and Citizen Engagement</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature keeps the community informed with verified advisories, disaster alerts, scheduled barangay programs, and public assemblies published by barangay officials.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can read published barangay news, view calendar schedules of community events, inspect pinned emergency bulletins, and post interactive comments or inquiries on published news threads.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot publish, edit, pin, or delete official announcements, and cannot moderate or delete comments posted by other residents.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.8: Real-Time Notification Center and Cellphone Push Alerts</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature notifies residents immediately whenever their application status progresses or when urgent community notices are posted.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can receive and view automated in-app notifications and browser or cellphone alerts regarding document approval, pickup readiness, fee payment instructions, or resubmission notices, and can mark notifications as read.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot broadcast notifications or send unsolicited messages to other system users.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 2.9: Resident Profile and Credential Management</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows residents to maintain their contact details and update account security settings.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The resident can view and update their mobile phone number, emergency contact person, civil status, and profile avatar, and can securely change their account password.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The resident cannot alter their assigned role, cannot modify voter verification records, and cannot alter audit trail history.</div>
+    </div>
+
+    <h2>3. Role: Barangay Administrative Staff / Admin <span class="role-badge role-admin">Admin / Staff</span></h2>
+    <div class="role-portal">Portal: Barangay Admin Operations Web Portal</div>
+    <div class="role-overview">
+      The Barangay Administrative Staff member operates the administrative portal to evaluate resident document applications, inspect uploaded proofs, generate tamper-proof digital certificates, publish community notices, and assist residents with account lockouts.
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.1: Barangay Administrative Operations Dashboard</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides operational staff with an aggregated overview of daily barangay transactions, workload queues, and service metrics.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The administrative staff member can view total application counts, pending review queues, approved certificates ready for release, declined request tallies, and upcoming scheduled community activities.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot modify global barangay institutional configurations, cannot change system branding, and cannot delete system audit records.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.2: Document Application Processing and Evaluation Queue</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature serves as the central processing inbox where staff review incoming citizen applications and examine uploaded supporting requirements.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can search and filter requests by tracking number, resident name, sitio, or status, view resident profiles, and inspect attached documents using the built-in File Preview Modal. The staff member can update application statuses to In Review, Approved, Declined, or Resubmission Requested, set estimated pickup dates, and append mandatory administrative remarks explaining approval requirements or rejection reasons. The staff member can also soft-delete fraudulent or duplicate requests into the archive with audit logging.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot approve requests without validating uploaded requirements, cannot waive statutory fees without treasurer authorization, and cannot record cash payments.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.3: Approved Documents Registry and Claiming Management</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature organizes all approved certifications that have been cleared for physical release or claiming at the Barangay Hall.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can view and filter approved applications awaiting pickup, verify the physical identity of the claiming resident, and update the status to Claimed upon handing over the certificate while recording the release timestamp and claiming officer identity.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot delete claimed records without generating a supervisory audit trail.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.4: Automated Digital Certificate Generator and Printing Engine</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature dynamically creates standardized, legally compliant official certifications bearing the official seal of Barangay Zapatera, city logos, tracking codes, and signature blocks.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can generate formatted digital certificates for Barangay Clearance, Certificate of Indigency, Certificate of Residency, Business Clearance, Barangay ID, and etc. The staff member can preview certificates complete with anti-fraud QR tracking codes and watermark seals, and can print or export the documents directly to PDF for official signing and issuance.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot alter the official barangay seal, modify official letterhead templates, or forge tracking numbers.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.5: Official Document Guidelines and Requirements Management</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows administrative staff to maintain accurate public guidelines and requirements lists for each document type.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can view and update document processing descriptions, required attachments checklists, processing turnaround times, and special instructions for applicants.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot alter core database schemas or delete statutory certificate offerings without SuperAdmin authorization.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.6: Barangay Public Bulletins and Announcements Publishing</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides a content management tool for drafting and broadcasting official announcements to the resident portal.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can create, view, edit, publish, pin, and delete barangay news, community advisories, disaster warnings, and event calendar dates, and can upload promotional banners.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot post unverified or unauthorized non-barangay notices.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.7: Resident Account Security and Lockout Assistance</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows administrative staff to assist legitimate residents who have locked themselves out of their accounts due to three consecutive failed password attempts.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can search resident profiles, verify resident identity, view account lock status, and execute an administrative unlock that resets the failed attempt counter to zero and restores resident portal access.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot view plaintext resident passwords, cannot change user roles, and cannot create or delete administrator accounts.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.8: Archive and Soft-Delete Recovery Management</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature acts as an operational recycle bin to protect against accidental deletion of document records.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can view soft-deleted document requests within the archive and restore erroneously deleted requests back to active processing queues.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot permanently destroy or purge database records, as permanent purging is strictly restricted to the Super Administrator.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.9: Operational Processing Reports and Export</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature generates quantitative summaries regarding barangay document issuance volume, processing speed, and demographic demand.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can filter operational statistics by custom date ranges and document categories, and can export structured reports into PDF, CSV spreadsheet, or printable summary formats.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot alter historical transaction numbers or access database server configurations.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.10: Administrative Action History Logs</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature maintains an immutable audit trail of all actions executed by staff members to ensure complete operational transparency.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can view a chronological log of administrative actions including request approvals, rejections, resubmission flags, certificate prints, and resident unlocks.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot edit, alter, or delete any log entry within the audit trail.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 3.11: Staff Account Profile and Security Settings</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows administrative personnel to maintain their own system profile and login credentials.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The staff member can view and update their personal profile information, contact number, and avatar, and can securely change their login password.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The staff member cannot elevate their own administrative privileges or reassign their own role.</div>
+    </div>
+
+    <h2>4. Role: Barangay Treasurer <span class="role-badge role-treasurer">Treasurer</span></h2>
+    <div class="role-portal">Portal: Dedicated Barangay Treasurer Financial Web Portal</div>
+    <div class="role-overview">
+      The Barangay Treasurer is the financial governance officer responsible for auditing document fees, logging cash collections, issuing Official Receipts (OR), recording fee waivers, and generating government accounting reports under strict Separation of Duties.
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 4.1: Financial Collection Dashboard and Real-Time Revenue Metrics</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature gives the Treasurer live financial intelligence regarding daily and monthly revenue performance across all document transactions.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Treasurer can view real-time calculations of Total Revenue Collected, Today's Cash Collections, Current Month Revenue, Unpaid/Pending Document Fees, and Fee-Exempt/Waived Transactions.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The Treasurer cannot evaluate document applications, approve certificates, or alter resident application guidelines.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 4.2: Payment Collections and Official Receipt (OR) Registry</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature serves as the central cash register and financial ledger linked directly to all processed document requests.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Treasurer can view all document requests with assessed fee amounts, applicant names, document types, tracking numbers, and payment statuses. The Treasurer can update payment records by entering the official government Official Receipt (OR) Number, selecting the payment method such as Cash or GCash, inputting the exact amount paid, recording the payment date timestamp, and entering audit remarks. Furthermore, the Treasurer can officially authorize fee waivers for legally qualified residents under valid statutory grounds such as Indigency Certification, Senior Citizen status, PWD status, or the First-Time Jobseeker Act (Republic Act 11261).</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> Under database Row-Level Security policies, the Treasurer cannot insert or delete document requests, cannot issue digital certificates, and cannot alter application review statuses.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 4.3: Revenue Breakdown Analytics by Document Type</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature displays graphical and proportional revenue breakdowns illustrating the financial contribution of each document classification.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Treasurer can view comparative income charts, collection volume percentages, and paid-versus-waived transaction ratios across all document classifications.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> This is a read-only financial analytics module.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 4.4: Official Financial Collection Reports and Audit Registers</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature generates formal accounting reports required for barangay financial auditing and reporting to higher government bodies.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Treasurer can filter financial records by date ranges, payment status, or receipt numbers, and can generate and export Daily Cash Collection Reports, Monthly Revenue Summaries, Official Receipt Registers, and Fee Exemption Ledgers in PDF, CSV spreadsheet, or formatted print layouts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The Treasurer cannot falsify reconciled financial records or delete historical financial logs.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 4.5: Treasurer Account Profile and Security Settings</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature enables the Treasurer to maintain personal profile details and security credentials.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Treasurer can view and update their profile details and change their secure login password.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The Treasurer cannot reassign their own role or grant financial recording authority to non-treasury personnel.</div>
+    </div>
+
+    <h2>5. Role: Account Management Specialist <span class="role-badge role-account">Account Management</span></h2>
+    <div class="role-portal">Portal: Dedicated User Provisioning & Account Governance Web Portal</div>
+    <div class="role-overview">
+      The Account Management Specialist serves as the identity and access management officer, responsible for provisioning authorized personnel accounts across all roles, monitoring brute-force security lockouts, managing the account archive, and customizing login branding.
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 5.1: Role-Based User Account Provisioning and Administration</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides an administrative directory for creating and configuring verified user accounts across all supported system roles.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The specialist can create and provision new accounts for Barangay Administrative Staff, Barangay Treasurers, Super Administrators, and Residents. The specialist can enforce strict institutional password complexity rules, validate email formats, assign operational roles, edit user demographic records, and soft-delete inactive or terminated accounts into the archive.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The specialist cannot process document applications, generate digital certificates, or collect financial payments.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 5.2: Security Governance and Account Lockout Resolution Queue</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature tracks accounts that have triggered the automated 3-consecutive-failed-attempt security lockout guard.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The specialist can inspect the queue of locked user accounts, examine failed attempt counters, verify user identities, and execute an administrative unlock to restore access, or manually lock compromised accounts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The specialist cannot view plaintext user passwords and cannot bypass audit logging during security modifications.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 5.3: Login Screen Design and Portal Branding CMS</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature enables visual customization of the portal login screen to match Barangay Zapatera branding standards.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The specialist can view, configure, and publish custom login background imagery, portal titles, welcome messages, and institutional subtitles.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The specialist cannot modify authentication security algorithms, session timeout parameters, or database schemas.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 5.4: User Account Archive and Restoration Management</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature stores deactivated or soft-deleted user profiles to safeguard against accidental account termination.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The specialist can view archived user accounts and restore deactivated accounts back to active status when authorized.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The specialist cannot permanently purge accounts from the database without SuperAdmin authority.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 5.5: Identity and Account Security Activity Logs</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature maintains an immutable audit trail of all identity administration operations.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The specialist can view and review chronological logs of user account creations, role changes, account lockouts, and administrative unlocks.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The specialist cannot edit, modify, or delete identity activity logs.</div>
+    </div>
+
+    <h2>6. Role: Super Administrator <span class="role-badge role-superadmin">Super Admin</span></h2>
+    <div class="role-portal">Portal: SuperAdmin Master Web Portal</div>
+    <div class="role-overview">
+      The Super Administrator is the master authority of the entire ecosystem, holding comprehensive governance over system configurations, statutory document rules, barangay officials directories, user identities, enterprise archive purges, and security audit trails.
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.1: Executive Master System Dashboard</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides enterprise-level visibility across all subsystems, operational queues, and administrative departments.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can view consolidated real-time analytics including total registered users across all roles, total document applications processed, certificate issuance counts, financial revenue summaries, active security alerts, and monthly operational trends.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> None within the scope of the system.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.2: Global User Account and Role Governance</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature gives the Super Administrator unrestricted authority over all user identities within the platform.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can create, view, update, deactivate, restore, or delete any account across all five roles, assign or revoke administrative privileges, reset credentials, and resolve security lockouts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The Super Administrator cannot retrieve plaintext user passwords, as credentials are protected by one-way cryptographic hashing.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.3: Official Document Template Engine and Guidelines Governance</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature controls the statutory parameters and document templates used for digital certificate generation.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can create, view, update, and delete document types, configure standard processing times, establish baseline fees, define required supporting documents, and modify official template layouts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> None.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.4: Barangay Public Bulletins, Advisories, and Community Governance</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides complete oversight over all public announcements and community discussions.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can publish, edit, pin, categorize, and delete news, disaster warnings, and community events, and can moderate or remove inappropriate resident comments.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> None.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.5: Global System Configuration and Barangay Institutional Branding</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature manages core barangay institutional data and dynamic signatories for digital certificates.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator has exclusive authority to configure official barangay information including official name, municipality, province, address, official email, and emergency contact numbers, upload the official Barangay Zapatera Seal, Cebu City Seal, and background watermarks, and manage the Barangay Officials Directory containing the names and designations of the Punong Barangay (Captain) and Barangay Councilors (Kagawad) that dynamically populate digital certificates.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> This feature is exclusive to the Super Administrator; no other role is permitted to modify these institutional configurations.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.6: Enterprise Archive and Permanent Database Purging</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature serves as the centralized master repository for all soft-deleted records across all modules.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can view all archived document requests, user profiles, announcements, and logs, restore any soft-deleted record back to active database tables, or execute permanent database purges to completely destroy obsolete records.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> Permanent record purging requires explicit administrative confirmation and is permanently recorded in the audit trail.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.7: Immutable Enterprise Security Audit Trail</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature provides an immutable, tamper-evident security audit log recording every transaction and event across the platform.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can search, filter, and review comprehensive audit records covering user logins, 3-attempt lockouts, administrative unlocks, request status transitions, digital certificate print operations, payment entries, and configuration updates, and can export audit logs for external compliance review.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> The Super Administrator cannot edit, modify, or erase audit trail entries, ensuring absolute non-repudiation.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.8: Cross-Departmental Comprehensive Reports and Intelligence</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature aggregates operational, financial, and demographic data into master analytical reports.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can generate, filter, and export system-wide reports combining document issuance volume, processing efficiency, revenue collection reconciliations, and geographic demand across Sitios into PDF, Excel, or formatted print layouts.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> None.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">Feature 6.9: Super Administrator Profile and Credential Security</div>
+      <div class="feature-item"><span class="label-desc">Description:</span> This feature allows the Super Administrator to maintain personal administrative details and high-security credentials.</div>
+      <div class="feature-item"><span class="label-perm">Access Permissions:</span> The Super Administrator can update their profile information and change master login passwords.</div>
+      <div class="feature-item"><span class="label-rest">Restrictions:</span> None.</div>
+    </div>
+
+    <h2>7. Comparative Permissions and Features Matrix</h2>
+    <p style="font-size: 13.5px; margin-bottom: 16px;">The following matrix summarizes the feature access permissions across all five user roles in the Barangay Zapatera E-Governance and Document Management System, highlighting shared functionalities and role-exclusive responsibilities:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>System Feature / Functional Module</th>
+          <th>Resident</th>
+          <th>Admin / Staff</th>
+          <th>Treasurer</th>
+          <th>Account Mgmt</th>
+          <th>Super Admin</th>
+          <th>Classification</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Resident Self-Registration & Onboarding</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td>Exclusive (Resident)</td>
+        </tr>
+        <tr>
+          <td>Browse Document Catalog & Guidelines</td>
+          <td class="td-special">View Only</td>
+          <td class="td-yes">Manage</td>
+          <td class="td-special">View Only</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full CRUD</td>
+          <td>Shared</td>
+        </tr>
+        <tr>
+          <td>Submit Document Application Online</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td>Exclusive (Resident)</td>
+        </tr>
+        <tr>
+          <td>Track Request Status & Resubmit Flagged</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td>Exclusive (Resident)</td>
+        </tr>
+        <tr>
+          <td>Review, Approve & Decline Applications</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (Admin/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Generate & Print Digital Certificates</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (Admin/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Mark Document as Claimed / Released</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Yes</td>
+          <td>Exclusive (Admin/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Record Fee Payment & Official Receipt (OR#)</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-special">View / Audit</td>
+          <td>Exclusive (Treasurer)</td>
+        </tr>
+        <tr>
+          <td>Authorize Fee Waivers & Indigent Exemptions</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (Treasurer/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Financial Collection & Cash Reports</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Comprehensive</td>
+          <td>Exclusive (Treasurer/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>User Account Provisioning & Role Setup</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (AcctMgmt/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Unlock 3-Attempt Security Locked Accounts</td>
+          <td class="td-special">Request</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-yes">Full</td>
+          <td>Shared (Admin/AcctMgmt/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Login Screen Design CMS & Branding</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (AcctMgmt/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Publish Announcements & Community News</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (Admin/SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Post Comments on Published Bulletins</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-yes">Yes</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-special">Moderate</td>
+          <td>Shared</td>
+        </tr>
+        <tr>
+          <td>Manage Barangay Officials Directory</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Global System Config & Seal Watermarks</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Full</td>
+          <td>Exclusive (SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Archive: Restore Soft-Deleted Records</td>
+          <td class="td-no">No</td>
+          <td class="td-special">Requests</td>
+          <td class="td-no">No</td>
+          <td class="td-special">Accounts</td>
+          <td class="td-yes">All Records</td>
+          <td>Role-Scoped Shared</td>
+        </tr>
+        <tr>
+          <td>Archive: Permanent Database Purge</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-no">No</td>
+          <td class="td-yes">Exclusive</td>
+          <td>Exclusive (SuperAdmin)</td>
+        </tr>
+        <tr>
+          <td>Immutable Security Audit Trail Access</td>
+          <td class="td-no">No</td>
+          <td class="td-special">Operational</td>
+          <td class="td-no">No</td>
+          <td class="td-special">Security</td>
+          <td class="td-yes">Complete</td>
+          <td>Shared Audit</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>8. Key Defense Presentation Talking Points</h2>
+
+    <div class="callout-box">
+      <div class="callout-title">1. Separation of Duties (SoD) for Financial Integrity</div>
+      <div>The architecture strictly separates document processing from fee collection. The Barangay Administrative Staff member can evaluate and approve documents, but is technically restricted from recording cash payments or issuing Official Receipts. Conversely, the Barangay Treasurer logs revenue and issues Official Receipts, but cannot approve document applications or issue certificates. This segregation of duties eliminates fraud, prevents unrecorded collections, and ensures audit accountability.</div>
+    </div>
+
+    <div class="callout-box">
+      <div class="callout-title">2. Multi-Layered Security and 3-Attempt Account Lockout Guard</div>
+      <div>To protect citizen and administrative accounts against automated brute-force password guessing and credential stuffing attacks, the system tracks consecutive failed attempts at both the application and database tiers. Upon the third consecutive failed attempt, the account is immediately locked, an unlock request record is dispatched, and access is rejected until an authorized administrator verifies the user's identity and performs an administrative unlock.</div>
+    </div>
+
+    <div class="callout-box">
+      <div class="callout-title">3. Transparent Resubmission Cycle and Tracking Continuity</div>
+      <div>Unlike traditional systems that outright reject incomplete applications, our platform introduces a dedicated Resubmission State. If an applicant uploads an expired ID or illegible proof, administrative staff provide clear deficiency instructions. The resident receives an immediate mobile alert, uploads the corrected attachment directly from their smartphone, and the application resumes processing under the original tracking number (BZ-YYYY-XXXX) without filing fees being forfeited.</div>
+    </div>
+
+    <div class="callout-box">
+      <div class="callout-title">4. Database-Level Row-Level Security (RLS) Enforcement</div>
+      <div>Access restrictions are not merely hidden in the frontend user interface; they are strictly enforced inside the Supabase PostgreSQL database via Row-Level Security policies. Even if an unauthorized user attempts to craft a direct API request to update document statuses or delete records, database policies automatically reject the transaction, guaranteeing data integrity and compliance with Republic Act 10173 (Data Privacy Act of 2012).</div>
+    </div>
+
+  </div>
+
+</body>
+</html>

@@ -107,9 +107,17 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     setError('');
     try {
       if (isSupabaseConfigured()) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? `${window.location.origin}/`
+            : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
+
         const { error: resendErr } = await supabase.auth.resend({
           type: 'signup',
           email: email.trim().toLowerCase(),
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         });
         if (resendErr) {
           setError(resendErr.message || 'Failed to resend confirmation email.');
@@ -413,8 +421,13 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
     try {
       if (isSupabaseConfigured()) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? `${window.location.origin}/`
+            : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
+
         const { error: resetErr } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
         });
         if (resetErr) {
           console.warn('Password reset notice:', resetErr.message);

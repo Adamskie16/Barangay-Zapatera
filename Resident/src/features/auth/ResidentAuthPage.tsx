@@ -158,9 +158,24 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
   const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
-    // Detect password recovery redirect
+    // 1. Detect if redirected with error, password recovery, or signup verification
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
+
+    if (hash.includes('error=') || search.includes('error=')) {
+      const rawParams = hash.startsWith('#') ? hash.substring(1) : search.startsWith('?') ? search.substring(1) : '';
+      const params = new URLSearchParams(rawParams);
+      const errorDesc = params.get('error_description') || params.get('error');
+      const errorCode = params.get('error_code');
+
+      if (errorCode === 'otp_expired' || errorDesc?.toLowerCase().includes('expired')) {
+        setErrorMessage('Verification Link Expired: The email link is invalid or has already expired. Please request a new verification or password reset link below.');
+        setShowResendConfirmation(true);
+      } else if (errorDesc) {
+        setErrorMessage(decodeURIComponent(errorDesc.replace(/\+/g, ' ')));
+      }
+    }
+
     const isRecovery =
       hash.includes('type=recovery') ||
       search.includes('type=recovery') ||
@@ -169,6 +184,10 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     if (isRecovery) {
       setAuthStep('reset_password');
       setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+    }
+
+    if (hash.includes('type=signup') || search.includes('type=signup')) {
+      setSuccessBanner('Email Verified Successfully! Your resident account is now verified. You may sign in.');
     }
 
     if (isSupabaseConfigured()) {
@@ -248,9 +267,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setErrorMessage('');
     try {
       if (isSupabaseConfigured()) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? `${window.location.origin}/`
+            : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
+
         const { error: resendErr } = await supabase.auth.resend({
           type: 'signup',
           email: loginEmail.trim().toLowerCase(),
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         });
         if (resendErr) {
           setErrorMessage(resendErr.message || 'Failed to resend confirmation email.');
@@ -643,9 +670,9 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setLoading(true);
     const cleanEmail = forgotEmail.trim().toLowerCase();
     const redirectUrl =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}${window.location.pathname}`
-        : undefined;
+      typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+        ? `${window.location.origin}/`
+        : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
 
     try {
       if (isSupabaseConfigured()) {
@@ -762,11 +789,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     try {
       if (isSupabaseConfigured()) {
-        // 1. Supabase Auth Sign Up
+        // 1. Supabase Auth Sign Up with Explicit Vercel Destination
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? `${window.location.origin}/`
+            : 'https://adam-capstone-web-zapatera-1mfg.vercel.app/';
+
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
           email: cleanEmail,
           password: regData.password,
           options: {
+            emailRedirectTo: redirectUrl,
             data: {
               display_name: displayName,
               full_name: formattedFullName,

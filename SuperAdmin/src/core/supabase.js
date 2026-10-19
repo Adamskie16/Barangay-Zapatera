@@ -99,17 +99,31 @@ export const isSupabaseConfigured = () => {
   );
 };
 
-export const signUpUserWithoutPersistSession = async ({ email, password, metadata }) => {
+export const signUpUserWithoutPersistSession = async ({ email, password, metadata, emailRedirectTo }) => {
   try {
     const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { fetch: resilientFetch },
     });
+
+    const role = (metadata?.role || '').toLowerCase();
+    const defaultRedirect =
+      role === 'admin'
+        ? 'https://adam-capstone-web-zapatera-gpqt.vercel.app/'
+        : role === 'treasurer'
+        ? 'https://adam-capstone-web-zapatera-2owg.vercel.app/'
+        : role === 'resident'
+        ? 'https://adam-capstone-web-zapatera-1mfg.vercel.app/'
+        : 'https://barangay-zapatera.vercel.app/';
+
+    const destination = emailRedirectTo || defaultRedirect;
+
     const { data, error } = await tempClient.auth.signUp({
       email,
       password,
       options: {
         data: metadata || {},
+        emailRedirectTo: destination,
       },
     });
     if (error) {

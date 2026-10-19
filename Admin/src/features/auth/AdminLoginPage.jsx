@@ -109,9 +109,22 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         if (isMounted) setIsPictureLoading(false);
       });
 
-    // 1. Detect if redirected from password reset email link
+    // 1. Detect if redirected with error or password reset email link
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
+
+    if (hash.includes('error=') || search.includes('error=')) {
+      const raw = hash.startsWith('#') ? hash.substring(1) : search.startsWith('?') ? search.substring(1) : '';
+      const params = new URLSearchParams(raw);
+      const errorDesc = params.get('error_description') || params.get('error');
+      const errorCode = params.get('error_code');
+      if (errorCode === 'otp_expired' || errorDesc?.toLowerCase().includes('expired')) {
+        setError('Notice: This password recovery or confirmation link has expired or has already been used. Please request a new link below.');
+      } else if (errorDesc) {
+        setError(decodeURIComponent(errorDesc.replace(/\+/g, ' ')));
+      }
+    }
+
     const isRecovery =
       hash.includes('type=recovery') ||
       search.includes('type=recovery') ||
@@ -173,9 +186,17 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     setError('');
     try {
       if (isSupabaseConfigured()) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+            ? window.location.origin
+            : 'https://adam-capstone-web-zapatera-gpqt.vercel.app';
+
         const { error: resendErr } = await supabase.auth.resend({
           type: 'signup',
           email: email.trim().toLowerCase(),
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         });
         if (resendErr) {
           setError(resendErr.message || 'Failed to resend confirmation email.');
@@ -667,10 +688,15 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
     const cleanEmail = forgotEmail.trim().toLowerCase();
 
+    const redirectUrl =
+      typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+        ? window.location.origin
+        : 'https://adam-capstone-web-zapatera-gpqt.vercel.app';
+
     try {
       if (isSupabaseConfigured()) {
         await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
         });
       }
     } catch (err) {
