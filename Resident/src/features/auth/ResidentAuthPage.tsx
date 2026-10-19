@@ -191,7 +191,37 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     }
 
     if (isSupabaseConfigured()) {
-      const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      // Proactively establish session if access_token and refresh_token are present in URL hash
+      const rawHash = hash.startsWith('#') ? hash.substring(1) : hash;
+      const hashParams = new URLSearchParams(rawHash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ data, error }) => {
+          if (!error && data?.session) {
+            setAuthStep('reset_password');
+            setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+          }
+        }).catch(() => {});
+      } else if (search.includes('code=')) {
+        const rawSearch = search.startsWith('?') ? search.substring(1) : search;
+        const searchParams = new URLSearchParams(rawSearch);
+        const code = searchParams.get('code');
+        if (code) {
+          supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+            if (!error && data?.session) {
+              setAuthStep('reset_password');
+              setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+            }
+          }).catch(() => {});
+        }
+      }
+
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
           setAuthStep('reset_password');
           setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
@@ -708,27 +738,58 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setSuccessBanner('');
     setInfoBanner('');
 
+    if (resetNewPassword.length < 8) {
+      setErrorMessage('Password must be at least 8 characters long.');
+      return;
+    }
+
     if (!isStrongPassword(resetNewPassword)) {
       setErrorMessage('Your password is too weak. Please use at least 8 characters, including an uppercase letter, lowercase letter, number, and special character.');
       return;
     }
 
     if (resetNewPassword !== resetConfirmPassword) {
-      setErrorMessage('Passwords do not match.');
+      setErrorMessage('Passwords do not match. Please ensure both fields match.');
       return;
     }
 
     setLoading(true);
     try {
       if (isSupabaseConfigured()) {
+        // Ensure active auth session exists before attempting updateUser
+        let { data: { session } } = await supabase.auth.getSession();
+        if (!session && typeof window !== 'undefined' && window.location.hash) {
+          const rawHash = window.location.hash.startsWith('#')
+            ? window.location.hash.substring(1)
+            : window.location.hash;
+          const params = new URLSearchParams(rawHash);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          if (accessToken && refreshToken) {
+            const { data: sData } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            session = sData?.session || null;
+          }
+        }
+
+        if (!session) {
+          setErrorMessage('Password reset session has expired or is invalid. Please request a new reset link.');
+          setLoading(false);
+          return;
+        }
+
         const { data, error: updateErr } = await supabase.auth.updateUser({ password: resetNewPassword });
         if (updateErr) {
           setErrorMessage(updateErr.message || 'Failed to update password.');
           setLoading(false);
           return;
         }
+
         const targetEmail = (data?.user?.email || forgotEmail || loginEmail || '').toLowerCase().trim();
         if (targetEmail) {
+          // STRICT: Only update lockout fields in profiles table, NEVER the password column!
           await supabase
             .from('profiles')
             .update({
@@ -761,15 +822,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }
 
       setLoading(false);
-      setSuccessBanner('Your password has been successfully updated! You can now log in with your new password.');
+      setSuccessBanner('Your password has been successfully updated! Redirecting to sign in...');
       setTimeout(() => {
         setAuthStep('credentials');
         setLoginPassword('');
         setResetNewPassword('');
         setResetConfirmPassword('');
+        setIsLocked(false);
+        setSuccessBanner('');
+        setInfoBanner('Password reset successful! Please log in with your new password.');
       }, 2000);
     } catch (err: any) {
-      console.error('Password reset error:', err);
       setLoading(false);
       setErrorMessage('Failed to update password. Please try requesting a new reset link.');
     }

@@ -85,10 +85,10 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: MobileStorage,
+    storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : MobileStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
   },
   global: {
     fetch: resilientFetch,

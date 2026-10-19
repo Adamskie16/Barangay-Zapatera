@@ -73,7 +73,37 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     }
 
     if (isSupabaseConfigured()) {
-      const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      // Proactively establish session if tokens are in URL hash
+      const rawHash = hash.startsWith('#') ? hash.substring(1) : hash;
+      const hashParams = new URLSearchParams(rawHash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }).then(({ data, error }) => {
+          if (!error && data?.session) {
+            setStep(4);
+            setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+          }
+        }).catch(() => {});
+      } else if (search.includes('code=')) {
+        const rawSearch = search.startsWith('?') ? search.substring(1) : search;
+        const searchParams = new URLSearchParams(rawSearch);
+        const code = searchParams.get('code');
+        if (code) {
+          supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+            if (!error && data?.session) {
+              setStep(4);
+              setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+            }
+          }).catch(() => {});
+        }
+      }
+
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
           setStep(4);
           setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
@@ -467,26 +497,54 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
     try {
       if (isSupabaseConfigured()) {
+        let { data: { session } } = await supabase.auth.getSession();
+        if (!session && typeof window !== 'undefined' && window.location.hash) {
+          const rawHash = window.location.hash.startsWith('#')
+            ? window.location.hash.substring(1)
+            : window.location.hash;
+          const params = new URLSearchParams(rawHash);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          if (accessToken && refreshToken) {
+            const { data: sData } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            session = sData?.session || null;
+          }
+        }
+
+        if (!session) {
+          setResetError('Password reset session has expired or is invalid. Please request a new reset link.');
+          setResetLoading(false);
+          return;
+        }
+
         const { data, error: updateErr } = await supabase.auth.updateUser({
           password: resetNewPassword,
         });
 
         if (updateErr) {
-          console.warn('Supabase updateUser notice:', updateErr.message);
+          setResetError(updateErr.message || 'Failed to update password.');
+          setResetLoading(false);
+          return;
         }
 
         const targetEmail = (data?.user?.email || forgotEmail || email || '').toLowerCase().trim();
 
         if (targetEmail) {
+          // STRICT: Only update lockout fields in profiles table, NEVER the password column!
           await supabase
             .from('profiles')
             .update({
-              password: resetNewPassword,
               is_locked: false,
               failed_attempts: 0,
+              locked_at: null,
               updated_at: new Date().toISOString(),
             })
             .eq('email', targetEmail);
+
+          await unlockUserAccount(targetEmail);
         }
       }
 
@@ -499,6 +557,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         setStep(1);
         setResetSuccess('');
         setPassword('');
+        setIsLocked(false);
         setInfoMsg('Password reset successful! Please log in with your new password.');
       }, 2000);
     } catch (err) {

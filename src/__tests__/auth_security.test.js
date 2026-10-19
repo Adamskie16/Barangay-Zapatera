@@ -170,6 +170,31 @@ class SecurityEngine {
   logAudit(action, details, level, userEmail) {
     this.auditLogs.push({ action, details, level, user_email: userEmail, timestamp: new Date().toISOString() });
   }
+
+  resetPassword(email, newPassword, session = null) {
+    if (!session) {
+      return {
+        success: false,
+        code: 'AUTH_SESSION_MISSING',
+        message: 'Password reset session has expired or is invalid. Please request a new reset link.',
+      };
+    }
+
+    const cleanEmail = email.toLowerCase();
+    const profile = this.profiles.get(cleanEmail);
+    if (!profile) {
+      return { success: false, code: 'USER_NOT_FOUND', message: 'User not found.' };
+    }
+
+    profile.password = newPassword;
+    profile.is_locked = false;
+    profile.failed_attempts = 0;
+    profile.locked_at = null;
+
+    this.unlockRequests = this.unlockRequests.filter(req => req.email !== cleanEmail);
+    this.logAudit('Password Reset', `Password reset successful for ${cleanEmail}. Lockout cleared.`, 'info', cleanEmail);
+    return { success: true, message: 'Password updated successfully.' };
+  }
 }
 
 // AUTOMATED TEST SUITE RUNNER
@@ -338,8 +363,40 @@ export function runSecurityTestSuite() {
   assert.strictEqual(rateLimitRes.message.includes('Too many authentication attempts'), true);
   console.log('  [PASS] Resident portal rate limiting strictly enforced with message: "Too many authentication attempts. Please wait..."\n');
 
+  // TEST 17: Password Reset Attempt Without Valid Session (Missing Auth Session Guard)
+  console.log('--> Test 17: Password Reset Attempt Without Valid Session (Missing Auth Session Guard)...');
+  const sessionUser = 'resident.locked@gmail.com';
+  engine.registerUser(sessionUser, 'OldPassword123!', 'resident');
+  // Lock the user out first
+  engine.recordFailedAttempt(sessionUser);
+  engine.recordFailedAttempt(sessionUser);
+  engine.recordFailedAttempt(sessionUser);
+  assert.strictEqual(engine.profiles.get(sessionUser).is_locked, true);
+
+  // Attempt reset without an active session
+  const noSessionRes = engine.resetPassword(sessionUser, 'NewPassword123!', null);
+  assert.strictEqual(noSessionRes.success, false);
+  assert.strictEqual(noSessionRes.code, 'AUTH_SESSION_MISSING');
+  assert.strictEqual(noSessionRes.message.includes('Password reset session has expired or is invalid'), true);
+  // Account must remain unchanged
+  assert.strictEqual(engine.profiles.get(sessionUser).is_locked, true);
+  console.log('  [PASS] Unauthenticated password reset attempt rejected with clear session notice without exposing raw auth exceptions\n');
+
+  // TEST 18: Password Reset With Valid Session -> Lockout Cleared & New Password Usable
+  console.log('--> Test 18: Password Reset With Valid Session -> Lockout Cleared & New Password Usable...');
+  const mockValidSession = { user: { email: sessionUser }, access_token: 'valid_jwt_token' };
+  const validResetRes = engine.resetPassword(sessionUser, 'BrandNewPassword123!', mockValidSession);
+  assert.strictEqual(validResetRes.success, true);
+  assert.strictEqual(engine.profiles.get(sessionUser).is_locked, false);
+  assert.strictEqual(engine.profiles.get(sessionUser).failed_attempts, 0);
+
+  // User should now be able to log in with new password
+  const newLoginRes = engine.login(sessionUser, 'BrandNewPassword123!');
+  assert.strictEqual(newLoginRes.success, true);
+  console.log('  [PASS] Password reset with valid session unlocks account, clears failed attempts, and allows instant login\n');
+
   console.log('====================================================');
-  console.log('✅ ALL 16 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
+  console.log('✅ ALL 18 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
   console.log('====================================================\n');
 }
 
