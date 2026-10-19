@@ -16,7 +16,7 @@ import {
   HelpCircle,
   Loader2,
 } from 'lucide-react';
-import { validateEmail, checkRateLimit, isAccountLocked, recordFailedAttempt, resetFailedAttempts } from '../../core/security';
+import { validateEmail, checkRateLimit, isAccountLocked, recordFailedAttempt, resetFailedAttempts, checkAccountExists, unlockUserAccount } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { ResidentUser } from '../../types';
 import UnlockAccountModal from '../../components/UnlockAccountModal';
@@ -178,14 +178,22 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Rate Limiting Check (10-second interval)
-    const rateLimit = await checkRateLimit(cleanEmail);
+    const rateLimit = await checkRateLimit(cleanEmail, 5, 10);
     if (!rateLimit.allowed) {
       setError(rateLimit.message || 'Too many authentication attempts. Please wait 10 seconds before trying again.');
       setLoading(false);
       return;
     }
 
-    // 2. Account Lockout Check (Pre-auth check)
+    // 2. Pre-Authentication Account Existence Check
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setError('Invalid Email and Password');
+      setLoading(false);
+      return;
+    }
+
+    // 3. Account Lockout Check (Pre-auth check)
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
@@ -498,26 +506,30 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     try {
       if (isSupabaseConfigured()) {
         let { data: { session } } = await supabase.auth.getSession();
-        if (!session && typeof window !== 'undefined' && window.location.hash) {
-          const rawHash = window.location.hash.startsWith('#')
-            ? window.location.hash.substring(1)
-            : window.location.hash;
-          const params = new URLSearchParams(rawHash);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          if (accessToken && refreshToken) {
-            const { data: sData } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            session = sData?.session || null;
+        if (!session && typeof window !== 'undefined') {
+          const hash = window.location.hash || '';
+          const search = window.location.search || '';
+          if (hash.includes('access_token')) {
+            const rawHash = hash.startsWith('#') ? hash.substring(1) : hash;
+            const params = new URLSearchParams(rawHash);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            if (accessToken && refreshToken) {
+              const { data: sData } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              session = sData?.session || null;
+            }
+          } else if (search.includes('code=')) {
+            const rawSearch = search.startsWith('?') ? search.substring(1) : search;
+            const params = new URLSearchParams(rawSearch);
+            const code = params.get('code');
+            if (code) {
+              const { data: cData } = await supabase.auth.exchangeCodeForSession(code);
+              session = cData?.session || null;
+            }
           }
-        }
-
-        if (!session) {
-          setResetError('Password reset session has expired or is invalid. Please request a new reset link.');
-          setResetLoading(false);
-          return;
         }
 
         const { data, error: updateErr } = await supabase.auth.updateUser({

@@ -4,6 +4,7 @@ import { StorageService } from '../../core/storage';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import {
   validateEmail,
+  checkAccountExists,
   checkRateLimit,
   isAccountLocked,
   recordFailedAttempt,
@@ -279,14 +280,22 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Rate Limiting Check
-    const rateLimit = await checkRateLimit(cleanEmail);
+    const rateLimit = await checkRateLimit(cleanEmail, 5, 10);
     if (!rateLimit.allowed) {
       setError(rateLimit.message || 'Too many authentication attempts. Please wait 10 seconds before trying again.');
       setLoading(false);
       return;
     }
 
-    // 2. Pre-Authentication Account Lockout Check
+    // 2. Pre-Authentication Account Existence Check
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setError('Invalid Email and Password');
+      setLoading(false);
+      return;
+    }
+
+    // 3. Pre-Authentication Account Lockout Check
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);

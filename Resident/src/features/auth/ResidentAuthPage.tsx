@@ -28,7 +28,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
-import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts, unlockUserAccount, checkRateLimit } from '../../core/security';
+import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts, unlockUserAccount, checkRateLimit, checkAccountExists } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { MobileStorage } from '../../core/storage';
 import UnlockAccountModal from '../../components/UnlockAccountModal';
@@ -452,6 +452,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
+    // 2. Pre-Authentication Account Existence Check
+    // If the account does not exist, show "Invalid Email and Password" and avoid invoking signInWithPassword (no 400 Bad Request console log)
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setAuthError('Invalid Email and Password');
+      return;
+    }
+
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
@@ -743,11 +751,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
-    if (!isStrongPassword(resetNewPassword)) {
-      setErrorMessage('Your password is too weak. Please use at least 8 characters, including an uppercase letter, lowercase letter, number, and special character.');
-      return;
-    }
-
     if (resetNewPassword !== resetConfirmPassword) {
       setErrorMessage('Passwords do not match. Please ensure both fields match.');
       return;
@@ -758,26 +761,30 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       if (isSupabaseConfigured()) {
         // Ensure active auth session exists before attempting updateUser
         let { data: { session } } = await supabase.auth.getSession();
-        if (!session && typeof window !== 'undefined' && window.location.hash) {
-          const rawHash = window.location.hash.startsWith('#')
-            ? window.location.hash.substring(1)
-            : window.location.hash;
-          const params = new URLSearchParams(rawHash);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          if (accessToken && refreshToken) {
-            const { data: sData } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-            session = sData?.session || null;
+        if (!session && typeof window !== 'undefined') {
+          const hash = window.location.hash || '';
+          const search = window.location.search || '';
+          if (hash.includes('access_token')) {
+            const rawHash = hash.startsWith('#') ? hash.substring(1) : hash;
+            const params = new URLSearchParams(rawHash);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            if (accessToken && refreshToken) {
+              const { data: sData } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              session = sData?.session || null;
+            }
+          } else if (search.includes('code=')) {
+            const rawSearch = search.startsWith('?') ? search.substring(1) : search;
+            const params = new URLSearchParams(rawSearch);
+            const code = params.get('code');
+            if (code) {
+              const { data: cData } = await supabase.auth.exchangeCodeForSession(code);
+              session = cData?.session || null;
+            }
           }
-        }
-
-        if (!session) {
-          setErrorMessage('Password reset session has expired or is invalid. Please request a new reset link.');
-          setLoading(false);
-          return;
         }
 
         const { data, error: updateErr } = await supabase.auth.updateUser({ password: resetNewPassword });

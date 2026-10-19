@@ -89,6 +89,46 @@ export const logActivityEvent = async (action, details, level = 'info', userEmai
 };
 
 /**
+ * Check whether an account exists in public.profiles or local fallback databases.
+ * Returns true if account exists, false otherwise.
+ */
+export const checkAccountExists = async (email) => {
+  const cleanEmail = String(email || '').toLowerCase().trim();
+  if (!cleanEmail) return false;
+
+  try {
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (!error && data?.id) {
+        return true;
+      }
+    }
+  } catch (err) {}
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const allDbs = ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_superadmins_db', 'zapatera_treasurers_db'];
+      for (const key of allDbs) {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list) && list.some((u) => (u.email || '').toLowerCase().trim() === cleanEmail)) {
+            return true;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  return false;
+};
+
+/**
  * Rate Limiting Check with 10-second cooldown interval
  */
 export const checkRateLimit = async (identifier, maxAttempts = 5, windowSeconds = 10) => {
@@ -96,16 +136,23 @@ export const checkRateLimit = async (identifier, maxAttempts = 5, windowSeconds 
   const now = new Date();
 
   let localLastAttempt = 0;
+  let localAttempts = 0;
   if (typeof localStorage !== 'undefined') {
-    localLastAttempt = parseInt(localStorage.getItem(`zapatera_ratelimit_${cleanId}`) || '0', 10);
+    localLastAttempt = parseInt(localStorage.getItem(`zapatera_ratelimit_ts_${cleanId}`) || '0', 10);
+    localAttempts = parseInt(localStorage.getItem(`zapatera_ratelimit_cnt_${cleanId}`) || '0', 10);
     const secondsPassed = Math.floor((now.getTime() - localLastAttempt) / 1000);
     if (localLastAttempt > 0 && secondsPassed < windowSeconds) {
-      const waitRemaining = windowSeconds - secondsPassed;
-      return {
-        allowed: false,
-        remaining: 0,
-        message: `Too many authentication attempts. Please wait ${waitRemaining} second${waitRemaining > 1 ? 's' : ''} before trying again.`,
-      };
+      if (localAttempts >= maxAttempts) {
+        return {
+          allowed: false,
+          remaining: 0,
+          message: 'Too many authentication attempts. Please wait 10 seconds before trying again.',
+        };
+      }
+      localStorage.setItem(`zapatera_ratelimit_cnt_${cleanId}`, String(localAttempts + 1));
+    } else {
+      localStorage.setItem(`zapatera_ratelimit_ts_${cleanId}`, String(now.getTime()));
+      localStorage.setItem(`zapatera_ratelimit_cnt_${cleanId}`, '1');
     }
   }
 
@@ -122,46 +169,33 @@ export const checkRateLimit = async (identifier, maxAttempts = 5, windowSeconds 
         const secondsDiff = Math.floor((now.getTime() - lastAttempt) / 1000);
 
         if (secondsDiff < windowSeconds && limitData.attempts >= maxAttempts) {
-          const waitRemaining = windowSeconds - secondsDiff;
           return {
             allowed: false,
             remaining: 0,
-            message: `Too many authentication attempts. Please wait ${waitRemaining} second${waitRemaining > 1 ? 's' : ''} before trying again.`,
+            message: 'Too many authentication attempts. Please wait 10 seconds before trying again.',
           };
         } else if (secondsDiff >= windowSeconds) {
           await supabase
             .from('rate_limits')
             .update({ attempts: 1, window_start: now.toISOString(), last_attempt: now.toISOString() })
             .eq('id', limitData.id);
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(`zapatera_ratelimit_${cleanId}`, String(now.getTime()));
-          }
           return { allowed: true, remaining: maxAttempts - 1 };
         } else {
           await supabase
             .from('rate_limits')
             .update({ attempts: limitData.attempts + 1, last_attempt: now.toISOString() })
             .eq('id', limitData.id);
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(`zapatera_ratelimit_${cleanId}`, String(now.getTime()));
-          }
           return { allowed: true, remaining: maxAttempts - (limitData.attempts + 1) };
         }
       } else if (!error) {
         await supabase
           .from('rate_limits')
           .insert([{ identifier: cleanId, attempts: 1, window_start: now.toISOString(), last_attempt: now.toISOString() }]);
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(`zapatera_ratelimit_${cleanId}`, String(now.getTime()));
-        }
         return { allowed: true, remaining: maxAttempts - 1 };
       }
     }
   } catch (err) {}
 
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(`zapatera_ratelimit_${cleanId}`, String(now.getTime()));
-  }
   return { allowed: true, remaining: maxAttempts - 1 };
 };
 
