@@ -183,6 +183,12 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
           }
 
           const lockRes = await recordFailedAttempt(cleanEmail, 'resident');
+          if ((lockRes as any).accountExists === false) {
+            setError('Invalid Email and Password');
+            setLoading(false);
+            return;
+          }
+
           if (lockRes.isLockedOut || lockRes.attempts >= 3) {
             setIsLocked(true);
             setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
@@ -830,6 +836,9 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         onUnlocked={(unlockedEmail) => {
           setIsLocked(false);
           setError('');
+          setPassword('');
+          if (unlockedEmail) setEmail(unlockedEmail);
+          setIsUnlockModalOpen(false);
           setInfoMsg(`Your account (${unlockedEmail}) has been successfully unlocked. You may now log in.`);
         }}
       />

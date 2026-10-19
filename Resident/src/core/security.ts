@@ -161,27 +161,7 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
 
   try {
     if (isSupabaseConfigured()) {
-      // 1. Try atomic SECURITY DEFINER RPC first
-      try {
-        const { data: rpcData, error: rpcErr } = await supabase.rpc('check_account_lockout', {
-          user_email: cleanEmail,
-        });
-        if (!rpcErr && rpcData && typeof (rpcData as any).is_locked === 'boolean') {
-          if ((rpcData as any).is_locked) {
-            if (typeof localStorage !== 'undefined') {
-              localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-              localStorage.setItem(`zapatera_failed_${cleanEmail}`, '3');
-            }
-            return true;
-          }
-          // If database returns is_locked: false, but local has >= 3 failed attempts, maintain lockout
-          if (localAttempts >= 3 || localLocked) {
-            return true;
-          }
-        }
-      } catch (e) {}
-
-      // 2. Direct profiles table query fallback
+      // 1. Direct authoritative profiles table check
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, email, is_locked, failed_login_attempts, failed_attempts, is_active, locked_at')
@@ -197,8 +177,8 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
             localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, dbAttempts)));
           }
           return true;
-        } else if (dbAttempts === 0 && profile.is_locked === false && profile.is_active !== false) {
-          // Explicit admin unlock in DB -> clear local lockout state
+        } else {
+          // Account is unlocked in Supabase database -> clear any stale local lockout flags
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
             localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
@@ -206,6 +186,22 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
           return false;
         }
       }
+
+      // 2. Try atomic SECURITY DEFINER RPC fallback
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('check_account_lockout', {
+          user_email: cleanEmail,
+        });
+        if (!rpcErr && rpcData && typeof (rpcData as any).is_locked === 'boolean') {
+          if ((rpcData as any).is_locked) {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+              localStorage.setItem(`zapatera_failed_${cleanEmail}`, '3');
+            }
+            return true;
+          }
+        }
+      } catch (e) {}
     }
   } catch (err) {}
 
@@ -241,8 +237,11 @@ export const recordFailedAttempt = async (
           user_email: cleanEmail,
         });
 
-        // ONLY trust RPC attempts if success is TRUE (profile exists in database)
-        if (!rpcErr && rpcData && (rpcData as any).success === true && typeof (rpcData as any).attempts === 'number') {
+        if (!rpcErr && rpcData && typeof (rpcData as any).success === 'boolean') {
+          if ((rpcData as any).success === false) {
+            // Email does NOT exist in profiles database
+            return { attempts: 0, isLockedOut: false, remaining: 0, accountExists: false };
+          }
           const newAttempts = Number((rpcData as any).attempts);
           const isLocked = Boolean((rpcData as any).is_locked) || newAttempts >= 3;
           if (typeof localStorage !== 'undefined') {
@@ -254,7 +253,7 @@ export const recordFailedAttempt = async (
           if (isLocked) {
             broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: newAttempts, lockedAt: nowTs });
           }
-          return { attempts: newAttempts, isLockedOut: isLocked, remaining: Math.max(0, 3 - newAttempts) };
+          return { attempts: newAttempts, isLockedOut: isLocked, remaining: Math.max(0, 3 - newAttempts), accountExists: true };
         }
       } catch (e) {}
 
@@ -298,20 +297,10 @@ export const recordFailedAttempt = async (
 
           broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: currentAttempts, lockedAt: nowTs });
         }
+        return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts), accountExists: true };
+      } else {
+        return { attempts: 0, isLockedOut: false, remaining: 0, accountExists: false };
       }
-
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(currentAttempts));
-        if (isLockedOut) {
-          localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-        }
-      }
-
-      if (isLockedOut) {
-        broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: currentAttempts, lockedAt: nowTs });
-      }
-
-      return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts) };
     }
   } catch (err) {}
 

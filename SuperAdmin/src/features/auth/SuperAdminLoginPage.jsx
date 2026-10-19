@@ -8,6 +8,7 @@ import {
   isAccountLocked,
   recordFailedAttempt,
   resetFailedAttempts,
+  unlockUserAccount,
 } from '../../core/security';
 import {
   ShieldCheck,
@@ -282,6 +283,12 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
           // Track consecutive failed login attempt in database
           const lockRes = await recordFailedAttempt(cleanEmail, 'super_admin');
           
+          if (lockRes.accountExists === false) {
+            setError('Invalid Email and Password');
+            setLoading(false);
+            return;
+          }
+
           if (lockRes.isLockedOut || lockRes.attempts >= 3) {
             setIsLocked(true);
             setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
@@ -616,8 +623,8 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // Unlock account in Supabase profiles database
-    await resetFailedAttempts(targetEmail);
+    // Unlock account in Supabase profiles database & clear local lockout
+    await unlockUserAccount(targetEmail);
 
     setIsLocked(false);
     setUnlockTimerActive(false);

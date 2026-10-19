@@ -23,7 +23,7 @@ import {
   ArrowRight,
   ArrowLeft,
 } from 'lucide-react';
-import { validateEmail, resetFailedAttempts } from '../core/security';
+import { validateEmail, resetFailedAttempts, unlockUserAccount } from '../core/security';
 import { supabase, isSupabaseConfigured } from '../core/supabase';
 
 interface UnlockAccountModalProps {
@@ -218,8 +218,12 @@ export default function UnlockAccountModal({
       return;
     }
 
-    // Reset account lockout status in Supabase database
-    await resetFailedAttempts(cleanEmail);
+    // Genuinely unlock account in Supabase database & clear local lockout flags
+    await unlockUserAccount(cleanEmail);
+
+    try {
+      onUnlocked(cleanEmail);
+    } catch (e) {}
 
     setTimerActive(false);
     setLoading(false);

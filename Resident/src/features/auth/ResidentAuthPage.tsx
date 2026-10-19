@@ -28,7 +28,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
-import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts } from '../../core/security';
+import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts, unlockUserAccount, checkRateLimit } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { MobileStorage } from '../../core/storage';
 import UnlockAccountModal from '../../components/UnlockAccountModal';
@@ -392,7 +392,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     const cleanEmail = loginEmail.toLowerCase().trim();
 
-    // 1. Pre-auth Account Lockout & Deletion Checks
+    // 1. Rate Limiting Check: 5 attempts per 10 seconds
+    const rateCheck = await checkRateLimit(cleanEmail, 5, 10);
+    if (!rateCheck.allowed) {
+      setAuthError(rateCheck.message || 'Too many authentication attempts. Please wait 10 seconds before trying again.');
+      return;
+    }
+
+    // 2. Pre-auth Account Lockout & Deletion Checks
     const deletedAccountsStr = typeof localStorage !== 'undefined' ? localStorage.getItem('zapatera_deleted_accounts') : null;
     let isExplicitlyDeleted = false;
     if (deletedAccountsStr) {
@@ -440,7 +447,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         });
 
         if (authErr) {
-          console.error('Supabase authentication error:', authErr);
           const errMsg = (authErr.message || '').toLowerCase();
           const isEmailNotConfirmed =
             errMsg.includes('email not confirmed') ||
@@ -455,6 +461,12 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           }
 
           const failedInfo = await recordFailedAttempt(cleanEmail, 'resident');
+          if ((failedInfo as any).accountExists === false) {
+            setAuthError('Invalid Email and Password');
+            setLoading(false);
+            return;
+          }
+
           if (failedInfo.isLockedOut || failedInfo.attempts >= 3) {
             const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
             setIsLocked(true);
@@ -575,7 +587,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       setAuthStep('otp');
       setInfoBanner(`Two-Factor Authentication: A 6-digit security OTP was sent to ${cleanEmail}. Please check your Gmail inbox.`);
     } catch (err: any) {
-      console.error('Supabase authentication error:', err);
       setLoading(false);
       setAuthError(err?.message || 'Unable to sign in. Please try again.');
     }
@@ -712,21 +723,23 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       if (isSupabaseConfigured()) {
         const { data, error: updateErr } = await supabase.auth.updateUser({ password: resetNewPassword });
         if (updateErr) {
-          console.error('Supabase updateUser error:', updateErr);
+          setErrorMessage(updateErr.message || 'Failed to update password.');
+          setLoading(false);
+          return;
         }
         const targetEmail = (data?.user?.email || forgotEmail || loginEmail || '').toLowerCase().trim();
         if (targetEmail) {
           await supabase
             .from('profiles')
             .update({
-              password: resetNewPassword,
               is_locked: false,
               failed_attempts: 0,
+              locked_at: null,
               updated_at: new Date().toISOString(),
             })
             .eq('email', targetEmail);
 
-          await resetFailedAttempts(targetEmail);
+          await unlockUserAccount(targetEmail);
         }
       }
 
@@ -1717,7 +1730,12 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         onClose={() => setIsUnlockModalOpen(false)}
         onUnlocked={(unlockedEmail) => {
           setIsLocked(false);
+          setAuthError(null);
           setErrorMessage('');
+          setSecurityNoticeModal(null);
+          setLoginPassword('');
+          if (unlockedEmail) setLoginEmail(unlockedEmail);
+          setIsUnlockModalOpen(false);
           setSuccessBanner(`Your account (${unlockedEmail}) has been successfully unlocked. You may now log in.`);
         }}
       />

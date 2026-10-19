@@ -37,7 +37,7 @@ class SecurityEngine {
   recordFailedAttempt(email, role = 'resident') {
     const cleanEmail = email.toLowerCase();
     const profile = this.profiles.get(cleanEmail);
-    if (!profile) return { attempts: 0, isLockedOut: false };
+    if (!profile) return { attempts: 0, isLockedOut: false, remaining: 0, accountExists: false };
 
     profile.failed_attempts += 1;
     if (profile.failed_attempts >= 3) {
@@ -53,10 +53,10 @@ class SecurityEngine {
       });
 
       this.logAudit('Account Locked Out', `Account ${cleanEmail} locked out due to 3 consecutive failed login attempts.`, 'danger', cleanEmail);
-      return { attempts: profile.failed_attempts, isLockedOut: true };
+      return { attempts: profile.failed_attempts, isLockedOut: true, remaining: 0, accountExists: true };
     } else {
       this.logAudit('Failed Login Attempt', `Failed password attempt ${profile.failed_attempts}/3 for ${cleanEmail}`, 'warning', cleanEmail);
-      return { attempts: profile.failed_attempts, isLockedOut: false };
+      return { attempts: profile.failed_attempts, isLockedOut: false, remaining: 3 - profile.failed_attempts, accountExists: true };
     }
   }
 
@@ -117,6 +117,9 @@ class SecurityEngine {
     // 3. Authenticate primary credentials
     if (!profile || profile.password !== password) {
       const lockResult = this.recordFailedAttempt(cleanEmail, portalRole);
+      if (lockResult.accountExists === false) {
+        return { success: false, code: 'INVALID_CREDENTIALS', message: 'Invalid Email and Password' };
+      }
       if (lockResult.isLockedOut) {
         return { success: false, code: 'JUST_LOCKED', message: 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.' };
       }
@@ -311,8 +314,32 @@ export function runSecurityTestSuite() {
   assert.strictEqual(validTreasurerRes.user.role, 'treasurer');
   console.log('  [PASS] Authorized treasurer accepted and routed to 2FA OTP verification step\n');
 
+  // TEST 15: Non-Existent Account Attempting Login -> Strictly "Invalid Email and Password" without lockout counters
+  console.log('--> Test 15: Non-Existent Account Attempting Login (e.g. Typo in Email)...');
+  const nonExistentEmail = 'joca.medina.swu@phinmaed.coms';
+  const nonExistRes = engine.loginToPortal(nonExistentEmail, 'AnyPassword123!', 'admin');
+  assert.strictEqual(nonExistRes.success, false);
+  assert.strictEqual(nonExistRes.code, 'INVALID_CREDENTIALS');
+  assert.strictEqual(nonExistRes.message, 'Invalid Email and Password');
+  assert.strictEqual(engine.profiles.has(nonExistentEmail), false);
+  console.log('  [PASS] Non-existent account rejected cleanly with "Invalid Email and Password" (no lockout attempt counters leaked)\n');
+
+  // TEST 16: Resident Portal Rate Limiting (5 requests per window)
+  console.log('--> Test 16: Resident Portal Rate Limiting (Too many authentication attempts)...');
+  const residentRateUser = 'rate.limit.resident@gmail.com';
+  engine.registerUser(residentRateUser, 'ResidentPass123!', 'resident');
+  // Trigger 5 attempts
+  for (let i = 0; i < 5; i++) {
+    engine.checkRateLimit(residentRateUser, 5);
+  }
+  // 6th attempt should be blocked
+  const rateLimitRes = engine.checkRateLimit(residentRateUser, 5);
+  assert.strictEqual(rateLimitRes.allowed, false);
+  assert.strictEqual(rateLimitRes.message.includes('Too many authentication attempts'), true);
+  console.log('  [PASS] Resident portal rate limiting strictly enforced with message: "Too many authentication attempts. Please wait..."\n');
+
   console.log('====================================================');
-  console.log('✅ ALL 14 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
+  console.log('✅ ALL 16 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
   console.log('====================================================\n');
 }
 

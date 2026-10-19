@@ -8,6 +8,7 @@ import {
   isAccountLocked,
   recordFailedAttempt,
   resetFailedAttempts,
+  unlockUserAccount,
 } from '../../core/security';
 import {
   ShieldCheck,
@@ -314,6 +315,12 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
 
           // Track consecutive failed login attempt in database
           const lockRes = await recordFailedAttempt(cleanEmail, 'treasurer');
+
+          if (lockRes.accountExists === false) {
+            setError('Invalid Email and Password');
+            setLoading(false);
+            return;
+          }
 
           if (lockRes.isLockedOut || lockRes.attempts >= 3) {
             setIsLocked(true);
@@ -656,7 +663,8 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    await resetFailedAttempts(targetEmail);
+    // Unlock account in Supabase profiles database & clear local lockout
+    await unlockUserAccount(targetEmail);
 
     setIsLocked(false);
     setUnlockTimerActive(false);
