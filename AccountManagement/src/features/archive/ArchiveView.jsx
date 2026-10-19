@@ -937,58 +937,241 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         </div>
       </div>
 
-      {/* Item Inspect Modal */}
+      {/* Human-Readable Item Inspection Modal */}
       {inspectItem && (
         <Modal
           isOpen={!!inspectItem}
           onClose={() => setInspectItem(null)}
-          title="Archived Entity Inspection"
+          title={
+            inspectItem._type === 'users'
+              ? 'Archived User Profile'
+              : inspectItem._type === 'requests'
+              ? 'Archived Document Request Details'
+              : 'Archived Announcement Details'
+          }
           darkMode={isDarkMode}
         >
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl space-y-1">
-              <p className="font-bold text-slate-900 dark:text-white text-sm">
-                {inspectItem.title || inspectItem.full_name || inspectItem.tracking_number}
-              </p>
-              <p className="text-slate-500">
-                Archived at: {formatDate(inspectItem.deleted_at)} by{' '}
+          <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
+            {/* Header info box */}
+            <div className="p-4 bg-slate-100 dark:bg-slate-800/80 rounded-2xl space-y-1.5 border border-slate-200/80 dark:border-slate-700/60">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="font-extrabold text-slate-900 dark:text-white text-base">
+                  {inspectItem.full_name || inspectItem.title || inspectItem.tracking_number || inspectItem.email}
+                </p>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                  Archived Record
+                </span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-xs">
+                Archived at:{' '}
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {inspectItem.archived_by_name || inspectItem.deleted_by || 'System'}
+                  {formatDate(inspectItem.deleted_at)}
+                </span>{' '}
+                by{' '}
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {inspectItem.archived_by_name || inspectItem.deleted_by || 'Administrator'}
                 </span>
               </p>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px]">
-                Full Item Metadata
-              </h4>
-              <pre className="p-3 bg-slate-950 text-slate-200 rounded-xl overflow-x-auto text-[11px] font-mono max-h-60">
-                {JSON.stringify(inspectItem, null, 2)}
-              </pre>
-            </div>
+            {/* A. User Profile View */}
+            {inspectItem._type === 'users' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center space-x-4 shadow-2xs">
+                  <UserAvatar user={inspectItem} size="lg" />
+                  <div className="space-y-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base truncate">
+                      {inspectItem.full_name || `${inspectItem.first_name || ''} ${inspectItem.last_name || ''}`}
+                    </h3>
+                    <p className="text-slate-500 dark:text-slate-400 font-mono text-xs truncate">{inspectItem.email}</p>
+                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      Role: {inspectItem.role || 'resident'}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="pt-3 border-t flex items-center justify-between">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.phone || inspectItem.contact_number || 'Not provided'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Sitio / Cluster</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.sitio || 'Sitio Zapatera Proper'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Full Address</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.address || inspectItem.office || 'Barangay Zapatera, Cebu City'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Civil Status</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.civil_status || 'Single'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Voter Status</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.voter_status || 'Registered Voter'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Account Created</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {formatDate(inspectItem.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* B. Announcements View */}
+            {inspectItem._type === 'announcements' && (
+              <div className="space-y-4">
+                {inspectItem.banner_url && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-48">
+                    <img
+                      src={inspectItem.banner_url}
+                      alt={inspectItem.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center space-x-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>{inspectItem.category || 'General Advisory'}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Author</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.author || inspectItem.created_by_name || 'Administration'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Target Audience</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs capitalize">
+                      {inspectItem.target_audience || 'All Residents'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Location</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.location || 'Barangay Zapatera, Cebu City'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date Posted</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                      {formatDate(inspectItem.created_at)}
+                    </span>
+                  </div>
+                </div>
+
+                {inspectItem.description && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</span>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                      {inspectItem.description}
+                    </div>
+                  </div>
+                )}
+
+                {inspectItem.content && inspectItem.content !== inspectItem.description && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Full Content</span>
+                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                      {inspectItem.content}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* C. Document Requests View */}
+            {inspectItem._type === 'requests' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Tracking Number</span>
+                    <span className="font-bold font-mono text-blue-600 dark:text-blue-400 text-xs">
+                      {inspectItem.tracking_number}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Document Type</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.document_title || inspectItem.document_types?.title || inspectItem.document_type || 'Certificate'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Resident Name</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                      {inspectItem.resident_name || inspectItem.profiles?.full_name || 'Resident'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Contact Email</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
+                      {inspectItem.resident_email || inspectItem.profiles?.email || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
+                      {inspectItem.resident_phone || inspectItem.profiles?.phone || 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Sitio / Address</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
+                      {inspectItem.sitio || inspectItem.profiles?.sitio || inspectItem.resident_address || 'Barangay Zapatera'}
+                    </span>
+                  </div>
+                </div>
+
+                {inspectItem.purpose && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Purpose of Request</span>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-semibold">
+                      {inspectItem.purpose}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setInspectItem(null)}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
               >
                 Close
               </button>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const it = inspectItem;
-                    setInspectItem(null);
-                    handlePromptRestore(it, it._type);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore Now</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const it = inspectItem;
+                  setInspectItem(null);
+                  handlePromptRestore(it, it._type);
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore Now</span>
+              </button>
             </div>
           </div>
         </Modal>

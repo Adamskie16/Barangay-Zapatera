@@ -984,7 +984,15 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         <Modal
           isOpen={!!inspectItem}
           onClose={() => setInspectItem(null)}
-          title="Item Details"
+          title={
+            inspectItem._type === 'announcements'
+              ? 'Archived Announcement Details'
+              : inspectItem._type === 'requests'
+              ? 'Archived Document Request Details'
+              : inspectItem._type === 'documents'
+              ? 'Archived Document Record Details'
+              : 'Archived Item Details'
+          }
           darkMode={isDarkMode}
         >
           <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
@@ -1049,25 +1057,25 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Author / Issuer</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Author</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.author || inspectItem.created_by_name || 'Barangay Administration'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Audience</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Target Audience</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs capitalize">
                       {inspectItem.target_audience || 'All Residents'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Location</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Location</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.location || 'Barangay Zapatera, Cebu City'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Date Posted</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date Posted</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {formatDate(inspectItem.created_at)}
                     </span>
@@ -1077,8 +1085,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 {/* Description Box */}
                 {inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Summary / Description</span>
-                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</span>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
                       {inspectItem.description}
                     </div>
                   </div>
@@ -1087,8 +1095,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 {/* Content Box */}
                 {inspectItem.content && inspectItem.content !== inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Full Content</span>
-                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Full Content</span>
+                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
                       {inspectItem.content}
                     </div>
                   </div>
@@ -1101,38 +1109,38 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Tracking Number</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Tracking Number</span>
                     <span className="font-bold font-mono text-blue-600 dark:text-blue-400 text-xs">
                       {inspectItem.tracking_number}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Document Type</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Document Type</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.document_title || inspectItem.document_types?.title || inspectItem.document_type || 'Certificate'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Resident Name</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Resident Name</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.resident_name || inspectItem.profiles?.full_name || 'Resident'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Contact Email</span>
-                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Contact Email</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
                       {inspectItem.resident_email || inspectItem.profiles?.email || 'N/A'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Phone Number</span>
-                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
                       {inspectItem.resident_phone || inspectItem.profiles?.phone || 'N/A'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Sitio / Address</span>
-                    <span className="font-medium text-slate-600 dark:text-slate-300 text-xs">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Sitio / Address</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300 text-xs">
                       {inspectItem.sitio || inspectItem.profiles?.sitio || inspectItem.resident_address || 'Barangay Zapatera'}
                     </span>
                   </div>
@@ -1140,8 +1148,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 {/* Purpose and details */}
                 <div className="space-y-1">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Purpose of Request</span>
-                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-semibold">
+                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Purpose of Request</span>
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-semibold">
                     {inspectItem.purpose || 'Local Requirement / Employment / Verification'}
                   </div>
                 </div>
@@ -1160,37 +1168,37 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Tracking Number</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Tracking Number</span>
                     <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 text-xs">
                       {inspectItem.tracking_number}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Document Title</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Document Title</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.document_title || inspectItem.document_types?.title || 'Official Document'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Resident Recipient</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Resident Recipient</span>
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.resident_name || inspectItem.profiles?.full_name || 'Resident'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Approved Date</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Approved Date</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
                       {formatDate(inspectItem.approved_at || inspectItem.created_at)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Processed By</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Processed By</span>
                     <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
                       {inspectItem.processed_by || 'Barangay Administrator'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Release Status</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Release Status</span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs uppercase">
                       {inspectItem.is_claimed ? 'Claimed & Released' : 'Ready for Pickup'}
                     </span>
@@ -1198,15 +1206,15 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Purpose / Remarks</span>
-                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-semibold">
+                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Purpose / Remarks</span>
+                  <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-semibold">
                     {inspectItem.purpose || 'Official Barangay Clearance & Certification'}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Modal Footer with Actions */}
+            {/* Modal Actions */}
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <button
                 type="button"
@@ -1215,19 +1223,17 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               >
                 Close
               </button>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const it = inspectItem;
-                    handlePromptRestore(it, it._type);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore Now</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const it = inspectItem;
+                  handlePromptRestore(it, it._type);
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore Now</span>
+              </button>
             </div>
           </div>
         </Modal>

@@ -1048,25 +1048,25 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Performed By</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Performed By</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.user_email || inspectItem.user || 'Admin'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Date & Time Logged</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date & Time Logged</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {formatDate(inspectItem.created_at)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Feature / Module</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Feature / Module</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.feature || 'General'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Log Reference ID</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Log Reference ID</span>
                     <span className="font-mono text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.id}
                     </span>
@@ -1074,8 +1074,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Activity Details</span>
-                  <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Activity Details</span>
+                  <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
                     {inspectItem.details || 'Activity record successfully committed to system database.'}
                   </div>
                 </div>
@@ -1099,49 +1099,49 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 {/* Structured Details Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Phone Number</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.phone || inspectItem.contact_number || 'Not provided'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Sitio / Cluster</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Sitio / Cluster</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.sitio || 'Sitio Zapatera Proper'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Full Address</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Full Address</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.address || inspectItem.office || 'Barangay Zapatera, Cebu City'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Civil Status</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Civil Status</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.civil_status || 'Single'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Voter Status</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Voter Status</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.voter_status || 'Registered Voter'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Gender & Age</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Gender & Age</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.gender || 'Not specified'} {inspectItem.age ? `(${inspectItem.age} yrs)` : ''}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Valid ID Presented</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Valid ID Presented</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.id_type || 'Government ID'}: {inspectItem.id_number || 'N/A'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Account Created</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Account Created</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {formatDate(inspectItem.created_at)}
                     </span>
@@ -1177,25 +1177,25 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Author</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Author</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.author || inspectItem.created_by_name || 'Administration'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Target Audience</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Target Audience</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs capitalize">
                       {inspectItem.target_audience || 'All Residents'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Location</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Location</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {inspectItem.location || 'Barangay Zapatera, Cebu City'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Date Posted</span>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date Posted</span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
                       {formatDate(inspectItem.created_at)}
                     </span>
@@ -1204,8 +1204,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 {inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Summary</span>
-                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</span>
+                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
                       {inspectItem.description}
                     </div>
                   </div>
@@ -1213,8 +1213,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 {inspectItem.content && inspectItem.content !== inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Full Content</span>
-                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Full Content</span>
+                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
                       {inspectItem.content}
                     </div>
                   </div>
