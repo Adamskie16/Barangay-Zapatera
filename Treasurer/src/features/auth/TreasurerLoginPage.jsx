@@ -1311,7 +1311,7 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
                     </>
                   ) : (
                     <>
-                      <span>Save New Password & Unlock Account</span>
+                      <span>Save New Password</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

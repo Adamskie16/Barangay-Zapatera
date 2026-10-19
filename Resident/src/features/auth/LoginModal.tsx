@@ -817,7 +817,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
               className="w-full py-2.5 font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
             >
               {resetLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              <span>Save New Password & Unlock Account</span>
+              <span>Save New Password</span>
             </button>
           </form>
         )}
