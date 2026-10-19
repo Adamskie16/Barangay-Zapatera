@@ -442,13 +442,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     }
 
     if (isExplicitlyDeleted) {
-      const msg = 'Notice: This resident account has been deleted by Barangay Zapatera administration. Access has been revoked.';
-      setAuthError(msg);
-      setSecurityNoticeModal({
-        isOpen: true,
-        type: 'deleted',
-        message: msg,
-      });
+      setAuthError('Invalid Email and Password');
       return;
     }
 

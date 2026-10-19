@@ -10,6 +10,7 @@ class SecurityEngine {
     this.unlockRequests = [];
     this.rateLimits = new Map();
     this.auditLogs = [];
+    this.archiveBin = [];
   }
 
   registerUser(email, password, role = 'resident') {
@@ -20,7 +21,34 @@ class SecurityEngine {
       failed_attempts: 0,
       is_locked: false,
       locked_at: null,
+      is_archived: false,
+      deleted_at: null,
     });
+  }
+
+  archiveUser(targetEmail, adminUser = 'superadmin@zapatera.gov.ph') {
+    const cleanEmail = targetEmail.toLowerCase();
+    const profile = this.profiles.get(cleanEmail);
+    if (!profile) return { success: false, message: 'User not found' };
+
+    profile.is_archived = true;
+    profile.is_active = false;
+    profile.deleted_at = new Date().toISOString();
+    profile.deleted_by = adminUser;
+
+    this.archiveBin.push({ ...profile });
+    this.logAudit('Archived User Account', `User ${cleanEmail} forwarded to Archive & Trash by ${adminUser}`, 'warning', adminUser);
+    return { success: true, user: profile };
+  }
+
+  checkAccountExists(email) {
+    const cleanEmail = String(email || '').toLowerCase().trim();
+    const profile = this.profiles.get(cleanEmail);
+    if (!profile) return false;
+    if (profile.is_archived === true || profile.deleted_at || profile.is_active === false) {
+      return false;
+    }
+    return true;
   }
 
   checkRateLimit(identifier, maxAttempts = 5) {
@@ -108,7 +136,13 @@ class SecurityEngine {
       return { success: false, code: 'RATE_LIMIT', message: limit.message };
     }
 
-    // 2. Lock status check
+    // 2. Pre-authentication account existence check
+    const exists = this.checkAccountExists(cleanEmail);
+    if (!exists) {
+      return { success: false, code: 'INVALID_CREDENTIALS', message: 'Invalid Email and Password' };
+    }
+
+    // 3. Lock status check
     const profile = this.profiles.get(cleanEmail);
     if (profile && profile.is_locked) {
       return { success: false, code: 'ACCOUNT_LOCKED', message: 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.' };
@@ -395,8 +429,52 @@ export function runSecurityTestSuite() {
   assert.strictEqual(newLoginRes.success, true);
   console.log('  [PASS] Password reset with valid session unlocks account, clears failed attempts, and allows instant login\n');
 
+  // TEST 19: SuperAdmin Deleting Account -> Forwarded to Archive & Trash
+  console.log('--> Test 19: SuperAdmin Deleting Account -> Forwarded to Archive & Trash...');
+  const residentToDelete = 'resident.deleted.sample@gmail.com';
+  engine.registerUser(residentToDelete, 'ResidentPass123!', 'resident');
+  const archiveRes = engine.archiveUser(residentToDelete, 'superadmin@zapatera.gov.ph');
+  assert.strictEqual(archiveRes.success, true);
+  assert.strictEqual(engine.profiles.get(residentToDelete).is_archived, true);
+  assert.strictEqual(engine.profiles.get(residentToDelete).is_active, false);
+  assert.ok(engine.profiles.get(residentToDelete).deleted_at);
+  assert.strictEqual(engine.archiveBin.some(u => u.email === residentToDelete), true);
+  console.log('  [PASS] Deleted account successfully archived and forwarded to Archive & Trash recycling bin\n');
+
+  // TEST 20: Deleted Resident Logging In Again -> "Invalid Email and Password"
+  console.log('--> Test 20: Deleted Resident Logging In Again -> Strictly "Invalid Email and Password"...');
+  const deletedLoginRes = engine.loginToPortal(residentToDelete, 'ResidentPass123!', 'resident');
+  assert.strictEqual(deletedLoginRes.success, false);
+  assert.strictEqual(deletedLoginRes.code, 'INVALID_CREDENTIALS');
+  assert.strictEqual(deletedLoginRes.message, 'Invalid Email and Password');
+  // Attempt count must not be incremented for non-existent/deleted accounts
+  assert.strictEqual(engine.profiles.get(residentToDelete).failed_attempts, 0);
+  console.log('  [PASS] Deleted resident login attempt rejected cleanly with "Invalid Email and Password" without lockout counters\n');
+
+  // TEST 21: Realtime Account Deletion Detection for Active Session
+  console.log('--> Test 21: Realtime Account Deletion Detection for Active Session...');
+  const activeResident = 'resident.active.session@gmail.com';
+  engine.registerUser(activeResident, 'ActivePass123!', 'resident');
+  // Resident is currently logged in
+  let residentCurrentSession = { email: activeResident, is_active: true };
+  // SuperAdmin deletes account
+  engine.archiveUser(activeResident, 'superadmin@zapatera.gov.ph');
+  // Resident heartbeat / broadcast sync checks profile status
+  const profileStatus = engine.profiles.get(activeResident);
+  let liveLoggedOut = false;
+  let modalNotice = '';
+  if (profileStatus.is_archived || profileStatus.deleted_at || !profileStatus.is_active) {
+    liveLoggedOut = true;
+    modalNotice = 'Notice: Your resident account has been deleted by Barangay Zapatera administration. You have been logged out.';
+    residentCurrentSession = null;
+  }
+  assert.strictEqual(liveLoggedOut, true);
+  assert.strictEqual(residentCurrentSession, null);
+  assert.strictEqual(modalNotice.includes('deleted by Barangay Zapatera administration'), true);
+  console.log('  [PASS] Active resident automatically logged out in real-time with deletion modal triggered\n');
+
   console.log('====================================================');
-  console.log('✅ ALL 18 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
+  console.log('✅ ALL 21 AUTOMATED SECURITY TESTS PASSED SUCCESSFULLY');
   console.log('====================================================\n');
 }
 

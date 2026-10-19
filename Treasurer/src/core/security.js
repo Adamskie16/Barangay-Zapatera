@@ -96,20 +96,45 @@ export const checkAccountExists = async (email) => {
   const cleanEmail = String(email || '').toLowerCase().trim();
   if (!cleanEmail) return false;
 
+  // 1. Check local deleted accounts and archive cache
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const deletedAccountsStr = localStorage.getItem('zapatera_deleted_accounts');
+      if (deletedAccountsStr) {
+        const deletedList = JSON.parse(deletedAccountsStr);
+        if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
+          return false;
+        }
+      }
+      const archiveDbStr = localStorage.getItem('zapatera_users_archive_db');
+      if (archiveDbStr) {
+        const archiveList = JSON.parse(archiveDbStr);
+        if (Array.isArray(archiveList) && archiveList.some((u) => (u.email || '').toLowerCase() === cleanEmail)) {
+          return false;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Check Supabase profiles table
   try {
     if (isSupabaseConfigured()) {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email')
+        .select('id, email, is_archived, deleted_at, is_active')
         .eq('email', cleanEmail)
         .maybeSingle();
 
       if (!error && data?.id) {
+        if (data.is_archived === true || data.deleted_at || data.is_active === false) {
+          return false;
+        }
         return true;
       }
     }
   } catch (err) {}
 
+  // 3. Fallback databases
   if (typeof localStorage !== 'undefined') {
     try {
       const allDbs = ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_superadmins_db', 'zapatera_treasurers_db'];
@@ -117,8 +142,11 @@ export const checkAccountExists = async (email) => {
         const stored = localStorage.getItem(key);
         if (stored) {
           const list = JSON.parse(stored);
-          if (Array.isArray(list) && list.some((u) => (u.email || '').toLowerCase().trim() === cleanEmail)) {
-            return true;
+          if (Array.isArray(list)) {
+            const found = list.find((u) => (u.email || '').toLowerCase().trim() === cleanEmail);
+            if (found && found.is_archived !== true && !found.deleted_at) {
+              return true;
+            }
           }
         }
       }

@@ -250,7 +250,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       try {
         const deletedList = JSON.parse(deletedAccountsStr);
         if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
-          setError('Invalid email or password.');
+          setError('Invalid Email and Password');
           setLoading(false);
           return;
         }

@@ -511,6 +511,7 @@ export default function App() {
     if (!currentUser?.id) return;
 
     let profileChannel: any = null;
+    let securityBroadcastChannel: any = null;
     let broadcastChannel: BroadcastChannel | null = null;
 
     const deletionNoticeText = 'Notice: Your resident account has been deleted by Barangay Zapatera administration. You have been logged out.';
@@ -532,9 +533,9 @@ export default function App() {
           return;
         }
 
-        // 2. Check if explicitly marked inactive
-        if (data && data.is_active === false) {
-          handleLogout('Notice: Your resident account has been deactivated by Barangay Zapatera administration.');
+        // 2. Check if explicitly marked archived, deleted, or deactivated
+        if (data && (data.is_archived === true || data.deleted_at || data.is_active === false)) {
+          handleLogout(deletionNoticeText);
           return;
         }
 
@@ -630,9 +631,14 @@ export default function App() {
               if (payload?.new) {
                 const updatedRow = payload.new;
 
-                // Check if account status has been locked or deactivated
-                if (updatedRow.is_locked || updatedRow.is_active === false) {
-                  handleLogout('Notice: Your resident account has been deactivated or locked by Barangay Zapatera administration.');
+                // Check if account has been deleted, archived, or deactivated
+                if (updatedRow.is_archived === true || updatedRow.deleted_at || updatedRow.is_active === false) {
+                  handleLogout(deletionNoticeText);
+                  return;
+                }
+
+                if (updatedRow.is_locked) {
+                  handleLogout('Notice: Your resident account has been locked. Please unlock via Gmail.');
                   return;
                 }
 
@@ -646,6 +652,23 @@ export default function App() {
                   MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
                   return updated;
                 });
+              }
+            }
+          )
+          .subscribe();
+
+        securityBroadcastChannel = supabase
+          .channel('zapatera_account_security_broadcast')
+          .on(
+            'broadcast',
+            { event: 'ACCOUNT_DELETED' },
+            (payload: any) => {
+              const deletedId = payload?.payload?.userId;
+              const deletedEmail = (payload?.payload?.email || '').toLowerCase().trim();
+              const myEmail = (currentUser?.email || '').toLowerCase().trim();
+
+              if (deletedId === currentUser?.id || (deletedEmail && deletedEmail === myEmail)) {
+                handleLogout(deletionNoticeText);
               }
             }
           )
@@ -711,6 +734,9 @@ export default function App() {
     return () => {
       if (profileChannel && isSupabaseConfigured()) {
         supabase.removeChannel(profileChannel);
+      }
+      if (securityBroadcastChannel && isSupabaseConfigured()) {
+        supabase.removeChannel(securityBroadcastChannel);
       }
       if (broadcastChannel) {
         broadcastChannel.close();

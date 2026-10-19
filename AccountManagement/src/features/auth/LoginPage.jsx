@@ -249,7 +249,7 @@ export default function LoginPage({ onLoginSuccess }) {
       try {
         const deletedList = JSON.parse(deletedAccountsStr);
         if (Array.isArray(deletedList) && deletedList.some((d) => (d.email || d).toLowerCase() === cleanEmail)) {
-          setError('Notice: This account has been deleted by Barangay Zapatera administration. Access has been revoked.');
+          setError('Invalid Email and Password');
           setLoading(false);
           return;
         }

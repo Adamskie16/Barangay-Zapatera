@@ -1327,7 +1327,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     try {
       // Soft-delete to Archive & Trash Management recycling bin
-      await StorageService.archiveUser(id, currentUser);
+      await StorageService.archiveUser(id, currentUser, deletingUser);
 
       // Record deletion in localStorage for cross-tab and login prevention
       if (typeof localStorage !== 'undefined') {

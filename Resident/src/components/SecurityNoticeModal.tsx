@@ -53,7 +53,7 @@ export default function SecurityNoticeModal({
     ? 'Account Security Lockout'
     : isInactive
     ? 'Account Deactivated'
-    : 'Account Terminated';
+    : 'Account Deleted';
 
   const defaultBadge = isIdle
     ? 'SESSION TIMED OUT'
@@ -61,7 +61,7 @@ export default function SecurityNoticeModal({
     ? 'SECURITY LOCKOUT'
     : isInactive
     ? 'ACCESS DEACTIVATED'
-    : 'ACCOUNT TERMINATED';
+    : 'ACCOUNT DELETED';
 
   const defaultSubtitle = isIdle
     ? 'Barangay Zapatera Automated Security Guard'

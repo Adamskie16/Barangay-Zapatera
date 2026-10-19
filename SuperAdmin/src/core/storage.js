@@ -1009,21 +1009,33 @@ export const StorageService = {
   },
 
   getArchivedUsersAsync: async () => {
+    let localArc = [];
+    try {
+      localArc = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
+    } catch {}
+
     try {
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('profiles')
-          .select('*, profiles:deleted_by(full_name, email)')
+          .select('*')
           .or('is_archived.eq.true,deleted_at.not.is.null')
           .order('deleted_at', { ascending: false });
-        if (!error && Array.isArray(data)) return data;
+
+        if (!error && Array.isArray(data)) {
+          const combined = [...data];
+          if (Array.isArray(localArc)) {
+            localArc.forEach((item) => {
+              if (!combined.some((c) => String(c.id) === String(item.id) || (c.email && item.email && c.email.toLowerCase() === item.email.toLowerCase()))) {
+                combined.push(item);
+              }
+            });
+          }
+          return combined;
+        }
       }
     } catch {}
-    try {
-      return JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
-    } catch {
-      return [];
-    }
+    return Array.isArray(localArc) ? localArc : [];
   },
 
   getArchivedApprovedDocumentsAsync: async () => {
@@ -1181,42 +1193,88 @@ export const StorageService = {
     });
   },
 
-  archiveUser: async (userId, adminUser) => {
+  archiveUser: async (userId, adminUser, userObj = null) => {
     const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
-    const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
+    const actorName = adminUser?.full_name || adminUser?.email || 'Super Admin';
     const deletedAt = new Date().toISOString();
 
+    let target = userObj;
+    if (!target) {
+      const allSuperAdmins = StorageService.getUsers();
+      target = allSuperAdmins.find((u) => u.id === userId || (u.email && u.email.toLowerCase() === String(userId).toLowerCase()));
+    }
+    if (!target && typeof localStorage !== 'undefined') {
+      try {
+        const storedResidents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+        target = storedResidents.find((r) => r.id === userId || (r.email && r.email.toLowerCase() === String(userId).toLowerCase()));
+      } catch {}
+    }
+
+    const cleanEmail = (target?.email || '').trim().toLowerCase();
+
+    // 1. Remove from active superadmins / admins in localStorage
     let users = StorageService.getUsers();
-    const target = users.find((u) => u.id === userId);
-    users = users.filter((u) => u.id !== userId);
+    users = users.filter((u) => u.id !== userId && (u.email || '').toLowerCase() !== cleanEmail);
     localStorage.setItem(STORAGE_KEYS.SUPER_ADMINS, JSON.stringify(users));
 
+    // 2. Remove from zapatera_residents_db in localStorage if present
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const storedResidents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+        if (Array.isArray(storedResidents)) {
+          const filtered = storedResidents.filter((r) => r.id !== userId && (r.email || '').toLowerCase() !== cleanEmail);
+          localStorage.setItem('zapatera_residents_db', JSON.stringify(filtered));
+        }
+      } catch {}
+    }
+
+    // 3. Create complete Archive Item for Archive & Trash Management
     const archiveUserItem = {
-      ...(target || { id: userId }),
+      ...(target || {}),
+      id: target?.id || userId,
+      email: cleanEmail || target?.email || userId,
+      full_name: target?.full_name || (target?.first_name ? `${target.first_name} ${target.last_name || ''}`.trim() : 'Barangay Citizen'),
+      role: target?.role || 'resident',
+      phone: target?.phone || target?.contact_number || '',
+      sitio: target?.sitio || target?.address || 'Zapatera',
       is_archived: true,
       is_active: false,
       deleted_at: deletedAt,
       deleted_by: actorId,
       archived_by_name: actorName,
     };
+
     try {
       const arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
-      if (!arcList.some((u) => u.id === userId)) {
-        arcList.unshift(archiveUserItem);
-        localStorage.setItem('zapatera_users_archive_db', JSON.stringify(arcList));
-      }
+      const filteredArc = Array.isArray(arcList) ? arcList.filter((u) => u.id !== userId && (u.email || '').toLowerCase() !== cleanEmail) : [];
+      filteredArc.unshift(archiveUserItem);
+      localStorage.setItem('zapatera_users_archive_db', JSON.stringify(filteredArc));
     } catch {}
 
+    // 4. Update Supabase profiles table
     try {
       if (isSupabaseConfigured()) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
         if (isUuid) {
-          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('id', userId);
-        } else if (target?.email) {
-          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('email', target.email);
+          await supabase.from('profiles').update({
+            is_archived: true,
+            is_active: false,
+            deleted_at: deletedAt,
+            deleted_by: actorId,
+          }).eq('id', userId);
+        }
+        if (cleanEmail) {
+          await supabase.from('profiles').update({
+            is_archived: true,
+            is_active: false,
+            deleted_at: deletedAt,
+            deleted_by: actorId,
+          }).eq('email', cleanEmail);
         }
       }
-    } catch {}
+    } catch (sErr) {
+      console.warn('Supabase archive user error:', sErr);
+    }
 
     StorageService.addLog({
       user_email: resolveActiveAdminEmail(adminUser),
