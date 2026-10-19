@@ -1871,6 +1871,7 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
         onOpenProfile={() => setActiveTab('profile')}
         onRequestDocument={() => handleOpenRequestFlow()}
+        onLogout={handleLogout}
       />
 
       {/* Permission banner for phone notifications */}

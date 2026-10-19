@@ -317,6 +317,8 @@ export default function App() {
           notificationsCount={notifications.length}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
+          onLogout={handleLogoutRequest}
+          onNavigate={(tab) => setActiveTab(tab)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 transition-colors duration-200 w-full max-w-full overflow-x-hidden bg-slate-100 text-slate-800">

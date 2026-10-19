@@ -66,7 +66,7 @@ export default function Sidebar({
             <div className="min-w-0">
               <div className="flex items-center space-x-1.5">
                 <h1 className="font-extrabold text-base text-white tracking-tight leading-none">Zapatera</h1>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
               </div>
               <p className="text-[11px] text-blue-400 font-semibold uppercase tracking-wider mt-0.5">Admin Portal</p>
             </div>

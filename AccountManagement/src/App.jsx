@@ -196,6 +196,7 @@ export default function App() {
           notificationsCount={0}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
+          onLogout={handleLogoutRequest}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-full overflow-x-hidden transition-colors duration-200 bg-slate-100 text-slate-800">

@@ -303,6 +303,8 @@ export default function App() {
           pendingCount={requests.filter((r) => r.status === 'pending').length}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
+          onLogout={handleLogoutRequest}
+          onNavigate={(tab) => setActiveTab(tab)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 w-full max-w-full overflow-x-hidden">

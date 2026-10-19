@@ -22,6 +22,7 @@ import {
   Check,
   X,
   Upload,
+  LogOut,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
@@ -681,15 +682,29 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               <span>{profile.email}</span>
             </p>
 
-            <div className="pt-3 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-[11px] text-slate-400 border-t border-slate-800/80 mt-3">
-              <span className="flex items-center">
-                <Calendar className="w-3.5 h-3.5 mr-1 text-blue-400" />
-                Member Since: <strong className="ml-1 text-slate-200">{formatDate(profile.created_at)}</strong>
-              </span>
-              <span className="flex items-center">
-                <Clock className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-                Last Updated: <strong className="ml-1 text-slate-200">{formatDate(profile.updated_at)}</strong>
-              </span>
+            <div className="pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400 border-t border-slate-800/80 mt-3 w-full">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
+                <span className="flex items-center">
+                  <Calendar className="w-3.5 h-3.5 mr-1 text-blue-400" />
+                  Member Since: <strong className="ml-1 text-slate-200">{formatDate(profile.created_at)}</strong>
+                </span>
+                <span className="flex items-center">
+                  <Clock className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+                  Last Updated: <strong className="ml-1 text-slate-200">{formatDate(profile.updated_at)}</strong>
+                </span>
+              </div>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer shrink-0"
+                  title="Sign out of your session"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1143,6 +1158,37 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           </div>
         </form>
       </div>
+
+      {/* Active Session & Device Sign Out Card (Dedicated Sign Out for Mobile & Desktop) */}
+      {onLogout && (
+        <div
+          className={`p-5 sm:p-6 rounded-2xl border shadow-sm transition-colors ${
+            isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
+          }`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center space-x-3.5">
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-600 rounded-xl shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Active Account Session</h3>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Signed in as <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{profile.email}</span>. You can safely sign out of your account on this device.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out of Profile</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Danger Zone Section */}
       <div

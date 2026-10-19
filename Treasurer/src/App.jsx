@@ -131,6 +131,8 @@ export default function App() {
           paidTodayCount={metrics.paidCount}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
+          onLogout={handleLogout}
+          onNavigate={(tab) => setActiveTab(tab)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
