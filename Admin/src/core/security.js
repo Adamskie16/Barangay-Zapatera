@@ -163,11 +163,12 @@ export const isAccountLocked = async (email) => {
   const cleanEmail = String(email).toLowerCase().trim();
 
   let localLocked = false;
+  let localAttempts = 0;
   if (typeof localStorage !== 'undefined') {
     if (localStorage.getItem(`zapatera_locked_${cleanEmail}`) === 'true') {
       localLocked = true;
     }
-    const localAttempts = parseInt(localStorage.getItem(`zapatera_failed_${cleanEmail}`) || '0', 10);
+    localAttempts = parseInt(localStorage.getItem(`zapatera_failed_${cleanEmail}`) || '0', 10);
     if (localAttempts >= 3) {
       localLocked = true;
     }
@@ -187,12 +188,10 @@ export const isAccountLocked = async (email) => {
               localStorage.setItem(`zapatera_failed_${cleanEmail}`, '3');
             }
             return true;
-          } else {
-            if (typeof localStorage !== 'undefined') {
-              localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
-              localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
-            }
-            return false;
+          }
+          // If database returns is_locked: false, but local has >= 3 failed attempts, maintain lockout
+          if (localAttempts >= 3 || localLocked) {
+            return true;
           }
         }
       } catch (e) {}
@@ -205,15 +204,16 @@ export const isAccountLocked = async (email) => {
         .maybeSingle();
 
       if (!profErr && profile) {
-        const attempts = Math.max(profile.failed_login_attempts || 0, profile.failed_attempts || 0);
-        const isDbLocked = profile.is_locked === true || attempts >= 3 || profile.is_active === false;
+        const dbAttempts = Math.max(profile.failed_login_attempts || 0, profile.failed_attempts || 0);
+        const isDbLocked = profile.is_locked === true || dbAttempts >= 3 || profile.is_active === false;
         if (isDbLocked) {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
-            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, attempts)));
+            localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(Math.max(3, dbAttempts)));
           }
           return true;
-        } else {
+        } else if (dbAttempts === 0 && profile.is_locked === false && profile.is_active !== false) {
+          // Explicit admin unlock in DB -> clear local lockout state
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
             localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
@@ -243,6 +243,8 @@ export const recordFailedAttempt = async (email, userRole = 'admin') => {
     }
   } catch (e) {}
 
+  const nextLocalAttempts = localAttempts + 1;
+
   try {
     if (isSupabaseConfigured()) {
       // 1. Try atomic SECURITY DEFINER RPC first
@@ -250,9 +252,11 @@ export const recordFailedAttempt = async (email, userRole = 'admin') => {
         const { data: rpcData, error: rpcErr } = await supabase.rpc('record_failed_login_attempt', {
           user_email: cleanEmail,
         });
-        if (!rpcErr && rpcData && rpcData.attempts !== undefined) {
-          const newAttempts = Number(rpcData.attempts) || 1;
-          const isLocked = Boolean(rpcData.is_locked);
+
+        // ONLY trust RPC attempts if success is TRUE (profile exists in database)
+        if (!rpcErr && rpcData && rpcData.success === true && typeof rpcData.attempts === 'number') {
+          const newAttempts = Number(rpcData.attempts);
+          const isLocked = Boolean(rpcData.is_locked) || newAttempts >= 3;
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(newAttempts));
             if (isLocked) {
@@ -274,7 +278,7 @@ export const recordFailedAttempt = async (email, userRole = 'admin') => {
         .maybeSingle();
 
       const dbAttempts = profData ? Math.max(profData.failed_login_attempts || 0, profData.failed_attempts || 0) : 0;
-      const currentAttempts = Math.max(dbAttempts, localAttempts) + 1;
+      const currentAttempts = Math.max(dbAttempts + 1, nextLocalAttempts);
       const isLockedOut = currentAttempts >= 3;
 
       if (profData?.id) {
@@ -315,20 +319,32 @@ export const recordFailedAttempt = async (email, userRole = 'admin') => {
         }
       }
 
+      if (isLockedOut) {
+        broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: currentAttempts, lockedAt: nowTs });
+      }
+
       return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts) };
     }
   } catch (err) {}
 
-  const currentAttempts = localAttempts + 1;
-  const isLockedOut = currentAttempts >= 3;
+  // 3. Fallback when offline or profile not found in database
+  const isLockedOut = nextLocalAttempts >= 3;
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(currentAttempts));
+    localStorage.setItem(`zapatera_failed_${cleanEmail}`, String(nextLocalAttempts));
     if (isLockedOut) {
       localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
     }
   }
 
-  return { attempts: currentAttempts, isLockedOut, remaining: Math.max(0, 3 - currentAttempts) };
+  if (isLockedOut) {
+    broadcastSecurityEvent('ACCOUNT_LOCKED', cleanEmail, { attempts: nextLocalAttempts, lockedAt: nowTs });
+  }
+
+  return {
+    attempts: nextLocalAttempts,
+    isLockedOut,
+    remaining: Math.max(0, 3 - nextLocalAttempts),
+  };
 };
 
 /**
