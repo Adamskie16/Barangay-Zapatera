@@ -973,27 +973,9 @@ export const StorageService = {
       arcList = JSON.parse(localStorage.getItem('zapatera_activity_logs_archive_db') || '[]');
     } catch {}
 
-    try {
-      if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('activity_logs')
-          .select('*')
-          .or('is_archived.eq.true,deleted_at.not.is.null')
-          .order('deleted_at', { ascending: false });
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const combined = [...data];
-          arcList.forEach((localItem) => {
-            if (!combined.some((c) => String(c.id) === String(localItem.id))) {
-              combined.push(localItem);
-            }
-          });
-          return combined;
-        }
-      }
-    } catch {}
-
-    return arcList;
+    // public.activity_logs in Supabase is an append-only audit trail table and does not have
+    // is_archived / deleted_at columns; soft-deleted records are managed via local archive storage.
+    return Array.isArray(arcList) ? arcList : [];
   },
 
   archiveNews: async (newsId, adminUser) => {
@@ -1505,19 +1487,9 @@ export const StorageService = {
       }
     } catch {}
 
-    // 4. Try updating in Supabase if columns exist
-    try {
-      if (isSupabaseConfigured()) {
-        await supabase
-          .from('activity_logs')
-          .update({
-            is_archived: true,
-            deleted_at: deletedAt,
-            deleted_by: actorId,
-          })
-          .eq('id', logId);
-      }
-    } catch {}
+    // 4. Update in Supabase:
+    // Note: public.activity_logs in Supabase is an immutable audit trail without is_archived columns;
+    // soft-deletion is tracked in zapatera_activity_logs_archive_db and zapatera_deleted_activity_logs.
 
     // 5. Broadcast channel
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -1561,19 +1533,6 @@ export const StorageService = {
           logs.unshift(restored);
           localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
         }
-      }
-    } catch {}
-
-    try {
-      if (isSupabaseConfigured()) {
-        await supabase
-          .from('activity_logs')
-          .update({
-            is_archived: false,
-            deleted_at: null,
-            deleted_by: null,
-          })
-          .eq('id', logId);
       }
     } catch {}
 

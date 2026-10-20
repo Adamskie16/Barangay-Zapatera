@@ -1946,11 +1946,12 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-200 flex items-start space-x-3">
               <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-sm text-rose-100">Permanent Account Deletion</p>
+                <p className="font-bold text-sm text-rose-100">Delete User Account</p>
                 <p className="text-xs text-rose-300 mt-1">
-                  Are you sure you want to permanently delete the account for{' '}
+                  Are you sure you want to delete the account for{' '}
                   <strong className="text-white">{deletingUser.full_name || 'Selected User'}</strong> (
                   <span className="font-mono text-rose-200">{deletingUser.email || 'N/A'}</span>)?
+                  It will be forwarded to Archive & Trash where authorized administrators can restore it.
                 </p>
               </div>
             </div>
@@ -2015,7 +2016,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 className="px-4 py-2 font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow-md shadow-rose-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
               >
                 {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>Authorize & Delete</span>
+                <span>Delete</span>
               </button>
             </div>
           </div>

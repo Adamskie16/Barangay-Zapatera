@@ -19,9 +19,9 @@ export default function SecurityVerificationModal({
   currentUser,
   targetUser,
   item,
-  title = 'Security Verification: Permanent Deletion',
-  message = 'Warning: This will permanently delete this record from the database. Please enter your password to confirm.',
-  confirmText = 'Verify & Permanently Delete',
+  title = 'Security Verification: Delete User Account',
+  message = 'Are you sure you want to delete this record? It will be forwarded to Archive & Trash where authorized administrators can restore it. Please enter your password to confirm.',
+  confirmText = 'Delete',
   isDestructive = true,
   isDarkMode = false,
 }) {
