@@ -1676,11 +1676,11 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
-                          {/* View Account Security & Telemetry Profile */}
+                          {/* View Account Information */}
                           <button
                             onClick={() => handleOpenViewModal(u)}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="View Account Security, Telemetry & Sessions"
+                            title="View Account Details & Sign-in Info"
                           >
                             <Eye className="w-4 h-4" />
                           </button>

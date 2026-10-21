@@ -355,7 +355,7 @@ export default function ResubmitRequestModal({
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <Upload size={15} color="#2563eb" />
-                <Text style={styles.sectionTitle}>Compliance Document Requirements</Text>
+                <Text style={styles.sectionTitle}>Required Documents & Attachments</Text>
               </View>
               <Text style={styles.inputHelperText}>
                 Upload or replace the required documents that were incomplete, blurred, or missing.
@@ -488,7 +488,7 @@ export default function ResubmitRequestModal({
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <Sparkles size={15} color="#2563eb" />
-                <Text style={styles.sectionTitle}>Compliance Notes for Barangay Staff</Text>
+                <Text style={styles.sectionTitle}>Notes for Barangay Staff (Optional)</Text>
               </View>
               <Text style={styles.inputHelperText}>
                 Explain the changes or new attachments you provided so the evaluating staff can verify them quickly.

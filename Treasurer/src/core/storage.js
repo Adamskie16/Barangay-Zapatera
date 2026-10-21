@@ -274,7 +274,7 @@ export const StorageService = {
     let sealUrl = null;
     let title = 'Treasury & Revenue Governance, Made Transparent.';
     let badge = 'Barangay Zapatera';
-    let description = 'Audit municipal collections, verify clearance fee schedules, and track revenue disbursements through one secure municipal portal.';
+    let description = 'Track document fee payments, issue official receipts, and review collection reports through one secure portal.';
 
     // 1. Try Supabase login_designs table (managed by Account Management)
     if (isSupabaseConfigured()) {

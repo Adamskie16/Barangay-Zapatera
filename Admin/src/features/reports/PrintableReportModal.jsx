@@ -183,11 +183,11 @@ export default function PrintableReportModal({
               onChange={(e) => setScope(e.target.value)}
               className="bg-slate-800 text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="all">Complete Comprehensive Report (All)</option>
-              <option value="summary">Executive Summary KPIs Only</option>
-              <option value="applications">Applications Pipeline Log Only</option>
-              <option value="monthly">Monthly Processing Quantities Only</option>
-              <option value="revenue">Document Revenue Audit Only</option>
+              <option value="all">Full Report (All Sections)</option>
+              <option value="summary">Summary of Totals Only</option>
+              <option value="applications">Document Requests List Only</option>
+              <option value="monthly">Monthly Requests Only</option>
+              <option value="revenue">Revenue & Fees Only</option>
             </select>
 
             {/* Print Button */}
@@ -424,7 +424,7 @@ export default function PrintableReportModal({
               <div className="mb-6">
                 <div className="flex items-center justify-between border-b border-slate-300 pb-1.5 mb-3">
                   <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-900">
-                    IV. Applications Pipeline Record Log ({requests.length} Entries)
+                    IV. Document Requests Record Log ({requests.length} Entries)
                   </h3>
                   <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                     Audit Log

@@ -663,7 +663,7 @@ export function generatePrintableHTML({
     ${(scope === 'all' || scope === 'applications') && requests.length > 0 ? `
       <!-- Applications Pipeline Detailed Log -->
       <div class="section-title">
-        <span>Application Pipeline & Request Log</span>
+        <span>Document Requests Log</span>
         <span class="tag">Total Records: ${requests.length}</span>
       </div>
       <table class="data-table">

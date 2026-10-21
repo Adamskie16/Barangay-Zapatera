@@ -165,14 +165,14 @@ DOCUMENT REQUIREMENTS & APPLICATION GUIDE
 
 Document: ${activeDoc.title} (${activeDoc.code || 'Official Document'})
 Issuance Fee: ${activeDoc.fee_type === 'variable' || activeDoc.is_variable_fee ? 'Depends upon claim (Assessed at barangay hall)' : activeDoc.fee === 0 ? 'FREE / No Charge' : formatCurrency(activeDoc.fee)}
-Processing Turnaround SLA: ${activeDoc.processing_days} Business Day(s)
+Estimated Processing Time: ${activeDoc.processing_days} Business Day(s)
 Validity: ${activeDoc.validity || '6 Months from date of issuance'}
 
 DESCRIPTION & SCOPE:
 ${activeDoc.description || 'Official Barangay Document'}
 
 -----------------------------------------------------
-REQUIRED ATTACHMENTS (DOCUMENT INFORMATION MANAGEMENT):
+REQUIRED ATTACHMENTS & REQUIREMENTS:
 -----------------------------------------------------
 ${requirementsList.map((r, i) => `[ ] ${i + 1}. ${r.name} (${r.is_required ? 'REQUIRED' : 'OPTIONAL'})\n    - ${r.description}`).join('\n\n')}
 
@@ -244,9 +244,9 @@ Generated on: ${new Date().toLocaleString('en-US')}
                 <FileText size={18} color="#1d4ed8" />
               </View>
               <View>
-                <Text style={styles.modalTitle}>Requirements & Guidelines Guide</Text>
+                <Text style={styles.modalTitle}>Requirements & Guidelines</Text>
                 <Text style={styles.modalSubtitle}>
-                  Barangay Zapatera Document Standards & Required Attachments
+                  What you need to prepare for your document request
                 </Text>
               </View>
             </View>
@@ -388,7 +388,7 @@ Generated on: ${new Date().toLocaleString('en-US')}
                     </View>
                     <View style={styles.metaBadge}>
                       <Clock size={12} color="#1d4ed8" />
-                      <Text style={styles.metaLabel}>Turnaround Time:</Text>
+                      <Text style={styles.metaLabel}>Processing Time:</Text>
                       <Text style={styles.metaValue}>
                         {activeDoc.processing_days}{' '}
                         {activeDoc.processing_days === 1 ? 'Business Day' : 'Business Days'}

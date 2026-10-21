@@ -449,8 +449,8 @@ export default function TreasurerReportsView({
                 >
                   <Download className="w-4 h-4 text-slate-600 shrink-0" />
                   <div>
-                    <p className="font-semibold">Complete Audit Payload (JSON)</p>
-                    <p className="text-[10px] text-slate-400">Raw structured data backup</p>
+                    <p className="font-semibold">All Records Backup (JSON)</p>
+                    <p className="text-[10px] text-slate-400">Complete data backup</p>
                   </div>
                 </button>
               </div>

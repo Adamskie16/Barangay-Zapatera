@@ -303,7 +303,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         isOpen: true,
         type: 'success',
         title: wasEditing ? 'Document Template Updated Successfully' : 'Document Template Created Successfully',
-        message: `The document template "${savedDocCopy.title}" (${savedDocCopy.code}) has been saved and configured. Processing Fee: ${feeDescription}. Turnaround SLA: ${savedDocCopy.processing_days} day(s). It is now actively available across the Barangay Zapatera administration and resident portal.`,
+        message: `The document template "${savedDocCopy.title}" (${savedDocCopy.code}) has been saved and configured. Processing Fee: ${feeDescription}. Processing Time: ${savedDocCopy.processing_days} day(s). It is now actively available across the Barangay Zapatera administration and resident portal.`,
         buttonText: 'Great, Understood',
         onClose: () => setActionModal((prev) => ({ ...prev, isOpen: false })),
       });
@@ -411,7 +411,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           }`}
         >
           <Sliders size={16} />
-          <span>Template Configurations & SLA</span>
+          <span>Document Templates & Processing Time</span>
         </button>
       </div>
 
@@ -424,7 +424,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             <div>
               <h2 className="text-xl font-bold text-slate-900">Document Information Management</h2>
               <p className="text-xs text-slate-500 mt-1">
-                Configure barangay document templates, processing fees, required attachments, and operational turnaround SLA.
+                Configure barangay document templates, processing fees, required attachments, and processing times.
               </p>
             </div>
             <button
@@ -491,7 +491,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4 text-blue-600" />
                         <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Turnaround SLA</p>
+                          <p className="text-[10px] uppercase font-bold text-slate-400">Processing Time</p>
                           <p className="text-xs font-bold text-slate-800">{doc.processing_days} Business Day(s)</p>
                         </div>
                       </div>
@@ -687,7 +687,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Turnaround Days (SLA)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Time (Days)</label>
                   <input
                     type="number"
                     min="1"

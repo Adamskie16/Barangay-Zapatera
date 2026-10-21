@@ -267,7 +267,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
             <div>
               <h2 className="text-xl font-extrabold text-slate-900">Document Information & Templates</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Manage barangay document types, processing fees, turn-around SLA, and dynamic certificate templates.
+                Manage barangay document types, processing fees, processing times, and dynamic certificate templates.
               </p>
             </div>
           </div>
@@ -345,7 +345,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                     <th className="px-6 py-4">Code</th>
                     <th className="px-6 py-4">Document Title & Description</th>
                     <th className="px-6 py-4">Issuance Fee</th>
-                    <th className="px-6 py-4">SLA (Turnaround)</th>
+                    <th className="px-6 py-4">Processing Time</th>
                     <th className="px-6 py-4">Requirements</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -563,7 +563,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Turnaround Days (SLA)</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Processing Time (Days)</label>
               <input
                 type="number"
                 min="1"

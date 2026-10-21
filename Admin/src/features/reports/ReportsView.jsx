@@ -294,7 +294,7 @@ export default function ReportsView({
 
   const handleExportApplicationsCSV = () => {
     const rows = buildApplicationsCSV(filteredRequests);
-    exportToCSV(`Barangay_Zapatera_Applications_Pipeline_${currentYear}`, rows);
+    exportToCSV(`Barangay_Zapatera_Document_Requests_${currentYear}`, rows);
     setIsExportMenuOpen(false);
   };
 
@@ -368,7 +368,7 @@ export default function ReportsView({
 
   const handleExportApplicationsPDF = () => {
     const html = generatePrintableHTML({
-      title: 'Applications Pipeline Log',
+      title: 'Document Requests List',
       subtitle: `Log of Document Applications (${filteredRequests.length} Record(s))`,
       config,
       currentUser,
@@ -381,7 +381,7 @@ export default function ReportsView({
       periodLabel: `Calendar Year ${currentYear}`,
       scope: 'applications',
     });
-    downloadReportAsPDF(html, `Barangay_Zapatera_Applications_Pipeline_${currentYear}`);
+    downloadReportAsPDF(html, `Barangay_Zapatera_Document_Requests_${currentYear}`);
     setIsExportMenuOpen(false);
   };
 
@@ -498,7 +498,7 @@ export default function ReportsView({
                 >
                   <FileSpreadsheet className="w-4 h-4 text-rose-600 shrink-0" />
                   <div>
-                    <p className="font-semibold text-slate-900">Executive KPI Summary (PDF)</p>
+                    <p className="font-semibold text-slate-900">Overall Summary Report (PDF)</p>
                     <p className="text-[10px] text-slate-400">Summary counts & revenue distribution</p>
                   </div>
                 </button>
@@ -509,7 +509,7 @@ export default function ReportsView({
                 >
                   <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
                   <div>
-                    <p className="font-semibold text-slate-900">Applications Pipeline Log (PDF)</p>
+                    <p className="font-semibold text-slate-900">Document Requests List (PDF)</p>
                     <p className="text-[10px] text-slate-400">{filteredRequests.length} active filtered record(s)</p>
                   </div>
                 </button>
@@ -538,7 +538,7 @@ export default function ReportsView({
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
-                    <p className="font-semibold">Executive KPI Summary (CSV)</p>
+                    <p className="font-semibold">Overall Summary Report (CSV)</p>
                     <p className="text-[10px] text-slate-400">Total counts, rates & metrics</p>
                   </div>
                 </button>
@@ -549,7 +549,7 @@ export default function ReportsView({
                 >
                   <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                   <div>
-                    <p className="font-semibold">Applications Pipeline Log (CSV)</p>
+                    <p className="font-semibold">Document Requests List (CSV)</p>
                     <p className="text-[10px] text-slate-400">
                       {filteredRequests.length} record(s) matching filter
                     </p>
@@ -574,7 +574,7 @@ export default function ReportsView({
                   >
                     <Layers className="w-4 h-4 text-amber-600 shrink-0" />
                     <div>
-                      <p className="font-semibold">Document Clearances Audit (CSV)</p>
+                      <p className="font-semibold">Document Types & Fees (CSV)</p>
                       <p className="text-[10px] text-slate-400">Issuance breakdown by document</p>
                     </div>
                   </button>
@@ -588,8 +588,8 @@ export default function ReportsView({
                 >
                   <Download className="w-4 h-4 text-slate-600 shrink-0" />
                   <div>
-                    <p className="font-semibold">Complete Audit Payload (JSON)</p>
-                    <p className="text-[10px] text-slate-400">Raw structured data backup</p>
+                    <p className="font-semibold">All Records Backup (JSON)</p>
+                    <p className="text-[10px] text-slate-400">Complete data backup</p>
                   </div>
                 </button>
               </div>
@@ -625,7 +625,7 @@ export default function ReportsView({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="font-bold text-slate-900 text-sm">Applications Pipeline & Clearance Log</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Document Requests List</h3>
               <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-full">
                 {filteredRequests.length} of {requests.length} records
               </span>

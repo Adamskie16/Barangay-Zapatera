@@ -150,7 +150,7 @@ export default function UnlockAccountModal({
     setCountdown(600);
     setTimerActive(true);
     setStep(2);
-    setSuccessMessage('If an account exists for this email, an unlock code has been dispatched.');
+    setSuccessMessage('If an account exists for this email, an unlock code has been sent to your email.');
   };
 
   /**
@@ -259,7 +259,7 @@ export default function UnlockAccountModal({
       }
       setCountdown(600);
       setTimerActive(true);
-      setSuccessMessage('A new unlock code has been dispatched.');
+      setSuccessMessage('A new unlock code has been sent to your email.');
     } catch (e) {
       setErrorMessage('Failed to resend unlock code. Please check your connection.');
     } finally {
@@ -285,7 +285,7 @@ export default function UnlockAccountModal({
               <View style={{ flex: 1 }}>
                 <View style={styles.stepPill}>
                   <Text style={styles.stepPillText}>
-                    {step === 1 ? 'STEP 1 OF 2 • REQUEST CODE' : 'STEP 2 OF 2 • VERIFY OTP'}
+                    {step === 1 ? 'STEP 1 OF 2 • ENTER EMAIL' : 'STEP 2 OF 2 • ENTER CODE'}
                   </Text>
                 </View>
                 <Text style={styles.modalTitle}>

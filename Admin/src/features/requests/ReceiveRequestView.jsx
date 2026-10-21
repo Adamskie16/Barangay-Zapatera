@@ -1085,7 +1085,7 @@ export default function ReceiveRequestView({
                           {req.is_resubmitted && normalizedStatus === 'pending' && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
-                              <span>Compliance Fix</span>
+                              <span>Updated Submission</span>
                             </span>
                           )}
                         </div>
@@ -1320,7 +1320,7 @@ export default function ReceiveRequestView({
                         </div>
                         <div>
                           <h4 className="font-bold text-xs text-amber-900">
-                            Resident Resubmission (Compliance Fix — Attempt #{selectedReq.resubmission_count || 1})
+                            Resident Resubmission (Updated Requirements — Attempt #{selectedReq.resubmission_count || 1})
                           </h4>
                           <p className="text-[11px] text-amber-700">
                             The resident updated their requirements and resubmitted for staff evaluation.
@@ -1350,7 +1350,7 @@ export default function ReceiveRequestView({
                     {selectedReq.resubmission_notes && (
                       <div className="bg-white p-2.5 rounded-xl border border-amber-200/70 text-xs">
                         <span className="font-bold text-slate-700 uppercase text-[10px] block mb-0.5">
-                          Resident Compliance Note:
+                          Resident Note:
                         </span>
                         <span className="text-slate-800 italic font-medium">
                           "{selectedReq.resubmission_notes}"

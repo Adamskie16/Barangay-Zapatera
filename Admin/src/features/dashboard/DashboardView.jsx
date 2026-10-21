@@ -78,7 +78,7 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
           </span>
           <h1 className="text-2xl font-extrabold tracking-tight">Barangay Zapatera Document Desk</h1>
           <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            Live operational intelligence, workflow pipeline analytics, and real-time document issuance performance.
+            Track document requests, review requirements, and issue certificates to residents.
           </p>
         </div>
 
@@ -138,15 +138,15 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
               <div>
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-bold text-slate-900 text-base">Document Processing Pipeline Funnel</h3>
+                  <h3 className="font-bold text-slate-900 text-base">Document Request Status</h3>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Visual stage progression across {totalRequests} total resident application{totalRequests !== 1 && 's'}
+                  Overview of {totalRequests} total document request{totalRequests !== 1 && 's'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {fulfillmentRate}% Fulfillment Rate
+                  {fulfillmentRate}% Completed
                 </span>
               </div>
             </div>
@@ -234,9 +234,9 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <BarChart2 className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-slate-900 text-base">Top Document Types Demand Distribution</h3>
+                <h3 className="font-bold text-slate-900 text-base">Most Requested Documents</h3>
               </div>
-              <span className="text-xs text-slate-500 font-medium">Relative Application Volume</span>
+              <span className="text-xs text-slate-500 font-medium">Request Count</span>
             </div>
 
             {docTypeStats.length === 0 ? (
@@ -269,16 +269,16 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
             )}
           </div>
 
-          {/* Card 3: Operational SLA & Turnaround Health Metrics */}
+          {/* Card 3: Processing Speed & Performance */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Turnaround</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Processing Time</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">&lt; 24 Hours</h4>
-                <p className="text-[10px] text-emerald-600 font-semibold">Standard SLA compliant</p>
+                <p className="text-[10px] text-emerald-600 font-semibold">Under 24 hours</p>
               </div>
             </div>
 
@@ -287,9 +287,9 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fulfillment Index</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Completion Rate</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">{fulfillmentRate}%</h4>
-                <p className="text-[10px] text-slate-500">Approvals & pick-ups</p>
+                <p className="text-[10px] text-slate-500">Approved & issued</p>
               </div>
             </div>
 
@@ -298,9 +298,9 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
                 <Layers className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Queue Load</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waiting for Review</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">{activeQueue} Items</h4>
-                <p className="text-[10px] text-amber-600 font-semibold">Pending + under review</p>
+                <p className="text-[10px] text-amber-600 font-semibold">Needs staff action</p>
               </div>
             </div>
           </div>

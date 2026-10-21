@@ -218,7 +218,7 @@ export default function RequestTrackingModal({
                 ) : null}
                 {request.resubmission_notes ? (
                   <Text style={styles.resubmissionNotes}>
-                    Resident Compliance Note: "{request.resubmission_notes}"
+                    Your Note to Staff: "{request.resubmission_notes}"
                   </Text>
                 ) : null}
                 <Text style={styles.resubmissionDate}>

@@ -427,7 +427,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
     setPendingUser(pendingPayload);
     setStep(2);
-    setInfoMsg(`Password verified! A 6-digit verification code has been dispatched to ${cleanEmail}. Please enter it below.`);
+    setInfoMsg(`Password verified! A 6-digit verification code has been sent to ${cleanEmail}. Please enter it below.`);
     setLoading(false);
   };
 
@@ -786,7 +786,7 @@ export default function LoginPage({ onLoginSuccess }) {
               {loginAssets?.title || 'User security & access, made easier to control.'}
             </h2>
             <p className="text-sm sm:text-base text-slate-200/95 leading-relaxed font-normal max-w-lg drop-shadow-sm">
-              {loginAssets?.description || 'Provision authorized personnel, govern account security, and manage role-based permissions through one secure administrative portal.'}
+              {loginAssets?.description || 'Create accounts, manage user roles, and keep account access secure through one portal.'}
             </p>
           </div>
 

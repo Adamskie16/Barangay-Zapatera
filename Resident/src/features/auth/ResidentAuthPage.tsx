@@ -750,7 +750,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       console.error('Password reset request error:', err);
     } finally {
       setLoading(false);
-      setSuccessBanner(`Password recovery instructions dispatched to (${cleanEmail}). Please check your Gmail inbox and click the reset link.`);
+      setSuccessBanner(`Password reset instructions have been sent to (${cleanEmail}). Please check your email inbox and click the reset link.`);
     }
   };
 
@@ -1318,7 +1318,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             <View style={styles.formContainer}>
               <Text style={styles.formTitle}>Enter Security Code</Text>
               <Text style={styles.formSubtitle}>
-                Enter the 6-digit authentication OTP dispatched to your Gmail.
+                Enter the 6-digit verification code sent to your email.
               </Text>
 
               <View style={styles.inputGroup}>

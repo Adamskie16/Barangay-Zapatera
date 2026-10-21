@@ -122,10 +122,10 @@ export default function DashboardView({
             <Shield className="w-3.5 h-3.5 mr-1" /> Super Admin Control Console
           </span>
           <h1 className="text-2xl font-extrabold tracking-tight">
-            {config?.barangay_name || 'Barangay Zapatera'} Operational Intelligence
+            {config?.barangay_name || 'Barangay Zapatera'} Overview
           </h1>
           <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            High-level executive metrics, multi-stage workflow pipeline distributions, and municipal compliance telemetry.
+            Track document requests, registered residents, fee collections, and system activity.
           </p>
         </div>
         <div className="hidden lg:block text-right border-l border-slate-700/60 pl-8">
@@ -180,14 +180,14 @@ export default function DashboardView({
               <div>
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-bold text-slate-900 text-base">Municipal Document Processing Pipeline</h3>
+                  <h3 className="font-bold text-slate-900 text-base">Document Request Status</h3>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Visual stage progression across {totalRequests} total resident application{totalRequests !== 1 && 's'}
+                  Overview of {totalRequests} total document request{totalRequests !== 1 && 's'}
                 </p>
               </div>
               <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-auto">
-                {fulfillmentRate}% Fulfillment Rate
+                {fulfillmentRate}% Completed
               </span>
             </div>
 
@@ -274,9 +274,9 @@ export default function DashboardView({
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <BarChart2 className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-slate-900 text-base">Top Document Clearances Demand Distribution</h3>
+                <h3 className="font-bold text-slate-900 text-base">Most Requested Documents</h3>
               </div>
-              <span className="text-xs text-slate-500 font-medium">Relative Application Volume</span>
+              <span className="text-xs text-slate-500 font-medium">Request Count</span>
             </div>
 
             {docTypeStats.length === 0 ? (
@@ -309,14 +309,14 @@ export default function DashboardView({
             )}
           </div>
 
-          {/* Card 3: Account Demographics & System SLA Health */}
+          {/* Card 3: Account Demographics & System Performance */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resident Ratio</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Resident Accounts</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">{residentRatio}%</h4>
                 <p className="text-[10px] text-blue-600 font-semibold">{totalResidents} of {totalUsers} Accounts</p>
               </div>
@@ -327,9 +327,9 @@ export default function DashboardView({
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fulfillment Index</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Completion Rate</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">{fulfillmentRate}%</h4>
-                <p className="text-[10px] text-emerald-600 font-semibold">Completed issuances</p>
+                <p className="text-[10px] text-emerald-600 font-semibold">Approved & issued</p>
               </div>
             </div>
 
@@ -338,9 +338,9 @@ export default function DashboardView({
                 <Layers className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Live Queue Load</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Waiting for Review</p>
                 <h4 className="text-base font-black text-slate-900 mt-0.5">{activeQueue} Items</h4>
-                <p className="text-[10px] text-amber-600 font-semibold">Pending review</p>
+                <p className="text-[10px] text-amber-600 font-semibold">Needs staff action</p>
               </div>
             </div>
           </div>

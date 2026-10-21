@@ -377,7 +377,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
     setPendingUser(residentPayload);
     setStep(2);
-    setInfoMsg(`Password verified! A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your Gmail Inbox or Spam folder and enter it below.`);
+    setInfoMsg(`Password verified! A 6-digit verification code has been sent to ${cleanEmail}. Please check your email inbox or Spam folder and enter it below.`);
     setLoading(false);
   };
 

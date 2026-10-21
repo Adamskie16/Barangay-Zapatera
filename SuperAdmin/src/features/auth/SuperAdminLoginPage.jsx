@@ -417,7 +417,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
 
     setPendingUser(pendingPayload);
     setStep(2);
-    setInfoMsg(`Password verified! A 6-digit verification code has been dispatched to ${cleanEmail}. Please enter it below.`);
+    setInfoMsg(`Password verified! A 6-digit verification code has been sent to ${cleanEmail}. Please enter it below.`);
     setLoading(false);
   };
 
@@ -561,7 +561,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     setUnlockCountdown(600); // 10 mins
     setUnlockTimerActive(true);
     setStep(6);
-    setUnlockSuccess('If an account exists for this email, an unlock code has been dispatched.');
+    setUnlockSuccess('If an account exists for this email, an unlock code has been sent to your email.');
   };
 
   /**
@@ -669,7 +669,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       }
       setUnlockCountdown(600);
       setUnlockTimerActive(true);
-      setUnlockSuccess('A new unlock code has been dispatched.');
+      setUnlockSuccess('A new unlock code has been sent to your email.');
     } catch (e) {
       setUnlockError('Failed to resend unlock code.');
     } finally {
@@ -833,7 +833,7 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
               {loginAssets?.title || 'System governance support, made easier to manage.'}
             </h2>
             <p className="text-sm sm:text-base text-slate-200/95 leading-relaxed font-normal max-w-lg drop-shadow-sm">
-              {loginAssets?.description || 'Oversee portal operations, manage system security, and audit community clearance pipelines through one secure municipal portal.'}
+              {loginAssets?.description || 'Oversee barangay operations, manage system security, and review document requests through one secure portal.'}
             </p>
           </div>
 

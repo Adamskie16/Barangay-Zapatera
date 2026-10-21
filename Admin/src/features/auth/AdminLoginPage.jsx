@@ -428,7 +428,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
     setPendingUser(pendingPayload);
     setStep(2);
-    setInfoMsg(`Password verified! A 6-digit verification code has been dispatched to ${cleanEmail}. Please enter it below.`);
+    setInfoMsg(`Password verified! A 6-digit verification code has been sent to ${cleanEmail}. Please enter it below.`);
     setLoading(false);
   };
 
@@ -571,7 +571,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
     setUnlockCountdown(600); // 10 mins
     setUnlockTimerActive(true);
     setStep(6);
-    setUnlockSuccess('If an account exists for this email, an unlock code has been dispatched.');
+    setUnlockSuccess('If an account exists for this email, an unlock code has been sent to your email.');
   };
 
   /**
@@ -679,7 +679,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       }
       setUnlockCountdown(600);
       setUnlockTimerActive(true);
-      setUnlockSuccess('A new unlock code has been dispatched.');
+      setUnlockSuccess('A new unlock code has been sent to your email.');
     } catch (e) {
       setUnlockError('Failed to resend unlock code.');
     } finally {

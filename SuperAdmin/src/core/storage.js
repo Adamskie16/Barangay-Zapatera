@@ -1923,7 +1923,7 @@ export const StorageService = {
     let sealUrl = null;
     let title = 'System governance support, made easier to manage.';
     let badge = '';
-    let description = 'Oversee portal operations, manage system security, and audit community clearance pipelines through one secure municipal portal.';
+    let description = 'Oversee barangay operations, manage system security, and review document requests through one secure portal.';
 
     if (isSupabaseConfigured()) {
       try {

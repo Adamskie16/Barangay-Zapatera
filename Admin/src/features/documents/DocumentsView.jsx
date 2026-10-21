@@ -833,7 +833,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Turnaround Days (SLA)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Time (Days)</label>
                   <input
                     type="number"
                     min="1"
