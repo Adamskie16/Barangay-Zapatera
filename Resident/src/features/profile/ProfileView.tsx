@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   User,
@@ -539,7 +540,7 @@ export default function ProfileView({
       {/* EDIT PROFILE MODAL */}
       <Modal visible={isEditModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditModalOpen(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 500, width: '100%', alignSelf: 'center' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Personal Information</Text>
               <TouchableOpacity onPress={() => setIsEditModalOpen(false)}>
@@ -588,7 +589,7 @@ export default function ProfileView({
       {/* HELP & SUPPORT MODAL */}
       <Modal visible={isHelpModalOpen} animationType="slide" transparent onRequestClose={() => setIsHelpModalOpen(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 480, width: '100%', alignSelf: 'center' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Barangay Help & Contact Desk</Text>
               <TouchableOpacity onPress={() => setIsHelpModalOpen(false)}>
@@ -623,7 +624,7 @@ export default function ProfileView({
       {/* PRIVACY POLICY MODAL */}
       <Modal visible={isPrivacyModalOpen} animationType="slide" transparent onRequestClose={() => setIsPrivacyModalOpen(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 480, width: '100%', alignSelf: 'center' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Data Privacy & Terms</Text>
               <TouchableOpacity onPress={() => setIsPrivacyModalOpen(false)}>
@@ -654,7 +655,7 @@ export default function ProfileView({
       {/* CHANGE PASSWORD MODAL */}
       <Modal visible={isPasswordModalOpen} animationType="slide" transparent onRequestClose={() => setIsPasswordModalOpen(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 420 }]}>
+          <View style={[styles.modalContent, { maxWidth: 440, width: '100%', alignSelf: 'center' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Lock size={18} color="#1d4ed8" />
@@ -800,7 +801,7 @@ export default function ProfileView({
       {/* LOGOUT CONFIRMATION MODAL */}
       <Modal visible={isLogoutConfirmOpen} animationType="fade" transparent onRequestClose={() => setIsLogoutConfirmOpen(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 340 }]}>
+          <View style={[styles.modalContent, { maxWidth: 360, width: '100%', alignSelf: 'center' }]}>
             <View style={styles.logoutConfirmBody}>
               <View style={styles.logoutIconCircle}>
                 <LogOut size={28} color="#dc2626" />
@@ -837,7 +838,7 @@ export default function ProfileView({
         onRequestClose={() => setIsCommentHistoryModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 560, height: '85%' }]}>
+          <View style={[styles.modalContent, { maxWidth: 560, height: '85%', width: '100%', alignSelf: 'center' }]}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -1316,9 +1317,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
+    ...(Platform.OS === 'web'
+      ? ({
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+        } as any)
+      : {}),
   },
   modalContent: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 20,
     maxHeight: '90%',
