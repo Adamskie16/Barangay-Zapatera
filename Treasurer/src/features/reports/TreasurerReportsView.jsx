@@ -457,17 +457,6 @@ export default function TreasurerReportsView({
             )}
           </div>
 
-          {/* Download Official Report PDF Directly */}
-          <button
-            type="button"
-            onClick={handleDownloadPDF}
-            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
-            title="Download Official Financial Statement into PDF"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download PDF</span>
-          </button>
-
           {/* Print Official Report Button (Direct Print) */}
           <button
             type="button"

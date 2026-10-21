@@ -744,16 +744,6 @@ export default function ReportsView({
             )}
           </div>
 
-          {/* Download Official Report PDF Directly */}
-          <button
-            onClick={handleExportFullReportPDF}
-            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-            title="Download Official Barangay Operations & Audit Report into PDF"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download PDF</span>
-          </button>
-
           {/* Print Formal Government Report Button (Direct Print) */}
           <button
             onClick={handleDirectPrintOfficialReport}
