@@ -945,6 +945,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setProcessingTitle(editingId ? 'Updating User Account...' : 'Creating New Account...');
     setProcessingMessage('Verifying credentials & saving user profile to database...');
 
+    let assignedId = editingId || editingUser?.id || null;
+
     try {
       if (isSupabaseConfigured()) {
         if (editingId || editingUser) {
@@ -970,7 +972,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           }
         } else {
           // CREATE NEW ACCOUNT IN SUPABASE AUTH + PUBLIC.PROFILES
-          let assignedId = null;
+          assignedId = null;
 
           if (supabaseAdmin) {
             try {
@@ -1060,6 +1062,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           }
 
           const newId = assignedId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `usr-${Date.now()}`);
+          assignedId = newId;
           const { error } = await supabase.from('profiles').upsert(
             [
               {
@@ -1100,7 +1103,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     if (onSaveUser) {
       onSaveUser({
-        id: editingId || editingUser?.id || undefined,
+        id: editingId || editingUser?.id || assignedId || undefined,
         ...pendingUserPayload,
         created_at: editingUser?.created_at,
         updated_at: nowIso,

@@ -98,7 +98,17 @@ export const isSupabaseConfigured = () => {
 export const signUpUserWithoutPersistSession = async ({ email, password, metadata, emailRedirectTo }) => {
   try {
     const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: `sb-ephemeral-${Math.random().toString(36).slice(2)}`,
+        storage: {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        },
+      },
       global: { fetch: resilientFetch },
     });
 
@@ -123,7 +133,7 @@ export const signUpUserWithoutPersistSession = async ({ email, password, metadat
       },
     });
     if (error) {
-      console.warn('Unpersisted signUp notice:', error.message);
+      console.warn('Unpersisted signUp notice:', error.message || error);
       return { id: null, error };
     }
     return { id: data?.user?.id || null, error: null };

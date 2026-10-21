@@ -1606,7 +1606,7 @@ export const StorageService = {
               supabase.from('document_requests').update({ deleted_by: null }).eq('deleted_by', userId),
               supabase.from('news').update({ created_by: null, deleted_by: null }).or(`created_by.eq.${userId},deleted_by.eq.${userId}`),
               supabase.from('activity_logs').update({ user_id: null }).eq('user_id', userId),
-              supabase.from('unlock_requests').delete().or(`user_id.eq.${userId},unlocked_by.eq.${userId}`),
+              supabase.from('account_unlock_requests').delete().eq('user_id', userId),
               supabase.from('notifications').delete().eq('user_id', userId),
               supabase.from('user_devices').delete().eq('user_id', userId),
               supabase.from('document_requests').delete().eq('resident_id', userId),
