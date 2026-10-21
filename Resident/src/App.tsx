@@ -925,7 +925,7 @@ export default function App() {
           }));
 
           const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
-            id: evt.id,
+            id: evt.id ? (String(evt.id).startsWith('event-') ? String(evt.id) : `event-${evt.id}`) : `event-${Date.now()}-${Math.random()}`,
             title: evt.title,
             category: 'Events',
             date: evt.event_date
@@ -947,9 +947,19 @@ export default function App() {
             return timeB - timeA;
           });
 
+          // Strictly deduplicate by ID so no duplicate keys ever reach React components
+          const seenIds = new Set<string>();
+          const uniqueAnnouncements: BarangayAnnouncement[] = [];
+          for (const item of combined) {
+            if (item.id && !seenIds.has(item.id)) {
+              seenIds.add(item.id);
+              uniqueAnnouncements.push(item);
+            }
+          }
+
           // Accurately update state and cache (even if empty because items were deleted)
-          setAnnouncements(combined);
-          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(combined));
+          setAnnouncements(uniqueAnnouncements);
+          await MobileStorage.setItem('zapatera_news_db', JSON.stringify(uniqueAnnouncements));
           return;
         }
       }
@@ -961,7 +971,14 @@ export default function App() {
     try {
       const stored = await MobileStorage.getItem('zapatera_news_db');
       if (stored) {
-        setAnnouncements(JSON.parse(stored));
+        const parsed: BarangayAnnouncement[] = JSON.parse(stored);
+        const seenIds = new Set<string>();
+        const unique = parsed.filter((a) => {
+          if (!a || !a.id || seenIds.has(a.id)) return false;
+          seenIds.add(a.id);
+          return true;
+        });
+        setAnnouncements(unique);
       }
     } catch {
       // fallback

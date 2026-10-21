@@ -370,9 +370,9 @@ export default function ResidentDashboard({
 
       <View style={styles.announcementsList}>
         {announcements.length > 0 ? (
-          announcements.slice(0, 3).map((item) => (
+          announcements.slice(0, 3).map((item, idx) => (
             <TouchableOpacity
-              key={item.id}
+              key={`${item.id}-${idx}`}
               style={styles.announcementCard}
               onPress={() => onViewAnnouncement(item)}
               activeOpacity={0.8}

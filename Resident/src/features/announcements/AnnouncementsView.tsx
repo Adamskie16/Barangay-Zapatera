@@ -1,5 +1,4 @@
-// Resident/src/features/announcements/AnnouncementsView.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -233,17 +232,25 @@ export default function AnnouncementsView({
     }
   };
 
-  const filteredAnnouncements = announcements.filter((ann) => {
-    const matchesSearch =
-      ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ann.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ann.content.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredAnnouncements = useMemo(() => {
+    const seen = new Set<string>();
+    return announcements.filter((ann) => {
+      if (!ann || !ann.id) return false;
+      if (seen.has(ann.id)) return false;
+      seen.add(ann.id);
 
-    const matchesCategory =
-      selectedCategory === 'All' || ann.category === selectedCategory;
+      const title = (ann.title || '').toLowerCase();
+      const desc = (ann.description || '').toLowerCase();
+      const content = (ann.content || '').toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
 
-    return matchesSearch && matchesCategory;
-  });
+      const matchesSearch = !q || title.includes(q) || desc.includes(q) || content.includes(q);
+      const matchesCategory =
+        selectedCategory === 'All' || ann.category === selectedCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [announcements, searchQuery, selectedCategory]);
 
   // Group comments into root comments and their replies
   const rootComments = comments.filter((c) => !c.parent_id);
@@ -319,11 +326,11 @@ export default function AnnouncementsView({
 
       {/* Main Bulletins Feed */}
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
-        {filteredAnnouncements.map((item) => {
+        {filteredAnnouncements.map((item, index) => {
           const itemCommentCount = commentCounts[item.id] || 0;
           return (
             <TouchableOpacity
-              key={item.id}
+              key={`${item.id}-${index}`}
               style={[
                 styles.card,
                 item.is_emergency && styles.cardEmergency,
@@ -387,7 +394,7 @@ export default function AnnouncementsView({
           );
         })}
 
-        {filteredAnnouncements.length === 0 && (
+        {filteredAnnouncements.length === 0 ? (
           <View style={styles.emptyBox}>
             <Megaphone size={36} color="#94a3b8" />
             <Text style={styles.emptyTitle}>No announcements found</Text>
@@ -395,14 +402,14 @@ export default function AnnouncementsView({
               Try searching with another keyword or selecting "All" categories.
             </Text>
           </View>
-        )}
+        ) : null}
 
         {/* Global Developer & Institution Footer */}
         <GlobalFooter />
       </ScrollView>
 
       {/* Full Announcement Reader & Real-Time Comments Modal */}
-      {activeModalItem && (
+      {activeModalItem ? (
         <Modal visible={true} animationType="slide" transparent onRequestClose={handleCloseModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -465,15 +472,15 @@ export default function AnnouncementsView({
                 </View>
 
                 {/* Loading indicator */}
-                {loadingComments && (
+                {loadingComments ? (
                   <View style={styles.commentsLoadingBox}>
                     <ActivityIndicator size="small" color="#2563eb" />
                     <Text style={styles.commentsLoadingText}>Loading live comments...</Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Empty State */}
-                {!loadingComments && comments.length === 0 && (
+                {!loadingComments && comments.length === 0 ? (
                   <View style={styles.commentsEmptyCard}>
                     <MessageSquare size={28} color="#94a3b8" />
                     <Text style={styles.commentsEmptyTitle}>No inquiries or comments yet</Text>
@@ -481,10 +488,10 @@ export default function AnnouncementsView({
                       Have a question regarding this announcement? Ask below and Barangay Officials will reply in real time.
                     </Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Comments List */}
-                {!loadingComments && rootComments.map((comment) => {
+                {!loadingComments ? rootComments.map((comment, commentIdx) => {
                   const replies = repliesByParent[comment.id] || [];
                   const isAuthor =
                     currentUser?.id &&
@@ -494,7 +501,7 @@ export default function AnnouncementsView({
                   const isOfficial = comment.is_official_response || comment.author_role === 'admin' || comment.author_role === 'super_admin';
 
                   return (
-                    <View key={comment.id} style={styles.commentItemWrapper}>
+                    <View key={`${comment.id}-${commentIdx}`} style={styles.commentItemWrapper}>
                       {/* Root Comment Box */}
                       <View style={[styles.commentBubble, isOfficial && styles.commentBubbleOfficial]}>
                         <View style={styles.commentHeaderRow}>
@@ -512,28 +519,28 @@ export default function AnnouncementsView({
                             <View>
                               <View style={styles.nameBadgeRow}>
                                 <Text style={styles.commentAuthorName}>{comment.author_name}</Text>
-                                {isOfficial && (
+                                {isOfficial ? (
                                   <View style={styles.officialBadge}>
                                     <ShieldCheck size={10} color="#1d4ed8" />
                                     <Text style={styles.officialBadgeText}>
                                       {comment.author_role === 'super_admin' ? 'Super Admin' : 'Barangay Official'}
                                     </Text>
                                   </View>
-                                )}
+                                ) : null}
                               </View>
                               <Text style={styles.commentTime}>{formatCommentTime(comment.created_at)}</Text>
                             </View>
                           </View>
 
                           {/* Delete Button for Author / Admin */}
-                          {isAuthor && (
+                          {Boolean(isAuthor) ? (
                             <TouchableOpacity
                               onPress={() => promptDeleteComment(comment)}
                               style={styles.commentDeleteBtn}
                             >
                               <Trash2 size={13} color="#ef4444" />
                             </TouchableOpacity>
-                          )}
+                          ) : null}
                         </View>
 
                         <Text style={styles.commentBodyText}>{comment.content}</Text>
@@ -554,7 +561,7 @@ export default function AnnouncementsView({
                       </View>
 
                       {/* Nested Replies */}
-                      {replies.map((reply) => {
+                      {replies.map((reply, replyIdx) => {
                         const isReplyOfficial =
                           reply.is_official_response ||
                           reply.author_role === 'admin' ||
@@ -566,7 +573,7 @@ export default function AnnouncementsView({
                             currentUser.role === 'super_admin');
 
                         return (
-                          <View key={reply.id} style={styles.replyItemWrapper}>
+                          <View key={`${reply.id}-${replyIdx}`} style={styles.replyItemWrapper}>
                             <CornerDownRight size={14} color="#94a3b8" style={styles.replyCornerIcon} />
                             <View
                               style={[
@@ -594,7 +601,7 @@ export default function AnnouncementsView({
                                   <View>
                                     <View style={styles.nameBadgeRow}>
                                       <Text style={styles.commentAuthorName}>{reply.author_name}</Text>
-                                      {isReplyOfficial && (
+                                      {isReplyOfficial ? (
                                         <View style={styles.officialBadge}>
                                           <ShieldCheck size={9} color="#1d4ed8" />
                                           <Text style={styles.officialBadgeText}>
@@ -603,20 +610,20 @@ export default function AnnouncementsView({
                                               : 'Barangay Official'}
                                           </Text>
                                         </View>
-                                      )}
+                                      ) : null}
                                     </View>
                                     <Text style={styles.commentTime}>{formatCommentTime(reply.created_at)}</Text>
                                   </View>
                                 </View>
 
-                                {isReplyAuthor && (
+                                {Boolean(isReplyAuthor) ? (
                                   <TouchableOpacity
                                     onPress={() => promptDeleteComment(reply)}
                                     style={styles.commentDeleteBtn}
                                   >
                                     <Trash2 size={12} color="#ef4444" />
                                   </TouchableOpacity>
-                                )}
+                                ) : null}
                               </View>
 
                               {reply.reply_to_name ? (
@@ -632,13 +639,13 @@ export default function AnnouncementsView({
                       })}
                     </View>
                   );
-                })}
+                }) : null}
               </ScrollView>
 
               {/* Bottom Interactive Comment Composer Bar */}
               <View style={styles.modalInputSection}>
                 {/* Active Reply Banner */}
-                {replyingTo && (
+                {replyingTo ? (
                   <View style={styles.replyBanner}>
                     <View style={styles.replyBannerLeft}>
                       <CornerDownRight size={13} color="#1d4ed8" />
@@ -650,7 +657,7 @@ export default function AnnouncementsView({
                       <X size={14} color="#64748b" />
                     </TouchableOpacity>
                   </View>
-                )}
+                ) : null}
 
                 {/* AI Content Moderation Warning Banner */}
                 {commentModerationError ? (
@@ -715,7 +722,7 @@ export default function AnnouncementsView({
             </View>
           </View>
         </Modal>
-      )}
+      ) : null}
 
       {/* Delete Comment Confirmation Modal */}
       <ActionModal
@@ -745,11 +752,11 @@ export default function AnnouncementsView({
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
                     {commentToDelete.author_name}
                   </Text>
-                  {commentToDelete.is_official_response && (
+                  {commentToDelete.is_official_response ? (
                     <Text style={{ fontSize: 10, fontWeight: '700', color: '#1d4ed8' }}>
                       [Official]
                     </Text>
-                  )}
+                  ) : null}
                 </View>
                 <Text
                   style={{ fontSize: 12, color: '#334155', fontStyle: 'italic', lineHeight: 18 }}
