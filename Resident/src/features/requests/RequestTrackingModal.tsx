@@ -263,11 +263,11 @@ export default function RequestTrackingModal({
                   <Text style={styles.claimedMetaLine}>
                     Date Released: <Text style={{ fontWeight: '700' }}>{request.claimed_at || request.issued_at ? new Date(request.claimed_at || request.issued_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Released'}</Text>
                   </Text>
-                  {request.claimed_by_admin && (
+                  {request.claimed_by_admin ? (
                     <Text style={styles.claimedMetaLine}>
                       Released By: <Text style={{ fontWeight: '700' }}>{request.claimed_by_admin}</Text>
                     </Text>
-                  )}
+                  ) : null}
                 </View>
               </View>
             )}
@@ -284,11 +284,11 @@ export default function RequestTrackingModal({
                     Your request is currently under review by the Barangay staff. Requirements and residency are being validated.
                   </Text>
                 </View>
-                {request.updated_at && (
+                {request.updated_at ? (
                   <Text style={{ fontSize: 11, color: '#3b82f6', fontWeight: '600', marginTop: 4 }}>
                     Processing started: {new Date(request.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </Text>
-                )}
+                ) : null}
               </View>
             )}
 

@@ -261,12 +261,12 @@ export default function DocumentCatalogView({
                       <Clock size={12} color="#64748b" />
                       <Text style={styles.metaText}>Processing: {doc.processing_days} {Number(doc.processing_days) === 1 ? 'Day' : 'Days'}</Text>
                     </View>
-                    {doc.validity && (
+                    {doc.validity ? (
                       <View style={styles.metaItem}>
                         <ShieldCheck size={12} color="#64748b" />
                         <Text style={styles.metaText}>Validity: {doc.validity}</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 </View>
               </View>

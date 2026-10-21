@@ -362,11 +362,11 @@ Generated on: ${new Date().toLocaleString('en-US')}
                     <View style={styles.codeBadge}>
                       <Text style={styles.codeBadgeText}>{activeDoc.code || 'DOC'}</Text>
                     </View>
-                    {activeDoc.category && (
+                    {activeDoc.category ? (
                       <View style={styles.categoryBadge}>
                         <Text style={styles.categoryBadgeText}>{activeDoc.category}</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
 
                   <Text style={styles.docTitle}>{activeDoc.title}</Text>
@@ -452,11 +452,11 @@ Generated on: ${new Date().toLocaleString('en-US')}
                                   >
                                     {item.name}
                                   </Text>
-                                  {item.description && (
+                                  {item.description ? (
                                     <Text style={styles.reqDescription}>
                                       {item.description}
                                     </Text>
-                                  )}
+                                  ) : null}
                                 </View>
                               </View>
                               <View

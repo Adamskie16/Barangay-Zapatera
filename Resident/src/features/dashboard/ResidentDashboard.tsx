@@ -121,7 +121,7 @@ export default function ResidentDashboard({
       </View>
 
       {/* Emergency Alert Banner if any */}
-      {emergencyAnn && (
+      {emergencyAnn ? (
         <TouchableOpacity
           style={styles.emergencyAlert}
           onPress={() => onViewAnnouncement(emergencyAnn)}
@@ -140,7 +140,7 @@ export default function ResidentDashboard({
           </View>
           <ArrowRight size={18} color="#ef4444" />
         </TouchableOpacity>
-      )}
+      ) : null}
 
       {/* Prominent Active Request Card */}
       {activeRequest ? (
@@ -377,9 +377,9 @@ export default function ResidentDashboard({
               onPress={() => onViewAnnouncement(item)}
               activeOpacity={0.8}
             >
-              {item.banner_url && (
+              {item.banner_url ? (
                 <Image source={{ uri: item.banner_url }} style={styles.announcementThumb} />
-              )}
+              ) : null}
               <View style={styles.announcementBody}>
                 <View style={styles.announcementHeader}>
                   <View style={styles.categoryBadge}>

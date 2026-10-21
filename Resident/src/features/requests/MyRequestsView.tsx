@@ -228,12 +228,12 @@ export default function MyRequestsView({
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <Badge status={claimed ? 'issued' : req.status} size="sm" />
-                    {req.is_resubmitted && req.status === 'pending' && (
+                    {Boolean(req.is_resubmitted) && req.status === 'pending' ? (
                       <View style={styles.resubmittedBadgePill}>
                         <RotateCcw size={10} color="#b45309" />
                         <Text style={styles.resubmittedBadgePillText}>Resubmitted</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                 </View>
 
@@ -312,14 +312,14 @@ export default function MyRequestsView({
                 )}
 
                 {/* Resubmitted Pending Banner */}
-                {req.is_resubmitted && req.status === 'pending' && (
+                {Boolean(req.is_resubmitted) && req.status === 'pending' ? (
                   <View style={styles.resubmittedHighlightBanner}>
                     <RotateCcw size={13} color="#b45309" />
                     <Text style={styles.resubmittedHighlightText}>
                       Application Resubmitted (Attempt #{req.resubmission_count || 1}). Pending review by Barangay Staff.
                     </Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Approved Box */}
                 {isApproved && (

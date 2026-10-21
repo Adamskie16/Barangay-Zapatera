@@ -1957,7 +1957,7 @@ export default function App() {
       <PhoneNotificationPermissionBanner />
 
       {/* Top Real-Time Cellphone Push Announcement Banner */}
-      {activeAnnouncementBanner && (
+      {activeAnnouncementBanner ? (
         <View
           style={[
             styles.floatingBanner,
@@ -2023,7 +2023,7 @@ export default function App() {
             </View>
           </View>
         </View>
-      )}
+      ) : null}
 
       {/* Screen Body Router */}
       <View style={styles.mainContent}>

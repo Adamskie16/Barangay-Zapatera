@@ -418,9 +418,9 @@ export default function AnnouncementsView({
 
               {/* Scrollable Content + Discussion */}
               <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {activeModalItem.banner_url && (
+                {activeModalItem.banner_url ? (
                   <Image source={{ uri: activeModalItem.banner_url }} style={styles.modalBanner} />
-                )}
+                ) : null}
 
                 <Text style={styles.modalTitleText}>{activeModalItem.title}</Text>
 
@@ -429,18 +429,18 @@ export default function AnnouncementsView({
                     <Calendar size={13} color="#64748b" />
                     <Text style={styles.modalMetaLabel}>Date: <Text style={styles.modalMetaVal}>{activeModalItem.date}</Text></Text>
                   </View>
-                  {activeModalItem.location && (
+                  {activeModalItem.location ? (
                     <View style={styles.modalMetaItem}>
                       <MapPin size={13} color="#64748b" />
                       <Text style={styles.modalMetaLabel}>Venue: <Text style={styles.modalMetaVal}>{activeModalItem.location}</Text></Text>
                     </View>
-                  )}
-                  {activeModalItem.author && (
+                  ) : null}
+                  {activeModalItem.author ? (
                     <View style={styles.modalMetaItem}>
                       <User size={13} color="#64748b" />
                       <Text style={styles.modalMetaLabel}>Issued by: <Text style={styles.modalMetaVal}>{activeModalItem.author}</Text></Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
 
                 <Text style={styles.modalContentText}>{activeModalItem.content}</Text>
@@ -619,11 +619,11 @@ export default function AnnouncementsView({
                                 )}
                               </View>
 
-                              {reply.reply_to_name && (
+                              {reply.reply_to_name ? (
                                 <Text style={styles.replyingToTag}>
                                   Replying to <Text style={styles.replyingToTarget}>@{reply.reply_to_name}</Text>
                                 </Text>
-                              )}
+                              ) : null}
 
                               <Text style={styles.commentBodyText}>{reply.content}</Text>
                             </View>

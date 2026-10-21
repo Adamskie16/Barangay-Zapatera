@@ -814,9 +814,9 @@ export default function RequestFlowModal({
                                   </View>
                                 ) : null}
                               </View>
-                              {item.description && (
+                              {item.description ? (
                                 <Text style={styles.uploadItemDesc}>{item.description}</Text>
-                              )}
+                              ) : null}
                             </View>
                           </View>
 
