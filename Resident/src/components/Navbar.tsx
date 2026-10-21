@@ -74,11 +74,14 @@ export default function Navbar({
             }}
             style={styles.sealLogo}
           />
-          <View>
+          <View style={styles.brandingTextCol}>
             <View style={styles.titleRow}>
               <Text style={styles.barangayName}>{(config.barangay_name || 'Barangay Zapatera').toUpperCase()}</Text>
+              <View style={styles.portalOfficialPill}>
+                <Text style={styles.portalOfficialText}>PORTAL</Text>
+              </View>
             </View>
-            <Text style={styles.portalTagline}>Resident Digital Services</Text>
+            <Text style={styles.portalTagline}>Resident Digital Services • Online Desk</Text>
           </View>
         </View>
 
@@ -89,8 +92,9 @@ export default function Navbar({
             style={styles.iconButton}
             onPress={onOpenNotifications}
             activeOpacity={0.7}
+            accessibilityLabel="Notifications"
           >
-            <Bell size={20} color="#334155" />
+            <Bell size={19} color="#334155" />
             {unreadNotifsCount > 0 && (
               <View style={styles.badgeDot}>
                 <Text style={styles.badgeText}>{unreadNotifsCount > 9 ? '9+' : unreadNotifsCount}</Text>
@@ -102,14 +106,14 @@ export default function Navbar({
           <TouchableOpacity
             style={styles.avatarButton}
             onPress={() => setIsMenuOpen((prev) => !prev)}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
             accessibilityLabel="Open profile menu"
           >
             <View style={styles.avatar}>
               {currentUser.avatar_url && !isTemplateAvatar(currentUser.avatar_url) && !avatarError ? (
                 <Image
                   source={{ uri: currentUser.avatar_url }}
-                  style={{ width: 33, height: 33, borderRadius: 16.5 }}
+                  style={{ width: 34, height: 34, borderRadius: 17 }}
                   onError={() => setAvatarError(true)}
                 />
               ) : (
@@ -246,15 +250,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
+    paddingVertical: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
     elevation: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     zIndex: 1000,
     position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any,
     top: 0,
@@ -266,31 +272,53 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   sealLogo: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1.5,
-    borderColor: '#1d4ed8',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
     backgroundColor: '#eff6ff',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  brandingTextCol: {
+    justifyContent: 'center',
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   barangayName: {
     fontSize: 14,
     fontWeight: '900',
     color: '#0f172a',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
+  },
+  portalOfficialPill: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  portalOfficialText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#1d4ed8',
+    letterSpacing: 0.6,
   },
   portalTagline: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#64748b',
     fontWeight: '600',
+    marginTop: 1,
   },
   headerRight: {
     flexDirection: 'row',
@@ -298,27 +326,37 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#f1f5f9',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
   badgeDot: {
     position: 'absolute',
     top: 2,
     right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#dc2626',
+    minWidth: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
-    borderWidth: 1.5,
+    paddingHorizontal: 4,
+    borderWidth: 2,
     borderColor: '#ffffff',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
   },
   badgeText: {
     fontSize: 9,
@@ -329,14 +367,18 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1d4ed8',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#bfdbfe',
+    borderWidth: 2,
+    borderColor: '#93c5fd',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   avatarText: {
     fontSize: 14,
@@ -347,25 +389,27 @@ const styles = StyleSheet.create({
   /* Dropdown Styles */
   dropdownBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.25)',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    paddingTop: 62,
+    paddingTop: 66,
     paddingRight: 16,
   },
   dropdownCard: {
-    width: 280,
-    maxWidth: '90%',
+    width: 290,
+    maxWidth: '92%',
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(226, 232, 240, 0.9)',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.14,
+    shadowRadius: 28,
+    elevation: 12,
   },
   dropdownHeader: {
     flexDirection: 'row',

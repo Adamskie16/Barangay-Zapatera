@@ -23,6 +23,9 @@ import {
   Phone,
   AlertTriangle,
   Info,
+  Sparkles,
+  ChevronRight,
+  Check,
 } from 'lucide-react';
 import { ResidentUser, DocumentRequest, BarangayConfig, BarangayAnnouncement, DocumentType } from '../../types';
 import Badge from '../../components/Badge';
@@ -74,13 +77,46 @@ export default function ResidentDashboard({
   const emergencyAnn = announcements.find((a) => a.is_emergency);
   const importantAnn = announcements.find((a) => a.is_important && !a.is_emergency);
 
+  const getRequestStageIndex = (status?: string): number => {
+    switch (status) {
+      case 'pending':
+        return 1;
+      case 'under_review':
+        return 2;
+      case 'processing':
+        return 3;
+      case 'ready_for_pickup':
+      case 'approved':
+      case 'issued':
+      case 'completed':
+        return 4;
+      default:
+        return 1;
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-      {/* Welcome Section */}
+      {/* Welcome Hero Banner */}
       <View style={styles.welcomeBanner}>
+        <View style={styles.welcomeBannerGlow} />
         <View style={styles.welcomeLeft}>
-          <Text style={styles.greetingText}>{getGreeting()}, {currentUser.first_name || currentUser.full_name?.split(' ')[0] || 'Resident'}!</Text>
-          <Text style={styles.greetingSubtitle}>How can we help you today with your official barangay documents?</Text>
+          <View style={styles.welcomePill}>
+            <Sparkles size={12} color="#93c5fd" />
+            <Text style={styles.welcomePillText}>Barangay Zapatera Digital Desk</Text>
+          </View>
+          <Text style={styles.greetingText}>
+            {getGreeting()}, {currentUser.first_name || currentUser.full_name?.split(' ')[0] || 'Resident'}!
+          </Text>
+          <Text style={styles.greetingSubtitle}>
+            Request official barangay clearances, track your applications in real-time, and read community bulletins.
+          </Text>
+        </View>
+        <View style={styles.welcomeSealWrapper}>
+          <Image
+            source={{ uri: config?.seal_url || config?.logo_url || '/zapatera_seal.png' }}
+            style={styles.welcomeSeal}
+          />
         </View>
       </View>
 
@@ -113,7 +149,7 @@ export default function ResidentDashboard({
             <View style={styles.activeRequestHeaderLeft}>
               <View style={[styles.statusDot, activeRequest.status === 'ready_for_pickup' ? styles.statusDotGreen : styles.statusDotBlue]} />
               <Text style={styles.activeRequestHeaderTitle}>
-                {activeRequest.status === 'ready_for_pickup' ? '🎉 DOCUMENT READY FOR PICKUP' : 'ACTIVE DOCUMENT REQUEST'}
+                {activeRequest.status === 'ready_for_pickup' ? '🎉 DOCUMENT READY FOR PICKUP' : 'ACTIVE DOCUMENT APPLICATION'}
               </Text>
             </View>
             <Badge status={activeRequest.status} size="sm" />
@@ -121,7 +157,48 @@ export default function ResidentDashboard({
 
           <View style={styles.activeRequestBody}>
             <Text style={styles.activeDocTitle}>{activeRequest.document_title}</Text>
-            <Text style={styles.activeTrackingNo}>Tracking Ref: <Text style={styles.activeTrackingCode}>{activeRequest.tracking_number}</Text></Text>
+            <Text style={styles.activeTrackingNo}>
+              Tracking Ref: <Text style={styles.activeTrackingCode}>{activeRequest.tracking_number}</Text>
+            </Text>
+
+            {/* Visual 4-Stage Progress Tracker */}
+            <View style={styles.stageTrackerContainer}>
+              {[
+                { step: 1, label: 'Submitted' },
+                { step: 2, label: 'Under Review' },
+                { step: 3, label: 'Processing' },
+                { step: 4, label: 'Ready' },
+              ].map((s, idx, arr) => {
+                const currentStage = getRequestStageIndex(activeRequest.status);
+                const isPassed = currentStage > s.step;
+                const isCurrent = currentStage === s.step;
+                return (
+                  <View key={s.step} style={styles.stageStepItem}>
+                    <View style={styles.stageNodeRow}>
+                      <View
+                        style={[
+                          styles.stageNode,
+                          isPassed && styles.stageNodePassed,
+                          isCurrent && styles.stageNodeCurrent,
+                        ]}
+                      >
+                        {isPassed ? (
+                          <Check size={10} color="#ffffff" strokeWidth={3} />
+                        ) : (
+                          <Text style={[styles.stageNodeText, isCurrent && styles.stageNodeTextCurrent]}>{s.step}</Text>
+                        )}
+                      </View>
+                      {idx < arr.length - 1 && (
+                        <View style={[styles.stageLine, currentStage > s.step && styles.stageLinePassed]} />
+                      )}
+                    </View>
+                    <Text style={[styles.stageLabel, (isCurrent || isPassed) && styles.stageLabelActive]} numberOfLines={1}>
+                      {s.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
 
             <View style={styles.activeDetailsGrid}>
               <View style={styles.activeDetailCol}>
@@ -171,8 +248,11 @@ export default function ResidentDashboard({
           onPress={() => onRequestDocument()}
           activeOpacity={0.8}
         >
-          <View style={[styles.quickIconCircle, { backgroundColor: '#1d4ed8' }]}>
-            <FileText size={22} color="#ffffff" />
+          <View style={styles.quickCardTopRow}>
+            <View style={[styles.quickIconCircle, { backgroundColor: '#1d4ed8' }]}>
+              <FileText size={20} color="#ffffff" />
+            </View>
+            <ChevronRight size={16} color="#94a3b8" />
           </View>
           <Text style={styles.quickCardTitle}>Request a Document</Text>
           <Text style={styles.quickCardSubtitle}>Clearances, Certificates & Permits</Text>
@@ -183,8 +263,11 @@ export default function ResidentDashboard({
           onPress={() => onNavigateTab('requests')}
           activeOpacity={0.8}
         >
-          <View style={[styles.quickIconCircle, { backgroundColor: '#0284c7' }]}>
-            <Clock size={22} color="#ffffff" />
+          <View style={styles.quickCardTopRow}>
+            <View style={[styles.quickIconCircle, { backgroundColor: '#0284c7' }]}>
+              <Clock size={20} color="#ffffff" />
+            </View>
+            <ChevronRight size={16} color="#94a3b8" />
           </View>
           <Text style={styles.quickCardTitle}>My Requests</Text>
           <Text style={styles.quickCardSubtitle}>Track & View Active Applications ({requests.length})</Text>
@@ -195,8 +278,11 @@ export default function ResidentDashboard({
           onPress={onOpenRequirements}
           activeOpacity={0.8}
         >
-          <View style={[styles.quickIconCircle, { backgroundColor: '#059669' }]}>
-            <BookOpen size={22} color="#ffffff" />
+          <View style={styles.quickCardTopRow}>
+            <View style={[styles.quickIconCircle, { backgroundColor: '#059669' }]}>
+              <BookOpen size={20} color="#ffffff" />
+            </View>
+            <ChevronRight size={16} color="#94a3b8" />
           </View>
           <Text style={styles.quickCardTitle}>Requirements Guide</Text>
           <Text style={styles.quickCardSubtitle}>Check valid IDs & needed papers</Text>
@@ -207,14 +293,16 @@ export default function ResidentDashboard({
           onPress={() => onNavigateTab('announcements')}
           activeOpacity={0.8}
         >
-          <View style={[styles.quickIconCircle, { backgroundColor: '#7c3aed' }]}>
-            <Megaphone size={22} color="#ffffff" />
+          <View style={styles.quickCardTopRow}>
+            <View style={[styles.quickIconCircle, { backgroundColor: '#7c3aed' }]}>
+              <Megaphone size={20} color="#ffffff" />
+            </View>
+            <ChevronRight size={16} color="#94a3b8" />
           </View>
           <Text style={styles.quickCardTitle}>Announcements</Text>
           <Text style={styles.quickCardSubtitle}>News, Advisories & Programs</Text>
         </TouchableOpacity>
       </View>
-
 
       {/* Official Barangay Documents (Live from Supabase CMS / Document Information Management) */}
       {(() => {
@@ -231,38 +319,46 @@ export default function ResidentDashboard({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.docTypesScroll}>
               {availableDocTypes.map((doc) => (
                 <View key={doc.id} style={styles.docTypeCard}>
-                <View style={styles.docTypeHeader}>
-                  <View style={styles.docIconBox}>
-                    <FileText size={18} color="#1d4ed8" />
+                  <View style={styles.docTypeHeader}>
+                    <View style={styles.docIconBox}>
+                      <FileText size={18} color="#1d4ed8" />
+                    </View>
+                    <View style={[styles.feeTag, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagPaid : (doc.fee === 0 ? styles.feeTagFree : styles.feeTagPaid)]}>
+                      <Text style={[styles.feeTagText, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagTextPaid : (doc.fee === 0 ? styles.feeTagTextFree : styles.feeTagTextPaid)]}>
+                        {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={[styles.feeTag, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagPaid : (doc.fee === 0 ? styles.feeTagFree : styles.feeTagPaid)]}>
-                    <Text style={[styles.feeTagText, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeTagTextPaid : (doc.fee === 0 ? styles.feeTagTextFree : styles.feeTagTextPaid)]}>
-                      {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
-                    </Text>
+                  <Text style={styles.docTypeTitle} numberOfLines={1}>{doc.title}</Text>
+                  <Text style={styles.docTypeDesc} numberOfLines={2}>{doc.description}</Text>
+                  <View style={styles.docTypeMeta}>
+                    <Clock size={11} color="#64748b" />
+                    <Text style={styles.docTypeMetaText}>{doc.processing_days} {doc.processing_days === 1 ? 'day' : 'days'} processing</Text>
+                  </View>
+                  <View style={styles.docTypeBtnRow}>
+                    <TouchableOpacity
+                      style={styles.docDetailsBtn}
+                      onPress={() => onOpenRequirements(doc)}
+                      activeOpacity={0.7}
+                    >
+                      <Info size={13} color="#1d4ed8" />
+                      <Text style={styles.docDetailsBtnText}>Requirements</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.docApplyBtn}
+                      onPress={() => onRequestDocument(doc)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.docApplyBtnText}>Apply</Text>
+                      <ArrowRight size={12} color="#ffffff" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.docTypeTitle} numberOfLines={1}>{doc.title}</Text>
-                <Text style={styles.docTypeDesc} numberOfLines={2}>{doc.description}</Text>
-                <View style={styles.docTypeMeta}>
-                  <Clock size={11} color="#64748b" />
-                  <Text style={styles.docTypeMetaText}>{doc.processing_days} {doc.processing_days === 1 ? 'day' : 'days'} processing</Text>
-                </View>
-                <View style={styles.docTypeBtnRow}>
-                  <TouchableOpacity
-                    style={styles.docDetailsBtn}
-                    onPress={() => onOpenRequirements(doc)}
-                    activeOpacity={0.7}
-                  >
-                    <Info size={13} color="#1d4ed8" />
-                    <Text style={styles.docDetailsBtnText}>Requirements & Info</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </>
-      );
-    })()}
+              ))}
+            </ScrollView>
+          </>
+        );
+      })()}
 
       {/* Recent Announcements Section */}
       <View style={styles.sectionHeaderRow}>
@@ -354,32 +450,74 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 16,
-    shadowColor: '#000000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    backgroundColor: '#1e3a8a',
+    borderRadius: 22,
+    padding: 20,
+    marginBottom: 18,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  welcomeBannerGlow: {
+    position: 'absolute',
+    top: -40,
+    right: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(59, 130, 246, 0.25)',
   },
   welcomeLeft: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 10,
+    zIndex: 2,
+  },
+  welcomePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  welcomePillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#dbeafe',
+    letterSpacing: 0.3,
   },
   greetingText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#ffffff',
     letterSpacing: -0.3,
   },
   greetingSubtitle: {
     fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-    lineHeight: 16,
+    color: 'rgba(238, 242, 255, 0.9)',
+    marginTop: 6,
+    lineHeight: 17,
+  },
+  welcomeSealWrapper: {
+    alignSelf: 'center',
+    zIndex: 2,
+  },
+  welcomeSeal: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   sealCircle: {
     width: 52,
@@ -497,6 +635,80 @@ const styles = StyleSheet.create({
   activeRequestBody: {
     padding: 16,
   },
+  stageTrackerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginBottom: 14,
+  },
+  stageStepItem: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  stageNodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  stageNode: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  stageNodePassed: {
+    backgroundColor: '#16a34a',
+  },
+  stageNodeCurrent: {
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  stageNodeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  stageNodeTextCurrent: {
+    color: '#ffffff',
+  },
+  stageLine: {
+    position: 'absolute',
+    left: '50%',
+    right: '-50%',
+    height: 2,
+    backgroundColor: '#e2e8f0',
+    zIndex: 1,
+  },
+  stageLinePassed: {
+    backgroundColor: '#16a34a',
+  },
+  stageLabel: {
+    fontSize: 9.5,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  stageLabelActive: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
   activeDocTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -560,71 +772,87 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#1d4ed8',
-    paddingVertical: 11,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   viewTimelineBtnText: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
   sectionHeading: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
     color: '#0f172a',
     letterSpacing: -0.2,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    marginTop: 8,
+    marginBottom: 12,
+    marginTop: 10,
   },
   seeAllText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#1d4ed8',
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 20,
+  },
+  quickCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   quickCard: {
     width: '48%',
     backgroundColor: '#ffffff',
     padding: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000000',
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   quickCardPrimary: {
     borderColor: '#bfdbfe',
-    backgroundColor: '#f0f7ff',
+    backgroundColor: '#f8faff',
   },
   quickIconCircle: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   quickCardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 2,
+    marginBottom: 3,
+    letterSpacing: -0.2,
   },
   quickCardSubtitle: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#64748b',
     lineHeight: 14,
   },
@@ -791,14 +1019,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   docTypeCard: {
-    width: 220,
+    width: 240,
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
-    marginRight: 12,
+    borderRadius: 18,
+    padding: 16,
+    marginRight: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(226, 232, 240, 0.95)',
     justifyContent: 'space-between',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   docTypeHeader: {
     flexDirection: 'row',
@@ -807,17 +1040,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   docIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   feeTag: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 3.5,
+    borderRadius: 7,
   },
   feeTagFree: {
     backgroundColor: '#dcfce7',
@@ -836,8 +1069,8 @@ const styles = StyleSheet.create({
     color: '#1d4ed8',
   },
   docTypeTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
     color: '#0f172a',
     marginBottom: 4,
   },
@@ -854,13 +1087,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   docTypeMetaText: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#64748b',
     fontWeight: '500',
   },
   docTypeBtnRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   docDetailsBtn: {
     flex: 1,
@@ -869,14 +1102,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     paddingVertical: 8,
-    borderRadius: 9,
-    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: '#e2e8f0',
   },
   docDetailsBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#1d4ed8',
+    color: '#334155',
+  },
+  docApplyBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#1d4ed8',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  docApplyBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

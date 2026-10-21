@@ -1061,6 +1061,38 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           </View>
         </View>
 
+        {/* Top Segmented Sign In / Register Tab Switcher */}
+        {authStep === 'credentials' && (
+          <View style={styles.authTabSwitcher}>
+            <TouchableOpacity
+              style={[styles.authTabBtn, activeTab === 'login' && styles.authTabBtnActive]}
+              onPress={() => {
+                setActiveTab('login');
+                setErrorMessage('');
+                setSuccessBanner('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.authTabBtnText, activeTab === 'login' && styles.authTabBtnTextActive]}>
+                Sign In
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.authTabBtn, activeTab === 'register' && styles.authTabBtnActive]}
+              onPress={() => {
+                setActiveTab('register');
+                setErrorMessage('');
+                setSuccessBanner('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.authTabBtnText, activeTab === 'register' && styles.authTabBtnTextActive]}>
+                Register Account
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ================================================================= */}
         {/* 7. REGISTRATION ALERTS & NOTICES */}
         {/* ================================================================= */}
@@ -1864,17 +1896,47 @@ const styles = StyleSheet.create({
 
   authCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 32,
-    padding: 24,
+    borderRadius: 28,
+    padding: 26,
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 450,
     shadowColor: '#1e3a8a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 28,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 36,
+    elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.8)',
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+  },
+  authTabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+  },
+  authTabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 11,
+  },
+  authTabBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  authTabBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  authTabBtnTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '800',
   },
   headerArea: {
     marginBottom: 8,
@@ -2037,13 +2099,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   primaryBtn: {
-    backgroundColor: '#1e3a8a',
+    backgroundColor: '#1d4ed8',
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1e3a8a',
-    shadowOffset: { width: 0, height: 6 },
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
     shadowRadius: 10,
     elevation: 4,

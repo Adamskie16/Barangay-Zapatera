@@ -2159,7 +2159,7 @@ export default function App() {
 const styles = StyleSheet.create({
   authContainer: {
     flex: 1,
-    backgroundColor: '#eff2fc',
+    backgroundColor: '#f8fafc',
     minHeight: '100vh' as any,
   },
   appContainer: {
@@ -2178,21 +2178,20 @@ const styles = StyleSheet.create({
     position: 'relative' as any,
   },
 
-
   floatingBanner: {
     position: 'absolute',
-    top: 65,
+    top: 68,
     left: 16,
     right: 16,
     zIndex: 9999,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowRadius: 20,
+    elevation: 10,
     borderWidth: 1,
   },
   floatingBannerTopHeader: {
