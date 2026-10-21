@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { ResidentUser, DocumentRequest, BarangayConfig, BarangayAnnouncement, DocumentType } from '../../types';
 import Badge from '../../components/Badge';
+import GlobalFooter from '../../components/GlobalFooter';
 import { formatCurrency } from '../../core/security';
 
 interface ResidentDashboardProps {
@@ -333,6 +334,9 @@ export default function ResidentDashboard({
           <Text style={styles.infoFooterSub}>Hotline: {config.contact_phone || '(032) 503-6465'}</Text>
         </View>
       </View>
+
+      {/* Global Developer & Institution Footer */}
+      <GlobalFooter />
     </ScrollView>
   );
 }

@@ -24,6 +24,7 @@ import {
 import { DocumentRequest, RequestStatus } from '../../types';
 import Badge from '../../components/Badge';
 import EmptyState from '../../components/EmptyState';
+import GlobalFooter from '../../components/GlobalFooter';
 import { formatCurrency } from '../../core/security';
 
 interface MyRequestsViewProps {
@@ -370,6 +371,9 @@ export default function MyRequestsView({
             onAction={activeTab === 'active' ? onRequestNew : undefined}
           />
         )}
+
+        {/* Global Developer & Institution Footer */}
+        <GlobalFooter />
       </ScrollView>
     </View>
   );

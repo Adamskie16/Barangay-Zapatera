@@ -1,5 +1,5 @@
 // Admin/src/features/dashboard/DashboardView.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import StatCard from '../../components/StatCard';
 import Badge from '../../components/Badge';
 import {
@@ -9,120 +9,64 @@ import {
   Clock,
   Activity,
   AlertCircle,
-  Search,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   FileText,
+  TrendingUp,
+  Layers,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  BarChart2,
+  ChevronRight,
 } from 'lucide-react';
 import { formatDate } from '../../core/security';
 import MonthlyAnalytics from '../../components/MonthlyAnalytics';
 
 export default function DashboardView({ requests = [], events = [], logs = [], setActiveTab, onQueueAction }) {
   const pendingRequests = requests.filter((r) => r.status === 'pending');
-  const reviewRequests = requests.filter((r) => r.status === 'under_review');
-  const approvedRequests = requests.filter((r) => r.status === 'approved');
-  const issuedRequests = requests.filter((r) => r.status === 'issued');
+  const reviewRequests = requests.filter((r) => r.status === 'under_review' || r.status === 'under review' || r.status === 'processing');
+  const approvedRequests = requests.filter((r) => r.status === 'approved' || r.status === 'ready_for_pickup');
+  const issuedRequests = requests.filter((r) => r.status === 'issued' || r.status === 'completed');
+  const declinedRequests = requests.filter((r) => r.status === 'declined' || r.status === 'rejected');
 
-  // Search, Filter, Sort & 10-Row Pagination State for Incoming Applications Queue
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortKey, setSortKey] = useState('created_at');
-  const [sortDirection, setSortDirection] = useState('desc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const totalRequests = requests.length;
+  const activeQueue = pendingRequests.length + reviewRequests.length;
+  const completedTotal = approvedRequests.length + issuedRequests.length;
+  const fulfillmentRate = totalRequests > 0 ? Math.round((completedTotal / totalRequests) * 100) : 0;
+  const declineRate = totalRequests > 0 ? Math.round((declinedRequests.length / totalRequests) * 100) : 0;
 
-  const handleSort = (key) => {
-    if (sortKey === key) {
-      if (sortDirection === 'asc') {
-        setSortDirection('desc');
-      } else {
-        setSortKey('created_at');
-        setSortDirection('desc');
-      }
-    } else {
-      setSortKey(key);
-      setSortDirection('asc');
-    }
-  };
-
-  const filteredRequests = useMemo(() => {
-    let result = [...requests];
-
-    if (statusFilter !== 'all') {
-      result = result.filter((r) => {
-        const s = String(r.status || 'pending').toLowerCase().trim();
-        if (statusFilter === 'pending') return s === 'pending';
-        if (statusFilter === 'under_review') {
-          return s === 'under_review' || s === 'under review' || s === 'processing';
-        }
-        if (statusFilter === 'approved') return s === 'approved' || s === 'ready_for_pickup';
-        if (statusFilter === 'issued') return s === 'issued' || s === 'completed';
-        if (statusFilter === 'declined') return s === 'declined' || s === 'rejected';
-        return s === statusFilter;
-      });
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter((r) => {
-        const tracking = String(r.tracking_number || '').toLowerCase();
-        const name = String(r.resident_name || '').toLowerCase();
-        const doc = String(r.document_title || '').toLowerCase();
-        return tracking.includes(q) || name.includes(q) || doc.includes(q);
-      });
-    }
-
-    result.sort((a, b) => {
-      let valA = a[sortKey];
-      let valB = b[sortKey];
-
-      if (sortKey === 'created_at') {
-        const dateA = new Date(valA || 0).getTime();
-        const dateB = new Date(valB || 0).getTime();
-        return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
-      }
-
-      valA = String(valA || '').toLowerCase();
-      valB = String(valB || '').toLowerCase();
-      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+  // Document Type Demand Distribution
+  const docTypeStats = useMemo(() => {
+    const counts = {};
+    requests.forEach((r) => {
+      const title = r.document_title || r.document_name || 'Barangay Clearance';
+      counts[title] = (counts[title] || 0) + 1;
     });
 
-    return result;
-  }, [requests, statusFilter, searchQuery, sortKey, sortDirection]);
+    const sorted = Object.entries(counts)
+      .map(([title, count]) => ({
+        title,
+        count,
+        percentage: totalRequests > 0 ? Math.round((count / totalRequests) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
 
-  // 10-Row Pagination Calculations
-  const totalEntries = filteredRequests.length;
-  const totalPages = Math.ceil(totalEntries / pageSize) || 1;
-  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+    return sorted.slice(0, 5);
+  }, [requests, totalRequests]);
 
-  const paginatedRequests = useMemo(() => {
-    const start = (safeCurrentPage - 1) * pageSize;
-    return filteredRequests.slice(start, start + pageSize);
-  }, [filteredRequests, safeCurrentPage, pageSize]);
+  // Funnel Stage Percentages
+  const pendingPct = totalRequests > 0 ? ((pendingRequests.length / totalRequests) * 100).toFixed(1) : 0;
+  const reviewPct = totalRequests > 0 ? ((reviewRequests.length / totalRequests) * 100).toFixed(1) : 0;
+  const approvedPct = totalRequests > 0 ? ((approvedRequests.length / totalRequests) * 100).toFixed(1) : 0;
+  const issuedPct = totalRequests > 0 ? ((issuedRequests.length / totalRequests) * 100).toFixed(1) : 0;
+  const declinedPct = totalRequests > 0 ? ((declinedRequests.length / totalRequests) * 100).toFixed(1) : 0;
 
-  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
-  const endIndex = Math.min(safeCurrentPage * pageSize, totalEntries);
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxButtons = 5;
-    let start = Math.max(1, safeCurrentPage - Math.floor(maxButtons / 2));
-    let end = Math.min(totalPages, start + maxButtons - 1);
-    if (end - start + 1 < maxButtons) {
-      start = Math.max(1, end - maxButtons + 1);
-    }
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    return pages;
-  };
+  // Recent 5 Requests for Streamlined Activity
+  const recentRequests = useMemo(() => {
+    return [...requests]
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+      .slice(0, 5);
+  }, [requests]);
 
   return (
     <div className="space-y-6">
@@ -134,16 +78,17 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
           </span>
           <h1 className="text-2xl font-extrabold tracking-tight">Barangay Zapatera Document Desk</h1>
           <p className="text-slate-300 text-sm mt-1 max-w-2xl">
-            Review resident applications, check requirements, approve documents, and issue official certificates.
+            Live operational intelligence, workflow pipeline analytics, and real-time document issuance performance.
           </p>
         </div>
 
         <div className="hidden sm:flex space-x-3">
           <button
             onClick={() => setActiveTab('receive_request')}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            Open Request Inbox ({pendingRequests.length})
+            <span>Open Request Queue ({activeQueue})</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -183,309 +128,240 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
       {/* Monthly Analytics Widget */}
       <MonthlyAnalytics requests={requests} />
 
-      {/* Main Grid */}
+      {/* Visual Analytics Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Incoming Applications Queue Table */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        {/* Left Column: Visual Graphs, Funnel & Demand Metrics */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Card 1: Processing Pipeline Funnel */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Incoming Applications Queue</h3>
-                <p className="text-xs text-slate-500">Document requests submitted by residents waiting for review</p>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-bold text-slate-900 text-base">Document Processing Pipeline Funnel</h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visual stage progression across {totalRequests} total resident application{totalRequests !== 1 && 's'}
+                </p>
               </div>
-              <button
-                onClick={() => setActiveTab('receive_request')}
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer self-start sm:self-auto"
-              >
-                View All Queue &rarr;
-              </button>
-            </div>
-
-            {/* Filter & Search Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search tracking, resident, or document..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="all">All Statuses ({requests.length})</option>
-                  <option value="pending">Pending ({pendingRequests.length})</option>
-                  <option value="under_review">Under Review ({reviewRequests.length})</option>
-                  <option value="approved">Ready for Pickup ({approvedRequests.length})</option>
-                  <option value="issued">Issued ({issuedRequests.length})</option>
-                </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {fulfillmentRate}% Fulfillment Rate
+                </span>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto border border-slate-100 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSort('tracking_number')}
-                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                          sortKey === 'tracking_number' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
-                        }`}
-                      >
-                        <span>Tracking No.</span>
-                        <span className={`p-0.5 rounded ${sortKey === 'tracking_number' ? 'bg-blue-50 text-blue-600' : ''}`}>
-                          {sortKey === 'tracking_number' ? (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
-                          )}
-                        </span>
-                      </button>
-                    </th>
-                    <th className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSort('resident_name')}
-                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                          sortKey === 'resident_name' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
-                        }`}
-                      >
-                        <span>Applicant Name</span>
-                        <span className={`p-0.5 rounded ${sortKey === 'resident_name' ? 'bg-blue-50 text-blue-600' : ''}`}>
-                          {sortKey === 'resident_name' ? (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
-                          )}
-                        </span>
-                      </button>
-                    </th>
-                    <th className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSort('document_title')}
-                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                          sortKey === 'document_title' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
-                        }`}
-                      >
-                        <span>Document Requested</span>
-                        <span className={`p-0.5 rounded ${sortKey === 'document_title' ? 'bg-blue-50 text-blue-600' : ''}`}>
-                          {sortKey === 'document_title' ? (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
-                          )}
-                        </span>
-                      </button>
-                    </th>
-                    <th className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSort('status')}
-                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                          sortKey === 'status' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
-                        }`}
-                      >
-                        <span>Status</span>
-                        <span className={`p-0.5 rounded ${sortKey === 'status' ? 'bg-blue-50 text-blue-600' : ''}`}>
-                          {sortKey === 'status' ? (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
-                          )}
-                        </span>
-                      </button>
-                    </th>
-                    <th className="p-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSort('created_at')}
-                        className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                          sortKey === 'created_at' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
-                        }`}
-                      >
-                        <span>Date Submitted</span>
-                        <span className={`p-0.5 rounded ${sortKey === 'created_at' ? 'bg-blue-50 text-blue-600' : ''}`}>
-                          {sortKey === 'created_at' ? (
-                            sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
-                          ) : (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
-                          )}
-                        </span>
-                      </button>
-                    </th>
-                    <th className="p-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedRequests.length > 0 ? (
-                    paginatedRequests.map((req) => (
-                      <tr key={req.id || req.tracking_number} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3 font-mono font-bold text-slate-900">
-                          {req.tracking_number}
-                        </td>
-                        <td className="p-3">
-                          <p className="font-semibold text-slate-800">{req.resident_name}</p>
-                          {req.purpose && (
-                            <p className="text-[11px] text-slate-400 truncate max-w-xs">{req.purpose}</p>
-                          )}
-                        </td>
-                        <td className="p-3 font-medium text-slate-700">
-                          {req.document_title}
-                        </td>
-                        <td className="p-3">
-                          <Badge variant={req.status}>{req.status?.replace('_', ' ')}</Badge>
-                        </td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">
-                          {formatDate(req.created_at)}
-                        </td>
-                        <td className="p-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onQueueAction) {
-                                onQueueAction(req);
-                              } else {
-                                const s = String(req.status || '').toLowerCase();
-                                if (s === 'approved' || s === 'completed' || s === 'issued') {
-                                  setActiveTab('approved_documents');
-                                } else {
-                                  setActiveTab('receive_request');
-                                }
-                              }
-                            }}
-                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer inline-flex items-center gap-1 active:scale-95"
-                            title={`Verify request ${req.tracking_number}`}
-                          >
-                            <span>Verify</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="p-6 text-center text-slate-400">
-                        No applications found in the queue.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            {/* Stacked Visual Bar */}
+            <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden flex mb-4 shadow-inner">
+              <div
+                style={{ width: `${pendingPct}%` }}
+                className="bg-amber-500 transition-all duration-500"
+                title={`Pending: ${pendingRequests.length} (${pendingPct}%)`}
+              />
+              <div
+                style={{ width: `${reviewPct}%` }}
+                className="bg-blue-500 transition-all duration-500"
+                title={`Under Review: ${reviewRequests.length} (${reviewPct}%)`}
+              />
+              <div
+                style={{ width: `${approvedPct}%` }}
+                className="bg-emerald-500 transition-all duration-500"
+                title={`Ready for Pickup: ${approvedRequests.length} (${approvedPct}%)`}
+              />
+              <div
+                style={{ width: `${issuedPct}%` }}
+                className="bg-purple-600 transition-all duration-500"
+                title={`Issued / Claimed: ${issuedRequests.length} (${issuedPct}%)`}
+              />
+              <div
+                style={{ width: `${declinedPct}%` }}
+                className="bg-rose-500 transition-all duration-500"
+                title={`Declined: ${declinedRequests.length} (${declinedPct}%)`}
+              />
+            </div>
+
+            {/* Stage Breakdown Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl">
+                <div className="flex items-center gap-1.5 text-amber-700 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Pending</span>
+                </div>
+                <div className="text-xl font-black text-amber-900">{pendingRequests.length}</div>
+                <div className="text-[10px] text-amber-600 font-medium">{pendingPct}% share</div>
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl">
+                <div className="flex items-center gap-1.5 text-blue-700 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">In Review</span>
+                </div>
+                <div className="text-xl font-black text-blue-900">{reviewRequests.length}</div>
+                <div className="text-[10px] text-blue-600 font-medium">{reviewPct}% share</div>
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl">
+                <div className="flex items-center gap-1.5 text-emerald-700 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Approved</span>
+                </div>
+                <div className="text-xl font-black text-emerald-900">{approvedRequests.length}</div>
+                <div className="text-[10px] text-emerald-600 font-medium">{approvedPct}% share</div>
+              </div>
+
+              <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl">
+                <div className="flex items-center gap-1.5 text-purple-700 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Issued</span>
+                </div>
+                <div className="text-xl font-black text-purple-900">{issuedRequests.length}</div>
+                <div className="text-[10px] text-purple-600 font-medium">{issuedPct}% share</div>
+              </div>
+
+              <div className="p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl col-span-2 sm:col-span-1">
+                <div className="flex items-center gap-1.5 text-rose-700 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Declined</span>
+                </div>
+                <div className="text-xl font-black text-rose-900">{declinedRequests.length}</div>
+                <div className="text-[10px] text-rose-600 font-medium">{declinedPct}% share</div>
+              </div>
             </div>
           </div>
 
-          {/* 10-Row Pagination Footer */}
-          {totalEntries > 0 && (
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs mt-4">
-              <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-                <span className="font-medium text-slate-600">
-                  Showing <span className="font-bold text-slate-900">{startIndex}</span> to{' '}
-                  <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
-                  <span className="font-bold text-slate-900">{totalEntries}</span> entries
-                </span>
-
-                <div className="flex items-center space-x-1.5 text-xs">
-                  <span className="hidden md:inline text-slate-500">Rows per page:</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="px-2 py-1 text-xs bg-white border border-slate-300 rounded-md font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors cursor-pointer"
-                  >
-                    {[10, 25, 50].map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          {/* Card 2: Document Type Demand Distribution Chart */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-900 text-base">Top Document Types Demand Distribution</h3>
               </div>
+              <span className="text-xs text-slate-500 font-medium">Relative Application Volume</span>
+            </div>
 
-              <div className="flex items-center space-x-1">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(1)}
-                  disabled={safeCurrentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  title="First page"
-                >
-                  <ChevronsLeft className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={safeCurrentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  title="Previous page"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-
-                {getPageNumbers().map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setCurrentPage(num)}
-                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                      safeCurrentPage === num
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'border border-slate-200 hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {num}
-                  </button>
+            {docTypeStats.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">No document requests recorded yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {docTypeStats.map((item, idx) => (
+                  <div key={item.title} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[10px]">
+                          {idx + 1}
+                        </span>
+                        <span className="font-semibold text-slate-800">{item.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{item.count} req</span>
+                        <span className="text-[11px] text-slate-400">({item.percentage}%)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(item.percentage, 4)}%` }}
+                      />
+                    </div>
+                  </div>
                 ))}
+              </div>
+            )}
+          </div>
 
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={safeCurrentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  title="Next page"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={safeCurrentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-                  title="Last page"
-                >
-                  <ChevronsRight className="w-3.5 h-3.5" />
-                </button>
+          {/* Card 3: Operational SLA & Turnaround Health Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Turnaround</p>
+                <h4 className="text-base font-black text-slate-900 mt-0.5">&lt; 24 Hours</h4>
+                <p className="text-[10px] text-emerald-600 font-semibold">Standard SLA compliant</p>
               </div>
             </div>
-          )}
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fulfillment Index</p>
+                <h4 className="text-base font-black text-slate-900 mt-0.5">{fulfillmentRate}%</h4>
+                <p className="text-[10px] text-slate-500">Approvals & pick-ups</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Queue Load</p>
+                <h4 className="text-base font-black text-slate-900 mt-0.5">{activeQueue} Items</h4>
+                <p className="text-[10px] text-amber-600 font-semibold">Pending + under review</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Operational Logs */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
-          <div>
+        {/* Right Column: Streamlined Recent Activity & System Logs */}
+        <div className="space-y-6">
+          {/* Recent Submissions Feed */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-blue-600" />
+                <h3 className="font-bold text-slate-900 text-sm">Recent Submissions</h3>
+              </div>
+              <button
+                onClick={() => setActiveTab('receive_request')}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>View Queue</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {recentRequests.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No incoming applications yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {recentRequests.map((r) => (
+                  <div
+                    key={r.id || r.tracking_number}
+                    className="p-3 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-100/60 px-1.5 py-0.5 rounded">
+                        {r.tracking_number || 'BZ-REQ'}
+                      </span>
+                      <Badge variant={r.status || 'pending'}>
+                        {r.status || 'pending'}
+                      </Badge>
+                    </div>
+                    <p className="font-bold text-xs text-slate-800 truncate">
+                      {r.resident_name || r.user_name || 'Resident'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {r.document_title || r.document_name || 'Clearance'}
+                    </p>
+                    <span className="text-[10px] text-slate-400 block pt-1.5">
+                      {formatDate(r.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Operational Logs */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-blue-600" />
-                <h3 className="font-bold text-slate-800 text-base">Recent Activity Logs</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Recent Activity Logs</h3>
               </div>
             </div>
 
@@ -501,10 +377,10 @@ export default function DashboardView({ requests = [], events = [], logs = [], s
                 </div>
               ))}
             </div>
-          </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-            <span className="text-xs text-slate-400">Barangay Zapatera Document Issuance System</span>
+            <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+              <span className="text-[11px] text-slate-400">Barangay Zapatera Document Issuance System</span>
+            </div>
           </div>
         </div>
       </div>

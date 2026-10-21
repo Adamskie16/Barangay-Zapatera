@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { DocumentType } from '../../types';
 import { formatCurrency } from '../../core/security';
+import GlobalFooter from '../../components/GlobalFooter';
 
 interface DocumentCatalogViewProps {
   docTypes: DocumentType[];
@@ -328,6 +329,9 @@ export default function DocumentCatalogView({
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Global Developer & Institution Footer */}
+        <GlobalFooter />
       </ScrollView>
     </View>
   );

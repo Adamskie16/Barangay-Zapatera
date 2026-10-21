@@ -25,16 +25,47 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
 
+  // Helper to format date in Philippine Standard Time (PST/PHT: UTC+8)
+  const getPHTDateKey = (raw) => {
+    if (!raw) return null;
+    try {
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return null;
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return formatter.format(d); // "YYYY-MM-DD"
+    } catch {
+      return null;
+    }
+  };
+
+  const getPHTTodayKey = () => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return formatter.format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  };
+
+  const todayKey = getPHTTodayKey();
+
   const eventDatesMap = {};
   events.forEach((evt) => {
-    const rawDate = evt.event_date || evt.scheduled_date || evt.date || (evt.category === 'Events' ? evt.created_at : null);
-    if (rawDate) {
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        if (!eventDatesMap[key]) eventDatesMap[key] = [];
-        eventDatesMap[key].push(evt);
-      }
+    const rawDate = evt.event_date || evt.scheduled_date || evt.event_datetime || evt.date || (evt.category === 'Events' ? evt.created_at : null);
+    const key = getPHTDateKey(rawDate);
+    if (key) {
+      if (!eventDatesMap[key]) eventDatesMap[key] = [];
+      eventDatesMap[key].push(evt);
     }
   });
 
@@ -50,8 +81,6 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
   for (let i = 1; i <= remaining; i++) {
     days.push({ day: i, isCurrentMonth: false, dateKey: null });
   }
-
-  const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
 
   return (
     <div className={`rounded-2xl border p-5 shadow-xs space-y-4 transition-colors ${
@@ -116,24 +145,35 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
           const hasEvents = item.events && item.events.length > 0;
           const isToday = item.dateKey === todayKey;
           const isSelected = selectedDate === item.dateKey;
+          const isPast = item.dateKey ? item.dateKey < todayKey : false;
 
           return (
             <button
               key={idx}
               type="button"
-              onClick={() => onSelectDate(isSelected ? null : item.dateKey)}
-              className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/30'
+              disabled={isPast}
+              onClick={() => {
+                if (!isPast) {
+                  onSelectDate(isSelected ? null : item.dateKey);
+                }
+              }}
+              title={isPast ? 'Past date (non-selectable)' : (hasEvents ? `${item.events.length} event(s) scheduled` : '')}
+              className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all ${
+                isPast
+                  ? isDarkMode
+                    ? 'opacity-25 cursor-not-allowed text-slate-600 select-none'
+                    : 'opacity-30 cursor-not-allowed text-slate-300 bg-slate-50/40 select-none'
+                  : isSelected
+                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/30 cursor-pointer'
                   : isToday
-                  ? isDarkMode ? 'bg-blue-950/60 text-blue-300 font-bold border border-blue-800' : 'bg-blue-50 text-blue-800 font-bold border border-blue-300'
+                  ? isDarkMode ? 'bg-blue-950/60 text-blue-300 font-bold border border-blue-800 cursor-pointer' : 'bg-blue-50 text-blue-800 font-bold border border-blue-300 cursor-pointer'
                   : hasEvents
-                  ? isDarkMode ? 'bg-blue-900/50 hover:bg-blue-900/80 text-blue-200 font-bold' : 'bg-blue-100/70 hover:bg-blue-200 text-blue-900 font-bold'
-                  : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200' : 'text-slate-700 hover:bg-slate-100'
+                  ? isDarkMode ? 'bg-blue-900/50 hover:bg-blue-900/80 text-blue-200 font-bold cursor-pointer' : 'bg-blue-100/70 hover:bg-blue-200 text-blue-900 font-bold cursor-pointer'
+                  : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer' : 'text-slate-700 hover:bg-slate-100 cursor-pointer'
               }`}
             >
               <span>{item.day}</span>
-              {hasEvents && (
+              {hasEvents && !isPast && (
                 <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-blue-600'}`} />
               )}
             </button>

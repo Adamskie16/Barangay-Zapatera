@@ -2,6 +2,7 @@
 // Real-time comments & official replies service for Barangay Zapatera Bulletins (SuperAdmin)
 
 import { supabase, isSupabaseConfigured } from './supabase';
+import { checkContentModeration } from './contentModerationService';
 
 const STORAGE_KEY = 'zapatera_bulletin_comments';
 
@@ -160,6 +161,9 @@ export async function postOfficialReply({
   parent_id = null,
   reply_to_name = null,
 }) {
+  const modResult = checkContentModeration(content);
+  const cleanContent = modResult.sanitizedText || (content || '').trim();
+
   const newComment = {
     id: `cm-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     news_id: String(news_id),
@@ -167,7 +171,7 @@ export async function postOfficialReply({
     author_name: adminUser?.full_name || 'Barangay Administration',
     author_role: adminUser?.role === 'super_admin' ? 'super_admin' : 'admin',
     author_avatar: adminUser?.avatar_url || '',
-    content: content.trim(),
+    content: cleanContent,
     parent_id: parent_id || null,
     reply_to_name: reply_to_name || null,
     is_official_response: true,

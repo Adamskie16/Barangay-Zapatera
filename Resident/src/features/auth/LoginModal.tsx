@@ -59,15 +59,26 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
   const [infoMsg, setInfoMsg] = useState('');
 
   useEffect(() => {
-    // Detect password recovery redirect
+    // Detect password recovery redirect vs signup confirmation
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
-    const isRecovery =
-      hash.includes('type=recovery') ||
-      search.includes('type=recovery') ||
-      hash.includes('access_token');
 
-    if (isRecovery) {
+    const isSignupConfirm =
+      hash.includes('type=signup') ||
+      search.includes('type=signup');
+
+    const isRecovery =
+      (hash.includes('type=recovery') ||
+      search.includes('type=recovery') ||
+      (hash.includes('access_token') && !isSignupConfirm)) && !isSignupConfirm;
+
+    if (isSignupConfirm) {
+      setStep(1);
+      setSuccessMsg('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } else if (isRecovery) {
       setStep(4);
       setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
     }
@@ -85,8 +96,13 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
           refresh_token: refreshToken,
         }).then(({ data, error }) => {
           if (!error && data?.session) {
-            setStep(4);
-            setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+            if (isRecovery) {
+              setStep(4);
+              setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+            } else if (isSignupConfirm) {
+              setStep(1);
+              setSuccessMsg('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+            }
           }
         }).catch(() => {});
       } else if (search.includes('code=')) {
@@ -96,8 +112,13 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         if (code) {
           supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
             if (!error && data?.session) {
-              setStep(4);
-              setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+              if (isRecovery) {
+                setStep(4);
+                setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
+              } else if (isSignupConfirm) {
+                setStep(1);
+                setSuccessMsg('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+              }
             }
           }).catch(() => {});
         }
@@ -491,8 +512,19 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     setResetError('');
     setResetSuccess('');
 
-    if (resetNewPassword.length < 8) {
-      setResetError('Password must be at least 8 characters long.');
+    if (!resetNewPassword) {
+      setResetError('Please enter your new password.');
+      return;
+    }
+
+    const hasLength = resetNewPassword.length >= 8;
+    const hasUpper = /[A-Z]/.test(resetNewPassword);
+    const hasLower = /[a-z]/.test(resetNewPassword);
+    const hasNumber = /[0-9]/.test(resetNewPassword);
+    const hasSpecial = /[@$!%*?&!#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(resetNewPassword);
+
+    if (!(hasLength && hasUpper && hasLower && hasNumber && hasSpecial)) {
+      setResetError('Strong password required: Minimum 8 characters, containing uppercase (A-Z), lowercase (a-z), number (0-9), and special character (@$!%*?&).');
       return;
     }
 
@@ -817,6 +849,17 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
                 Your recovery link has been verified. Please create and confirm your new secure password.
+              </p>
+            </div>
+
+            {/* Strong Password Requirement Callout */}
+            <div className="p-3 bg-amber-950/60 border border-amber-800/80 rounded-xl space-y-1">
+              <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Strong Password Required</span>
+              </div>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed pl-6">
+                Minimum 8 characters with at least 1 uppercase letter (A-Z), 1 lowercase letter (a-z), 1 number (0-9), and 1 special symbol (e.g. !@#$%^&*).
               </p>
             </div>
 

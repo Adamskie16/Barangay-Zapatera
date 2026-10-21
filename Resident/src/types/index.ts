@@ -76,6 +76,8 @@ export interface DocumentType {
   category?: 'Clearance' | 'Certificate' | 'Permit' | 'Indigency' | 'General';
   description: string;
   fee: number;
+  fee_type?: 'fixed' | 'variable';
+  is_variable_fee?: boolean;
   processing_days: number;
   validity?: string;
   requirements: string[];

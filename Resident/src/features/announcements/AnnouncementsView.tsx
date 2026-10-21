@@ -42,6 +42,7 @@ import {
   deleteBulletinComment,
 } from '../../core/commentService';
 import ActionModal from '../../components/ActionModal';
+import GlobalFooter from '../../components/GlobalFooter';
 import { checkContentModeration } from '../../core/contentModerationService';
 
 interface AnnouncementsViewProps {
@@ -395,6 +396,9 @@ export default function AnnouncementsView({
             </Text>
           </View>
         )}
+
+        {/* Global Developer & Institution Footer */}
+        <GlobalFooter />
       </ScrollView>
 
       {/* Full Announcement Reader & Real-Time Comments Modal */}

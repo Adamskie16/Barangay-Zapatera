@@ -816,6 +816,7 @@ export default function App() {
 
   const fetchDocTypes = async () => {
     try {
+      let rawDocs: any[] = [];
       if (isSupabaseConfigured()) {
         const { data, error } = await supabase
           .from('document_types')
@@ -824,45 +825,67 @@ export default function App() {
           .order('title', { ascending: true });
 
         if (!error && data && data.length > 0) {
-          const formatted: DocumentType[] = data.map((d: any) => {
-            const text = `${d.code || ''} ${d.title || ''} ${d.description || ''}`.toLowerCase();
-            let inferredCategory = d.category;
-            if (!inferredCategory) {
-              if (text.includes('clearance')) inferredCategory = 'Clearance';
-              else if (text.includes('indigency') || text.includes('financial')) inferredCategory = 'Indigency';
-              else if (text.includes('permit') || text.includes('business')) inferredCategory = 'Permit';
-              else if (text.includes('certificate') || text.includes('certification') || text.includes('residency') || text.includes('moral') || text.includes('jobseeker')) inferredCategory = 'Certificate';
-              else inferredCategory = 'General';
-            }
-
-            let parsedReqs: string[] = [];
-            if (Array.isArray(d.requirements)) {
-              parsedReqs = d.requirements;
-            } else if (typeof d.requirements === 'string') {
-              try {
-                const parsed = JSON.parse(d.requirements);
-                if (Array.isArray(parsed)) parsedReqs = parsed;
-                else parsedReqs = [d.requirements];
-              } catch {
-                parsedReqs = d.requirements.split('\n').map((s: string) => s.trim()).filter(Boolean);
-              }
-            }
-
-            return {
-              id: d.id,
-              code: d.code,
-              title: d.title,
-              category: inferredCategory,
-              description: d.description,
-              fee: Number(d.fee) || 0,
-              processing_days: Number(d.processing_days) || 1,
-              validity: d.validity || (Number(d.fee) === 0 ? '3-6 Months' : '6 Months from issuance'),
-              requirements: parsedReqs,
-              is_active: d.is_active !== false,
-            };
-          });
-          setDocTypes(formatted);
+          rawDocs = data;
         }
+      }
+
+      // Seamlessly merge templates from localStorage database so newly added templates are immediately available
+      try {
+        const localRaw = typeof window !== 'undefined' ? localStorage.getItem('zapatera_doctypes_db') : null;
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) {
+            const activeLocal = parsed.filter((d: any) => d.is_active !== false);
+            const map = new Map<string, any>();
+            activeLocal.forEach((d: any) => map.set(d.code || d.id, d));
+            rawDocs.forEach((d: any) => map.set(d.code || d.id, d));
+            rawDocs = Array.from(map.values());
+          }
+        }
+      } catch {}
+
+      if (rawDocs.length > 0) {
+        const formatted: DocumentType[] = rawDocs.map((d: any) => {
+          const text = `${d.code || ''} ${d.title || ''} ${d.description || ''}`.toLowerCase();
+          let inferredCategory = d.category;
+          if (!inferredCategory) {
+            if (text.includes('clearance')) inferredCategory = 'Clearance';
+            else if (text.includes('indigency') || text.includes('financial')) inferredCategory = 'Indigency';
+            else if (text.includes('permit') || text.includes('business')) inferredCategory = 'Permit';
+            else if (text.includes('certificate') || text.includes('certification') || text.includes('residency') || text.includes('moral') || text.includes('jobseeker')) inferredCategory = 'Certificate';
+            else inferredCategory = 'General';
+          }
+
+          let parsedReqs: string[] = [];
+          if (Array.isArray(d.requirements)) {
+            parsedReqs = d.requirements;
+          } else if (typeof d.requirements === 'string') {
+            try {
+              const parsed = JSON.parse(d.requirements);
+              if (Array.isArray(parsed)) parsedReqs = parsed;
+              else parsedReqs = [d.requirements];
+            } catch {
+              parsedReqs = d.requirements.split('\n').map((s: string) => s.trim()).filter(Boolean);
+            }
+          }
+
+          const isVar = Boolean(d.is_variable_fee || d.fee_type === 'variable');
+          return {
+            id: d.id,
+            code: d.code,
+            title: d.title,
+            category: inferredCategory,
+            description: d.description,
+            fee: isVar ? 0 : (Number(d.fee) || 0),
+            fee_type: isVar ? 'variable' : 'fixed',
+            is_variable_fee: isVar,
+            processing_days: Number(d.processing_days) || 1,
+            validity: d.validity || (Number(d.fee) === 0 ? '3-6 Months' : '6 Months from issuance'),
+            requirements: parsedReqs,
+            is_active: d.is_active !== false,
+          };
+        });
+        setDocTypes(formatted);
       }
     } catch {
       // fallback to default
@@ -1768,6 +1791,36 @@ export default function App() {
   };
 
   const handleMarkAllAsRead = async () => {
+    // 1. Mark all notifications as read in state (strictly preserve the list!)
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+
+    try {
+      // 2. Update account-scoped local notifications storage with read status
+      const stored = await MobileStorage.getItem(userNotifsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) => ({ ...n, is_read: true }));
+        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      }
+
+      // 3. Update Supabase
+      if (isSupabaseConfigured() && authUserId) {
+        try {
+          await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .or(`user_id.eq.${authUserId},role_target.eq.resident`);
+        } catch {}
+      }
+    } catch {}
+  };
+
+  const handleClearAllNotifications = async () => {
     const idsToErase = notifications.map((n) => n.id);
     // 1. Erase all notifications from state for this resident account
     setNotifications([]);
@@ -2096,6 +2149,7 @@ export default function App() {
         onClose={() => setIsNotificationModalOpen(false)}
         onMarkAsRead={handleMarkAsRead}
         onMarkAllAsRead={handleMarkAllAsRead}
+        onClearAll={handleClearAllNotifications}
         onNotificationClick={handleNotificationClick}
       />
     </SafeAreaView>

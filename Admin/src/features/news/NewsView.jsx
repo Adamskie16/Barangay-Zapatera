@@ -65,6 +65,50 @@ const CATEGORIES = [
   'Maintenance'
 ];
 
+// Helper to format/parse dates in Philippine Standard Time (PST/PHT: UTC+8)
+function getPHTDateKey(raw) {
+  if (!raw) return null;
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return null;
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return null;
+  }
+}
+
+function getPhilippineDateTimeLocal(dateInput) {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  try {
+    const phtParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const map = {};
+    phtParts.forEach((p) => { map[p.type] = p.value; });
+    return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
+  } catch {
+    return new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 16);
+  }
+}
+
+function fromPhilippineDateTimeLocal(localStr) {
+  if (!localStr) return null;
+  return new Date(`${localStr}:00+08:00`).toISOString();
+}
+
 export default function NewsView({ currentUser, events = [], onSaveEvent, onDeleteEvent, isDarkMode = false }) {
   const [newsList, setNewsList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -604,27 +648,21 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
         (item.location || '').toLowerCase().includes(q);
 
       const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
-      const matchesEmergency = !filterEmergencyOnly || item.is_emergency;
 
       let matchesDate = true;
       if (selectedDate) {
-        const itemDateStr = item.event_date || item.scheduled_date || (item.category === 'Events' ? item.created_at : null);
+        const itemDateStr = item.event_date || item.scheduled_date || item.event_datetime || (item.category === 'Events' ? item.created_at : null);
         if (itemDateStr) {
-          try {
-            const d = new Date(itemDateStr);
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            matchesDate = key === selectedDate;
-          } catch {
-            matchesDate = false;
-          }
+          const key = getPHTDateKey(itemDateStr);
+          matchesDate = key === selectedDate;
         } else {
           matchesDate = false;
         }
       }
 
-      return matchesSearch && matchesCategory && matchesEmergency && matchesDate;
+      return matchesSearch && matchesCategory && matchesDate;
     });
-  }, [newsList, searchQuery, selectedCategory, filterEmergencyOnly, selectedDate]);
+  }, [newsList, searchQuery, selectedCategory, selectedDate]);
 
   // Calendar events feed (items with an event_date or categorized as Events)
   const calendarItems = useMemo(() => {
@@ -828,20 +866,6 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 <span>Cards</span>
               </button>
             </div>
-
-            {/* Emergency Filter Toggle */}
-            <button
-              type="button"
-              onClick={() => setFilterEmergencyOnly(!filterEmergencyOnly)}
-              className={`inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 ${
-                filterEmergencyOnly
-                  ? 'bg-rose-700 text-white shadow-md shadow-rose-900/30'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>{filterEmergencyOnly ? 'Showing Emergency Only' : 'Emergency Filter'}</span>
-            </button>
           </div>
         </div>
 
@@ -1303,10 +1327,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                       <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
                         <div className="space-y-2">
                           {/* Prominent Event Schedule Tag if date present */}
-                          {item.event_date && (
+                          {(item.event_date || item.scheduled_date) && (
                             <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold">
-                              <Calendar className="w-3 h-3 text-indigo-600" />
-                              <span>Event Scheduled: {formatDate(item.event_date)}</span>
+                              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Event / Scheduled Date: {formatDate(item.event_date || item.scheduled_date)}</span>
                             </div>
                           )}
 
@@ -1814,19 +1838,19 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
             {formData.duration_days === 'custom' && (
               <div className="mt-2.5 p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1.5 animate-in fade-in duration-200">
                 <label className="block text-xs font-bold text-blue-900">
-                  Select Expiration Date & Time:
+                  Select Expiration Date & Time (Philippine Time):
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="datetime-local"
-                    value={formData.expires_at ? new Date(formData.expires_at).toISOString().slice(0, 16) : ''}
-                    min={new Date().toISOString().slice(0, 16)}
+                    value={getPhilippineDateTimeLocal(formData.expires_at)}
+                    min={getPhilippineDateTimeLocal(new Date())}
                     onChange={(e) => {
                       const val = e.target.value;
                       setFormData({
                         ...formData,
                         duration_days: 'custom',
-                        expires_at: val ? new Date(val).toISOString() : null,
+                        expires_at: fromPhilippineDateTimeLocal(val),
                       });
                     }}
                     className="flex-1 px-3 py-2 text-xs border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-mono text-slate-900"
@@ -1835,14 +1859,14 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, expires_at: null, duration_days: 0 })}
-                      className="px-2.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg"
+                      className="px-2.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg cursor-pointer"
                     >
                       Clear
                     </button>
                   )}
                 </div>
                 <p className="text-[10px] text-blue-700">
-                  The announcement will automatically expire at this date/time and move to Archive & Trash.
+                  Calculated based on Philippine Standard Time (UTC+8). The announcement will automatically move to Archive & Trash when the duration ends.
                 </p>
               </div>
             )}

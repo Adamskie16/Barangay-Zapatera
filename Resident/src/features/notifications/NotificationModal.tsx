@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   CheckCheck,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { ResidentNotification } from '../../types';
 
@@ -28,6 +29,7 @@ interface NotificationModalProps {
   onClose: () => void;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
+  onClearAll?: () => void;
   onNotificationClick: (notif: ResidentNotification) => void;
 }
 
@@ -37,6 +39,7 @@ export default function NotificationModal({
   onClose,
   onMarkAsRead,
   onMarkAllAsRead,
+  onClearAll,
   onNotificationClick,
 }: NotificationModalProps) {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -94,13 +97,26 @@ export default function NotificationModal({
             </View>
           </View>
 
-          {/* Mark all as read bar */}
+          {/* Separate Action Bar: Mark all as read & Clear all */}
           {notifications.length > 0 && (
             <View style={styles.markAllBar}>
-              <TouchableOpacity style={styles.markAllBtn} onPress={onMarkAllAsRead}>
+              <TouchableOpacity
+                style={[styles.markAllBtn, unreadCount === 0 && { opacity: 0.5 }]}
+                onPress={onMarkAllAsRead}
+                disabled={unreadCount === 0}
+              >
                 <CheckCheck size={14} color="#1d4ed8" />
-                <Text style={styles.markAllBtnText}>Mark all as read (Clear all)</Text>
+                <Text style={styles.markAllBtnText}>
+                  {unreadCount > 0 ? `Mark all as read (${unreadCount})` : 'All marked as read'}
+                </Text>
               </TouchableOpacity>
+
+              {onClearAll && (
+                <TouchableOpacity style={styles.clearAllBtn} onPress={onClearAll}>
+                  <Trash2 size={13} color="#dc2626" />
+                  <Text style={styles.clearAllBtnText}>Clear all</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -231,17 +247,37 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   markAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
   },
   markAllBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#1d4ed8',
+  },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+  },
+  clearAllBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
   },
   modalBody: {
     padding: 12,

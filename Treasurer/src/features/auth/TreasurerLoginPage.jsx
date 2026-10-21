@@ -1534,9 +1534,12 @@ export default function TreasurerLoginPage({ onLoginSuccess }) {
         </div>
 
         {/* Footer */}
-        <div className="w-full max-w-[400px] mx-auto text-center pt-4 border-t border-slate-100">
-          <p className="text-[11px] text-slate-400">
-            Zapatera Document & Records Management System
+        <div className="w-full max-w-md mx-auto text-center pt-4 border-t border-slate-100">
+          <p className="text-[11px] font-medium text-slate-600">
+            Barangay Zapatera Document & Records Management System
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Developed by <span className="font-semibold text-slate-700">Binghay, Adam Keith Mardee and Medina, Joshua C.</span> • Powered by <span className="font-semibold text-slate-700">Southwestern University PHINMA</span>
           </p>
         </div>
       </div>

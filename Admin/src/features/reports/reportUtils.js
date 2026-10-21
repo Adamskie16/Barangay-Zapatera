@@ -70,6 +70,50 @@ export function exportToHTML(filename, htmlContent) {
 }
 
 /**
+ * Triggers professional browser print/save-as-PDF dialog with official A4 document styling
+ */
+export function downloadReportAsPDF(htmlContent, filename = 'Barangay_Zapatera_Report') {
+  if (!htmlContent) {
+    alert('Report content is empty.');
+    return;
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.setAttribute('title', filename);
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  if (iframe.contentWindow) {
+    iframe.contentWindow.document.title = filename;
+  }
+
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (e) {
+      console.warn('Print/PDF export notice:', e);
+    } finally {
+      setTimeout(() => {
+        if (iframe.parentNode) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+    }
+  }, 350);
+}
+
+/**
  * Build CSV records for Applications Pipeline Log
  */
 export function buildApplicationsCSV(requests = []) {

@@ -1953,7 +1953,7 @@ export default function ReceiveRequestView({
 
                     {/* Scaled Preview Template Box */}
                     <div className="w-full overflow-x-auto flex justify-center py-1">
-                      <div className="transform scale-[0.62] sm:scale-[0.70] origin-top transition-transform duration-200">
+                      <div className="transform scale-[0.62] sm:scale-[0.70] origin-top transition-transform duration-200 mb-[-410px] sm:mb-[-330px]">
                         <DocumentTemplate
                           documentTitle={genDocTitle}
                           name={genName}

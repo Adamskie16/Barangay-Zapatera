@@ -6,6 +6,7 @@ import TreasurerLoginPage from './features/auth/TreasurerLoginPage';
 import TreasurerDashboardView from './features/dashboard/TreasurerDashboardView';
 import TreasurerReportsView from './features/reports/TreasurerReportsView';
 import AccountView from './features/account/AccountView';
+import GlobalFooter from './components/GlobalFooter';
 import { StorageService } from './core/storage';
 import { supabase, isSupabaseConfigured } from './core/supabase';
 import { LogOut, X, AlertTriangle } from 'lucide-react';
@@ -164,6 +165,9 @@ export default function App() {
                 onLogout={handleLogout}
               />
             )}
+
+            {/* Global Enterprise Developer & Institution Footer */}
+            <GlobalFooter className="mt-8" />
           </div>
         </main>
       </div>

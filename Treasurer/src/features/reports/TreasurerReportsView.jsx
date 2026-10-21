@@ -29,8 +29,8 @@ export default function TreasurerReportsView({
 
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
-  // Direct print handler with isolated iframe for clean official document printing
-  const handlePrintOfficialReport = () => {
+  // Helper to build formal financial statement HTML
+  const getFinancialReportHtml = () => {
     const now = new Date();
     const dateFormatted = now.toLocaleDateString('en-US', {
       month: 'long',
@@ -43,12 +43,11 @@ export default function TreasurerReportsView({
     });
 
     const barangayName = config.barangay_name || 'Barangay Zapatera';
-    const municipality = config.municipality || 'Cebu City';
     const punongBarangay = config.punong_barangay || 'HON. DAVID M. AGRAVANTE';
     const treasurerName = currentUser?.full_name || config.treasurer_name || 'HON. MA. LOURDES S. RAMOS';
     const controlNo = `BZ-FIN-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const rowsHtml = filteredRequests.slice(0, 50).map((r, i) => {
+    const rowsHtml = filteredRequests.slice(0, 100).map((r, i) => {
       const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
       const isWaived = r.payment_status === 'waived' || r.is_waived === true;
       const statusText = isPaid ? 'PAID' : isWaived ? 'WAIVED' : 'UNPAID';
@@ -65,7 +64,7 @@ export default function TreasurerReportsView({
       `;
     }).join('');
 
-    const printableHtml = `
+    return `
       <!DOCTYPE html>
       <html>
       <head>
@@ -169,6 +168,48 @@ export default function TreasurerReportsView({
       </body>
       </html>
     `;
+  };
+
+  // Download Financial Statement directly as PDF
+  const handleDownloadPDF = () => {
+    const printableHtml = getFinancialReportHtml();
+    const filename = `Barangay_Zapatera_Financial_Statement_${new Date().toISOString().split('T')[0]}`;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('title', filename);
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(printableHtml);
+    doc.close();
+
+    if (iframe.contentWindow) {
+      iframe.contentWindow.document.title = filename;
+    }
+
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+      iframe.contentWindow.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+    }, 350);
+
+    setIsExportMenuOpen(false);
+  };
+
+  // Direct print handler with isolated iframe for clean official document printing
+  const handlePrintOfficialReport = () => {
+    const printableHtml = getFinancialReportHtml();
 
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
@@ -341,27 +382,46 @@ export default function TreasurerReportsView({
               title="Export report summaries directly to Downloads"
             >
               <Download className="w-4 h-4" />
-              <span>Export to Downloads</span>
+              <span>Export Reports</span>
               <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
             </button>
 
             {isExportMenuOpen && (
               <div
-                className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
                 onMouseLeave={() => setIsExportMenuOpen(false)}
               >
                 <div className="px-3 py-1.5 border-b border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Select Download Format
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> Official PDF Documents
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPDF}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-red-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Official Financial Statement (PDF)</p>
+                    <p className="text-[10px] text-slate-400">Certified collections statement with control no.</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-slate-100 my-1.5" />
+                <div className="px-3 py-1.5 border-b border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Download className="w-3 h-3" /> Data Spreadsheets & Backups
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleExportCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Collections Ledger (CSV)</p>
                     <p className="text-[10px] text-slate-400">Detailed line-by-line transactions</p>
@@ -371,9 +431,9 @@ export default function TreasurerReportsView({
                 <button
                   type="button"
                   onClick={handleExportSummaryCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <FileText className="w-4 h-4 text-blue-600" />
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Executive KPI Summary (CSV)</p>
                     <p className="text-[10px] text-slate-400">Total gross revenue & rates</p>
@@ -385,9 +445,9 @@ export default function TreasurerReportsView({
                 <button
                   type="button"
                   onClick={handleExportJSON}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-slate-600" />
+                  <Download className="w-4 h-4 text-slate-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Complete Audit Payload (JSON)</p>
                     <p className="text-[10px] text-slate-400">Raw structured data backup</p>
@@ -396,6 +456,17 @@ export default function TreasurerReportsView({
               </div>
             )}
           </div>
+
+          {/* Download Official Report PDF Directly */}
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+            title="Download Official Financial Statement into PDF"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download PDF</span>
+          </button>
 
           {/* Print Official Report Button (Direct Print) */}
           <button

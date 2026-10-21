@@ -33,6 +33,7 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { MobileStorage } from '../../core/storage';
 import UnlockAccountModal from '../../components/UnlockAccountModal';
 import SecurityNoticeModal from '../../components/SecurityNoticeModal';
+import GlobalFooter from '../../components/GlobalFooter';
 
 // ============================================================================
 // SAMPLE SITIO LIST FOR BARANGAY ZAPATERA
@@ -176,18 +177,25 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }
     }
 
-    const isRecovery =
-      hash.includes('type=recovery') ||
-      search.includes('type=recovery') ||
-      hash.includes('access_token');
+    const isSignupConfirm =
+      hash.includes('type=signup') ||
+      search.includes('type=signup');
 
-    if (isRecovery) {
+    const isRecovery =
+      (hash.includes('type=recovery') ||
+      search.includes('type=recovery') ||
+      (hash.includes('access_token') && !isSignupConfirm)) && !isSignupConfirm;
+
+    if (isSignupConfirm) {
+      setAuthStep('credentials');
+      setActiveTab('login');
+      setSuccessBanner('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } else if (isRecovery) {
       setAuthStep('reset_password');
       setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
-    }
-
-    if (hash.includes('type=signup') || search.includes('type=signup')) {
-      setSuccessBanner('Email Verified Successfully! Your resident account is now verified. You may sign in.');
     }
 
     if (isSupabaseConfigured()) {
@@ -203,8 +211,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           refresh_token: refreshToken,
         }).then(({ data, error }) => {
           if (!error && data?.session) {
-            setAuthStep('reset_password');
-            setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+            if (isRecovery) {
+              setAuthStep('reset_password');
+              setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+            } else if (isSignupConfirm) {
+              setAuthStep('credentials');
+              setActiveTab('login');
+              setSuccessBanner('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+            }
           }
         }).catch(() => {});
       } else if (search.includes('code=')) {
@@ -214,8 +228,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         if (code) {
           supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
             if (!error && data?.session) {
-              setAuthStep('reset_password');
-              setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+              if (isRecovery) {
+                setAuthStep('reset_password');
+                setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
+              } else if (isSignupConfirm) {
+                setAuthStep('credentials');
+                setActiveTab('login');
+                setSuccessBanner('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
+              }
             }
           }).catch(() => {});
         }
@@ -740,8 +760,13 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     setSuccessBanner('');
     setInfoBanner('');
 
-    if (resetNewPassword.length < 8) {
-      setErrorMessage('Password must be at least 8 characters long.');
+    if (!resetNewPassword) {
+      setErrorMessage('Please enter your new password.');
+      return;
+    }
+
+    if (!isStrongPassword(resetNewPassword)) {
+      setErrorMessage('Strong password required: Must contain at least 8 characters, with at least 1 uppercase letter (A-Z), 1 lowercase letter (a-z), 1 number (0-9), and 1 special symbol (@$!%*?&).');
       return;
     }
 
@@ -1232,6 +1257,17 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 Create a new strong password for your resident portal account.
               </Text>
 
+              {/* Strong Password Alert Callout */}
+              <View style={styles.strongPasswordAlert}>
+                <View style={styles.strongPasswordAlertHeader}>
+                  <ShieldAlert size={16} color="#b45309" />
+                  <Text style={styles.strongPasswordAlertTitle}>Strong Password Required</Text>
+                </View>
+                <Text style={styles.strongPasswordAlertText}>
+                  Must be at least 8 characters with at least 1 uppercase letter (A-Z), 1 lowercase letter (a-z), 1 number (0-9), and 1 special symbol (e.g. !@#$%^&*).
+                </Text>
+              </View>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>
                   New Password <Text style={styles.requiredAsterisk}>*</Text>
@@ -1719,6 +1755,9 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             </View>
           </View>
         )}
+
+        {/* Global Developer & Institution Footer */}
+        <GlobalFooter />
       </View>
 
       {/* Privacy Policy Modal */}
@@ -2295,5 +2334,29 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  strongPasswordAlert: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  strongPasswordAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  strongPasswordAlertTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  strongPasswordAlertText: {
+    fontSize: 11,
+    color: '#78350f',
+    lineHeight: 16,
   },
 });

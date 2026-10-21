@@ -1319,18 +1319,59 @@ export const StorageService = {
       let arcList = JSON.parse(localStorage.getItem('zapatera_users_archive_db') || '[]');
       arcList = arcList.filter((u) => u.id !== userId);
       localStorage.setItem('zapatera_users_archive_db', JSON.stringify(arcList));
+
+      const delList = JSON.parse(localStorage.getItem('zapatera_deleted_accounts') || '[]');
+      const cleanedDel = delList.filter((d) => (d.id || d) !== userId && (d.email || d) !== userId);
+      localStorage.setItem('zapatera_deleted_accounts', JSON.stringify(cleanedDel));
     } catch {}
 
     try {
       if (isSupabaseConfigured()) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+        // 1. Clean up or nullify dependent foreign key rows to prevent 409 Conflict
+        try {
+          if (isUuid) {
+            await Promise.allSettled([
+              supabase.from('document_requests').update({ processed_by: null }).eq('processed_by', userId),
+              supabase.from('document_requests').update({ deleted_by: null }).eq('deleted_by', userId),
+              supabase.from('news').update({ created_by: null, deleted_by: null }).or(`created_by.eq.${userId},deleted_by.eq.${userId}`),
+              supabase.from('activity_logs').update({ user_id: null }).eq('user_id', userId),
+              supabase.from('unlock_requests').delete().or(`user_id.eq.${userId},unlocked_by.eq.${userId}`),
+              supabase.from('notifications').delete().eq('user_id', userId),
+              supabase.from('user_devices').delete().eq('user_id', userId),
+              supabase.from('document_requests').delete().eq('resident_id', userId),
+            ]);
+          }
+        } catch {}
+
+        // 2. Attempt hard delete from profiles
+        let deleteError = null;
         if (isUuid) {
-          await supabase.from('profiles').delete().eq('id', userId);
+          const { error } = await supabase.from('profiles').delete().eq('id', userId);
+          deleteError = error;
         } else {
-          await supabase.from('profiles').delete().eq('email', userId);
+          const { error } = await supabase.from('profiles').delete().eq('email', userId);
+          deleteError = error;
+        }
+
+        // 3. If foreign key constraints or RLS still block deletion (409 Conflict / 23503),
+        // gracefully neutralize and soft-purge the profile so it never appears again
+        if (deleteError) {
+          const anonymizedEmail = `purged_${Date.now()}_${String(userId).slice(0, 8)}@deleted.local`;
+          await supabase.from('profiles').update({
+            email: anonymizedEmail,
+            full_name: 'Purged Account',
+            is_active: false,
+            is_archived: true,
+            deleted_at: new Date().toISOString(),
+            deleted_by: null,
+          }).eq(isUuid ? 'id' : 'email', userId);
         }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Purge user exception handled:', e);
+    }
 
     StorageService.addLog({
       user_email: resolveActiveAdminEmail(adminUser),

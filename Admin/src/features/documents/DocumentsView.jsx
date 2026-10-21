@@ -16,6 +16,7 @@ import {
   Loader2,
   Sliders,
   AlertCircle,
+  Printer,
 } from 'lucide-react';
 import { formatCurrency, sanitizeInput } from '../../core/security';
 import { StorageService } from '../../core/storage';

@@ -45,6 +45,7 @@ import { ResidentUser, BarangayConfig, BarangayAnnouncement } from '../../types'
 import { uploadUserAvatar } from '../../core/storageService';
 import { getUserCommentHistory, ResidentCommentHistoryItem } from '../../core/commentService';
 import ActionModal from '../../components/ActionModal';
+import GlobalFooter from '../../components/GlobalFooter';
 
 interface ProfileViewProps {
   currentUser: ResidentUser;
@@ -531,6 +532,9 @@ export default function ProfileView({
       <Text style={styles.versionText}>
         Barangay Zapatera Digital Portal • v2.4.0 (Secure Government Build)
       </Text>
+
+      {/* Global Developer & Institution Footer */}
+      <GlobalFooter />
 
       {/* EDIT PROFILE MODAL */}
       <Modal visible={isEditModalOpen} animationType="slide" transparent onRequestClose={() => setIsEditModalOpen(false)}>

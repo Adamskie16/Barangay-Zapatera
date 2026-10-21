@@ -8,11 +8,22 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import DocumentManagement from './DocumentManagement';
 import SecurityVerificationModal from '../../components/SecurityVerificationModal';
+import ActionModal from '../../components/ActionModal';
 
 export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode, config = {} }) {
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'templates'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
+
+  // Success & Feedback ActionModal State
+  const [actionModal, setActionModal] = useState({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+    buttonText: 'OK',
+    onClose: null,
+  });
 
   // Security Verification Modal State (Save/Create/Edit)
   const [isSaveSecurityModalOpen, setIsSaveSecurityModalOpen] = useState(false);
@@ -274,10 +285,28 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      const wasEditing = Boolean(editingDoc);
+      const savedDocCopy = { ...pendingDocPayload };
+
       setIsSaveSecurityModalOpen(false);
       setIsModalOpen(false);
       setPendingDocPayload(null);
       setSavePasswordInput('');
+
+      const feeDescription = (savedDocCopy.is_variable_fee || savedDocCopy.fee_type === 'variable')
+        ? 'Depends upon claim'
+        : Number(savedDocCopy.fee) > 0
+        ? formatCurrency(savedDocCopy.fee)
+        : 'FREE / Exempt';
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: wasEditing ? 'Document Template Updated Successfully' : 'Document Template Created Successfully',
+        message: `The document template "${savedDocCopy.title}" (${savedDocCopy.code}) has been saved and configured. Processing Fee: ${feeDescription}. Turnaround SLA: ${savedDocCopy.processing_days} day(s). It is now actively available across the Barangay Zapatera administration and resident portal.`,
+        buttonText: 'Great, Understood',
+        onClose: () => setActionModal((prev) => ({ ...prev, isOpen: false })),
+      });
     } catch (err) {
       console.error('Error saving document type:', err);
       setSaveAuthError('An error occurred while saving.');
@@ -314,12 +343,22 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     setProcessingMessage(`Deleting "${deletingDoc.title}" from system records...`);
 
     try {
+      const removedTitle = deletingDoc.title;
       if (onDeleteDocType) {
         await onDeleteDocType(deletingDoc.id || deletingDoc.code);
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
       setIsDeleteModalOpen(false);
       setDeletingDoc(null);
+
+      setActionModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Document Template Removed',
+        message: `The document template "${removedTitle}" has been successfully removed from system records.`,
+        buttonText: 'OK',
+        onClose: () => setActionModal((prev) => ({ ...prev, isOpen: false })),
+      });
     } catch (err) {
       console.error('Error deleting document type:', err);
       setDeleteAuthError('Failed to remove document template.');
@@ -783,6 +822,17 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           </Modal>
         </>
       )}
+
+      {/* Global Success / Alert ActionModal */}
+      <ActionModal
+        isOpen={actionModal.isOpen}
+        type={actionModal.type}
+        title={actionModal.title}
+        message={actionModal.message}
+        buttonText={actionModal.buttonText}
+        onClose={actionModal.onClose || (() => setActionModal((prev) => ({ ...prev, isOpen: false })))}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import UserManagementView from './features/users/UserManagementView';
 import AccountView from './features/account/AccountView';
 import ArchiveView from './features/archive/ArchiveView';
 import AdminLoginPage from './features/auth/AdminLoginPage';
+import GlobalFooter from './components/GlobalFooter';
 import { StorageService } from './core/storage';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
 import './index.css';
@@ -391,6 +392,9 @@ export default function App() {
               isDarkMode={false}
             />
           )}
+
+          {/* Global Enterprise Developer & Institution Footer */}
+          <GlobalFooter className="mt-8" />
         </main>
       </div>
 

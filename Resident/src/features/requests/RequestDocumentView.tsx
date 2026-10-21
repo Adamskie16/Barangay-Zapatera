@@ -103,7 +103,7 @@ export default function RequestDocumentView({
                       {doc.title}
                     </Text>
                     <Text style={[styles.docFee, isSelected && styles.docFeeSelected]}>
-                      {doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
+                      {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
                     </Text>
                   </View>
                   <Text style={styles.docDesc}>{doc.description}</Text>

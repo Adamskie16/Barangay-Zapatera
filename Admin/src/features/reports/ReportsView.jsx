@@ -6,6 +6,7 @@ import PrintableReportModal from './PrintableReportModal';
 import {
   exportToCSV,
   exportToJSON,
+  downloadReportAsPDF,
   buildApplicationsCSV,
   buildMonthlyCSV,
   buildRevenueAuditCSV,
@@ -327,6 +328,82 @@ export default function ReportsView({
     setIsExportMenuOpen(false);
   };
 
+  // PDF Export Handlers
+  const handleExportFullReportPDF = () => {
+    const html = generatePrintableHTML({
+      title: 'Official Barangay Operations & Audit Report',
+      config,
+      currentUser,
+      requests: filteredRequests.length > 0 ? filteredRequests : requests,
+      docTypes,
+      monthlyData,
+      statusCounts,
+      totalRevenue: totalGrossRevenue,
+      totalResidents: 0,
+      periodLabel: `Calendar Year ${currentYear}`,
+      scope: 'all',
+    });
+    downloadReportAsPDF(html, `Barangay_Zapatera_Official_Report_${currentYear}`);
+    setIsExportMenuOpen(false);
+  };
+
+  const handleExportSummaryPDF = () => {
+    const html = generatePrintableHTML({
+      title: 'Barangay Executive KPI Summary',
+      subtitle: 'Official Summary of Operations & Revenue Audit',
+      config,
+      currentUser,
+      requests,
+      docTypes,
+      monthlyData,
+      statusCounts,
+      totalRevenue: totalGrossRevenue,
+      totalResidents: 0,
+      periodLabel: `Calendar Year ${currentYear}`,
+      scope: 'summary',
+    });
+    downloadReportAsPDF(html, `Barangay_Zapatera_Executive_Summary_${currentYear}`);
+    setIsExportMenuOpen(false);
+  };
+
+  const handleExportApplicationsPDF = () => {
+    const html = generatePrintableHTML({
+      title: 'Applications Pipeline Log',
+      subtitle: `Log of Document Applications (${filteredRequests.length} Record(s))`,
+      config,
+      currentUser,
+      requests: filteredRequests,
+      docTypes,
+      monthlyData,
+      statusCounts,
+      totalRevenue: totalGrossRevenue,
+      totalResidents: 0,
+      periodLabel: `Calendar Year ${currentYear}`,
+      scope: 'applications',
+    });
+    downloadReportAsPDF(html, `Barangay_Zapatera_Applications_Pipeline_${currentYear}`);
+    setIsExportMenuOpen(false);
+  };
+
+  const handleExportMonthlyPDF = () => {
+    const html = generatePrintableHTML({
+      title: 'Monthly Document Processing Report',
+      subtitle: `Annual Issuance Quantities & Approval Rates (Year ${currentYear})`,
+      config,
+      currentUser,
+      requests,
+      docTypes,
+      monthlyData,
+      statusCounts,
+      totalRevenue: totalGrossRevenue,
+      totalResidents: 0,
+      periodLabel: `Calendar Year ${currentYear}`,
+      scope: 'monthly',
+    });
+    downloadReportAsPDF(html, `Barangay_Zapatera_Monthly_Processing_${currentYear}`);
+    setIsExportMenuOpen(false);
+  };
+
   // Direct print handler for official government report
   const handleDirectPrintOfficialReport = () => {
     const html = generatePrintableHTML({
@@ -389,26 +466,77 @@ export default function ReportsView({
               title="Export report summaries directly to Downloads"
             >
               <Download className="w-4 h-4" />
-              <span>Export to Downloads</span>
+              <span>Export Reports</span>
               <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
             </button>
 
             {isExportMenuOpen && (
               <div
-                className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
                 onMouseLeave={() => setIsExportMenuOpen(false)}
               >
                 <div className="px-3 py-1.5 border-b border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Select Download Format
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3 h-3" /> Official PDF Documents
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleExportFullReportPDF}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-red-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Official Barangay Report (PDF)</p>
+                    <p className="text-[10px] text-slate-400">Complete certified audit document</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleExportSummaryPDF}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-rose-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Executive KPI Summary (PDF)</p>
+                    <p className="text-[10px] text-slate-400">Summary counts & revenue distribution</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleExportApplicationsPDF}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                >
+                  <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Applications Pipeline Log (PDF)</p>
+                    <p className="text-[10px] text-slate-400">{filteredRequests.length} active filtered record(s)</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleExportMonthlyPDF}
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                >
+                  <BarChart2 className="w-4 h-4 text-purple-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Monthly Processing Report (PDF)</p>
+                    <p className="text-[10px] text-slate-400">12-Month processing volume</p>
+                  </div>
+                </button>
+
+                <div className="border-t border-slate-100 my-1.5" />
+                <div className="px-3 py-1.5 border-b border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Download className="w-3 h-3" /> Data Spreadsheets & Backups
                   </p>
                 </div>
 
                 <button
                   onClick={handleExportFullSummaryCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Executive KPI Summary (CSV)</p>
                     <p className="text-[10px] text-slate-400">Total counts, rates & metrics</p>
@@ -417,9 +545,9 @@ export default function ReportsView({
 
                 <button
                   onClick={handleExportApplicationsCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <FileText className="w-4 h-4 text-blue-600" />
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Applications Pipeline Log (CSV)</p>
                     <p className="text-[10px] text-slate-400">
@@ -430,9 +558,9 @@ export default function ReportsView({
 
                 <button
                   onClick={handleExportMonthlyCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <BarChart2 className="w-4 h-4 text-purple-600" />
+                  <BarChart2 className="w-4 h-4 text-purple-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Monthly Quantities Log (CSV)</p>
                     <p className="text-[10px] text-slate-400">12-Month processing volume</p>
@@ -442,9 +570,9 @@ export default function ReportsView({
                 {docTypes.length > 0 && (
                   <button
                     onClick={handleExportDocAuditCSV}
-                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2 transition-colors cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
                   >
-                    <Layers className="w-4 h-4 text-amber-600" />
+                    <Layers className="w-4 h-4 text-amber-600 shrink-0" />
                     <div>
                       <p className="font-semibold">Document Clearances Audit (CSV)</p>
                       <p className="text-[10px] text-slate-400">Issuance breakdown by document</p>
@@ -456,9 +584,9 @@ export default function ReportsView({
 
                 <button
                   onClick={handleExportJSON}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2.5 transition-colors cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-slate-600" />
+                  <Download className="w-4 h-4 text-slate-600 shrink-0" />
                   <div>
                     <p className="font-semibold">Complete Audit Payload (JSON)</p>
                     <p className="text-[10px] text-slate-400">Raw structured data backup</p>
@@ -467,6 +595,16 @@ export default function ReportsView({
               </div>
             )}
           </div>
+
+          {/* Download Official Report PDF Directly */}
+          <button
+            onClick={handleExportFullReportPDF}
+            className="inline-flex items-center space-x-2 px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            title="Download Official Barangay Operations & Audit Report into PDF"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download PDF</span>
+          </button>
 
           {/* Print Formal Government Report Button (Direct Print) */}
           <button
