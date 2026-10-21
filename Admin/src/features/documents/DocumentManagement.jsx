@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
-import { documentTemplates, formatIssuedDateOrdinal } from './documentTemplates';
+import { documentTemplates, formatIssuedDateOrdinal, formatResidentName } from './documentTemplates';
 import DocumentTemplate from './DocumentTemplate';
 
 export default function DocumentManagement({ docTypes = [], config = {} }) {
@@ -82,6 +82,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
             // Include residents or accounts without elevated admin rights
             if (role === 'resident' || role === 'user' || !role) {
               const fullName =
+                formatResidentName(p) ||
                 p.full_name ||
                 p.fullName ||
                 `${p.first_name || ''} ${p.last_name || ''}`.trim() ||
@@ -145,8 +146,9 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
 
   // Handle selecting a resident from dropdown
   const handleSelectResident = (res) => {
-    setName(res.fullName);
-    setResidentSearchInput(res.fullName);
+    const formattedName = formatResidentName(res.fullName);
+    setName(formattedName);
+    setResidentSearchInput(formattedName);
     if (res.address) setAddress(res.address);
     if (res.dateOfBirth) setDateOfBirth(res.dateOfBirth);
     if (res.contactNo) setContactNo(res.contactNo);
@@ -293,6 +295,15 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                     setName(e.target.value);
                     setResidentSearchInput(e.target.value);
                     setShowResidentDropdown(true);
+                  }}
+                  onBlur={() => {
+                    if (name && name.includes(',')) {
+                      const formatted = formatResidentName(name);
+                      if (formatted) {
+                        setName(formatted);
+                        setResidentSearchInput(formatted);
+                      }
+                    }
                   }}
                   onFocus={() => setShowResidentDropdown(true)}
                   placeholder="Select or enter resident name..."

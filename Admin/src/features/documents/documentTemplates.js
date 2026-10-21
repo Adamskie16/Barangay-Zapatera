@@ -146,3 +146,69 @@ export function formatIssuedDateOrdinal(dateInput) {
 
   return `${day}${ordinal} day of ${month} ${year}`;
 }
+
+/**
+ * Formats a resident's name into "Firstname Middle Name Last Name" format.
+ * Examples:
+ *   "Keith, Adam" -> "Adam Keith"
+ *   "Keith, Adam M." -> "Adam M. Keith"
+ *   "Keith, Adam Santos" -> "Adam Santos Keith"
+ *   { first_name: "Adam", middle_name: "Santos", last_name: "Keith" } -> "Adam Santos Keith"
+ *   { first_name: "Adam", middle_initial: "M", last_name: "Keith" } -> "Adam M. Keith"
+ *   { full_name: "Keith, Adam" } -> "Adam Keith"
+ */
+export function formatResidentName(input) {
+  if (!input) return '';
+
+  // Case 1: Input is an object (profile / resident row)
+  if (typeof input === 'object') {
+    const first = (input.first_name || input.firstName || '').trim();
+    const last = (input.last_name || input.lastName || '').trim();
+    let middle = (input.middle_name || input.middleName || input.middle_initial || input.middleInitial || '').trim();
+
+    if (middle.length === 1 && /^[a-zA-Z]$/.test(middle)) {
+      middle = `${middle.toUpperCase()}.`;
+    }
+
+    if (first && last) {
+      if (!middle && input.full_name && input.full_name.includes(',')) {
+        const parsedFromFn = formatResidentName(input.full_name);
+        if (parsedFromFn && parsedFromFn.split(' ').length > 2) {
+          return parsedFromFn;
+        }
+      }
+      return `${first} ${middle ? middle + ' ' : ''}${last}`.replace(/\s+/g, ' ').trim();
+    }
+
+    const rawFullName = input.full_name || input.fullName || input.name || '';
+    if (rawFullName && typeof rawFullName === 'string') {
+      return formatResidentName(rawFullName);
+    }
+
+    if (first || last) {
+      return `${first} ${last}`.trim();
+    }
+
+    return input.email || '';
+  }
+
+  // Case 2: Input is a string
+  if (typeof input === 'string') {
+    const str = input.trim();
+    if (!str) return '';
+
+    // If string has a comma (e.g. "Lastname, Firstname" or "Lastname, Firstname MiddleName/MI")
+    if (str.includes(',')) {
+      const parts = str.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const lastName = parts[0];
+        const firstAndMiddle = parts.slice(1).join(' ').trim();
+        return `${firstAndMiddle} ${lastName}`.replace(/\s+/g, ' ').trim();
+      }
+    }
+
+    return str.replace(/\s+/g, ' ').trim();
+  }
+
+  return String(input).trim();
+}

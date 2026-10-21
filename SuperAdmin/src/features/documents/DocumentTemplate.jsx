@@ -1,6 +1,6 @@
 // SuperAdmin/src/features/documents/DocumentTemplate.jsx
 import React from 'react';
-import { formatIssuedDateOrdinal } from './documentTemplates';
+import { formatIssuedDateOrdinal, formatResidentName } from './documentTemplates';
 
 /**
  * Standard A4 Printable Document Template (210mm x 297mm)
@@ -121,7 +121,7 @@ export default function DocumentTemplate({
             <span className="col-span-4 font-bold text-slate-900">Name</span>
             <span className="col-span-1 font-bold text-slate-900 text-center">:</span>
             <span className="col-span-7 font-extrabold uppercase text-slate-950 tracking-wide">
-              {name || '________________________________________'}
+              {formatResidentName(name) || '________________________________________'}
             </span>
           </div>
 

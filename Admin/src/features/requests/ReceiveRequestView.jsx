@@ -50,7 +50,7 @@ import ActionModal from '../../components/ActionModal';
 import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import { formatDate, formatCurrency, sanitizeInput } from '../../core/security';
 import { TableSkeleton } from '../../components/SkeletonLoader';
-import { documentTemplates, formatIssuedDateOrdinal } from '../documents/documentTemplates';
+import { documentTemplates, formatIssuedDateOrdinal, formatResidentName } from '../documents/documentTemplates';
 import DocumentTemplate from '../documents/DocumentTemplate';
 import FilePreviewModal from '../../components/FilePreviewModal';
 import { downloadStoredAttachment, getSignedAttachmentUrl } from '../../core/storageService';
@@ -388,7 +388,9 @@ export default function ReceiveRequestView({
 
   const extractResidentName = (r) => {
     if (!r) return 'Resident Applicant';
-    return r.resident_name || r.residentName || r.profiles?.full_name || r.user_metadata?.full_name || 'Resident Applicant';
+    const raw = r.resident_name || r.residentName || r.profiles?.full_name || r.user_metadata?.full_name || '';
+    if (!raw) return 'Resident Applicant';
+    return formatResidentName(r.profiles || raw) || 'Resident Applicant';
   };
 
   const extractResidentAddress = (r) => {
