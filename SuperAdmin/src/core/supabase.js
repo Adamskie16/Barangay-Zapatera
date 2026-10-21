@@ -64,22 +64,37 @@ const resilientFetch = async (input, init) => {
   throw lastError;
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  global: {
-    fetch: resilientFetch,
-  },
-});
+const globalSupabaseKey = '__zapatera_superadmin_supabase_client__';
+const globalSupabaseAdminKey = '__zapatera_superadmin_supabase_admin_client__';
+
+export const supabase = (typeof window !== 'undefined' && window[globalSupabaseKey])
+  ? window[globalSupabaseKey]
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: resilientFetch,
+      },
+    });
+
+if (typeof window !== 'undefined') {
+  window[globalSupabaseKey] = supabase;
+}
 
 export const supabaseAdmin = supabaseServiceRoleKey
-  ? createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: resilientFetch },
-    })
+  ? ((typeof window !== 'undefined' && window[globalSupabaseAdminKey])
+      ? window[globalSupabaseAdminKey]
+      : createClient(supabaseUrl, supabaseServiceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: { fetch: resilientFetch },
+        }))
   : null;
+
+if (typeof window !== 'undefined' && supabaseAdmin) {
+  window[globalSupabaseAdminKey] = supabaseAdmin;
+}
 
 export const isSupabaseConfigured = () => {
   return Boolean(

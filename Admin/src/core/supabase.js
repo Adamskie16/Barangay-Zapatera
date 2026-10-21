@@ -62,15 +62,22 @@ const resilientFetch = async (input, init) => {
   throw lastError;
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  global: {
-    fetch: resilientFetch,
-  },
-});
+const globalSupabaseKey = '__zapatera_admin_supabase_client__';
+export const supabase = (typeof window !== 'undefined' && window[globalSupabaseKey])
+  ? window[globalSupabaseKey]
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+      global: {
+        fetch: resilientFetch,
+      },
+    });
+
+if (typeof window !== 'undefined') {
+  window[globalSupabaseKey] = supabase;
+}
 
 export const isSupabaseConfigured = () => {
   return (

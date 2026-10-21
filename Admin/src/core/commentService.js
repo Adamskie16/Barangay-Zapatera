@@ -290,15 +290,18 @@ async function notifyParentAuthorOnReply({ newComment, parentId }) {
       // 2. Persist to Supabase notifications table if available
       if (!shouldSkipRemote() && targetUserId) {
         try {
-          await supabase.from('notifications').insert([{
-            user_id: targetUserId,
-            title: notifTitle,
-            message: notifMessage,
-            type: 'announcement',
-            link_tab: 'announcements',
-            is_read: false,
-            created_at: new Date().toISOString(),
-          }]);
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user) {
+            await supabase.from('notifications').insert([{
+              user_id: targetUserId,
+              title: notifTitle,
+              message: notifMessage,
+              type: 'announcement',
+              link_tab: 'announcements',
+              is_read: false,
+              created_at: new Date().toISOString(),
+            }]);
+          }
         } catch (e) {
           console.warn('Could not insert reply notification to Supabase:', e);
         }

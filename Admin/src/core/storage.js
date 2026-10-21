@@ -466,15 +466,20 @@ export const StorageService = {
         }
 
         if (isResidentUuid) {
-          await supabase.from('notifications').insert([{
-            user_id: residentId,
-            title: notifTitle,
-            message: notifMsg,
-            type: notifType,
-            link_tab: 'requests',
-            is_read: false,
-            created_at: new Date().toISOString()
-          }]);
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (sessionData?.session?.user) {
+              await supabase.from('notifications').insert([{
+                user_id: residentId,
+                title: notifTitle,
+                message: notifMsg,
+                type: notifType,
+                link_tab: 'requests',
+                is_read: false,
+                created_at: new Date().toISOString()
+              }]);
+            }
+          } catch (_) {}
         }
 
         // Automated Transactional Email Notification Trigger (Dual-Path: DB Webhook + Direct Invoke Fallback)
@@ -818,16 +823,19 @@ export const StorageService = {
           const notifType = saved.is_emergency ? 'warning' : 'announcement';
 
           try {
-            await supabase.from('notifications').insert([{
-              user_id: null,
-              role_target: 'resident',
-              title: notifTitle,
-              message: notifMsg,
-              type: notifType,
-              link_tab: 'announcements',
-              is_read: false,
-              created_at: new Date().toISOString()
-            }]);
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (sessionData?.session?.user) {
+              await supabase.from('notifications').insert([{
+                user_id: null,
+                role_target: 'resident',
+                title: notifTitle,
+                message: notifMsg,
+                type: notifType,
+                link_tab: 'announcements',
+                is_read: false,
+                created_at: new Date().toISOString()
+              }]);
+            }
           } catch (nErr) {
             console.warn('Failed to insert news notification in Supabase:', nErr);
           }

@@ -1,7 +1,7 @@
 // SuperAdmin/src/core/storage.js
 // Data Service & Storage Engine with Supabase & Offline Synchronization
 
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabase';
 
 let isPickupEmailFunctionAvailable = true;
 
@@ -597,15 +597,33 @@ export const StorageService = {
         }
 
         if (isResidentUuid) {
-          await supabase.from('notifications').insert([{
-            user_id: residentId,
-            title: notifTitle,
-            message: notifMsg,
-            type: notifType,
-            link_tab: 'requests',
-            is_read: false,
-            created_at: new Date().toISOString()
-          }]);
+          try {
+            const client = supabaseAdmin || supabase;
+            if (supabaseAdmin) {
+              await client.from('notifications').insert([{
+                user_id: residentId,
+                title: notifTitle,
+                message: notifMsg,
+                type: notifType,
+                link_tab: 'requests',
+                is_read: false,
+                created_at: new Date().toISOString()
+              }]);
+            } else {
+              const { data: sessionData } = await supabase.auth.getSession();
+              if (sessionData?.session?.user) {
+                await client.from('notifications').insert([{
+                  user_id: residentId,
+                  title: notifTitle,
+                  message: notifMsg,
+                  type: notifType,
+                  link_tab: 'requests',
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                }]);
+              }
+            }
+          } catch (_) {}
         }
 
         // Automated Transactional Email Notification Trigger (Dual-Path: DB Webhook + Direct Invoke Fallback)
@@ -927,16 +945,33 @@ export const StorageService = {
           const notifType = saved.is_emergency ? 'warning' : 'announcement';
 
           try {
-            await supabase.from('notifications').insert([{
-              user_id: null,
-              role_target: 'resident',
-              title: notifTitle,
-              message: notifMsg,
-              type: notifType,
-              link_tab: 'announcements',
-              is_read: false,
-              created_at: new Date().toISOString()
-            }]);
+            const client = supabaseAdmin || supabase;
+            if (supabaseAdmin) {
+              await client.from('notifications').insert([{
+                user_id: null,
+                role_target: 'resident',
+                title: notifTitle,
+                message: notifMsg,
+                type: notifType,
+                link_tab: 'announcements',
+                is_read: false,
+                created_at: new Date().toISOString()
+              }]);
+            } else {
+              const { data: sessionData } = await supabase.auth.getSession();
+              if (sessionData?.session?.user) {
+                await client.from('notifications').insert([{
+                  user_id: null,
+                  role_target: 'resident',
+                  title: notifTitle,
+                  message: notifMsg,
+                  type: notifType,
+                  link_tab: 'announcements',
+                  is_read: false,
+                  created_at: new Date().toISOString()
+                }]);
+              }
+            }
           } catch (nErr) {
             console.warn('Failed to insert news notification in Supabase:', nErr);
           }
@@ -1784,7 +1819,8 @@ export const StorageService = {
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase.from('notifications').insert([{
+        const client = supabaseAdmin || supabase;
+        const insertPayload = [{
           user_id: notif.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notif.user_id) ? notif.user_id : null,
           role_target: notif.role_target || 'all',
           title: notif.title,
@@ -1793,7 +1829,16 @@ export const StorageService = {
           link_tab: notif.link_tab || 'requests',
           is_read: false,
           created_at: new Date().toISOString()
-        }]);
+        }];
+
+        if (supabaseAdmin) {
+          await client.from('notifications').insert(insertPayload);
+        } else {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user) {
+            await client.from('notifications').insert(insertPayload);
+          }
+        }
       }
     } catch {
       // Handled

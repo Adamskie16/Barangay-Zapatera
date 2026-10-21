@@ -83,17 +83,26 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
   throw lastError;
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : MobileStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-  global: {
-    fetch: resilientFetch,
-  },
-});
+const globalSupabaseKey = '__zapatera_resident_supabase_client__';
+export const supabase = ((typeof window !== 'undefined' && (window as any)[globalSupabaseKey]) || (typeof globalThis !== 'undefined' && (globalThis as any)[globalSupabaseKey]))
+  ? ((typeof window !== 'undefined' && (window as any)[globalSupabaseKey]) || (globalThis as any)[globalSupabaseKey])
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : MobileStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+      global: {
+        fetch: resilientFetch,
+      },
+    });
+
+if (typeof window !== 'undefined') {
+  (window as any)[globalSupabaseKey] = supabase;
+} else if (typeof globalThis !== 'undefined') {
+  (globalThis as any)[globalSupabaseKey] = supabase;
+}
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey);
