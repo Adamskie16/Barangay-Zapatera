@@ -49,6 +49,7 @@ import Badge from '../../components/Badge';
 import EventCalendar from '../../components/EventCalendar';
 import ActionModal from '../../components/ActionModal';
 import { StorageService } from '../../core/storage';
+import { uploadNewsBanner } from '../../core/storageService';
 import { formatDate, sanitizeInput } from '../../core/security';
 
 const CATEGORIES = [
@@ -429,7 +430,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     setIsPreviewModalOpen(true);
   };
 
-  // Helper to compress uploaded images
+  // Helper to compress uploaded images as a lightweight fallback
   const compressImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -439,8 +440,8 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
           if (width > height) {
             if (width > MAX_WIDTH) {
               height = Math.round((height * MAX_WIDTH) / width);
@@ -456,7 +457,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
         img.src = event.target.result;
       };
@@ -473,10 +474,22 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     }
     setIsUploading(true);
     try {
+      // 1. First attempt to upload to Supabase Storage (public_assets bucket)
+      const uploadRes = await uploadNewsBanner(file);
+      if (uploadRes?.success && uploadRes?.url) {
+        setFormData((prev) => ({ ...prev, banner_url: uploadRes.url }));
+        return;
+      }
+
+      // 2. Fallback to lightweight compressed image data URL if Supabase storage is unavailable or fails
       const compressedDataUrl = await compressImage(file);
       setFormData((prev) => ({ ...prev, banner_url: compressedDataUrl }));
     } catch (err) {
-      console.warn('Image processing error:', err);
+      console.warn('Image upload/processing error, falling back to compressed thumbnail:', err);
+      try {
+        const compressedDataUrl = await compressImage(file);
+        setFormData((prev) => ({ ...prev, banner_url: compressedDataUrl }));
+      } catch (_) {}
     } finally {
       setIsUploading(false);
     }

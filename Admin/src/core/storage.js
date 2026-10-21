@@ -57,6 +57,27 @@ const DEFAULT_CONFIG = {
   updated_at: new Date().toISOString(),
 };
 
+const resolveValidProfileId = async (user) => {
+  if (!isSupabaseConfigured() || !user) return null;
+  const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  const userId = user.id && isUuid(user.id) ? user.id : (typeof user === 'string' && isUuid(user) ? user : null);
+  const userEmail = typeof user.email === 'string' ? user.email.trim().toLowerCase() : (typeof user === 'string' && user.includes('@') ? user.trim().toLowerCase() : null);
+
+  try {
+    if (userId) {
+      const { data: prof } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+      if (prof?.id) return prof.id;
+    }
+    if (userEmail) {
+      const { data: profByEmail } = await supabase.from('profiles').select('id').ilike('email', userEmail).maybeSingle();
+      if (profByEmail?.id) return profByEmail.id;
+    }
+  } catch (err) {
+    console.warn('Error resolving profile ID:', err);
+  }
+  return null;
+};
+
 export const StorageService = {
   // PROFILES / USERS (Directly maps to public.profiles)
   getUsers: () => {
@@ -705,21 +726,29 @@ export const StorageService = {
       saved.created_at = new Date().toISOString();
       news.unshift(saved);
     }
-    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+
+    // Safely write to localStorage with quota-exceeded fallback
+    try {
+      localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+    } catch (quotaErr) {
+      console.warn('LocalStorage quota exceeded on saveNews, stripping large base64 banners for local storage cache...', quotaErr);
+      try {
+        const leanNews = news.map((item) => {
+          if (item.banner_url && item.banner_url.startsWith('data:')) {
+            return { ...item, banner_url: '' };
+          }
+          return item;
+        });
+        localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(leanNews.slice(0, 30)));
+      } catch (innerErr) {
+        console.warn('Failed to save lean news list to localStorage:', innerErr);
+      }
+    }
 
     try {
       if (isSupabaseConfigured()) {
         const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
-        const adminId = adminUser?.id && isUuid(adminUser.id) ? adminUser.id : (isUuid(saved.created_by) ? saved.created_by : null);
-
-        // Verify adminId exists in public.profiles to prevent foreign key violation
-        let validProfileId = null;
-        if (adminId) {
-          try {
-            const { data: prof } = await supabase.from('profiles').select('id').eq('id', adminId).maybeSingle();
-            if (prof?.id) validProfileId = prof.id;
-          } catch {}
-        }
+        const validProfileId = (await resolveValidProfileId(adminUser)) || (isUuid(saved.created_by) ? saved.created_by : null);
 
         const basePayload = {
           title: saved.title,
@@ -745,13 +774,26 @@ export const StorageService = {
 
         if (isUuid(saved.id)) {
           payloadWithEvent.id = saved.id;
-          const { error: upsertErr } = await supabase.from('news').upsert(payloadWithEvent);
+          let { error: upsertErr } = await supabase.from('news').upsert(payloadWithEvent);
+          if (upsertErr && (upsertErr.code === '23503' || String(upsertErr.message).includes('foreign key'))) {
+            payloadWithEvent.created_by = null;
+            basePayload.created_by = null;
+            const retryRes = await supabase.from('news').upsert(payloadWithEvent);
+            upsertErr = retryRes.error;
+          }
           if (upsertErr && (upsertErr.code === 'PGRST204' || String(upsertErr.message).includes('event_date'))) {
             basePayload.id = saved.id;
             await supabase.from('news').upsert(basePayload);
           }
         } else {
           let { data, error: insertErr } = await supabase.from('news').insert([payloadWithEvent]).select();
+          if (insertErr && (insertErr.code === '23503' || String(insertErr.message).includes('foreign key'))) {
+            payloadWithEvent.created_by = null;
+            basePayload.created_by = null;
+            const retryRes = await supabase.from('news').insert([payloadWithEvent]).select();
+            data = retryRes.data;
+            insertErr = retryRes.error;
+          }
           if (insertErr && (insertErr.code === 'PGRST204' || String(insertErr.message).includes('event_date'))) {
             const retryRes = await supabase.from('news').insert([basePayload]).select();
             data = retryRes.data;
@@ -979,14 +1021,17 @@ export const StorageService = {
   },
 
   archiveNews: async (newsId, adminUser) => {
-    const actorId = adminUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminUser.id) ? adminUser.id : null;
+    const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const actorId = adminUser?.id && isUuid(adminUser.id) ? adminUser.id : null;
     const actorName = adminUser?.full_name || adminUser?.email || 'Admin';
     const deletedAt = new Date().toISOString();
 
     let news = StorageService.getNews();
     const item = news.find((n) => n.id === newsId);
     news = news.filter((n) => n.id !== newsId);
-    localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+    try {
+      localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(news));
+    } catch {}
 
     const archiveItem = {
       ...(item || { id: newsId }),
@@ -1005,16 +1050,31 @@ export const StorageService = {
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase
+        const validProfileId = await resolveValidProfileId(adminUser || { id: actorId });
+        const { error: patchError } = await supabase
           .from('news')
           .update({
             is_archived: true,
             deleted_at: deletedAt,
-            deleted_by: actorId,
+            deleted_by: validProfileId,
           })
           .eq('id', newsId);
+
+        if (patchError) {
+          console.warn('Initial archive update failed, retrying with deleted_by: null:', patchError);
+          await supabase
+            .from('news')
+            .update({
+              is_archived: true,
+              deleted_at: deletedAt,
+              deleted_by: null,
+            })
+            .eq('id', newsId);
+        }
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Supabase archiveNews exception handled:', err);
+    }
 
     StorageService.addLog({
       user_email: adminUser?.email || 'admin@zapatera.gov.ph',
@@ -1114,11 +1174,20 @@ export const StorageService = {
 
     try {
       if (isSupabaseConfigured()) {
+        const validProfileId = await resolveValidProfileId(adminUser || { id: actorId });
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        let updateRes;
         if (isUuid) {
-          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('id', userId);
+          updateRes = await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: validProfileId }).eq('id', userId);
         } else if (target?.email) {
-          await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: actorId }).eq('email', target.email);
+          updateRes = await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: validProfileId }).eq('email', target.email);
+        }
+        if (updateRes?.error) {
+          if (isUuid) {
+            await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: null }).eq('id', userId);
+          } else if (target?.email) {
+            await supabase.from('profiles').update({ is_archived: true, is_active: false, deleted_at: deletedAt, deleted_by: null }).eq('email', target.email);
+          }
         }
       }
     } catch {}
@@ -1274,11 +1343,18 @@ export const StorageService = {
 
     try {
       if (isSupabaseConfigured()) {
+        const validProfileId = await resolveValidProfileId(adminUser || { id: actorId });
         if (requestId) {
-          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('id', requestId);
+          const { error } = await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: validProfileId }).eq('id', requestId);
+          if (error) {
+            await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: null }).eq('id', requestId);
+          }
         }
         if (trackingNumber) {
-          await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: actorId }).eq('tracking_number', trackingNumber.trim());
+          const { error } = await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: validProfileId }).eq('tracking_number', trackingNumber.trim());
+          if (error) {
+            await supabase.from('document_requests').update({ is_archived: true, deleted_at: deletedAt, deleted_by: null }).eq('tracking_number', trackingNumber.trim());
+          }
         }
       }
     } catch {}

@@ -61,6 +61,51 @@ export const uploadSuperAdminAvatar = async (userId, file) => {
   }
 };
 
+/**
+ * Upload an announcement / news bulletin banner to public_assets bucket
+ */
+export const uploadNewsBanner = async (file) => {
+  if (!file) return { success: false, error: 'No file provided' };
+
+  const sanitized = sanitizeFileName(file.name || 'news_banner.jpg');
+  const storagePath = `news/${sanitized}`;
+
+  if (!isSupabaseConfigured()) {
+    return {
+      success: true,
+      url: typeof URL !== 'undefined' ? URL.createObjectURL(file) : '',
+      path: storagePath,
+    };
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from('public_assets')
+      .upload(storagePath, file, {
+        contentType: file.type || 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) {
+      console.warn('Supabase storage upload error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('public_assets')
+      .getPublicUrl(data.path);
+
+    return {
+      success: true,
+      url: publicUrlData?.publicUrl,
+      path: data.path,
+    };
+  } catch (err) {
+    console.warn('Supabase storage exception:', err);
+    return { success: false, error: err?.message || 'Upload failed' };
+  }
+};
+
 export const getSignedAttachmentUrl = async (storagePath, expiresIn = 3600) => {
   if (!isSupabaseConfigured() || !storagePath) return null;
   try {

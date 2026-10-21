@@ -1414,14 +1414,39 @@ export const StorageService = {
 
     try {
       if (isSupabaseConfigured()) {
-        await supabase
+        let validProfileId = null;
+        if (actorId) {
+          try {
+            const { data: prof } = await supabase.from('profiles').select('id').eq('id', actorId).maybeSingle();
+            if (prof?.id) validProfileId = prof.id;
+          } catch {}
+        }
+        if (!validProfileId && adminUser?.email) {
+          try {
+            const { data: profByEmail } = await supabase.from('profiles').select('id').ilike('email', adminUser.email.trim().toLowerCase()).maybeSingle();
+            if (profByEmail?.id) validProfileId = profByEmail.id;
+          } catch {}
+        }
+
+        const { error: patchError } = await supabase
           .from('news')
           .update({
             is_archived: true,
             deleted_at: deletedAt,
-            deleted_by: actorId,
+            deleted_by: validProfileId,
           })
           .eq('id', newsId);
+
+        if (patchError) {
+          await supabase
+            .from('news')
+            .update({
+              is_archived: true,
+              deleted_at: deletedAt,
+              deleted_by: null,
+            })
+            .eq('id', newsId);
+        }
       }
     } catch {}
 
