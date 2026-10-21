@@ -1,5 +1,4 @@
-// Resident/src/features/documents/DocumentCatalogView.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +22,10 @@ import {
   CheckCircle,
   ArrowUpDown,
   Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { DocumentType } from '../../types';
 import { formatCurrency } from '../../core/security';
@@ -79,6 +82,15 @@ export default function DocumentCatalogView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState<'name' | 'fee' | 'time'>('name');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Reset pagination to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, sortBy]);
 
   // Compute category counts
   const categoryCounts = useMemo(() => {
@@ -122,6 +134,35 @@ export default function DocumentCatalogView({
         return a.title.localeCompare(b.title);
       });
   }, [docTypes, searchQuery, selectedCategory, sortBy]);
+
+  // Pagination Calculations
+  const totalDocs = filteredDocs.length;
+  const totalPages = Math.max(1, Math.ceil(totalDocs / itemsPerPage));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalDocs);
+
+  const paginatedDocs = useMemo(() => {
+    return filteredDocs.slice(startIndex, endIndex);
+  }, [filteredDocs, startIndex, endIndex]);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const getVisiblePageNumbers = (current: number, total: number): (number | string)[] => {
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 3) {
+      return [1, 2, 3, 4, '...', total];
+    }
+    if (current >= total - 2) {
+      return [1, '...', total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
 
   const renderIcon = (doc: DocumentType) => {
     const text = `${doc.code || ''} ${doc.title || ''}`.toLowerCase();
@@ -223,19 +264,33 @@ export default function DocumentCatalogView({
       </View>
 
       {/* Documents List */}
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.resultsRow}>
-          <Text style={styles.resultsCount}>
-            Available Documents ({filteredDocs.length})
-          </Text>
-          {selectedCategory !== 'All' && (
-            <TouchableOpacity onPress={() => setSelectedCategory('All')}>
-              <Text style={styles.clearFilterText}>Reset filter</Text>
-            </TouchableOpacity>
-          )}
+          <View>
+            <Text style={styles.resultsCount}>
+              Available Documents ({totalDocs})
+            </Text>
+            {totalDocs > 0 ? (
+              <Text style={styles.resultsSubtext}>
+                Showing {startIndex + 1}–{endIndex} of {totalDocs} documents • Page {safeCurrentPage} of {totalPages}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.resultsRowRight}>
+            {selectedCategory !== 'All' ? (
+              <TouchableOpacity onPress={() => setSelectedCategory('All')}>
+                <Text style={styles.clearFilterText}>Reset filter</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
 
-        {filteredDocs.map((doc) => {
+        {paginatedDocs.map((doc) => {
           const docCategory = getDocumentCategory(doc);
           return (
             <View key={doc.id} style={styles.docCard}>
@@ -309,7 +364,132 @@ export default function DocumentCatalogView({
           );
         })}
 
-        {filteredDocs.length === 0 && (
+        {/* Pagination Controls */}
+        {totalDocs > 0 ? (
+          <View style={styles.paginationCard}>
+            <View style={styles.paginationInfoRow}>
+              <Text style={styles.paginationInfoText}>
+                Page <Text style={styles.paginationBoldText}>{safeCurrentPage}</Text> of{' '}
+                <Text style={styles.paginationBoldText}>{totalPages}</Text> •{' '}
+                <Text style={styles.paginationBoldText}>{totalDocs}</Text> total documents
+              </Text>
+
+              <View style={styles.pageSizeRow}>
+                <Text style={styles.pageSizeLabel}>Per page:</Text>
+                {[5, 10, 15].map((size) => (
+                  <TouchableOpacity
+                    key={size}
+                    style={[
+                      styles.pageSizeBtn,
+                      itemsPerPage === size ? styles.pageSizeBtnActive : null,
+                    ]}
+                    onPress={() => {
+                      setItemsPerPage(size);
+                      setCurrentPage(1);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.pageSizeBtnText,
+                        itemsPerPage === size ? styles.pageSizeBtnTextActive : null,
+                      ]}
+                    >
+                      {size}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {totalPages > 1 ? (
+              <View style={styles.paginationNavRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.pageNavBtn,
+                    safeCurrentPage === 1 ? styles.pageNavBtnDisabled : null,
+                  ]}
+                  onPress={() => handlePageChange(1)}
+                  disabled={safeCurrentPage === 1}
+                  activeOpacity={0.7}
+                >
+                  <ChevronsLeft size={16} color={safeCurrentPage === 1 ? '#94a3b8' : '#1e293b'} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.pageNavBtn,
+                    safeCurrentPage === 1 ? styles.pageNavBtnDisabled : null,
+                  ]}
+                  onPress={() => handlePageChange(Math.max(1, safeCurrentPage - 1))}
+                  disabled={safeCurrentPage === 1}
+                  activeOpacity={0.7}
+                >
+                  <ChevronLeft size={16} color={safeCurrentPage === 1 ? '#94a3b8' : '#1e293b'} />
+                </TouchableOpacity>
+
+                <View style={styles.pageNumbersRow}>
+                  {getVisiblePageNumbers(safeCurrentPage, totalPages).map((p, idx) => {
+                    if (p === '...') {
+                      return (
+                        <View key={`ellipsis-${idx}`} style={styles.pageEllipsis}>
+                          <Text style={styles.pageEllipsisText}>…</Text>
+                        </View>
+                      );
+                    }
+                    const isCurrent = p === safeCurrentPage;
+                    return (
+                      <TouchableOpacity
+                        key={`page-${p}`}
+                        style={[
+                          styles.pageNumberBtn,
+                          isCurrent ? styles.pageNumberBtnActive : null,
+                        ]}
+                        onPress={() => handlePageChange(p as number)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.pageNumberText,
+                            isCurrent ? styles.pageNumberTextActive : null,
+                          ]}
+                        >
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.pageNavBtn,
+                    safeCurrentPage === totalPages ? styles.pageNavBtnDisabled : null,
+                  ]}
+                  onPress={() => handlePageChange(Math.min(totalPages, safeCurrentPage + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  activeOpacity={0.7}
+                >
+                  <ChevronRight size={16} color={safeCurrentPage === totalPages ? '#94a3b8' : '#1e293b'} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.pageNavBtn,
+                    safeCurrentPage === totalPages ? styles.pageNavBtnDisabled : null,
+                  ]}
+                  onPress={() => handlePageChange(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  activeOpacity={0.7}
+                >
+                  <ChevronsRight size={16} color={safeCurrentPage === totalPages ? '#94a3b8' : '#1e293b'} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {filteredDocs.length === 0 ? (
           <View style={styles.emptySearchBox}>
             <Search size={36} color="#94a3b8" />
             <Text style={styles.emptySearchTitle}>No matching documents found</Text>
@@ -328,7 +508,7 @@ export default function DocumentCatalogView({
               <Text style={styles.resetBtnText}>View All Documents</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
         {/* Global Developer & Institution Footer */}
         <GlobalFooter />
@@ -690,6 +870,147 @@ const styles = StyleSheet.create({
   resetBtnText: {
     color: '#ffffff',
     fontSize: 12,
+    fontWeight: '700',
+  },
+  resultsSubtext: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  resultsRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  paginationCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    marginTop: 6,
+    marginBottom: 20,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  paginationInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  paginationInfoText: {
+    fontSize: 11.5,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  paginationBoldText: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  pageSizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pageSizeLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginRight: 2,
+  },
+  pageSizeBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  pageSizeBtnActive: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#1d4ed8',
+  },
+  pageSizeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  pageSizeBtnTextActive: {
+    color: '#ffffff',
+  },
+  paginationNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  pageNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNavBtnDisabled: {
+    opacity: 0.35,
+    backgroundColor: '#f1f5f9',
+  },
+  pageNumbersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  pageNumberBtn: {
+    minWidth: 34,
+    height: 34,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberBtnActive: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#1d4ed8',
+    shadowColor: '#1d4ed8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pageNumberText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  pageNumberTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  pageEllipsis: {
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageEllipsisText: {
+    fontSize: 14,
+    color: '#94a3b8',
     fontWeight: '700',
   },
 });
