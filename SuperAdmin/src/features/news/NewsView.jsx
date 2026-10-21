@@ -36,6 +36,7 @@ import {
   ChevronsRight,
   LayoutGrid,
   Table as TableIcon,
+  Sparkles,
 } from 'lucide-react';
 import {
   getBulletinComments,
@@ -44,6 +45,7 @@ import {
   deleteBulletinComment,
   subscribeToBulletinComments
 } from '../../core/commentService';
+import { translateCivicAnnouncement, CIVIC_ANNOUNCEMENT_TEMPLATES } from '../../core/administrativeAiService';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import EventCalendar from '../../components/EventCalendar';
@@ -1662,6 +1664,135 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               <span className="font-semibold">{formError}</span>
             </div>
           )}
+
+          {/* AI Civic Bulletin Assistant & Public Advisory Synthesizer Toolbar */}
+          <div className={`p-3.5 border rounded-xl space-y-2.5 ${
+            isDarkMode
+              ? 'bg-gradient-to-r from-blue-950/60 via-indigo-950/60 to-slate-900 border-blue-800/60'
+              : 'bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50 border-blue-200'
+          }`}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center space-x-1.5">
+                <Sparkles className="w-4 h-4 text-blue-500" />
+                <span className={`font-bold text-xs ${isDarkMode ? 'text-blue-300' : 'text-slate-900'}`}>
+                  AI Assistant: LGU Bulletin Templates & Localization
+                </span>
+              </div>
+
+              {/* Quick Translation / Localization Bar */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Translate:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'cebuano',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className={`px-2 py-1 text-[11px] font-bold border rounded-lg cursor-pointer transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-800 text-blue-300 border-blue-700/60 hover:bg-slate-700'
+                      : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
+                  }`}
+                  title="Translate into Cebuano / Bisaya dialect"
+                >
+                  🇵🇭 Bisaya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'tagalog',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className={`px-2 py-1 text-[11px] font-bold border rounded-lg cursor-pointer transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-800 text-indigo-300 border-indigo-700/60 hover:bg-slate-700'
+                      : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                  }`}
+                  title="Translate into Tagalog"
+                >
+                  Tagalog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const res = translateCivicAnnouncement({
+                      title: formData.title,
+                      description: formData.description,
+                      content: formData.content,
+                      targetLanguage: 'english',
+                    });
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: res.title,
+                      description: res.description,
+                      content: res.content,
+                    }));
+                  }}
+                  className={`px-2 py-1 text-[11px] font-bold border rounded-lg cursor-pointer transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-800 text-emerald-300 border-emerald-700/60 hover:bg-slate-700'
+                      : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                  }`}
+                  title="Format as formal English advisory"
+                >
+                  English
+                </button>
+              </div>
+            </div>
+
+            {/* LGU Bulletin Quick Templates */}
+            <div className={`flex items-center gap-1.5 flex-wrap pt-1 border-t ${
+              isDarkMode ? 'border-slate-800' : 'border-blue-100/70'
+            }`}>
+              <span className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Smart Templates:
+              </span>
+              {CIVIC_ANNOUNCEMENT_TEMPLATES.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      title: tmpl.title,
+                      category: tmpl.category,
+                      description: tmpl.description,
+                      content: tmpl.content,
+                    }));
+                  }}
+                  className={`px-2 py-0.5 text-[11px] font-semibold border rounded-md cursor-pointer transition-colors ${
+                    isDarkMode
+                      ? 'bg-slate-800 text-slate-200 border-slate-700 hover:border-blue-500 hover:text-white'
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
+                  }`}
+                >
+                  {tmpl.name}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div>
             <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>

@@ -28,6 +28,8 @@ interface NotificationModalProps {
   notifications: ResidentNotification[];
   onClose: () => void;
   onMarkAsRead: (id: string) => void;
+  onToggleReadStatus?: (id: string) => void;
+  onDeleteNotification?: (id: string) => void;
   onMarkAllAsRead: () => void;
   onClearAll?: () => void;
   onNotificationClick: (notif: ResidentNotification) => void;
@@ -38,6 +40,8 @@ export default function NotificationModal({
   notifications,
   onClose,
   onMarkAsRead,
+  onToggleReadStatus,
+  onDeleteNotification,
   onMarkAllAsRead,
   onClearAll,
   onNotificationClick,
@@ -155,17 +159,46 @@ export default function NotificationModal({
                     <Text style={styles.notifMessage}>{notif.message}</Text>
                     <View style={styles.notifFooterRow}>
                       <Text style={styles.notifTime}>{notif.created_at}</Text>
-                      <TouchableOpacity
-                        style={styles.markAsReadBtn}
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          onMarkAsRead(notif.id);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <CheckCircle2 size={12} color="#1d4ed8" />
-                        <Text style={styles.markAsReadBtnText}>Mark as read</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          style={notif.is_read ? styles.markAsUnreadBtn : styles.markAsReadBtn}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            if (onToggleReadStatus) {
+                              onToggleReadStatus(notif.id);
+                            } else {
+                              onMarkAsRead(notif.id);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          {notif.is_read ? (
+                            <>
+                              <Clock size={12} color="#64748b" />
+                              <Text style={styles.markAsUnreadBtnText}>Mark as unread</Text>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={12} color="#1d4ed8" />
+                              <Text style={styles.markAsReadBtnText}>Mark as read</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+
+                        {onDeleteNotification && (
+                          <TouchableOpacity
+                            style={styles.deleteSingleBtn}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              onDeleteNotification(notif.id);
+                            }}
+                            activeOpacity={0.7}
+                            accessibilityLabel="Delete notification"
+                          >
+                            <Trash2 size={12} color="#ef4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -358,15 +391,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
     backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
   },
   markAsReadBtnText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#1d4ed8',
+  },
+  markAsUnreadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  markAsUnreadBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  deleteSingleBtn: {
+    padding: 3,
+    borderRadius: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   emptyBox: {
     alignItems: 'center',

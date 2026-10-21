@@ -1149,6 +1149,20 @@ export default function App() {
           query = query.or(`role_target.eq.resident,and(user_id.is.null,role_target.is.null)`);
         }
 
+        // Load existing local user notifications to preserve user's read/unread choices
+        const localStored = await MobileStorage.getItem(userNotifsKey);
+        const localMap = new Map<string, boolean>();
+        if (localStored) {
+          try {
+            const localList = JSON.parse(localStored);
+            if (Array.isArray(localList)) {
+              localList.forEach((ln: any) => {
+                if (ln && ln.id) localMap.set(ln.id, Boolean(ln.is_read));
+              });
+            }
+          } catch {}
+        }
+
         const { data, error } = await query;
         if (!error && Array.isArray(data)) {
           const formatted: ResidentNotification[] = data
@@ -1159,17 +1173,56 @@ export default function App() {
               title: n.title,
               message: n.message,
               type: n.type || 'info',
-              is_read: n.is_read || false,
+              is_read: localMap.has(n.id) ? localMap.get(n.id)! : Boolean(n.is_read),
               link_tab: (n.link_tab as any) || (n.type === 'announcement' || n.type === 'warning' ? 'announcements' : 'requests'),
               created_at: new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
             }));
 
-          // Merge with progress notifications
+          // Merge with progress notifications and published announcements
           const map = new Map<string, ResidentNotification>();
           formatted.forEach((n) => map.set(n.id, n));
           progressNotifications.forEach((n) => {
             if (!map.has(n.id)) map.set(n.id, n);
           });
+
+          // Incorporate recent published announcements as notifications if not already fetched
+          try {
+            const rawNews = await MobileStorage.getItem('zapatera_news_db');
+            if (rawNews) {
+              const newsItems: BarangayAnnouncement[] = JSON.parse(rawNews);
+              if (Array.isArray(newsItems)) {
+                newsItems.slice(0, 15).forEach((item) => {
+                  const annNotifId = `ann-notif-${item.id}`;
+                  if (!erasedIds.has(annNotifId) && !map.has(annNotifId)) {
+                    const isEmerg = item.is_emergency || item.category === 'Emergency';
+                    const annTitle = isEmerg
+                      ? `🚨 Emergency Advisory: ${item.title}`
+                      : item.is_important
+                      ? `📢 Important Announcement: ${item.title}`
+                      : `📰 News Bulletin: ${item.title}`;
+                    const cleanDesc = (item.description || item.content || '').trim();
+                    const excerpt = cleanDesc.length > 130 ? cleanDesc.substring(0, 127) + '...' : cleanDesc;
+                    const dateStr = item.created_at
+                      ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                    const wasReadLocally = localMap.has(annNotifId) ? localMap.get(annNotifId)! : false;
+
+                    map.set(annNotifId, {
+                      id: annNotifId,
+                      user_id: authUserId,
+                      title: annTitle,
+                      message: excerpt,
+                      type: isEmerg ? 'warning' : 'announcement',
+                      is_read: wasReadLocally,
+                      link_tab: 'announcements',
+                      created_at: dateStr,
+                    });
+                  }
+                });
+              }
+            }
+          } catch {}
 
           const combined = Array.from(map.values()).sort((a, b) => {
             const timeA = new Date(a.created_at || 0).getTime();
@@ -1209,6 +1262,43 @@ export default function App() {
         }
       });
 
+      // Also merge recent published announcements in fallback
+      try {
+        const rawNews = await MobileStorage.getItem('zapatera_news_db');
+        if (rawNews) {
+          const newsItems: BarangayAnnouncement[] = JSON.parse(rawNews);
+          if (Array.isArray(newsItems)) {
+            newsItems.slice(0, 15).forEach((item) => {
+              const annNotifId = `ann-notif-${item.id}`;
+              if (!erasedIds.has(annNotifId) && !map.has(annNotifId)) {
+                const isEmerg = item.is_emergency || item.category === 'Emergency';
+                const annTitle = isEmerg
+                  ? `🚨 Emergency Advisory: ${item.title}`
+                  : item.is_important
+                  ? `📢 Important Announcement: ${item.title}`
+                  : `📰 News Bulletin: ${item.title}`;
+                const cleanDesc = (item.description || item.content || '').trim();
+                const excerpt = cleanDesc.length > 130 ? cleanDesc.substring(0, 127) + '...' : cleanDesc;
+                const dateStr = item.created_at
+                  ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                map.set(annNotifId, {
+                  id: annNotifId,
+                  user_id: authUserId,
+                  title: annTitle,
+                  message: excerpt,
+                  type: isEmerg ? 'warning' : 'announcement',
+                  is_read: false,
+                  link_tab: 'announcements',
+                  created_at: dateStr,
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
       const combined = Array.from(map.values()).sort((a, b) => {
         const timeA = new Date(a.created_at || 0).getTime();
         const timeB = new Date(b.created_at || 0).getTime();
@@ -1216,7 +1306,7 @@ export default function App() {
       });
       setNotifications(combined);
     } catch {
-      setNotifications(declinedNotifications);
+      setNotifications(progressNotifications);
     }
   };
 
@@ -1765,7 +1855,73 @@ export default function App() {
   };
 
   const handleMarkAsRead = async (id: string) => {
-    // 1. Erase notification data immediately for this resident account
+    // 1. Strictly update read state (PRESERVE notification in the list!)
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+    );
+
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+
+    try {
+      // 2. Persist read state in account-scoped notifications storage
+      const stored = await MobileStorage.getItem(userNotifsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) =>
+          n.id === id ? { ...n, is_read: true } : n
+        );
+        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      }
+
+      // 3. In Supabase: update is_read = true
+      if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        try {
+          await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+        } catch {}
+      }
+    } catch {}
+  };
+
+  const handleToggleReadStatus = async (id: string) => {
+    let nextStatus = true;
+    setNotifications((prev) =>
+      prev.map((n) => {
+        if (n.id === id) {
+          nextStatus = !n.is_read;
+          return { ...n, is_read: nextStatus };
+        }
+        return n;
+      })
+    );
+
+    if (!currentUser) return;
+    const authUserId = currentUser.id;
+    const userScope = authUserId || currentUser.email || 'resident';
+    const userNotifsKey = `zapatera_notifications_db_${userScope}`;
+
+    try {
+      const stored = await MobileStorage.getItem(userNotifsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const updated = parsed.map((n: any) =>
+          n.id === id ? { ...n, is_read: nextStatus } : n
+        );
+        await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
+      }
+
+      if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        try {
+          await supabase.from('notifications').update({ is_read: nextStatus }).eq('id', id);
+        } catch {}
+      }
+    } catch {}
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    // 1. Erase only this specific notification item
     setNotifications((prev) => prev.filter((n) => n.id !== id));
 
     if (!currentUser) return;
@@ -1775,7 +1931,6 @@ export default function App() {
     const userErasedKey = `zapatera_erased_notifs_${userScope}`;
 
     try {
-      // 2. Store erased notification ID in account-specific registry so it is never recreated
       let erasedList: string[] = [];
       const erasedRaw = await MobileStorage.getItem(userErasedKey);
       if (erasedRaw) {
@@ -1786,7 +1941,6 @@ export default function App() {
         await MobileStorage.setItem(userErasedKey, JSON.stringify(erasedList));
       }
 
-      // 3. Erase from account-scoped notifications storage
       const stored = await MobileStorage.getItem(userNotifsKey);
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -1794,15 +1948,10 @@ export default function App() {
         await MobileStorage.setItem(userNotifsKey, JSON.stringify(updated));
       }
 
-      // 4. In Supabase: delete or mark read for this specific account
       if (isSupabaseConfigured() && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         try {
           await supabase.from('notifications').delete().eq('id', id);
-        } catch {
-          try {
-            await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-          } catch {}
-        }
+        } catch {}
       }
     } catch {}
   };
@@ -2165,6 +2314,8 @@ export default function App() {
         notifications={notifications}
         onClose={() => setIsNotificationModalOpen(false)}
         onMarkAsRead={handleMarkAsRead}
+        onToggleReadStatus={handleToggleReadStatus}
+        onDeleteNotification={handleDeleteNotification}
         onMarkAllAsRead={handleMarkAllAsRead}
         onClearAll={handleClearAllNotifications}
         onNotificationClick={handleNotificationClick}
