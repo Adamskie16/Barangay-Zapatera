@@ -155,10 +155,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
               setProfile(loadedProfile);
 
-              // Keep local session updated with latest profile fields
+              // Keep local session updated with latest profile fields only if still logged in
               try {
-                const currentSession = StorageService.getCurrentUser() || {};
-                StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+                const currentSession = StorageService.getCurrentUser();
+                if (currentSession && currentSession.role === 'admin') {
+                  StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+                }
               } catch (e) {}
             }
           } else {

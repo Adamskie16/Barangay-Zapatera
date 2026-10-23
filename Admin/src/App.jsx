@@ -189,6 +189,8 @@ export default function App() {
   };
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [receiveRequestTarget, setReceiveRequestTarget] = useState(null);
+  const [approvedDocsTarget, setApprovedDocsTarget] = useState(null);
 
   const handleLogoutRequest = () => {
     setIsLogoutModalOpen(true);
@@ -196,12 +198,52 @@ export default function App() {
 
   const handleConfirmLogout = () => {
     setIsLogoutModalOpen(false);
+    setIsMobileMenuOpen(false);
+    setReceiveRequestTarget(null);
+    setApprovedDocsTarget(null);
+    setActiveTab('dashboard');
     try {
       localStorage.removeItem('zapatera_admin_active_tab');
     } catch {}
     StorageService.setCurrentUser(null);
     setCurrentUser(null);
-    refreshState();
+  };
+
+  const handleQueueAction = (req) => {
+    if (!req) return;
+    const s = String(req.status || '').toLowerCase().trim();
+
+    if (s === 'pending' || s === 'under_review') {
+      // Proceed to process if status is under review and pending
+      setReceiveRequestTarget({
+        selectedReq: req,
+        search: req.tracking_number || '',
+        statusFilter: s,
+      });
+      setActiveTab('receive_request');
+    } else if (s === 'approved' || s === 'completed' || s === 'issued' || s === 'ready_for_pickup') {
+      // Proceed to approved documents sorted / filtered by specific tracking number
+      setApprovedDocsTarget({
+        trackingNumber: req.tracking_number || '',
+        search: req.tracking_number || '',
+      });
+      setActiveTab('approved_documents');
+    } else if (s === 'declined' || s === 'rejected') {
+      // If decline proceed to document request
+      setReceiveRequestTarget({
+        selectedReq: null,
+        search: req.tracking_number || '',
+        statusFilter: 'declined',
+      });
+      setActiveTab('receive_request');
+    } else {
+      setReceiveRequestTarget({
+        selectedReq: req,
+        search: req.tracking_number || '',
+        statusFilter: 'all',
+      });
+      setActiveTab('receive_request');
+    }
   };
 
   // Auth Guard - Strictly Barangay Admin only (Reject super_admin, treasurer, resident)
@@ -263,46 +305,6 @@ export default function App() {
       </>
     );
   }
-
-  const [receiveRequestTarget, setReceiveRequestTarget] = useState(null);
-  const [approvedDocsTarget, setApprovedDocsTarget] = useState(null);
-
-  const handleQueueAction = (req) => {
-    if (!req) return;
-    const s = String(req.status || '').toLowerCase().trim();
-
-    if (s === 'pending' || s === 'under_review') {
-      // Proceed to process if status is under review and pending
-      setReceiveRequestTarget({
-        selectedReq: req,
-        search: req.tracking_number || '',
-        statusFilter: s,
-      });
-      setActiveTab('receive_request');
-    } else if (s === 'approved' || s === 'completed' || s === 'issued' || s === 'ready_for_pickup') {
-      // Proceed to approved documents sorted / filtered by specific tracking number
-      setApprovedDocsTarget({
-        trackingNumber: req.tracking_number || '',
-        search: req.tracking_number || '',
-      });
-      setActiveTab('approved_documents');
-    } else if (s === 'declined' || s === 'rejected') {
-      // If decline proceed to document request
-      setReceiveRequestTarget({
-        selectedReq: null,
-        search: req.tracking_number || '',
-        statusFilter: 'declined',
-      });
-      setActiveTab('receive_request');
-    } else {
-      setReceiveRequestTarget({
-        selectedReq: req,
-        search: req.tracking_number || '',
-        statusFilter: 'all',
-      });
-      setActiveTab('receive_request');
-    }
-  };
 
   const tabTitles = {
     dashboard: 'Barangay Admin Operations Dashboard',

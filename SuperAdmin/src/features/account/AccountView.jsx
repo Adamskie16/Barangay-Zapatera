@@ -153,8 +153,10 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               setProfile(loadedProfile);
 
               try {
-                const currentSession = StorageService.getCurrentUser() || {};
-                StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+                const currentSession = StorageService.getCurrentUser();
+                if (currentSession && currentSession.role === 'super_admin') {
+                  StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+                }
               } catch (e) {}
             }
           } else {

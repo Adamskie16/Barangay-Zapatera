@@ -198,12 +198,13 @@ export default function App() {
 
   const handleConfirmLogout = () => {
     setIsLogoutModalOpen(false);
+    setIsMobileMenuOpen(false);
+    setActiveTab('dashboard');
     try {
       localStorage.removeItem('zapatera_superadmin_active_tab');
     } catch {}
     StorageService.setCurrentUser(null);
     setCurrentUser(null);
-    refreshState();
   };
 
   // Handlers for Data Mutations
