@@ -83,43 +83,37 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
   }
 
   return (
-    <div className={`rounded-2xl border p-5 shadow-xs space-y-4 transition-colors ${
-      isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-    }`}>
+    <div className="bg-white rounded-[26px] border border-slate-100/80 p-5 shadow-xs space-y-4 text-slate-800">
       {/* Calendar Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <CalendarIcon className="w-5 h-5 text-blue-600" />
-          <h3 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-xl bg-sky-50 text-[#38bdf8] flex items-center justify-center">
+            <CalendarIcon className="w-4 h-4" />
+          </div>
+          <h3 className="font-extrabold text-sm text-slate-800">
             {monthNames[month]} {year}
           </h3>
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1.5">
           <button
             type="button"
             onClick={prevMonth}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+            className="w-7 h-7 rounded-xl bg-[#f4f7fb] text-slate-500 hover:text-[#3b5bfd] hover:bg-blue-50 flex items-center justify-center transition-colors cursor-pointer"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={nextMonth}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
-            }`}
+            className="w-7 h-7 rounded-xl bg-[#f4f7fb] text-slate-500 hover:text-[#3b5bfd] hover:bg-blue-50 flex items-center justify-center transition-colors cursor-pointer"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       {/* Weekday Labels */}
-      <div className={`grid grid-cols-7 text-center text-[10px] font-bold uppercase tracking-wider border-b pb-2 ${
-        isDarkMode ? 'text-slate-500 border-slate-800' : 'text-slate-400 border-slate-100'
-      }`}>
+      <div className="grid grid-cols-7 text-center text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
         <span>Su</span>
         <span>Mo</span>
         <span>Tu</span>
@@ -134,9 +128,10 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
         {days.map((item, idx) => {
           if (!item.isCurrentMonth) {
             return (
-              <div key={idx} className={`py-2 pointer-events-none text-[11px] ${
-                isDarkMode ? 'text-slate-700' : 'text-slate-300'
-              }`}>
+              <div
+                key={idx}
+                className="py-2 pointer-events-none text-[11px] text-slate-300"
+              >
                 {item.day}
               </div>
             );
@@ -157,24 +152,32 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
                   onSelectDate(isSelected ? null : item.dateKey);
                 }
               }}
-              title={isPast ? 'Past date (non-selectable)' : (hasEvents ? `${item.events.length} event(s) scheduled` : '')}
-              className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all ${
+              title={
                 isPast
-                  ? isDarkMode
-                    ? 'opacity-25 cursor-not-allowed text-slate-600 select-none'
-                    : 'opacity-30 cursor-not-allowed text-slate-300 bg-slate-50/40 select-none'
-                  : isSelected
-                  ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-900/30 cursor-pointer'
-                  : isToday
-                  ? isDarkMode ? 'bg-blue-950/60 text-blue-300 font-bold border border-blue-800 cursor-pointer' : 'bg-blue-50 text-blue-800 font-bold border border-blue-300 cursor-pointer'
+                  ? 'Past date (non-selectable)'
                   : hasEvents
-                  ? isDarkMode ? 'bg-blue-900/50 hover:bg-blue-900/80 text-blue-200 font-bold cursor-pointer' : 'bg-blue-100/70 hover:bg-blue-200 text-blue-900 font-bold cursor-pointer'
-                  : isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer' : 'text-slate-700 hover:bg-slate-100 cursor-pointer'
+                  ? `${item.events.length} event(s) scheduled`
+                  : ''
+              }
+              className={`py-2 rounded-full flex flex-col items-center justify-center relative transition-all ${
+                isPast
+                  ? 'opacity-30 cursor-not-allowed text-slate-300 select-none'
+                  : isSelected
+                  ? 'bg-gradient-to-b from-[#4dc4ff] to-[#3b5bfd] text-white font-extrabold shadow-md shadow-sky-400/35 cursor-pointer'
+                  : isToday
+                  ? 'bg-sky-50 text-[#3b5bfd] font-extrabold border border-sky-200 cursor-pointer'
+                  : hasEvents
+                  ? 'bg-blue-50/80 hover:bg-blue-100 text-[#3b5bfd] font-extrabold cursor-pointer'
+                  : 'text-slate-600 hover:bg-[#f4f7fb] font-medium cursor-pointer'
               }`}
             >
               <span>{item.day}</span>
               {hasEvents && !isPast && (
-                <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSelected ? 'bg-white' : 'bg-blue-600'}`} />
+                <span
+                  className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
+                    isSelected ? 'bg-white' : 'bg-[#38bdf8]'
+                  }`}
+                />
               )}
             </button>
           );
@@ -183,27 +186,24 @@ export default function EventCalendar({ events = [], selectedDate, onSelectDate,
 
       {/* Active Filter Status */}
       {selectedDate ? (
-        <div className={`pt-3 border-t flex items-center justify-between text-xs ${
-          isDarkMode ? 'border-slate-800' : 'border-slate-100'
-        }`}>
-          <span className={`font-semibold flex items-center ${isDarkMode ? 'text-blue-400' : 'text-blue-800'}`}>
-            <Filter className="w-3.5 h-3.5 mr-1" /> Filtered Date: <span className="font-mono ml-1 font-bold">{selectedDate}</span>
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+          <span className="font-bold flex items-center text-[#3b5bfd]">
+            <Filter className="w-3.5 h-3.5 mr-1 text-[#38bdf8]" /> Filtered:{' '}
+            <span className="font-mono ml-1 font-extrabold">{selectedDate}</span>
           </span>
           <button
             type="button"
             onClick={() => onSelectDate(null)}
-            className="text-slate-500 hover:text-rose-600 font-bold flex items-center space-x-0.5 text-[11px] cursor-pointer"
+            className="text-slate-400 hover:text-rose-600 font-bold flex items-center space-x-0.5 text-[11px] cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
-            <span>Clear Filter</span>
+            <span>Clear</span>
           </button>
         </div>
       ) : (
-        <div className={`pt-2 border-t text-center text-[11px] ${
-          isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-100 text-slate-400'
-        }`}>
-          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1.5" />
-          Highlighted days indicate scheduled barangay events & bulletins.
+        <div className="pt-2 border-t border-slate-100 text-center text-[11px] text-slate-400">
+          <span className="inline-block w-2 h-2 rounded-full bg-[#38bdf8] mr-1.5" />
+          Highlighted days indicate scheduled barangay events &amp; bulletins.
         </div>
       )}
     </div>

@@ -626,596 +626,612 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-3">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-        <p className="text-xs font-semibold text-slate-400">Loading Account Profile & Security Settings...</p>
+      <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 flex flex-col items-center justify-center min-h-[420px] space-y-3 font-sans">
+        <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#3b5bfd] shadow-xs">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-bold text-slate-400">Loading Account Profile & Security Settings...</p>
       </div>
     );
   }
 
+  const passwordStrengthChecks = [
+    securityForm.newPassword.length >= 8,
+    /[A-Z]/.test(securityForm.newPassword),
+    /[a-z]/.test(securityForm.newPassword),
+    /[0-9]/.test(securityForm.newPassword),
+    /[^A-Za-z0-9]/.test(securityForm.newPassword),
+  ];
+  const passedStrengthCount = passwordStrengthChecks.filter(Boolean).length;
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 font-sans pb-12">
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans pb-12">
+      {/* Top Page Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 px-1 pt-1">
+        <div>
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white text-[#3b5bfd] text-[11px] font-bold uppercase tracking-wider mb-2 shadow-xs border border-slate-100">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#38bdf8]" />
+            <span>Account & Security Settings</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            Settings & Profile Control
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
+            Manage your official barangay administrator identity, contact credentials, password security, and active device session.
+          </p>
+        </div>
+
+        {onLogout && (
+          <div className="flex items-center gap-2.5 self-start lg:self-auto">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="px-5 py-2.5 rounded-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold shadow-xs transition-all flex items-center space-x-2 cursor-pointer"
+              title="Sign out of your active session"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out Session</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Toast Notification Banner */}
       {toast.show && (
         <div
-          className={`p-4 rounded-xl shadow-lg border flex items-center justify-between text-xs font-semibold transition-all transform duration-300 ${
+          className={`p-4 rounded-2xl shadow-xs border flex items-center justify-between text-xs font-bold transition-all ${
             toast.type === 'error'
-              ? 'bg-rose-950/90 text-rose-200 border-rose-800'
+              ? 'bg-rose-50 text-rose-800 border-rose-200'
               : toast.type === 'info'
-              ? 'bg-blue-950/90 text-blue-200 border-blue-800'
-              : 'bg-emerald-950/90 text-emerald-200 border-emerald-800'
+              ? 'bg-blue-50 text-blue-800 border-blue-200'
+              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
           }`}
         >
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2.5">
             {toast.type === 'error' ? (
-              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
             ) : (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             )}
             <span>{toast.message}</span>
           </div>
           <button
             onClick={() => setToast({ show: false, message: '', type: 'success' })}
-            className="text-slate-400 hover:text-white text-xs ml-4"
+            className="text-slate-400 hover:text-slate-700 text-xs ml-4 cursor-pointer"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Header Profile Banner */}
-      <div className="p-6 rounded-2xl border shadow-sm bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-slate-200 text-white">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
-          {/* Avatar Preview & Upload */}
-          <div className="relative group">
-            <UserAvatar
-              src={profile.avatar_url}
-              name={profile.full_name || profile.username || profile.email}
-              role={profile.role || 'admin'}
-              size="2xl"
-              isDarkMode={isDarkMode}
-              className="w-24 h-24 rounded-2xl text-2xl font-bold border-2 border-blue-500/40 shadow-xl"
-            />
-
-            <label
-              className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-[10px] font-bold shadow-md cursor-pointer transition-transform hover:scale-105"
-              title="Upload New Profile Picture"
-            >
-              {uploadingAvatar ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <ImageIcon className="w-3.5 h-3.5" />
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                disabled={uploadingAvatar}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setUploadingAvatar(true);
-                  const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
-                  if (result.success && result.url) {
-                    setProfile((prev) => ({ ...prev, avatar_url: result.url }));
-                    setActionModal({
-                      isOpen: true,
-                      type: 'success',
-                      title: 'Profile Photo Uploaded',
-                      message: 'Your photo has been uploaded. Click "Save Profile Changes" to persist your updates.',
-                      buttonText: 'OK',
-                      onClose: () => setActionModal({ isOpen: false }),
-                    });
-                  } else {
-                    setActionModal({
-                      isOpen: true,
-                      type: 'error',
-                      title: 'Upload Failed',
-                      message: 'Unable to upload photo. Please check the image file and try again.',
-                      buttonText: 'Close',
-                      onClose: () => setActionModal({ isOpen: false }),
-                    });
-                  }
-                  setUploadingAvatar(false);
-                }}
-              />
-            </label>
+      {/* 4 Colorful Gradient KPI Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#3b5bfd] via-[#4f6ef7] to-[#60a5fa] text-white shadow-[0_14px_30px_-12px_rgba(59,91,253,0.45)] flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Administrator Role</p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{getRoleBadgeLabel(profile.role)}</h3>
+            <p className="text-[11px] text-white/80 mt-1 font-mono">@{profile.username || 'admin'}</p>
           </div>
+          <div className="w-12 h-12 rounded-2xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-md shrink-0">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+        </div>
 
-          {/* User Info Overview */}
-          <div className="text-center sm:text-left space-y-1 flex-1">
-            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-3">
-              <h1 className="text-2xl font-bold tracking-tight text-white">{profile.full_name}</h1>
-              {/* Account Role Badge */}
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/30 inline-flex items-center self-center sm:self-auto">
-                <ShieldCheck className="w-3 h-3 mr-1 text-blue-400" />
-                {getRoleBadgeLabel(profile.role)}
-              </span>
-            </div>
-            <p className="text-xs text-blue-300 font-mono">@{profile.username || 'admin'}</p>
-            <p className="text-xs text-slate-300 flex items-center justify-center sm:justify-start pt-1">
-              <Mail className="w-3.5 h-3.5 mr-1 text-slate-400" />
-              <span>{profile.email}</span>
-            </p>
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#10b981] via-[#14b8a6] to-[#34d399] text-white shadow-[0_14px_30px_-12px_rgba(16,185,129,0.45)] flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Security Status</p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">Verified Active</h3>
+            <p className="text-[11px] text-white/80 mt-1 truncate max-w-[180px]">{profile.email}</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-md shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
 
-            <div className="pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400 border-t border-slate-800/80 mt-3 w-full">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
-                <span className="flex items-center">
-                  <Calendar className="w-3.5 h-3.5 mr-1 text-blue-400" />
-                  Member Since: <strong className="ml-1 text-slate-200">{formatDate(profile.created_at)}</strong>
-                </span>
-                <span className="flex items-center">
-                  <Clock className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-                  Last Updated: <strong className="ml-1 text-slate-200">{formatDate(profile.updated_at)}</strong>
-                </span>
-              </div>
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#6366f1] via-[#8b5cf6] to-[#a855f7] text-white shadow-[0_14px_30px_-12px_rgba(139,92,246,0.45)] flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Member Since</p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{formatDate(profile.created_at)}</h3>
+            <p className="text-[11px] text-white/80 mt-1">Official Barangay Portal</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white text-indigo-600 flex items-center justify-center shadow-md shrink-0">
+            <Calendar className="w-6 h-6" />
+          </div>
+        </div>
 
-              {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer shrink-0"
-                  title="Sign out of your session"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Sign Out</span>
-                </button>
-              )}
-            </div>
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#f59e0b] via-[#f97316] to-[#fb923c] text-white shadow-[0_14px_30px_-12px_rgba(249,115,22,0.42)] flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Last Profile Sync</p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{formatDate(profile.updated_at)}</h3>
+            <p className="text-[11px] text-white/80 mt-1">Cloud & Local Storage</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white text-amber-500 flex items-center justify-center shadow-md shrink-0">
+            <Clock className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* Main Profile Form Card */}
-      <div className="p-6 sm:p-8 rounded-2xl border shadow-sm bg-white border-slate-200 text-slate-800">
-        <div className="border-b pb-4 mb-6 flex items-center justify-between border-slate-200">
-          <div>
-            <h2 className="text-lg font-bold">Profile Details & Personal Information</h2>
-            <p className="text-xs mt-0.5 text-slate-500">
-              Manage your official administrator details, contact number, and profile photo.
-            </p>
-          </div>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            Account Info
-          </span>
-        </div>
-
-        <form onSubmit={handleInitiateSaveProfile} className="space-y-6">
-          {/* Read-Only Email & Account Role */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Email Address (Read-Only)
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="email"
-                  readOnly
-                  disabled
-                  value={profile.email}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs font-mono border transition-colors cursor-not-allowed bg-slate-100 border-slate-200 text-slate-500"
+      {/* Main 2-Column Settings Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Administrator Identity & Profile Details Form */}
+        <div className="xl:col-span-7 space-y-6">
+          <div className="bg-white rounded-[26px] border border-slate-100 shadow-[0_8px_30px_rgb(15,23,42,0.04)] p-6 sm:p-7 space-y-6">
+            {/* Light Profile Identity Banner */}
+            <div className="p-5 rounded-[22px] bg-[#f4f7fb] border border-slate-200/80 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              <div className="relative group shrink-0">
+                <UserAvatar
+                  src={profile.avatar_url}
+                  name={profile.full_name || profile.username || profile.email}
+                  role={profile.role || 'admin'}
+                  size="2xl"
+                  isDarkMode={false}
+                  className="w-20 h-20 rounded-2xl text-2xl font-extrabold border-2 border-white shadow-md"
                 />
-                <Lock className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Account Security Role (Read-Only)
-              </label>
-              <div className="relative">
-                <ShieldCheck className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-500" />
-                <input
-                  type="text"
-                  readOnly
-                  disabled
-                  value={getRoleBadgeLabel(profile.role)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-not-allowed capitalize bg-blue-50 border-blue-200 text-blue-800"
-                />
-                <Lock className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              </div>
-            </div>
-          </div>
-
-          {/* Full Name & Username */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Full Name *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  required
-                  value={profile.full_name}
-                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  placeholder="Barangay Staff Officer"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Username *
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">@</span>
-                <input
-                  type="text"
-                  required
-                  value={profile.username}
-                  onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-                  placeholder="admin"
-                  className="w-full pl-8 pr-3.5 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Phone Number & Avatar URL */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Phone Number
-              </label>
-              <div className="relative">
-                <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  placeholder="09171234567"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Avatar Image URL (Optional)
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <ImageIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="url"
-                    value={profile.avatar_url}
-                    onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-                    placeholder="https://... or upload an image file"
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                  />
-                </div>
                 <label
-                  className="px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0 border transition-all bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
-                  title="Upload Avatar Image"
+                  className="absolute -bottom-1.5 -right-1.5 w-8 h-8 bg-[#3b5bfd] hover:bg-blue-700 rounded-xl text-white flex items-center justify-center shadow-md cursor-pointer transition-transform hover:scale-105"
+                  title="Upload New Profile Picture"
                 >
                   {uploadingAvatar ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Upload className="w-3.5 h-3.5 text-blue-600" />
+                    <ImageIcon className="w-4 h-4" />
                   )}
-                  <span>{uploadingAvatar ? 'Uploading…' : 'Upload'}</span>
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
                     disabled={uploadingAvatar}
-                    onChange={handleAvatarFileSelected}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingAvatar(true);
+                      const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
+                      if (result.success && result.url) {
+                        setProfile((prev) => ({ ...prev, avatar_url: result.url }));
+                        setActionModal({
+                          isOpen: true,
+                          type: 'success',
+                          title: 'Profile Photo Uploaded',
+                          message: 'Your photo has been uploaded. Click "Save Profile Changes" to persist your updates.',
+                          buttonText: 'OK',
+                          onClose: () => setActionModal({ isOpen: false }),
+                        });
+                      } else {
+                        setActionModal({
+                          isOpen: true,
+                          type: 'error',
+                          title: 'Upload Failed',
+                          message: 'Unable to upload photo. Please check the image file and try again.',
+                          buttonText: 'Close',
+                          onClose: () => setActionModal({ isOpen: false }),
+                        });
+                      }
+                      setUploadingAvatar(false);
+                    }}
                   />
                 </label>
               </div>
-              {profile.avatar_url && (
-                <div className="mt-2 flex items-center gap-2">
-                  <img
-                    src={profile.avatar_url}
-                    alt="Avatar preview"
-                    className="w-7 h-7 rounded-full object-cover border border-blue-500/40"
-                  />
-                  <span className="text-[11px] text-slate-400">Preview</span>
+
+              <div className="text-center sm:text-left flex-1 min-w-0">
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h3 className="text-lg font-extrabold text-slate-900 truncate">{profile.full_name}</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-[#3b5bfd] border border-blue-200 inline-flex items-center">
+                    <ShieldCheck className="w-3 h-3 mr-1 text-[#38bdf8]" />
+                    {getRoleBadgeLabel(profile.role)}
+                  </span>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Form Action Footer */}
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center space-x-2 transition-all cursor-pointer"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Saving Profile…</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Save Profile Changes</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Security Settings & Password Section */}
-      <div className="p-6 sm:p-8 rounded-2xl border shadow-sm bg-white border-slate-200 text-slate-800">
-        <div className="border-b pb-4 mb-6 flex items-center justify-between border-slate-200">
-          <div>
-            <h2 className="text-lg font-bold flex items-center">
-              <Key className="w-5 h-5 text-amber-500 mr-2" />
-              <span>Security Settings & Password Authentication</span>
-            </h2>
-            <p className="text-xs mt-0.5 text-slate-500">
-              Update your account password and security credentials.
-            </p>
-          </div>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            Security Control
-          </span>
-        </div>
-
-        {passwordError && (
-          <div className="p-4 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center space-x-2 font-medium">
-            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{passwordError}</span>
-          </div>
-        )}
-
-        {passwordSuccess && (
-          <div className="p-4 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2 font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span>{passwordSuccess}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleChangePassword} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold mb-1.5 text-slate-700">
-              Current Password *
-            </label>
-            <div className="relative max-w-md">
-              <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type={showCurrentPass ? 'text' : 'password'}
-                required
-                name="account_current_pass"
-                autoComplete="current-password"
-                value={securityForm.currentPassword}
-                onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })}
-                placeholder="Enter your existing account password"
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrentPass(!showCurrentPass)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                New Password *
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type={showNewPass ? 'text' : 'password'}
-                  required
-                  name="account_new_pass"
-                  autoComplete="new-password"
-                  value={securityForm.newPassword}
-                  onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
-                  placeholder="Minimum 8 strong characters"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPass(!showNewPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold mb-1.5 text-slate-700">
-                Confirm New Password *
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type={showNewPass ? 'text' : 'password'}
-                  required
-                  name="account_confirm_pass"
-                  autoComplete="new-password"
-                  value={securityForm.confirmPassword}
-                  onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
-                  placeholder="Re-type new password"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Real-Time Strong Password Validation Checklist */}
-          {securityForm.newPassword && (
-            <div className="p-3.5 rounded-xl border max-w-2xl text-xs space-y-2 transition-all bg-slate-50 border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-700">
-                  Password Strength Requirements:
-                </span>
-                <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
-                  [
-                    securityForm.newPassword.length >= 8,
-                    /[A-Z]/.test(securityForm.newPassword),
-                    /[a-z]/.test(securityForm.newPassword),
-                    /[0-9]/.test(securityForm.newPassword),
-                    /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                  ].filter(Boolean).length === 5
-                    ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30'
-                    : [
-                        securityForm.newPassword.length >= 8,
-                        /[A-Z]/.test(securityForm.newPassword),
-                        /[a-z]/.test(securityForm.newPassword),
-                        /[0-9]/.test(securityForm.newPassword),
-                        /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                      ].filter(Boolean).length >= 3
-                    ? 'bg-amber-500/20 text-amber-600 border border-amber-500/30'
-                    : 'bg-rose-500/20 text-rose-600 border border-rose-500/30'
-                }`}>
-                  {[
-                    securityForm.newPassword.length >= 8,
-                    /[A-Z]/.test(securityForm.newPassword),
-                    /[a-z]/.test(securityForm.newPassword),
-                    /[0-9]/.test(securityForm.newPassword),
-                    /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                  ].filter(Boolean).length === 5 ? 'Strong Password' : 'Incomplete'}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-300 rounded-full ${
-                    [
-                      securityForm.newPassword.length >= 8,
-                      /[A-Z]/.test(securityForm.newPassword),
-                      /[a-z]/.test(securityForm.newPassword),
-                      /[0-9]/.test(securityForm.newPassword),
-                      /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                    ].filter(Boolean).length === 5
-                      ? 'bg-emerald-500'
-                      : [
-                          securityForm.newPassword.length >= 8,
-                          /[A-Z]/.test(securityForm.newPassword),
-                          /[a-z]/.test(securityForm.newPassword),
-                          /[0-9]/.test(securityForm.newPassword),
-                          /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                        ].filter(Boolean).length >= 3
-                      ? 'bg-amber-500'
-                      : 'bg-rose-500'
-                  }`}
-                  style={{
-                    width: `${([
-                      securityForm.newPassword.length >= 8,
-                      /[A-Z]/.test(securityForm.newPassword),
-                      /[a-z]/.test(securityForm.newPassword),
-                      /[0-9]/.test(securityForm.newPassword),
-                      /[^A-Za-z0-9]/.test(securityForm.newPassword)
-                    ].filter(Boolean).length / 5) * 100}%`
-                  }}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px]">
-                <div className={`flex items-center space-x-1.5 ${securityForm.newPassword.length >= 8 ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                  {securityForm.newPassword.length >= 8 ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                  <span>At least 8 characters</span>
-                </div>
-                <div className={`flex items-center space-x-1.5 ${/[A-Z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                  {/[A-Z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                  <span>At least one uppercase letter (A-Z)</span>
-                </div>
-                <div className={`flex items-center space-x-1.5 ${/[a-z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                  {/[a-z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                  <span>At least one lowercase letter (a-z)</span>
-                </div>
-                <div className={`flex items-center space-x-1.5 ${/[0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                  {/[0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                  <span>At least one number (0-9)</span>
-                </div>
-                <div className={`flex items-center space-x-1.5 ${/[^A-Za-z0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                  {/[^A-Za-z0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
-                  <span>At least one special character (!@#$%^&*)</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end">
-            <button
-              type="submit"
-              disabled={updatingPassword}
-              className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-amber-600/30 flex items-center space-x-2 transition-all cursor-pointer"
-            >
-              {updatingPassword ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Updating Security Password…</span>
-                </>
-              ) : (
-                <>
-                  <Key className="w-4 h-4" />
-                  <span>Update Account Password</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Active Session & Device Sign Out Card (Dedicated Sign Out for Mobile & Desktop) */}
-      {onLogout && (
-        <div className="p-5 sm:p-6 rounded-2xl border shadow-sm transition-colors bg-white border-slate-200 text-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center space-x-3.5">
-              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl shrink-0">
-                <LogOut className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Active Account Session</h3>
-                <p className="text-xs mt-0.5 text-slate-500">
-                  Signed in as <span className="font-mono font-semibold text-slate-700">{profile.email}</span>. You can safely sign out of your account on this device.
+                <p className="text-xs font-mono font-bold text-[#3b5bfd] mt-0.5">@{profile.username || 'admin'}</p>
+                <p className="text-xs text-slate-500 flex items-center justify-center sm:justify-start mt-1.5 truncate">
+                  <Mail className="w-3.5 h-3.5 mr-1.5 text-slate-400 shrink-0" />
+                  <span className="truncate">{profile.email}</span>
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer shrink-0"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out of Profile</span>
-            </button>
+
+            {/* Section Title */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">Profile Details & Personal Information</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Update your official administrator name, username handle, contact number, and avatar.
+                </p>
+              </div>
+              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] border border-blue-100 shrink-0">
+                Account Info
+              </span>
+            </div>
+
+            <form onSubmit={handleInitiateSaveProfile} className="space-y-5">
+              {/* Read-Only Email & Account Role */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Email Address (Read-Only)
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      readOnly
+                      disabled
+                      value={profile.email}
+                      className="w-full pl-10 pr-9 py-2.5 rounded-2xl text-xs font-mono border cursor-not-allowed bg-slate-100/80 border-slate-200 text-slate-500"
+                    />
+                    <Lock className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Account Security Role (Read-Only)
+                  </label>
+                  <div className="relative">
+                    <ShieldCheck className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3b5bfd]" />
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={getRoleBadgeLabel(profile.role)}
+                      className="w-full pl-10 pr-9 py-2.5 rounded-2xl text-xs font-bold border cursor-not-allowed capitalize bg-blue-50/70 border-blue-200 text-[#3b5bfd]"
+                    />
+                    <Lock className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Name & Username */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Full Name *
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      value={profile.full_name}
+                      onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                      placeholder="Barangay Staff Officer"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Username *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs font-bold">@</span>
+                    <input
+                      type="text"
+                      required
+                      value={profile.username}
+                      onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                      placeholder="admin"
+                      className="w-full pl-8 pr-3.5 py-2.5 rounded-2xl text-xs font-mono font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone Number & Avatar URL */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Phone Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={profile.phone}
+                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                      placeholder="09171234567"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Avatar Image URL or Upload
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <ImageIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="url"
+                        value={profile.avatar_url}
+                        onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
+                        placeholder="https://... or upload file"
+                        className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                      />
+                    </div>
+                    <label
+                      className="px-4 py-2.5 rounded-full text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 border transition-all bg-[#f4f7fb] hover:bg-blue-50 text-[#3b5bfd] border-blue-200"
+                      title="Upload Avatar Image"
+                    >
+                      {uploadingAvatar ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3b5bfd]" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                      )}
+                      <span>{uploadingAvatar ? 'Uploading…' : 'Upload'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                        onChange={handleAvatarFileSelected}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Action Footer */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Requires administrator password confirmation to save.
+                </span>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-6 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-full shadow-md shadow-blue-500/20 flex items-center space-x-2 transition-all cursor-pointer shrink-0"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving Profile…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Profile Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      )}
 
-      {/* Danger Zone Section */}
-      <div className="p-6 sm:p-8 rounded-2xl border shadow-sm bg-rose-50/50 border-rose-200 text-slate-900">
-        <div className="flex items-start space-x-4">
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-500 rounded-xl shrink-0">
-            <AlertTriangle className="w-6 h-6" />
+        {/* Right Column: Password Authentication & Session / Danger Zone */}
+        <div className="xl:col-span-5 space-y-6">
+          {/* Security Settings & Password Card */}
+          <div className="bg-white rounded-[26px] border border-slate-100 shadow-[0_8px_30px_rgb(15,23,42,0.04)] p-6 sm:p-7 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center shrink-0">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Password & Authentication</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Update your administrator login password.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                Security
+              </span>
+            </div>
+
+            {passwordError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center space-x-2 font-semibold">
+                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>{passwordSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Current Password *
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type={showCurrentPass ? 'text' : 'password'}
+                    required
+                    name="account_current_pass"
+                    autoComplete="current-password"
+                    value={securityForm.currentPassword}
+                    onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })}
+                    placeholder="Enter existing account password"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPass(!showCurrentPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    New Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      required
+                      name="account_new_pass"
+                      autoComplete="new-password"
+                      value={securityForm.newPassword}
+                      onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
+                      placeholder="Min 8 strong chars"
+                      className="w-full pl-10 pr-9 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPass(!showNewPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      required
+                      name="account_confirm_pass"
+                      autoComplete="new-password"
+                      value={securityForm.confirmPassword}
+                      onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
+                      placeholder="Re-type new password"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Real-Time Strong Password Validation Checklist */}
+              {securityForm.newPassword && (
+                <div className="p-4 rounded-2xl border text-xs space-y-2.5 transition-all bg-[#f4f7fb] border-slate-200/80">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700">Password Strength</span>
+                    <span
+                      className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        passedStrengthCount === 5
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : passedStrengthCount >= 3
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}
+                    >
+                      {passedStrengthCount === 5 ? 'Strong Password' : 'Incomplete'}
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 rounded-full ${
+                        passedStrengthCount === 5
+                          ? 'bg-emerald-500'
+                          : passedStrengthCount >= 3
+                          ? 'bg-amber-500'
+                          : 'bg-rose-500'
+                      }`}
+                      style={{ width: `${(passedStrengthCount / 5) * 100}%` }}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-1 pt-1 text-[11px]">
+                    <div className={`flex items-center space-x-1.5 ${securityForm.newPassword.length >= 8 ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                      {securityForm.newPassword.length >= 8 ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                      <span>At least 8 characters</span>
+                    </div>
+                    <div className={`flex items-center space-x-1.5 ${/[A-Z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                      {/[A-Z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                      <span>One uppercase letter (A-Z)</span>
+                    </div>
+                    <div className={`flex items-center space-x-1.5 ${/[a-z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                      {/[a-z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                      <span>One lowercase letter (a-z)</span>
+                    </div>
+                    <div className={`flex items-center space-x-1.5 ${/[0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                      {/[0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                      <span>One number (0-9)</span>
+                    </div>
+                    <div className={`flex items-center space-x-1.5 ${/[^A-Za-z0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+                      {/[^A-Za-z0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                      <span>One special character (!@#$%^&*)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={updatingPassword}
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold rounded-full shadow-md shadow-amber-500/20 flex items-center space-x-2 transition-all cursor-pointer"
+                >
+                  {updatingPassword ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Updating Password…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Key className="w-4 h-4" />
+                      <span>Update Account Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div className="flex-1 space-y-1">
-            <h3 className="text-base font-bold text-rose-600">Danger Zone</h3>
-            <p className="text-xs text-slate-600">
-              Deleting your account is a permanent action. This will remove your administrator account and revoke all access permissions.
-            </p>
+          {/* Session & Danger Zone Card */}
+          <div className="bg-white rounded-[26px] border border-slate-100 shadow-[0_8px_30px_rgb(15,23,42,0.04)] p-6 space-y-4">
+            {onLogout && (
+              <div className="p-4 rounded-2xl bg-[#f4f7fb] border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center shrink-0 shadow-2xs">
+                    <LogOut className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-900">Active Device Session</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Signed in as <span className="font-mono font-bold text-slate-700">{profile.email}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-4 py-2 rounded-full bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all cursor-pointer shrink-0"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
 
-            <div className="pt-3">
+            <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100/80 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-extrabold text-rose-700">Danger Zone — Delete Account</h4>
+                  <p className="text-[11px] text-rose-600/80 mt-0.5">
+                    Permanently remove this administrator profile and revoke access.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setDeleteConfirmInput('');
                   setIsDeleteModalOpen(true);
                 }}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-1.5 cursor-pointer"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-full shadow-xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Account</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
             </div>
           </div>
@@ -1223,66 +1239,69 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       </div>
 
       {/* Delete Confirmation Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden p-6 space-y-4 bg-white border-slate-200 text-slate-800">
-            <div className="flex items-center space-x-3 text-rose-500">
-              <ShieldAlert className="w-7 h-7" />
-              <h3 className="text-lg font-bold text-slate-900">Delete Account Confirmation</h3>
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Account Confirmation"
+        size="sm"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" />
             </div>
-
-            <p className="text-xs leading-relaxed text-slate-600">
-              Are you sure you want to permanently delete your profile for <strong className="font-mono text-rose-600">{profile.email}</strong>?
-            </p>
-
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs space-y-1">
-              <p className="font-bold">⚠️ Warning: This action cannot be undone!</p>
-              <p>
-                Type <span className="font-mono font-bold text-white bg-rose-600 px-1.5 py-0.5 rounded">DELETE</span> below to proceed.
+            <div>
+              <p className="font-extrabold text-rose-900 text-xs">Permanent Account Removal</p>
+              <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
+                Are you sure you want to permanently delete your profile for{' '}
+                <strong className="font-mono">{profile.email}</strong>? This action cannot be undone.
               </p>
             </div>
+          </div>
 
-            <div>
-              <input
-                type="text"
-                value={deleteConfirmInput}
-                onChange={(e) => setDeleteConfirmInput(e.target.value)}
-                placeholder="Type DELETE"
-                className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono border focus:ring-2 focus:ring-rose-500 focus:outline-none bg-white border-slate-300 text-slate-900 placeholder-slate-400"
-              />
-            </div>
+          <div className="p-4 rounded-2xl bg-[#f4f7fb] border border-slate-200/80 space-y-2">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              Type <span className="font-mono font-extrabold text-rose-600">DELETE</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmInput}
+              onChange={(e) => setDeleteConfirmInput(e.target.value)}
+              placeholder="Type DELETE"
+              className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono font-bold border border-slate-200 bg-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 focus:outline-none text-slate-900 placeholder-slate-400"
+            />
+          </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
+          <div className="flex items-center justify-end gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="px-4 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
 
-              <button
-                type="button"
-                disabled={deleteConfirmInput.trim() !== 'DELETE' || deleting}
-                onClick={handleDeleteAccount}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-lg flex items-center space-x-1.5 transition-all cursor-pointer"
-              >
-                {deleting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Deleting Profile…</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-4 h-4" />
-                    <span>Confirm Delete Profile</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              type="button"
+              disabled={deleteConfirmInput.trim() !== 'DELETE' || deleting}
+              onClick={handleDeleteAccount}
+              className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-full shadow-md shadow-rose-500/20 flex items-center space-x-1.5 transition-all cursor-pointer"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Deleting Profile…</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Confirm Delete</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Security Verification Modal - Save Profile Changes */}
       <Modal
@@ -1292,29 +1311,32 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
           setSecurityPassword('');
           setSecurityError('');
         }}
-        title="Security Verification - Save Profile Changes"
+        title="Authorize Profile Changes"
+        size="sm"
       >
         <div className="space-y-4 text-xs">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start space-x-3">
-            <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl text-blue-900 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#3b5bfd] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
             <div>
-              <p className="font-bold text-sm text-blue-950">Authorize Profile Changes</p>
-              <p className="text-xs text-blue-800 mt-1">
-                Please enter your logged-in administrator password to verify your identity and commit your account profile modifications.
+              <p className="font-extrabold text-xs text-slate-900">Identity Confirmation Required</p>
+              <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                Enter your logged-in administrator password to verify your identity and commit your profile updates.
               </p>
             </div>
           </div>
 
           {securityError && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center space-x-2 font-medium">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl flex items-center space-x-2 font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
               <span>{securityError}</span>
             </div>
           )}
 
-          <div className="p-3.5 rounded-xl border bg-slate-50 border-slate-200 space-y-2">
-            <label className="block font-bold text-xs flex items-center text-slate-700">
-              <Lock className="w-3.5 h-3.5 mr-1 text-slate-500" /> Logged-in Account Password (Required to Authorize)
+          <div className="p-4 rounded-2xl border bg-[#f4f7fb] border-slate-200/80 space-y-2">
+            <label className="block font-bold text-[11px] uppercase tracking-wider flex items-center text-slate-600">
+              <Lock className="w-3.5 h-3.5 mr-1.5 text-[#3b5bfd]" /> Administrator Password
             </label>
             <div className="relative">
               <input
@@ -1333,7 +1355,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   }
                 }}
                 placeholder="Enter your logged-in account password"
-                className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs bg-white text-slate-900"
+                className="w-full pl-3.5 pr-10 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none font-mono text-xs bg-white text-slate-900"
               />
               <button
                 type="button"
@@ -1345,7 +1367,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+          <div className="pt-2 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => {
@@ -1353,7 +1375,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                 setSecurityPassword('');
                 setSecurityError('');
               }}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -1361,7 +1383,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               type="button"
               disabled={isVerifyingPassword || !securityPassword.trim()}
               onClick={handleConfirmSaveProfile}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-900/20 flex items-center space-x-2 transition-all cursor-pointer"
+              className="px-5 py-2 bg-[#3b5bfd] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-full shadow-md shadow-blue-500/20 flex items-center space-x-2 transition-all cursor-pointer"
             >
               {isVerifyingPassword ? (
                 <>
@@ -1371,7 +1393,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               ) : (
                 <>
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Authorize & Save Changes</span>
+                  <span>Authorize & Save</span>
                 </>
               )}
             </button>

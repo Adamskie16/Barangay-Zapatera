@@ -41,6 +41,8 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Filter,
   X,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
@@ -125,6 +127,7 @@ export default function UserManagementView({ currentUser }) {
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'active', 'locked'
+  const [filterRole, setFilterRole] = useState('all'); // 'all', 'resident', 'admin', 'treasurer', 'super_admin'
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
@@ -576,8 +579,36 @@ export default function UserManagementView({ currentUser }) {
     }
   };
 
+  const isAccountLocked = (u) =>
+    Boolean(
+      u.is_locked ||
+        (u.failed_login_attempts || 0) >= 3 ||
+        (u.failed_attempts || 0) >= 3 ||
+        u.is_active === false ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true')
+    );
+
+  const normalizeRole = (role) => {
+    const r = String(role || 'resident').toLowerCase().trim();
+    if (r === 'super_admin' || r === 'superadmin') return 'super_admin';
+    if (r === 'admin') return 'admin';
+    if (r === 'treasurer') return 'treasurer';
+    return 'resident';
+  };
+
+  const totalAccountsCount = usersList.length;
+  const lockedAccountsCount = usersList.filter((u) => isAccountLocked(u)).length;
+  const activeAccountsCount = Math.max(0, totalAccountsCount - lockedAccountsCount);
+  const residentAccountsCount = usersList.filter((u) => normalizeRole(u.role) === 'resident').length;
+  const adminAccountsCount = usersList.filter((u) => normalizeRole(u.role) === 'admin').length;
+  const treasurerAccountsCount = usersList.filter((u) => normalizeRole(u.role) === 'treasurer').length;
+  const superAdminAccountsCount = usersList.filter((u) => normalizeRole(u.role) === 'super_admin').length;
+  const registeredVotersCount = usersList.filter(
+    (u) => normalizeRole(u.role) === 'resident' && isUserRegisteredVoter(u)
+  ).length;
+
   const filteredUsers = usersList.filter((u) => {
-    const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
+    const isLocked = isAccountLocked(u);
     const matchesStatus =
       filterStatus === 'all'
         ? true
@@ -585,19 +616,23 @@ export default function UserManagementView({ currentUser }) {
         ? isLocked
         : !isLocked;
 
+    const userRole = normalizeRole(u.role);
+    const matchesRole = filterRole === 'all' ? true : userRole === filterRole;
+
     const searchLower = search.toLowerCase();
     const matchesSearch =
       (u.full_name || '').toLowerCase().includes(searchLower) ||
       (u.email || '').toLowerCase().includes(searchLower) ||
       (u.phone || '').toLowerCase().includes(searchLower) ||
-      (u.id_number || '').toLowerCase().includes(searchLower);
+      (u.id_number || '').toLowerCase().includes(searchLower) ||
+      (u.address || '').toLowerCase().includes(searchLower);
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesRole && matchesSearch;
   });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterStatus, pageSize]);
+  }, [search, filterStatus, filterRole, pageSize]);
 
   const handleSort = (columnKey) => {
     if (!columnKey) return;
@@ -648,122 +683,296 @@ export default function UserManagementView({ currentUser }) {
     return pages;
   };
 
+  const hasActiveFilters = filterStatus !== 'all' || filterRole !== 'all' || search.trim().length > 0;
+
   return (
-    <div className="space-y-6 font-sans">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border border-slate-200 shadow-xs">
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">User Account Management & Security</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Manage user accounts, check login status, and unlock accounts.
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
+            <Users className="w-3.5 h-3.5" />
+            <span>Identity & Access Control</span>
+          </div>
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
+            User Account Management & Security
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Monitor resident and official accounts, filter by role or lock state, and manage security lockouts.
           </p>
         </div>
-        <button
-          onClick={fetchUsers}
-          disabled={loadingUsers}
-          className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-xs font-semibold border border-blue-200 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <div className="inline-flex items-center gap-2 bg-white px-4 py-2.5 rounded-full border border-slate-200/80 shadow-xs text-xs font-bold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{totalAccountsCount} Registered Accounts</span>
+          </div>
+          <button
+            onClick={() => fetchUsers(true)}
+            disabled={loadingUsers}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-sm shadow-blue-500/25 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} />
+            <span>Sync Accounts</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 Colorful Gradient KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Total Accounts */}
+        <div
+          onClick={() => {
+            setFilterStatus('all');
+            setFilterRole('all');
+          }}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${
+            filterStatus === 'all' && filterRole === 'all' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
+          }`}
         >
-          <RefreshCw className={`w-4 h-4 ${loadingUsers ? 'animate-spin' : ''}`} />
-          <span>Sync Accounts</span>
-        </button>
-      </div>
-
-      {/* Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white rounded-xl border border-slate-200">
-        <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto">
-          {[
-            { id: 'all', label: 'All Accounts' },
-            { id: 'active', label: 'Active Accounts' },
-            { id: 'locked', label: 'Locked Out (3 Failures)' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilterStatus(tab.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                filterStatus === tab.id
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Users className="w-5 h-5 text-[#0284c7]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              All Profiles
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{totalAccountsCount}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Total User Accounts</p>
+            <p className="text-[11px] text-white/75 mt-1">
+              {residentAccountsCount} residents • {totalAccountsCount - residentAccountsCount} staff
+            </p>
+          </div>
         </div>
 
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            id="admin_user_mgmt_search"
-            name="admin_user_mgmt_search"
-            autoComplete="off"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email, or ID..."
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-          />
+        {/* Card 2: Active Accounts */}
+        <div
+          onClick={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01] ${
+            filterStatus === 'active' ? 'ring-4 ring-offset-2 ring-emerald-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <CheckCircle className="w-5 h-5 text-[#059669]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              {totalAccountsCount > 0 ? `${Math.round((activeAccountsCount / totalAccountsCount) * 100)}% Active` : 'Active'}
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{activeAccountsCount}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Active Accounts</p>
+            <p className="text-[11px] text-white/75 mt-1">Verified & unlocked access</p>
+          </div>
+        </div>
+
+        {/* Card 3: Locked Out Accounts */}
+        <div
+          onClick={() => setFilterStatus(filterStatus === 'locked' ? 'all' : 'locked')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#fb7185] via-[#f43f5e] to-[#e11d48] shadow-rose-500/15 hover:scale-[1.01] ${
+            filterStatus === 'locked' ? 'ring-4 ring-offset-2 ring-rose-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Lock className="w-5 h-5 text-[#e11d48]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Security Guard
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{lockedAccountsCount}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Locked Out (3 Failures)</p>
+            <p className="text-[11px] text-white/75 mt-1">Requires admin unlock review</p>
+          </div>
+        </div>
+
+        {/* Card 4: Resident & Voter Breakdown */}
+        <div
+          onClick={() => setFilterRole(filterRole === 'resident' ? 'all' : 'resident')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
+            filterRole === 'resident' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Vote className="w-5 h-5 text-[#4f46e5]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Voter Registry
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{registeredVotersCount}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Registered Voters</p>
+            <p className="text-[11px] text-white/75 mt-1">
+              Out of {residentAccountsCount} resident accounts
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Accounts Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* Main Content Card: Filter Bar + Table + Pagination */}
+      <div className="bg-white rounded-[26px] border border-slate-100/80 shadow-xs overflow-hidden">
+        {/* Filter Toolbar with Role Dropdown, Account Status Dropdown & Search */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Dropdown 1: Account Status Filter (All, Active Accounts, Locked Out) */}
+            <div className="relative">
+              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center">
+                {filterStatus === 'locked' ? (
+                  <Lock className="w-3.5 h-3.5 text-rose-500" />
+                ) : filterStatus === 'active' ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                )}
+              </div>
+              <select
+                aria-label="Filter by Account Status"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${
+                  filterStatus !== 'all'
+                    ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
+                    : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
+                }`}
+              >
+                <option value="all">All Account Status ({totalAccountsCount})</option>
+                <option value="active">Active Accounts ({activeAccountsCount})</option>
+                <option value="locked">Locked Out — 3 Failures ({lockedAccountsCount})</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {/* Dropdown 2: Role Filter (All Roles, Resident, Admin, Treasurer, Super Admin) */}
+            <div className="relative">
+              <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center">
+                <Filter className="w-3.5 h-3.5 text-[#3b5bfd]" />
+              </div>
+              <select
+                aria-label="Filter by User Role"
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${
+                  filterRole !== 'all'
+                    ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
+                    : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
+                }`}
+              >
+                <option value="all">All Roles ({totalAccountsCount})</option>
+                <option value="resident">Resident ({residentAccountsCount})</option>
+                <option value="admin">Barangay Admin ({adminAccountsCount})</option>
+                <option value="treasurer">Barangay Treasurer ({treasurerAccountsCount})</option>
+                {superAdminAccountsCount > 0 && (
+                  <option value="super_admin">Super Admin ({superAdminAccountsCount})</option>
+                )}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {/* Reset Filters Pill */}
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setFilterStatus('all');
+                  setFilterRole('all');
+                  setSearch('');
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-100 transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset Filters</span>
+              </button>
+            )}
+          </div>
+
+          {/* Search Input */}
+          <div className="relative w-full xl:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              id="admin_user_mgmt_search"
+              name="admin_user_mgmt_search"
+              autoComplete="off"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, email, phone, or address..."
+              className="w-full pl-9 pr-8 py-2.5 text-xs font-medium bg-[#f4f7fb] border border-transparent focus:border-blue-200 focus:bg-white rounded-full text-slate-700 placeholder-slate-400 focus:outline-none transition-all"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Accounts Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-[#f8fafc] border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                 <th
                   onClick={() => handleSort('full_name')}
-                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  className="px-5 py-3.5 whitespace-nowrap cursor-pointer hover:text-slate-700 transition-colors select-none"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="inline-flex items-center gap-1.5">
                     <span>Account Identity</span>
                     {sortKey === 'full_name' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" />
                     ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     )}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('role')}
-                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  className="px-5 py-3.5 whitespace-nowrap cursor-pointer hover:text-slate-700 transition-colors select-none"
                 >
-                  <div className="flex items-center space-x-1">
-                    <span>Role</span>
+                  <div className="inline-flex items-center gap-1.5">
+                    <span>Role & Voter Status</span>
                     {sortKey === 'role' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" />
                     ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     )}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('phone')}
-                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  className="px-5 py-3.5 whitespace-nowrap cursor-pointer hover:text-slate-700 transition-colors select-none"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="inline-flex items-center gap-1.5">
                     <span>Contact & Location</span>
                     {sortKey === 'phone' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" />
                     ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     )}
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('is_locked')}
-                  className="px-6 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors select-none"
+                  className="px-5 py-3.5 whitespace-nowrap cursor-pointer hover:text-slate-700 transition-colors select-none"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="inline-flex items-center gap-1.5">
                     <span>Security & Lock Status</span>
                     {sortKey === 'is_locked' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                      sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" />
                     ) : (
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                     )}
                   </div>
                 </th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
+                <th className="px-5 py-3.5 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -771,16 +980,23 @@ export default function UserManagementView({ currentUser }) {
                 <TableSkeleton rows={6} cols={5} isDarkMode={false} />
               ) : paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
-                    No matching user accounts found.
+                  <td colSpan={5} className="px-6 py-14 text-center text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">No Matching User Accounts</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Try adjusting your Role or Account Status dropdown filters above.
+                    </p>
                   </td>
                 </tr>
               ) : (
                 paginatedUsers.map((u) => {
-                  const isLocked = u.is_locked || (u.failed_login_attempts || 0) >= 3 || (u.failed_attempts || 0) >= 3;
+                  const isLocked = isAccountLocked(u);
+                  const roleNorm = normalizeRole(u.role);
                   return (
-                    <tr key={u.id || u.email} className="hover:bg-slate-50/80 transition-colors text-slate-700">
-                      <td className="px-6 py-4">
+                    <tr key={u.id || u.email} className="hover:bg-[#f4f7fb]/60 transition-colors text-slate-700">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center space-x-3">
                           <UserAvatar
                             src={u.avatar_url}
@@ -788,75 +1004,92 @@ export default function UserManagementView({ currentUser }) {
                             role={u.role}
                             size="md"
                           />
-                          <div>
-                            <p className="font-bold text-slate-900">{u.full_name || 'Resident Account'}</p>
-                            <p className="text-[11px] text-slate-500 font-mono">{u.email}</p>
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-slate-900 truncate max-w-[200px]">{u.full_name || 'Resident Account'}</p>
+                            <p className="text-[11px] text-slate-400 font-mono truncate max-w-[220px]">{u.email}</p>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 space-y-1">
-                        <div>
-                          <Badge variant={u.role === 'super_admin' ? 'purple' : u.role === 'admin' ? 'blue' : u.role === 'treasurer' ? 'success' : 'active'}>
-                            {u.role === 'super_admin' ? 'Super Admin' : u.role === 'admin' ? 'Barangay Admin' : u.role === 'treasurer' ? 'Barangay Treasurer' : 'Resident'}
-                          </Badge>
-                        </div>
-                        {u.role === 'resident' && (
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isUserRegisteredVoter(u)
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <Badge
+                            variant={
+                              roleNorm === 'super_admin'
+                                ? 'purple'
+                                : roleNorm === 'admin'
+                                ? 'blue'
+                                : roleNorm === 'treasurer'
+                                ? 'success'
+                                : 'resident'
+                            }
                           >
-                            <Vote className="w-2.5 h-2.5" />
-                            {isUserRegisteredVoter(u) ? 'Registered Voter' : 'Non-Voter'}
-                          </span>
-                        )}
+                            {roleNorm === 'super_admin'
+                              ? 'Super Admin'
+                              : roleNorm === 'admin'
+                              ? 'Barangay Admin'
+                              : roleNorm === 'treasurer'
+                              ? 'Barangay Treasurer'
+                              : 'Resident'}
+                          </Badge>
+                          {roleNorm === 'resident' && (
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
+                                isUserRegisteredVoter(u)
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-[#f4f7fb] text-slate-500 border border-slate-200/80'
+                              }`}
+                            >
+                              <Vote className="w-2.5 h-2.5 shrink-0" />
+                              <span>{isUserRegisteredVoter(u) ? 'Registered Voter' : 'Non-Voter'}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
-                      <td className="px-6 py-4 space-y-0.5 text-[11px]">
-                        <p className="text-slate-600">{u.phone || 'No phone registered'}</p>
-                        <p className="text-slate-400 truncate max-w-xs">{u.address || 'Barangay Zapatera, Cebu City'}</p>
+                      <td className="px-5 py-3.5 space-y-0.5 text-[11px]">
+                        <p className="text-slate-700 font-semibold whitespace-nowrap">{u.phone || 'No phone registered'}</p>
+                        <p className="text-slate-400 truncate max-w-[240px]">{u.address || 'Barangay Zapatera, Cebu City'}</p>
                       </td>
 
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         {isLocked ? (
                           <div className="inline-flex flex-col space-y-1">
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              <Lock className="w-3 h-3 mr-1" />
-                              <span>Locked - 3 Failed Attempts</span>
+                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                              <Lock className="w-3 h-3 shrink-0" />
+                              <span>Locked — 3 Failed Attempts</span>
                             </span>
                             {u.locked_at && (
-                              <span className="text-[10px] text-slate-400 font-mono">
+                              <span className="text-[10px] text-slate-400 font-mono pl-1">
                                 Locked: {formatDate(u.locked_at)}
                               </span>
                             )}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle className="w-3 h-3 mr-1" />
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                            <CheckCircle className="w-3 h-3 shrink-0" />
                             <span>Active</span>
                           </span>
                         )}
                       </td>
 
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end space-x-2">
                           {/* View Credentials */}
                           <button
                             onClick={() => handleOpenViewModal(u)}
-                            className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            className="inline-flex items-center space-x-1 px-3 py-1.5 text-slate-600 bg-[#f4f7fb] hover:text-[#3b5bfd] hover:bg-blue-50 rounded-full text-xs font-bold transition-colors cursor-pointer"
                             title="View Account Credentials Safely"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Details</span>
                           </button>
 
                           {/* Lock / Unlock Toggle Action */}
                           {isLocked ? (
                             <button
                               onClick={() => initiateAction(u, 'unlock')}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                              className="inline-flex items-center space-x-1 px-3.5 py-1.5 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-xs shadow-blue-500/20 cursor-pointer active:scale-95"
                               title="Unlock Resident Account"
                             >
                               <Unlock className="w-3.5 h-3.5" />
@@ -865,11 +1098,11 @@ export default function UserManagementView({ currentUser }) {
                           ) : (
                             <button
                               onClick={() => initiateAction(u, 'lock')}
-                              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                              className="inline-flex items-center space-x-1 px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 rounded-full text-xs font-bold transition-all cursor-pointer"
                               title="Lock Account"
                             >
                               <Lock className="w-3.5 h-3.5" />
-                              <span>Lock Account</span>
+                              <span>Lock</span>
                             </button>
                           )}
                         </div>
@@ -882,40 +1115,44 @@ export default function UserManagementView({ currentUser }) {
           </table>
         </div>
 
-        {/* 10-Row Pagination Footer */}
+        {/* Pagination Footer */}
         {totalEntries > 0 && (
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-600 font-medium">
+          <div className="px-6 py-4 bg-[#f8fafc] border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5 text-slate-500 font-medium">
               <span>Showing</span>
-              <span className="font-bold text-slate-900">{startIndex}</span>
+              <span className="font-extrabold text-slate-800">{startIndex}</span>
               <span>to</span>
-              <span className="font-bold text-slate-900">{endIndex}</span>
+              <span className="font-extrabold text-slate-800">{endIndex}</span>
               <span>of</span>
-              <span className="font-bold text-slate-900">{totalEntries}</span>
+              <span className="font-extrabold text-slate-800">{totalEntries}</span>
               <span>accounts</span>
 
-              <div className="ml-4 flex items-center gap-1.5">
-                <span className="text-slate-500 text-[11px]">Rows:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 bg-white border border-slate-300 rounded-md text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
+              <div className="ml-3 flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px] font-semibold">Rows:</span>
+                <div className="relative inline-flex items-center">
+                  <select
+                    aria-label="Rows per page"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="appearance-none pl-3 pr-7 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safeCurrentPage === 1}
-                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 title="Previous Page"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -930,10 +1167,10 @@ export default function UserManagementView({ currentUser }) {
                   <button
                     key={`page-${pageNum}`}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`min-w-[32px] py-1.5 px-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       safeCurrentPage === pageNum
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
+                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-[#f4f7fb]'
                     }`}
                   >
                     {pageNum}
@@ -944,7 +1181,7 @@ export default function UserManagementView({ currentUser }) {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safeCurrentPage === totalPages}
-                className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 title="Next Page"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -954,7 +1191,7 @@ export default function UserManagementView({ currentUser }) {
         )}
       </div>
 
-      {/* Simple Resident Credentials View Modal - Single Personal Information Card */}
+      {/* Simplified & Organized Resident Credentials Modal */}
       {isViewModalOpen && viewingUser && (
         <Modal
           isOpen={isViewModalOpen && !!viewingUser}
@@ -962,8 +1199,9 @@ export default function UserManagementView({ currentUser }) {
             setIsViewModalOpen(false);
             setViewingUser(null);
           }}
-          title="Resident Credentials"
-          maxWidth="max-w-2xl"
+          title="Account Profile & Credentials"
+          subtitle="Verified resident identity and security status"
+          maxWidth="max-w-xl"
         >
           {(() => {
             const isVoter = isUserRegisteredVoter(viewingUser);
@@ -972,24 +1210,29 @@ export default function UserManagementView({ currentUser }) {
             const birthDateFormatted = viewingUser.birth_date || viewingUser.birthdate
               ? formatDate(viewingUser.birth_date || viewingUser.birthdate)
               : null;
-            const cleanFullName = viewingUser.full_name || (last && first ? `${last}, ${first}${mi ? ' ' + mi + '.' : ''}` : viewingUser.email);
+            const cleanFullName =
+              viewingUser.full_name ||
+              (last && first ? `${last}, ${first}${mi ? ' ' + mi + '.' : ''}` : viewingUser.email);
+            const isLocked = isAccountLocked(viewingUser);
+            const registeredDate =
+              viewingUser.created_at || viewingUser.registered_at || viewingUser.date_registered;
 
             return (
               <div className="space-y-4">
-                {/* Header Profile Identity */}
-                <div className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-50/80 to-slate-50 border-slate-200">
-                  <div className="flex items-center space-x-3.5">
+                {/* Identity Banner */}
+                <div className="p-4 rounded-[22px] bg-[#f4f7fb] border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <UserAvatar
                       src={viewingUser.avatar_url}
                       name={cleanFullName}
                       role={viewingUser.role}
                       size="lg"
                       showStatus={true}
-                      isLocked={viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3}
+                      isLocked={isLocked}
                     />
-                    <div className="space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-extrabold text-slate-900 text-base">
+                        <h4 className="font-extrabold text-slate-900 text-base truncate">
                           {cleanFullName}
                         </h4>
                         <Badge
@@ -1011,225 +1254,167 @@ export default function UserManagementView({ currentUser }) {
                             ? 'Barangay Treasurer'
                             : 'Resident'}
                         </Badge>
-                        {viewingUser.role === 'resident' && (
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              isVoter
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-slate-100 text-slate-700 border border-slate-300'
-                            }`}
-                          >
-                            <Vote className={`w-3.5 h-3.5 ${isVoter ? 'text-emerald-600' : 'text-slate-400'}`} />
-                            {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                          </span>
-                        )}
                       </div>
-                      <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-blue-600" />
-                        <span>{viewingUser.email}</span>
+                      <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5 truncate">
+                        <Mail className="w-3.5 h-3.5 text-[#3b5bfd] shrink-0" />
+                        <span className="truncate">{viewingUser.email}</span>
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex sm:flex-col items-start sm:items-end justify-between gap-1 shrink-0">
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1.5 shrink-0">
                     <span
-                      className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3
-                          ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
+                        isLocked
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       }`}
                     >
-                      {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
+                      {isLocked ? (
                         <>
-                          <Lock className="w-3 h-3 mr-0.5" />
+                          <Lock className="w-3 h-3" />
                           <span>Locked</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle className="w-3 h-3 mr-0.5" />
+                          <CheckCircle className="w-3 h-3" />
                           <span>Active</span>
                         </>
                       )}
                     </span>
-                    {(() => {
-                      const registeredDate = viewingUser.created_at || viewingUser.registered_at || viewingUser.date_registered;
-                      const editDate = viewingUser.last_edited_at || viewingUser.updated_at;
-                      const isEdited = Boolean(
-                        viewingUser.last_edited_at ||
-                        (editDate && registeredDate && (new Date(editDate).getTime() - new Date(registeredDate).getTime() > 2000))
-                      );
-
-                      return (
-                        <div className="flex flex-col items-start sm:items-end gap-0.5 mt-0.5">
-                          <span className="text-[11px] text-slate-400">
-                            Registered: {registeredDate ? formatDate(registeredDate) : (editDate ? formatDate(editDate) : 'Not recorded')}
-                          </span>
-                          {isEdited && editDate && (
-                            <span className="text-[11px] text-slate-400">
-                              Latest Edit: {formatDate(editDate)}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {registeredDate && (
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        Joined {formatDate(registeredDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* ONE Single Clean Personal Information Card */}
-                <div className="p-5 rounded-2xl border bg-slate-50 border-slate-200">
-                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
-                    <h5 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <IdCard className="w-4 h-4 text-blue-600" />
-                      <span>Personal Information & Resident Credentials</span>
-                    </h5>
-                    <span className="text-[11px] font-semibold text-slate-400">Barangay Zapatera Records</span>
+                {/* Organized 2-Column Info Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Full Name Breakdown
+                    </span>
+                    <p className="font-bold text-slate-800 mt-1">
+                      {[first, mi ? `${mi}.` : '', last].filter(Boolean).join(' ') || cleanFullName}
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">First Name</span>
-                      <p className="font-semibold text-slate-800">
-                        {first || '—'}
-                      </p>
-                    </div>
+                  <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-[#3b5bfd]" /> Date of Birth & Age
+                    </span>
+                    <p className="font-bold text-slate-800 mt-1">
+                      {birthDateFormatted ? (
+                        <>
+                          {birthDateFormatted}
+                          {(age !== null || viewingUser.age) && (
+                            <span className="text-slate-400 font-semibold ml-1">
+                              ({viewingUser.age || age} yrs)
+                            </span>
+                          )}
+                        </>
+                      ) : viewingUser.age ? (
+                        `${viewingUser.age} years old`
+                      ) : (
+                        'Not recorded'
+                      )}
+                    </p>
+                  </div>
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Middle Initial</span>
-                      <p className="font-semibold text-slate-800">
-                        {mi ? `${mi}.` : 'None / Not Provided'}
-                      </p>
-                    </div>
+                  <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Gender & Civil Status
+                    </span>
+                    <p className="font-bold text-slate-800 mt-1 capitalize">
+                      {viewingUser.gender || 'Not specified'} • {viewingUser.civil_status || 'Single'}
+                    </p>
+                  </div>
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Last Name</span>
-                      <p className="font-semibold text-slate-800">
-                        {last || '—'}
-                      </p>
-                    </div>
+                  <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-600" /> Contact Number
+                    </span>
+                    <p className="font-mono font-bold text-slate-800 mt-1">
+                      {viewingUser.phone || viewingUser.contact_number || 'None provided'}
+                    </p>
+                  </div>
 
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-blue-600" /> Date of Birth & Age
-                      </span>
-                      <p className="font-semibold text-slate-800">
-                        {birthDateFormatted ? (
-                          <>
-                            {birthDateFormatted}
-                            {(age !== null || viewingUser.age) && (
-                              <span className="text-slate-500 font-normal ml-1">({viewingUser.age || age} yrs old)</span>
-                            )}
-                          </>
-                        ) : viewingUser.age ? (
-                          `${viewingUser.age} years old`
-                        ) : (
-                          'Not recorded'
-                        )}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Gender</span>
-                      <p className="font-semibold text-slate-800 capitalize">
-                        {viewingUser.gender || 'Not specified'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Civil Status</span>
-                      <p className="font-semibold text-slate-800 capitalize">
-                        {viewingUser.civil_status || 'Single'}
-                      </p>
-                    </div>
-
-                    {viewingUser.role === 'resident' && (
-                      <div>
-                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                          <Vote className="w-3 h-3 text-blue-600" /> Voter Status
+                  {normalizeRole(viewingUser.role) === 'resident' && (
+                    <>
+                      <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                          <Vote className="w-3 h-3 text-[#3b5bfd]" /> Voter Registration
                         </span>
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          isVoter
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : 'bg-slate-200 text-slate-700 border border-slate-300'
-                        }`}>
-                          {isVoter ? 'Registered Voter' : 'Non-Voter'}
-                        </span>
+                        <div className="mt-1">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              isVoter
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-white text-slate-600 border border-slate-200'
+                            }`}
+                          >
+                            {isVoter ? 'Registered Voter' : 'Non-Voter'}
+                          </span>
+                        </div>
                       </div>
-                    )}
 
-                    {viewingUser.role === 'resident' && (
-                      <div>
-                        <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
+                      <div className="p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-emerald-600" /> Sitio / Area
                         </span>
-                        <p className="font-semibold text-slate-800">
+                        <p className="font-bold text-slate-800 mt-1">
                           {viewingUser.sitio || 'Sitio Zapatera Proper'}
                         </p>
                       </div>
-                    )}
+                    </>
+                  )}
 
-                    <div className="sm:col-span-2">
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-emerald-600" /> Complete Residential Address
-                      </span>
-                      <p className="font-semibold text-slate-800">
-                        {viewingUser.address || viewingUser.complete_address || `${viewingUser.sitio || 'Barangay Zapatera'}, Cebu City`}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-emerald-600" /> Contact Number
-                      </span>
-                      <p className="font-mono font-semibold text-slate-800">
-                        {viewingUser.phone || viewingUser.contact_number || 'None provided'}
-                      </p>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <span className="text-[11px] text-slate-400 block mb-1 flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-blue-600" /> Email Address
-                      </span>
-                      <p className="font-mono font-semibold text-slate-800">
-                        {viewingUser.email}
-                      </p>
-                    </div>
+                  <div className="sm:col-span-2 p-3.5 rounded-2xl bg-[#f4f7fb] border border-slate-200/60">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-emerald-600" /> Residential Address
+                    </span>
+                    <p className="font-bold text-slate-800 mt-1">
+                      {viewingUser.address ||
+                        viewingUser.complete_address ||
+                        `${viewingUser.sitio || 'Barangay Zapatera'}, Cebu City`}
+                    </p>
                   </div>
                 </div>
 
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-200">
-                  <div className="flex items-center space-x-2">
-                    {viewingUser.is_locked || (viewingUser.failed_attempts || 0) >= 3 ? (
-                      <button
-                        onClick={() => {
-                          setIsViewModalOpen(false);
-                          initiateAction(viewingUser, 'unlock');
-                        }}
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-                      >
-                        <Unlock className="w-3.5 h-3.5" />
-                        <span>Authorize Unlock Account</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setIsViewModalOpen(false);
-                          initiateAction(viewingUser, 'lock');
-                        }}
-                        className="inline-flex items-center space-x-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                      >
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Lock This Account</span>
-                      </button>
-                    )}
-                  </div>
+                {/* Modal Footer Actions */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  {isLocked ? (
+                    <button
+                      onClick={() => {
+                        setIsViewModalOpen(false);
+                        initiateAction(viewingUser, 'unlock');
+                      }}
+                      className="inline-flex items-center space-x-1.5 px-5 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold transition-all shadow-sm shadow-blue-500/25 cursor-pointer active:scale-95"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>Unlock Account</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setIsViewModalOpen(false);
+                        initiateAction(viewingUser, 'lock');
+                      }}
+                      className="inline-flex items-center space-x-1.5 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-full text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Lock Account</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {
                       setIsViewModalOpen(false);
                       setViewingUser(null);
                     }}
-                    className="px-5 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    className="px-6 py-2.5 font-bold rounded-full text-xs transition-colors cursor-pointer bg-[#f4f7fb] hover:bg-slate-200/70 text-slate-600"
                   >
                     Close
                   </button>
@@ -1240,7 +1425,7 @@ export default function UserManagementView({ currentUser }) {
         </Modal>
       )}
 
-      {/* Security Password Authorization Modal */}
+      {/* Simplified Security Password Authorization Modal */}
       {isSecurityModalOpen && targetUser && (
         <Modal
           isOpen={isSecurityModalOpen}
@@ -1251,47 +1436,67 @@ export default function UserManagementView({ currentUser }) {
             setSecurityError('');
           }}
           title={actionType === 'unlock' ? 'Authorize Account Unlock' : 'Authorize Account Lockout'}
+          subtitle="Admin password verification required"
+          maxWidth="max-w-md"
         >
           <div className="space-y-4 text-xs">
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-amber-800">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div
+              className={`p-4 rounded-2xl border flex items-start gap-3 ${
+                actionType === 'unlock'
+                  ? 'bg-blue-50/70 border-blue-100 text-slate-700'
+                  : 'bg-rose-50/70 border-rose-100 text-slate-700'
+              }`}
+            >
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  actionType === 'unlock'
+                    ? 'bg-[#3b5bfd] text-white'
+                    : 'bg-rose-600 text-white'
+                }`}
+              >
+                {actionType === 'unlock' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              </div>
               <div>
-                <p className="font-bold">Security Verification Required</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed">
-                  You are about to {actionType === 'unlock' ? 'unlock' : 'lock'} account access for{' '}
-                  <span className="font-bold text-amber-950">{targetUser.full_name || targetUser.email}</span>.
-                  Please confirm your logged-in Admin Password to proceed.
+                <p className="font-extrabold text-slate-900">
+                  {actionType === 'unlock' ? 'Restore Account Access' : 'Restrict Account Access'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-500 leading-relaxed">
+                  Confirm your admin password to {actionType === 'unlock' ? 'unlock' : 'lock'}{' '}
+                  <span className="font-bold text-slate-800">{targetUser.full_name || targetUser.email}</span>.
                 </p>
               </div>
             </div>
 
             {securityError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
-                {securityError}
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{securityError}</span>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Logged-in Admin Password</label>
+              <label className="text-[11px] font-bold text-slate-600 block">
+                Admin Password
+              </label>
               <div className="relative">
                 <input
                   type={showAdminPassword ? 'text' : 'password'}
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Enter admin password to authorize..."
-                  className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="Enter admin password..."
+                  className="w-full pl-4 pr-10 py-2.5 bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl text-xs font-medium text-slate-800 outline-none transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowAdminPassword(!showAdminPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => {
@@ -1300,7 +1505,7 @@ export default function UserManagementView({ currentUser }) {
                   setAdminPassword('');
                   setSecurityError('');
                 }}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 font-bold rounded-xl transition-colors cursor-pointer text-xs"
+                className="px-5 py-2.5 text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 font-bold rounded-full transition-colors cursor-pointer text-xs"
               >
                 Cancel
               </button>
@@ -1308,10 +1513,10 @@ export default function UserManagementView({ currentUser }) {
                 type="button"
                 onClick={handleExecuteSecurityAction}
                 disabled={isProcessing || !adminPassword.trim()}
-                className={`px-6 py-2 text-white font-bold rounded-xl transition-all shadow-md cursor-pointer text-xs flex items-center space-x-1.5 active:scale-95 ${
+                className={`px-6 py-2.5 text-white font-bold rounded-full transition-all shadow-sm cursor-pointer text-xs flex items-center space-x-1.5 active:scale-95 disabled:opacity-50 ${
                   actionType === 'unlock'
-                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
-                    : 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                    ? 'bg-[#3b5bfd] hover:bg-blue-700 shadow-blue-500/25'
+                    : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/25'
                 }`}
               >
                 {isProcessing && <Loader2 size={14} className="animate-spin" />}

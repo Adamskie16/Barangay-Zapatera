@@ -5,16 +5,13 @@ import {
   Trash2,
   RotateCcw,
   Search,
-  Filter,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
   X,
   Newspaper,
   Users,
-  Calendar,
   Clock,
-  User,
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
@@ -24,20 +21,12 @@ import {
   ArrowUp,
   ArrowDown,
   Eye,
-  Info,
-  ShieldCheck,
   Tag,
-  Mail,
-  Phone,
-  Hash,
-  MapPin,
   Flame,
   AlertCircle,
-  FileBadge,
   Activity,
 } from 'lucide-react';
 import Modal from '../../components/Modal';
-import Badge from '../../components/Badge';
 import ActionModal from '../../components/ActionModal';
 import SecurityVerificationModal from '../../components/SecurityVerificationModal';
 import UserAvatar from '../../components/UserAvatar';
@@ -51,7 +40,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const userRole = (currentUser?.role || '').toLowerCase();
   const hasAccess = userRole === 'super_admin' || userRole === 'admin';
 
-  // Active Tab state: 'announcements' | 'users'
+  // Active Tab state: 'announcements' | 'users' | 'activity_logs'
   const [activeTab, setActiveTab] = useState('announcements');
 
   // Datasets
@@ -75,7 +64,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     isOpen: false,
     item: null,
     actionType: null, // 'restore' | 'purge'
-    dataType: null,   // 'announcements' | 'users'
+    dataType: null,   // 'announcements' | 'users' | 'activity_logs'
   });
 
   // Action Confirmation & Feedback Modal
@@ -119,7 +108,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   const loadArchivedData = async () => {
     setLoading(true);
     try {
-      // Build profiles lookup map
       const lookup = {};
       try {
         if (isSupabaseConfigured()) {
@@ -365,13 +353,13 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   // Unauthorized Access Guard UI
   if (!hasAccess) {
     return (
-      <div className="p-6 max-w-4xl mx-auto mt-12">
-        <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 shadow-xl text-center space-y-4">
-          <div className="w-16 h-16 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto ring-4 ring-rose-500/10">
+      <div className="p-6 max-w-2xl mx-auto mt-12">
+        <div className="p-8 rounded-[28px] bg-white border border-rose-100 shadow-lg text-center space-y-4">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-100">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Restricted Area</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+          <h2 className="text-xl font-extrabold text-slate-900">Restricted Area</h2>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
             You do not have permission to view the archive. Please contact a super administrator.
           </p>
         </div>
@@ -379,18 +367,20 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
     );
   }
 
+  const totalArchivedCount = archivedNews.length + archivedUsers.length + archivedActivityLogs.length;
+
   return (
-    <div className={`p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto min-h-screen ${
-      isDarkMode ? 'text-slate-100' : 'text-slate-900'
-    }`}>
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
       {/* Toast Notification Alert */}
       {toast && (
         <div className="fixed top-5 right-5 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className={`px-4 py-3 rounded-2xl shadow-xl border flex items-center space-x-3 text-xs font-bold ${
-            toast.type === 'error'
-              ? 'bg-rose-600 text-white border-rose-700 shadow-rose-600/20'
-              : 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-600/20'
-          }`}>
+          <div
+            className={`px-4 py-3 rounded-full shadow-xl border flex items-center space-x-3 text-xs font-bold ${
+              toast.type === 'error'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-rose-600/20'
+                : 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-600/20'
+            }`}
+          >
             {toast.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
             <span>{toast.message}</span>
             <button onClick={() => setToast(null)} className="ml-2 hover:opacity-75 cursor-pointer">
@@ -400,230 +390,311 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className={`p-6 sm:p-8 rounded-3xl border shadow-sm relative overflow-hidden transition-colors ${
-        isDarkMode
-          ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800/80 border-slate-800'
-          : 'bg-gradient-to-br from-white via-slate-50 to-blue-50/30 border-slate-200'
-      }`}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-          <div className="space-y-1.5">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
-              Archive & Trash Management
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-              Inspect archived news announcements, soft-deleted user accounts, and activity logs. Authorized administrators can inspect full details, restore records, or permanently purge them.
-            </p>
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
+            <Archive className="w-3.5 h-3.5" />
+            <span>Data Recovery & Retention</span>
           </div>
-
-          <div className="flex items-center space-x-3 shrink-0">
-            <button
-              type="button"
-              onClick={loadArchivedData}
-              disabled={loading}
-              className={`px-4 py-2.5 rounded-2xl border font-bold text-xs flex items-center space-x-2 transition-all cursor-pointer ${
-                isDarkMode
-                  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 shadow-xs'
-              }`}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-500' : ''}`} />
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Segmented Horizontal Tabs with Dynamic Badges */}
-      <div className={`p-1.5 rounded-2xl border flex flex-wrap gap-1.5 shadow-xs transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100/80 border-slate-200'
-      }`}>
-        {[
-          { id: 'announcements', label: 'Announcements Archive', icon: Newspaper, count: archivedNews.length, color: 'blue' },
-          { id: 'users', label: 'User Accounts Archive', icon: Users, count: archivedUsers.length, color: 'indigo' },
-          { id: 'activity_logs', label: 'Activity Logs Archive', icon: Activity, count: archivedActivityLogs.length, color: 'purple' },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center space-x-2.5 transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-500/20'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span>{tab.label}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                isActive
-                  ? 'bg-white/20 text-white'
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Search & Filter Toolbar */}
-      <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${
-              activeTab === 'announcements'
-                ? 'by title, category, author...'
-                : 'by name, email, role, phone...'
-            }`}
-            className={`w-full pl-9 pr-9 py-2 text-xs rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors ${
-              isDarkMode
-                ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
-                : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
-            }`}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
+            Archive & Trash Management
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Inspect, restore, or permanently purge archived news announcements, soft-deleted user accounts, and activity logs.
+          </p>
         </div>
 
-        <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 w-full sm:w-auto justify-end">
-          <span>Sort:</span>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <div className="inline-flex items-center gap-2 bg-white px-4 py-2.5 rounded-full border border-slate-200/80 shadow-xs text-xs font-bold text-slate-700">
+            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+            <span>{totalArchivedCount} Total Archived</span>
+          </div>
           <button
-            onClick={() => handleSort('deleted_at')}
-            className={`px-3 py-1.5 rounded-lg border font-semibold flex items-center space-x-1 transition-colors cursor-pointer ${
-              sortKey === 'deleted_at'
-                ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-300 dark:border-blue-800 text-blue-600 dark:text-blue-300'
-                : isDarkMode
-                ? 'border-slate-800 hover:bg-slate-800'
-                : 'border-slate-200 hover:bg-slate-100'
-            }`}
+            type="button"
+            onClick={loadArchivedData}
+            disabled={loading}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-sm shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50"
           >
-            <span>Date Archived</span>
-            {sortKey === 'deleted_at' && (
-              sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-            )}
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Archive</span>
           </button>
         </div>
       </div>
 
-      {/* Main Table Content */}
-      <div className={`rounded-3xl border shadow-sm overflow-hidden transition-colors ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
+      {/* 4 Colorful Gradient KPI Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Total Archived Repository */}
+        <div
+          onClick={() => setSearchQuery('')}
+          className="relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01]"
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Archive className="w-5 h-5 text-[#0284c7]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              All Vaults
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{totalArchivedCount}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Total Archived Items</p>
+            <p className="text-[11px] text-white/75 mt-1">Recoverable with admin password</p>
+          </div>
+        </div>
+
+        {/* Card 2: Archived Bulletins */}
+        <div
+          onClick={() => setActiveTab('announcements')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
+            activeTab === 'announcements' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Newspaper className="w-5 h-5 text-[#4f46e5]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Bulletins
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{archivedNews.length}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Announcements Archive</p>
+            <p className="text-[11px] text-white/75 mt-1">Deleted news & advisories</p>
+          </div>
+        </div>
+
+        {/* Card 3: Archived User Accounts */}
+        <div
+          onClick={() => setActiveTab('users')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#fbbf24] via-[#f59e0b] to-[#ea580c] shadow-amber-500/15 hover:scale-[1.01] ${
+            activeTab === 'users' ? 'ring-4 ring-offset-2 ring-amber-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Users className="w-5 h-5 text-[#ea580c]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Accounts
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{archivedUsers.length}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">User Accounts Archive</p>
+            <p className="text-[11px] text-white/75 mt-1">Soft-deleted citizen & staff profiles</p>
+          </div>
+        </div>
+
+        {/* Card 4: Archived Activity Logs */}
+        <div
+          onClick={() => setActiveTab('activity_logs')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01] ${
+            activeTab === 'activity_logs' ? 'ring-4 ring-offset-2 ring-emerald-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Activity className="w-5 h-5 text-[#059669]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Audit Logs
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{archivedActivityLogs.length}</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Activity Logs Archive</p>
+            <p className="text-[11px] text-white/75 mt-1">Archived system audit records</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Card: Category Tabs + Search + Table + Pagination */}
+      <div className="bg-white rounded-[26px] border border-slate-100/80 shadow-xs overflow-hidden">
+        {/* Top Toolbar */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          {/* Pill Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { id: 'announcements', label: 'Announcements Archive', icon: Newspaper, count: archivedNews.length },
+              { id: 'users', label: 'User Accounts Archive', icon: Users, count: archivedUsers.length },
+              { id: 'activity_logs', label: 'Activity Logs Archive', icon: Activity, count: archivedActivityLogs.length },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                      : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search & Sort Controls */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="relative min-w-[260px]">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={
+                  activeTab === 'announcements'
+                    ? 'Search title, category, author...'
+                    : activeTab === 'users'
+                    ? 'Search name, email, role, phone...'
+                    : 'Search action, actor, details...'
+                }
+                className="w-full pl-9 pr-8 py-2 text-xs font-medium rounded-full bg-[#f4f7fb] border border-transparent focus:border-blue-200 focus:bg-white text-slate-700 placeholder-slate-400 focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => handleSort('deleted_at')}
+              className={`px-3.5 py-2 rounded-full border text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shrink-0 ${
+                sortKey === 'deleted_at'
+                  ? 'bg-blue-50 border-blue-200 text-[#3b5bfd]'
+                  : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Date Archived</span>
+              {sortKey === 'deleted_at' &&
+                (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+            </button>
+          </div>
+        </div>
+
+        {/* Table Content */}
         <div className="overflow-x-auto min-w-full">
-          {/* Announcements Table */}
+          {/* 1. Announcements Table */}
           {activeTab === 'announcements' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
-                  isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('title')}>
+                <tr className="bg-[#f8fafc] border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('title')}>
                     <div className="flex items-center space-x-1">
                       <span>Announcement / Title</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('category')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('category')}>
                     <div className="flex items-center space-x-1">
                       <span>Category</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('author')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('author')}>
                     <div className="flex items-center space-x-1">
                       <span>Author</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('created_at')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('created_at')}>
                     <div className="flex items-center space-x-1">
                       <span>Date Posted</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('deleted_at')}>
                     <div className="flex items-center space-x-1 text-rose-500">
                       <span>Date Archived</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                      <ArrowUpDown className="w-3.5 h-3.5" />
                     </div>
                   </th>
-                  <th className="p-4">Archived By</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="px-6 py-3.5">Archived By</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-400">
-                      <Archive className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived announcements found</p>
-                      <p className="text-xs">Deleted announcements will appear here.</p>
+                    <td colSpan={7} className="px-6 py-14 text-center text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                        <Archive className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700">No Archived Announcements Found</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Deleted announcements from News & Bulletins will appear here.</p>
                     </td>
                   </tr>
                 ) : (
                   paginatedData.map((item) => {
                     const archivedByName = resolveActorName(item.archived_by_name || item.deleted_by);
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 max-w-xs">
+                      <tr key={item.id} className="hover:bg-[#f4f7fb]/60 transition-colors">
+                        <td className="px-6 py-4 max-w-xs">
                           <div className="flex items-center space-x-3">
                             {item.banner_url ? (
-                              <img src={item.banner_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200 dark:border-slate-700" />
+                              <img src={item.banner_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-200" />
                             ) : (
-                              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                                <Newspaper className="w-5 h-5 text-slate-400" />
+                              <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0 border border-blue-100">
+                                <Newspaper className="w-5 h-5" />
                               </div>
                             )}
                             <div className="min-w-0">
-                              <p className="font-bold text-slate-900 dark:text-white truncate">{item.title}</p>
+                              <p className="font-extrabold text-slate-900 truncate">{item.title}</p>
                               <p className="text-[11px] text-slate-400 truncate max-w-[240px]">{item.description || item.content}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="p-4 whitespace-nowrap">
-                          <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2.5 py-1 rounded-full font-bold text-[10px] bg-blue-50 text-[#3b5bfd] border border-blue-100">
                             {item.category || 'General'}
                           </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap font-medium text-slate-600 dark:text-slate-300">
+                        <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-700">
                           {item.author || item.created_by_name || 'Administration'}
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-500">
                           {formatDate(item.created_at)}
                         </td>
-                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                          {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                            {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                          </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-semibold text-[11px]">
                           {archivedByName}
                         </td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end space-x-1.5">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-2">
                             <button
                               onClick={() => setInspectItem({ ...item, _type: 'announcements' })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 bg-[#f4f7fb] hover:text-[#3b5bfd] hover:bg-blue-50 transition-colors cursor-pointer"
                               title="Inspect Details"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Details</span>
                             </button>
                             <button
                               onClick={() => handlePromptRestore(item, 'announcements')}
-                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              className="px-3.5 py-1.5 rounded-full font-bold text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center space-x-1 cursor-pointer transition-colors"
                               title="Restore Announcement"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
@@ -631,10 +702,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                             </button>
                             <button
                               onClick={() => handlePromptPurge(item, 'announcements')}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              className="p-2 rounded-full text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
                               title="Permanently Delete"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -646,101 +717,106 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             </table>
           )}
 
-          {/* User Accounts Table */}
+          {/* 2. User Accounts Table */}
           {activeTab === 'users' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
-                  isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('full_name')}>
+                <tr className="bg-[#f8fafc] border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('full_name')}>
                     <div className="flex items-center space-x-1">
                       <span>User Account</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('email')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('email')}>
                     <div className="flex items-center space-x-1">
                       <span>Email</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('role')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('role')}>
                     <div className="flex items-center space-x-1">
                       <span>Role</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4">Contact / Sitio</th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
+                  <th className="px-6 py-3.5">Contact / Sitio</th>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('deleted_at')}>
                     <div className="flex items-center space-x-1 text-rose-500">
                       <span>Date Archived</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                      <ArrowUpDown className="w-3.5 h-3.5" />
                     </div>
                   </th>
-                  <th className="p-4">Archived By</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="px-6 py-3.5">Archived By</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-400">
-                      <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived accounts found</p>
-                      <p className="text-xs">Deleted accounts will appear here and can be restored anytime.</p>
+                    <td colSpan={7} className="px-6 py-14 text-center text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700">No Archived User Accounts Found</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Deleted user accounts will appear here and can be restored anytime.</p>
                     </td>
                   </tr>
                 ) : (
                   paginatedData.map((u) => {
                     const archivedByName = resolveActorName(u.archived_by_name || u.deleted_by);
                     return (
-                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4">
+                      <tr key={u.id} className="hover:bg-[#f4f7fb]/60 transition-colors">
+                        <td className="px-6 py-4">
                           <div className="flex items-center space-x-3">
                             <UserAvatar user={u} size="sm" />
                             <div className="min-w-0">
-                              <p className="font-bold text-slate-900 dark:text-white truncate">{u.full_name || 'Barangay Citizen'}</p>
+                              <p className="font-extrabold text-slate-900 truncate">{u.full_name || 'Barangay Citizen'}</p>
                               <p className="text-[10px] text-slate-400 font-mono">ID: {u.id?.slice(0, 8)}...</p>
                             </div>
                           </div>
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-mono text-[11px]">
                           {u.email}
                         </td>
-                        <td className="p-4 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
-                            u.role === 'admin' || u.role === 'super_admin'
-                              ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200'
-                              : u.role === 'treasurer'
-                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
-                          }`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase border ${
+                              u.role === 'admin' || u.role === 'super_admin'
+                                ? 'bg-blue-50 text-[#3b5bfd] border-blue-200'
+                                : u.role === 'treasurer'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
+                          >
                             {u.role || 'resident'}
                           </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-500 text-[11px]">
-                          <p>{u.phone || u.contact_number || 'No phone'}</p>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-500 text-[11px]">
+                          <p className="font-semibold text-slate-700">{u.phone || u.contact_number || 'No phone'}</p>
                           <p className="text-[10px] text-slate-400">{u.sitio || u.address || 'Zapatera'}</p>
                         </td>
-                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                          {u.deleted_at ? formatDate(u.deleted_at) : 'Archived'}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                            {u.deleted_at ? formatDate(u.deleted_at) : 'Archived'}
+                          </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-semibold text-[11px]">
                           {archivedByName}
                         </td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end space-x-1.5">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-2">
                             <button
                               onClick={() => setInspectItem({ ...u, _type: 'users' })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 bg-[#f4f7fb] hover:text-[#3b5bfd] hover:bg-blue-50 transition-colors cursor-pointer"
                               title="Inspect Full Profile"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Details</span>
                             </button>
                             <button
                               onClick={() => handlePromptRestore(u, 'users')}
-                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              className="px-3.5 py-1.5 rounded-full font-bold text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center space-x-1 cursor-pointer transition-colors"
                               title="Restore User Account"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
@@ -748,10 +824,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                             </button>
                             <button
                               onClick={() => handlePromptPurge(u, 'users')}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              className="p-2 rounded-full text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
                               title="Permanently Delete"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -763,55 +839,55 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             </table>
           )}
 
-          {/* Activity Logs Table */}
+          {/* 3. Activity Logs Table */}
           {activeTab === 'activity_logs' && (
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
-                  isDarkMode ? 'bg-slate-950/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
-                }`}>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('created_at')}>
+                <tr className="bg-[#f8fafc] border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('created_at')}>
                     <div className="flex items-center space-x-1">
                       <span>Date & Time</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('user_email')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('user_email')}>
                     <div className="flex items-center space-x-1">
                       <span>Performed By</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('category')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('category')}>
                     <div className="flex items-center space-x-1">
                       <span>Category</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('action')}>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('action')}>
                     <div className="flex items-center space-x-1">
                       <span>Action</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
                     </div>
                   </th>
-                  <th className="p-4">Activity Details</th>
-                  <th className="p-4 cursor-pointer" onClick={() => handleSort('deleted_at')}>
+                  <th className="px-6 py-3.5">Activity Details</th>
+                  <th className="px-6 py-3.5 cursor-pointer hover:text-slate-700" onClick={() => handleSort('deleted_at')}>
                     <div className="flex items-center space-x-1 text-rose-500">
                       <span>Date Archived</span>
-                      <ArrowUpDown className="w-3 h-3" />
+                      <ArrowUpDown className="w-3.5 h-3.5" />
                     </div>
                   </th>
-                  <th className="p-4">Archived By</th>
-                  <th className="p-4 text-right">Actions</th>
+                  <th className="px-6 py-3.5">Archived By</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody className="divide-y divide-slate-100 font-medium">
                 {paginatedData.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-12 text-center text-slate-400">
-                      <Archive className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                      <p className="font-bold text-sm">No archived activity logs found</p>
-                      <p className="text-xs">Deleted activity logs will appear here.</p>
+                    <td colSpan={8} className="px-6 py-14 text-center text-slate-400">
+                      <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                        <Activity className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-sm text-slate-700">No Archived Activity Logs Found</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Deleted activity logs will appear here.</p>
                     </td>
                   </tr>
                 ) : (
@@ -824,63 +900,68 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                       <tr
                         key={item.id}
                         title={`Archived Activity: ${item.action || 'Activity'} by ${userEmail} (${formatDate(item.created_at)})`}
-                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        className="hover:bg-[#f4f7fb]/60 transition-colors"
                       >
-                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-mono">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-500 font-mono">
                           <div className="flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span>{formatDate(item.created_at)}</span>
                           </div>
                         </td>
-                        <td className="p-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-7 h-7 rounded-full bg-[#3b5bfd] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
                               {initial}
                             </div>
-                            <span className="font-semibold text-slate-900 dark:text-white text-xs truncate max-w-[170px]" title={userEmail}>
+                            <span className="font-bold text-slate-800 text-xs truncate max-w-[170px]" title={userEmail}>
                               {userEmail}
                             </span>
                           </div>
                         </td>
-                        <td className="p-4 whitespace-nowrap">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${
-                            cat === 'Event'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : cat === 'Bulletin'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : cat === 'User Account'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-1 rounded-full font-bold text-[10px] border ${
+                              cat === 'Event'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : cat === 'Bulletin'
+                                ? 'bg-blue-50 text-[#3b5bfd] border-blue-200'
+                                : cat === 'User Account'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
                             {cat}
                           </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap font-bold text-slate-900 dark:text-white">
+                        <td className="px-6 py-4 whitespace-nowrap font-extrabold text-slate-900">
                           {item.action || 'Log Entry'}
                         </td>
-                        <td className="p-4 max-w-xs">
-                          <span className="text-slate-600 dark:text-slate-300 text-xs line-clamp-2 leading-relaxed" title={item.details}>
+                        <td className="px-6 py-4 max-w-xs">
+                          <span className="text-slate-600 text-xs line-clamp-2 leading-relaxed" title={item.details}>
                             {item.details || 'Activity record successfully committed.'}
                           </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap font-bold text-rose-600 dark:text-rose-400">
-                          {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                            {item.deleted_at ? formatDate(item.deleted_at) : 'Archived'}
+                          </span>
                         </td>
-                        <td className="p-4 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium text-[11px]">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-semibold text-[11px]">
                           {archivedByName}
                         </td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end space-x-1.5">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-2">
                             <button
                               onClick={() => setInspectItem({ ...item, _type: 'activity_logs' })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-slate-600 bg-[#f4f7fb] hover:text-[#3b5bfd] hover:bg-blue-50 transition-colors cursor-pointer"
                               title="Inspect Details"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Details</span>
                             </button>
                             <button
                               onClick={() => handlePromptRestore(item, 'activity_logs')}
-                              className="px-2.5 py-1.5 rounded-lg font-bold text-xs bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1 cursor-pointer transition-colors"
+                              className="px-3.5 py-1.5 rounded-full font-bold text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center space-x-1 cursor-pointer transition-colors"
                               title="Restore Activity Log"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
@@ -888,10 +969,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                             </button>
                             <button
                               onClick={() => handlePromptPurge(item, 'activity_logs')}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+                              className="p-2 rounded-full text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
                               title="Permanently Delete"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -904,24 +985,20 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
           )}
         </div>
 
-        {/* 10-Row Standard Pagination Footer */}
-        <div className={`p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs transition-colors ${
-          isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'
-        }`}>
-          <div>
-            Showing <span className="font-bold text-slate-700 dark:text-slate-200">{paginatedData.length > 0 ? (safeCurrentPage - 1) * pageSize + 1 : 0}</span> to{' '}
-            <span className="font-bold text-slate-700 dark:text-slate-200">{Math.min(safeCurrentPage * pageSize, totalEntries)}</span> of{' '}
-            <span className="font-bold text-slate-700 dark:text-slate-200">{totalEntries}</span> records
+        {/* Circular Pagination Footer */}
+        <div className="px-6 py-4 bg-[#f8fafc] border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="font-medium">
+            Showing <span className="font-extrabold text-slate-800">{paginatedData.length > 0 ? (safeCurrentPage - 1) * pageSize + 1 : 0}</span> to{' '}
+            <span className="font-extrabold text-slate-800">{Math.min(safeCurrentPage * pageSize, totalEntries)}</span> of{' '}
+            <span className="font-extrabold text-slate-800">{totalEntries}</span> records
           </div>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-1.5">
             <button
               type="button"
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
-              }`}
+              className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="First page"
             >
               <ChevronsLeft className="w-3.5 h-3.5" />
@@ -931,29 +1008,25 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
-              }`}
+              className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Previous page"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
 
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1.5">
               {getPageNumbers().map((num, i) =>
                 num === '...' ? (
-                  <span key={`dots-${i}`} className="px-2 py-1 text-slate-400">…</span>
+                  <span key={`dots-${i}`} className="px-2 py-1 text-slate-400 font-bold">…</span>
                 ) : (
                   <button
                     key={`page-${num}`}
                     type="button"
                     onClick={() => setCurrentPage(num)}
-                    className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${
+                    className={`w-8 h-8 text-xs font-bold rounded-full transition-all cursor-pointer ${
                       safeCurrentPage === num
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                        : isDarkMode
-                        ? 'border-slate-800 hover:bg-slate-800 text-slate-300'
-                        : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                        : 'bg-white border border-slate-200 hover:bg-[#f4f7fb] text-slate-700'
                     }`}
                   >
                     {num}
@@ -966,9 +1039,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages}
-              className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
-              }`}
+              className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Next page"
             >
               <ChevronRight className="w-3.5 h-3.5" />
@@ -978,9 +1049,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               type="button"
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages}
-              className={`p-1.5 rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors ${
-                isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
-              }`}
+              className="w-8 h-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Last page"
             >
               <ChevronsRight className="w-3.5 h-3.5" />
@@ -989,7 +1058,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         </div>
       </div>
 
-      {/* Human-Readable Item Inspection Modal */}
+      {/* Simplified & Organized Archived Item Details Modal */}
       {inspectItem && (
         <Modal
           isOpen={!!inspectItem}
@@ -1001,26 +1070,27 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               ? 'Archived Activity Log Details'
               : 'Archived Announcement Details'
           }
-          darkMode={isDarkMode}
+          subtitle="Review archived record metadata before restoring"
+          maxWidth="max-w-xl"
         >
-          <div className="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
-            {/* Header banner */}
-            <div className="p-4 bg-slate-100 dark:bg-slate-800/80 rounded-2xl space-y-1.5 border border-slate-200/80 dark:border-slate-700/60">
+          <div className="space-y-4 text-xs">
+            {/* Header info box */}
+            <div className="p-4 bg-[#f4f7fb] rounded-[22px] space-y-1.5 border border-slate-200/70">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="font-extrabold text-slate-900 dark:text-white text-base">
+                <p className="font-extrabold text-slate-900 text-base">
                   {inspectItem.full_name || inspectItem.action || inspectItem.title || inspectItem.email}
                 </p>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-rose-50 text-rose-600 border border-rose-200">
                   Archived Record
                 </span>
               </div>
-              <p className="text-slate-500 dark:text-slate-400 text-xs">
-                Archived at:{' '}
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
+              <p className="text-slate-500 text-xs">
+                Archived on{' '}
+                <span className="font-bold text-slate-700">
                   {formatDate(inspectItem.deleted_at)}
                 </span>{' '}
                 by{' '}
-                <span className="font-bold text-slate-800 dark:text-slate-200">
+                <span className="font-bold text-slate-800">
                   {resolveActorName(inspectItem.archived_by_name || inspectItem.deleted_by)}
                 </span>
               </p>
@@ -1029,120 +1099,106 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             {/* A. Rich Activity Log View */}
             {inspectItem._type === 'activity_logs' ? (
               <div className="space-y-4">
-                <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center space-x-4 shadow-2xs">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-lg border border-purple-200 dark:border-purple-800 shrink-0">
+                <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center space-x-4 shadow-2xs">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-black text-lg border border-purple-100 shrink-0">
                     <Activity className="w-6 h-6" />
                   </div>
                   <div className="space-y-1 min-w-0">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base truncate">
+                    <h3 className="font-extrabold text-slate-900 text-base truncate">
                       {inspectItem.action || 'Activity Log'}
                     </h3>
-                    <p className="text-slate-500 dark:text-slate-400 font-mono text-xs truncate">
+                    <p className="text-slate-500 font-mono text-xs truncate">
                       {inspectItem.user_email || inspectItem.user || 'admin@zapatera.gov'}
                     </p>
-                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase bg-purple-50 text-purple-700 border border-purple-200">
                       Category: {inspectItem.category || getLogCategory(inspectItem)}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/40">
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Performed By</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Performed By</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.user_email || inspectItem.user || 'Admin'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date & Time Logged</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Date & Time Logged</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {formatDate(inspectItem.created_at)}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Feature / Module</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Feature / Module</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.feature || 'General'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Log Reference ID</span>
-                    <span className="font-mono text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Log Reference ID</span>
+                    <span className="font-mono text-slate-800 text-xs mt-1 block truncate">
                       {inspectItem.id}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Activity Details</span>
-                  <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Activity Details</span>
+                  <div className="p-3.5 bg-[#f4f7fb] border border-slate-200/60 rounded-2xl text-slate-800 leading-relaxed font-medium">
                     {inspectItem.details || 'Activity record successfully committed to system database.'}
                   </div>
                 </div>
               </div>
             ) : inspectItem._type === 'users' ? (
               <div className="space-y-4">
-                {/* Profile Card */}
-                <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center space-x-4 shadow-2xs">
+                <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center space-x-4 shadow-2xs">
                   <UserAvatar user={inspectItem} size="lg" />
                   <div className="space-y-1">
-                    <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                    <h3 className="font-extrabold text-slate-900 text-base">
                       {inspectItem.full_name || `${inspectItem.first_name || ''} ${inspectItem.last_name || ''}`}
                     </h3>
-                    <p className="text-slate-500 dark:text-slate-400 font-mono text-xs">{inspectItem.email}</p>
-                    <span className="inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    <p className="text-slate-500 font-mono text-xs">{inspectItem.email}</p>
+                    <span className="inline-block px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase bg-blue-50 text-[#3b5bfd] border border-blue-200">
                       Role: {inspectItem.role || 'resident'}
                     </span>
                   </div>
                 </div>
 
-                {/* Structured Details Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/40">
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Phone Number</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phone Number</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.phone || inspectItem.contact_number || 'Not provided'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Sitio / Cluster</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sitio / Cluster</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.sitio || 'Sitio Zapatera Proper'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Full Address</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Address</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.address || inspectItem.office || 'Barangay Zapatera, Cebu City'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Civil Status</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Civil Status</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.civil_status || 'Single'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Voter Status</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Voter Status</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.voter_status || 'Registered Voter'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Gender & Age</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
-                      {inspectItem.gender || 'Not specified'} {inspectItem.age ? `(${inspectItem.age} yrs)` : ''}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Valid ID Presented</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
-                      {inspectItem.id_type || 'Government ID'}: {inspectItem.id_number || 'N/A'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Account Created</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Account Created</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {formatDate(inspectItem.created_at)}
                     </span>
                   </div>
@@ -1152,7 +1208,7 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
               /* B. Rich Announcement View */
               <div className="space-y-4">
                 {inspectItem.banner_url && (
-                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-48">
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 max-h-48">
                     <img
                       src={inspectItem.banner_url}
                       alt={inspectItem.title}
@@ -1162,41 +1218,48 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center space-x-1.5">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-[#3b5bfd] border border-blue-100 flex items-center space-x-1.5">
                     <Tag className="w-3.5 h-3.5" />
                     <span>{inspectItem.category || 'General Advisory'}</span>
                   </span>
 
                   {inspectItem.is_emergency && (
-                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-1.5">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center space-x-1.5">
                       <Flame className="w-3.5 h-3.5 text-rose-600" />
                       <span>Emergency Alert</span>
                     </span>
                   )}
+
+                  {inspectItem.is_important && (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center space-x-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Important Notice</span>
+                    </span>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/60 dark:border-slate-700/40">
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Author</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Author</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.author || inspectItem.created_by_name || 'Administration'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Target Audience</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs capitalize">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Audience</span>
+                    <span className="font-bold text-slate-800 text-xs capitalize mt-1 block">
                       {inspectItem.target_audience || 'All Residents'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Location</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {inspectItem.location || 'Barangay Zapatera, Cebu City'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Date Posted</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                  <div className="p-3.5 bg-[#f4f7fb] rounded-2xl border border-slate-200/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Date Posted</span>
+                    <span className="font-bold text-slate-800 text-xs mt-1 block">
                       {formatDate(inspectItem.created_at)}
                     </span>
                   </div>
@@ -1204,8 +1267,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 {inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</span>
-                    <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Summary</span>
+                    <div className="p-3.5 bg-[#f4f7fb] border border-slate-200/60 rounded-2xl text-slate-700 leading-relaxed font-medium">
                       {inspectItem.description}
                     </div>
                   </div>
@@ -1213,8 +1276,8 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
 
                 {inspectItem.content && inspectItem.content !== inspectItem.description && (
                   <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Full Content</span>
-                    <div className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Content</span>
+                    <div className="p-3.5 bg-[#f4f7fb] border border-slate-200/60 rounded-2xl text-slate-700 leading-relaxed whitespace-pre-wrap">
                       {inspectItem.content}
                     </div>
                   </div>
@@ -1223,24 +1286,25 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
             )}
 
             {/* Modal Actions */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setInspectItem(null)}
-                className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
-              >
-                Close
-              </button>
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => {
                   const it = inspectItem;
                   handlePromptRestore(it, it._type);
                 }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                className="px-5 py-2.5 rounded-full bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center space-x-1.5 cursor-pointer shadow-sm shadow-emerald-500/25 active:scale-95 transition-all"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Restore Now</span>
+                <span>Restore Record</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInspectItem(null)}
+                className="px-6 py-2.5 rounded-full text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 font-bold cursor-pointer transition-colors"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -1255,21 +1319,21 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         currentUser={currentUser}
         item={securityVerification.item}
         targetUser={securityVerification.dataType === 'users' ? securityVerification.item : null}
-        title={securityVerification.actionType === 'restore' ? 'Security Verification: Restore Record' : 'Security Verification: Permanent Deletion'}
+        title={securityVerification.actionType === 'restore' ? 'Restore Archived Record' : 'Permanently Delete Record'}
         message={
           securityVerification.actionType === 'restore'
-            ? `Please confirm your password to verify restoring this ${
+            ? `Confirm your admin password to restore this ${
                 securityVerification.dataType === 'announcements'
                   ? 'announcement'
                   : securityVerification.dataType === 'users'
                   ? 'user account'
                   : 'activity log'
               } to active status.`
-            : `Warning: This will permanently delete this record from the database. Please enter your password to confirm.`
+            : `Warning: This will permanently erase this record from the database. Enter your password to confirm.`
         }
-        confirmText={securityVerification.actionType === 'restore' ? 'Verify & Restore' : 'Verify & Permanently Delete'}
+        confirmText={securityVerification.actionType === 'restore' ? 'Verify & Restore' : 'Verify & Delete'}
         isDestructive={securityVerification.actionType === 'purge'}
-        isDarkMode={isDarkMode}
+        isDarkMode={false}
       />
 
       {/* Global Accessible Action Confirmation Modal */}
@@ -1285,7 +1349,6 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
         isLoading={actionModal.isLoading}
         onConfirm={actionModal.onConfirm}
         onClose={actionModal.onClose || (() => setActionModal({ isOpen: false }))}
-        isDarkMode={isDarkMode}
       />
     </div>
   );

@@ -16,8 +16,36 @@ import { StorageService } from './core/storage';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
 import './index.css';
 
+const VALID_SUPERADMIN_TABS = [
+  'dashboard',
+  'documents',
+  'news',
+  'users',
+  'archive',
+  'config',
+  'reports',
+  'logs',
+  'account',
+];
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('zapatera_superadmin_active_tab');
+      if (saved && VALID_SUPERADMIN_TABS.includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'dashboard';
+  });
+
+  useEffect(() => {
+    try {
+      if (activeTab && VALID_SUPERADMIN_TABS.includes(activeTab)) {
+        localStorage.setItem('zapatera_superadmin_active_tab', activeTab);
+      }
+    } catch {}
+  }, [activeTab]);
   const [searchQuery, setSearchQuery] = useState('');
   // Mobile responsive drawer state (< 1024px)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -170,6 +198,9 @@ export default function App() {
 
   const handleConfirmLogout = () => {
     setIsLogoutModalOpen(false);
+    try {
+      localStorage.removeItem('zapatera_superadmin_active_tab');
+    } catch {}
     StorageService.setCurrentUser(null);
     setCurrentUser(null);
     refreshState();
@@ -299,7 +330,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen font-sans overflow-hidden bg-slate-100 text-slate-800">
+    <div className="flex h-screen font-sans overflow-hidden bg-[#f4f7fb] text-slate-800">
       {/* Responsive Sidebar (Off-canvas drawer on mobile < 1024px, static on desktop >= 1024px) */}
       <Sidebar
         activeTab={activeTab}
@@ -316,13 +347,17 @@ export default function App() {
         <Navbar
           activeTitle={tabTitles[activeTab]}
           notificationsCount={notifications.length}
+          pendingCount={requests.filter((r) => r.status === 'pending').length}
+          requests={requests}
+          logs={logs}
+          notifications={notifications}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
           onLogout={handleLogoutRequest}
           onNavigate={(tab) => setActiveTab(tab)}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 transition-colors duration-200 w-full max-w-full overflow-x-hidden bg-slate-100 text-slate-800">
+        <main className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 sm:py-5 transition-colors duration-200 w-full max-w-full overflow-x-hidden bg-[#f4f7fb] text-slate-800">
           {activeTab === 'dashboard' && (
             <DashboardView
               users={users}
@@ -331,6 +366,7 @@ export default function App() {
               events={events}
               logs={logs}
               config={config}
+              setActiveTab={setActiveTab}
             />
           )}
 

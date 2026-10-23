@@ -13,11 +13,11 @@ import {
   CheckCheck,
   DollarSign,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../core/security';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton, useDelayedLoading } from '../../components/loaders';
-import { DESIGN_TOKENS } from '../../core/designTokens';
 
 export default function ApprovedDocumentsView({
   requests = [],
@@ -412,11 +412,11 @@ export default function ApprovedDocumentsView({
   const columns = useMemo(() => [
     {
       key: 'tracking_number',
-      header: 'Tracking Number',
+      header: 'Tracking No.',
       sortable: true,
       accessor: 'tracking_number',
       render: (req) => (
-        <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 text-xs inline-block">
+        <span className="font-mono font-bold text-slate-800 bg-[#f4f7fb] px-2.5 py-1 rounded-lg border border-slate-200/80 text-[11px] inline-block">
           {req.tracking_number}
         </span>
       ),
@@ -426,12 +426,25 @@ export default function ApprovedDocumentsView({
       header: 'Resident Applicant',
       sortable: true,
       accessor: 'resident_name',
-      render: (req) => (
-        <div>
-          <p className="font-bold text-slate-800">{req.resident_name || 'Resident Applicant'}</p>
-          <p className="text-[11px] text-slate-400">{req.resident_email || 'No email provided'}</p>
-        </div>
-      ),
+      render: (req) => {
+        const residentInitials = (req.resident_name || 'R')
+          .split(' ')
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((part) => part[0]?.toUpperCase())
+          .join('');
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-blue-50 text-[#3b5bfd] font-extrabold text-[11px] flex items-center justify-center shrink-0 border border-blue-100">
+              {residentInitials || 'RA'}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-slate-800 truncate">{req.resident_name || 'Resident Applicant'}</p>
+              <p className="text-[11px] text-slate-400 truncate">{req.resident_email || 'No email provided'}</p>
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'document_title',
@@ -450,20 +463,20 @@ export default function ApprovedDocumentsView({
 
         return (
           <div>
-            <p className="font-semibold text-slate-800">{req.document_title}</p>
+            <p className="font-bold text-slate-800">{req.document_title}</p>
             {claimed ? (
-              <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 <span>Claimed Fee: {claimedFee > 0 ? formatCurrency(claimedFee) : 'FREE'}</span>
-              </p>
+              </span>
             ) : isVar ? (
-              <p className="text-[11px] text-blue-700 font-semibold italic mt-0.5">
-                Fee: Depends upon claim
-              </p>
+              <span className="inline-flex items-center text-[10px] text-[#3b5bfd] bg-blue-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
+                Fee: Depends on claim
+              </span>
             ) : (
-              <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              <span className="inline-flex items-center text-[10px] text-slate-600 bg-[#f4f7fb] px-2 py-0.5 rounded-full font-bold mt-0.5">
                 Fee: {req.fee > 0 ? formatCurrency(req.fee) : 'Free'}
-              </p>
+              </span>
             )}
           </div>
         );
@@ -471,12 +484,13 @@ export default function ApprovedDocumentsView({
     },
     {
       key: 'pickup_time_slot',
-      header: 'Pick-up Time Slot',
+      header: 'Pick-up Slot',
       sortable: true,
       accessor: 'pickup_time_slot',
       render: (req) => (
-        <span className="inline-flex items-center px-2.5 py-1 rounded bg-blue-50 text-blue-800 border border-blue-200 font-mono text-[11px] font-bold">
-          {req.pickup_time_slot || '9:00 AM - 9:30 AM'}
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50/80 text-[#3b5bfd] border border-blue-100 font-mono text-[11px] font-bold">
+          <Clock className="w-3 h-3" />
+          <span>{req.pickup_time_slot || '9:00 AM - 9:30 AM'}</span>
         </span>
       ),
     },
@@ -487,7 +501,7 @@ export default function ApprovedDocumentsView({
       accessor: 'purpose',
       render: (req) => (
         <span
-          className="text-slate-600 max-w-xs block truncate"
+          className="text-slate-600 font-medium max-w-xs block truncate"
           title={req.purpose || 'Official Verification'}
         >
           {req.purpose || 'Official Verification'}
@@ -500,7 +514,7 @@ export default function ApprovedDocumentsView({
       sortable: true,
       accessor: (req) => req.approved_at || req.updated_at || req.created_at,
       render: (req) => (
-        <span className="text-slate-500 font-medium whitespace-nowrap">
+        <span className="text-slate-500 font-semibold whitespace-nowrap">
           {req.approved_at
             ? formatDate(req.approved_at)
             : req.updated_at
@@ -521,12 +535,12 @@ export default function ApprovedDocumentsView({
       render: (req) => {
         const claimed = isClaimed(req);
         return claimed ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300/80 shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span>Claimed</span>
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300/80 shadow-2xs">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             <span>Unclaimed</span>
           </span>
@@ -552,14 +566,14 @@ export default function ApprovedDocumentsView({
 
         return (
           <div className="flex items-center justify-end space-x-2">
-            {/* Enhanced Civic Mark as Claim Button */}
+            {/* Enhanced Mark as Claim Pill Button */}
             <button
               type="button"
               onClick={() => handlePromptToggleClaim(req)}
               className={
                 claimed
-                  ? 'px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 cursor-pointer active:scale-95'
-                  : 'px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 cursor-pointer active:scale-95'
+                  ? 'px-3.5 py-2 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition-all bg-[#f4f7fb] hover:bg-slate-200/80 text-slate-700 border border-slate-200/80 cursor-pointer active:scale-95'
+                  : 'px-4 py-2 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition-all bg-[#3b5bfd] hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 cursor-pointer active:scale-95'
               }
               title={claimed ? 'Revert to Unclaimed' : isVar ? 'Confirm Claim & Fee Collection' : 'Mark Document as Claimed'}
               aria-label={
@@ -586,11 +600,11 @@ export default function ApprovedDocumentsView({
               )}
             </button>
 
-            {/* Standard Civic Delete Action Button (matches ReceiveRequestView) */}
+            {/* Delete Action Button */}
             <button
               type="button"
               onClick={() => handlePromptDelete(req)}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-1"
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer border border-transparent hover:border-rose-200"
               title="Delete Record"
               aria-label={`Delete record ${req.tracking_number || ''}`}
             >
@@ -600,57 +614,145 @@ export default function ApprovedDocumentsView({
         );
       },
     },
-  ], [currentUser]);
+  ], [currentUser, allDocTypes]);
+
+  const claimRate = totalCount > 0 ? Math.round((claimedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Summary Cards (Strict 4px/8px rhythm, Civic neutral/accent) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Approved */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Approved</p>
-            <h3 className="text-2xl font-black text-slate-900 mt-1">{totalCount}</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Approved clearance certificates</p>
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
+      {/* Top Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-1">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
+            <FileCheck2 className="w-3.5 h-3.5" />
+            <span>Release & Claim Registry</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
-            <FileCheck2 className="w-6 h-6" />
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
+            Approved Documents
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Track printed certificates, confirm resident pick-ups, and record claim fees upon release.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-slate-200/80 shadow-2xs text-xs font-bold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span>{unclaimedCount} Awaiting Pick-up</span>
+          </div>
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-slate-200/80 shadow-2xs text-xs font-bold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span>{claimedCount} Claimed ({claimRate}%)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Colorful Gradient KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: Total Approved */}
+        <div
+          onClick={() => setClaimFilter('all')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#4f46e5] via-[#3b5bfd] to-[#2563eb] text-white shadow-lg shadow-blue-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            claimFilter === 'all' ? 'ring-4 ring-blue-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-md">
+              <FileCheck2 className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Approved Total
+            </span>
+          </div>
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Total Approved</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {totalCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              Certificates
+            </span>
           </div>
         </div>
 
-        {/* Claimed Count */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Claimed Documents</p>
-            <h3 className="text-2xl font-black text-emerald-800 mt-1">{claimedCount}</h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5">Officially released to residents</p>
+        {/* Card 2: Claimed Documents */}
+        <div
+          onClick={() => setClaimFilter('claimed')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#0ea5e9] via-[#38bdf8] to-[#0284c7] text-white shadow-lg shadow-sky-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            claimFilter === 'claimed' ? 'ring-4 ring-sky-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-sky-500 flex items-center justify-center shadow-md">
+              <PackageCheck className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Released
+            </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
-            <PackageCheck className="w-6 h-6" />
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Claimed Documents</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {claimedCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              {claimRate}% Claimed
+            </span>
           </div>
         </div>
 
-        {/* Unclaimed Count */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-amber-700 uppercase tracking-wider">Unclaimed Documents</p>
-            <h3 className="text-2xl font-black text-amber-800 mt-1">{unclaimedCount}</h3>
-            <p className="text-[11px] text-amber-600 mt-0.5">Awaiting resident pick-up</p>
+        {/* Card 3: Unclaimed Documents */}
+        <div
+          onClick={() => setClaimFilter('unclaimed')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#f59e0b] via-[#fb923c] to-[#f97316] text-white shadow-lg shadow-orange-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            claimFilter === 'unclaimed' ? 'ring-4 ring-orange-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-orange-500 flex items-center justify-center shadow-md">
+              <Package className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              For Pick-up
+            </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center">
-            <Package className="w-6 h-6" />
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Unclaimed Documents</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {unclaimedCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              Ready at Hall
+            </span>
           </div>
         </div>
 
-        {/* Total Claimed Fee Collections */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Claimed Fee Collections</p>
-            <h3 className="text-2xl font-black text-emerald-800 mt-1">{formatCurrency(totalClaimedFees)}</h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5">Total collected on release</p>
+        {/* Card 4: Claimed Fee Collections */}
+        <div className="relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#a855f7] via-[#c084fc] to-[#e879f9] text-white shadow-lg shadow-purple-500/20 flex flex-col justify-between min-h-[148px]">
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-purple-600 flex items-center justify-center shadow-md">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Collections
+            </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
-            <DollarSign className="w-6 h-6" />
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Claimed Fee Collections</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {formatCurrency(totalClaimedFees)}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              On Release
+            </span>
           </div>
         </div>
       </div>

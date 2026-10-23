@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Calendar,
   MapPin,
-  HelpCircle,
   RotateCcw,
   Sparkles,
   Phone,
@@ -71,7 +70,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
 
     try {
       if (isSupabaseConfigured()) {
-        const { data: profileData, error: profileErr } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .order('full_name', { ascending: true });
@@ -79,7 +78,6 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
         if (profileData && profileData.length > 0) {
           profileData.forEach((p) => {
             const role = (p.role || p.user_role || '').toLowerCase();
-            // Include residents or accounts without elevated super_admin rights
             if (role === 'resident' || role === 'user' || !role) {
               const fullName =
                 formatResidentName(p) ||
@@ -172,119 +170,144 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
     window.print();
   };
 
+  const [previewZoom, setPreviewZoom] = useState(0.85);
+
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
 
+  const templateMeta = {
+    barangayCertification: { badge: 'General Cert', subtitle: 'Residency & general legal purposes' },
+    barangayClearance: { badge: 'Clearance', subtitle: 'Good moral & derogatory record check' },
+    certificateOfIndigency: { badge: 'Indigency', subtitle: 'Medical, scholarship & financial aid' },
+    businessClearance: { badge: 'Business', subtitle: 'Commercial & permit operations' },
+  };
+
+  const handleResetCurrentTemplate = () => {
+    const tmpl = documentTemplates[selectedTemplateKey];
+    if (tmpl) {
+      setDocumentTitle(tmpl.title);
+      setBodyText(tmpl.defaultBody);
+      setPurpose(tmpl.defaultPurpose);
+    }
+  };
+
   return (
-    <div className="space-y-6 font-sans text-slate-800">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-        <div>
+    <div className="space-y-5 font-sans text-slate-800">
+      {/* 1. Horizontal 4-Card Official Template Selector Ribbon */}
+      <div className="bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100/80 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Official Document Generator
-            </h2>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-              A4 Dynamic
-            </span>
+            <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
+              <Sparkles size={14} />
+            </div>
+            <div>
+              <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                Step 1 — Choose Official Certificate Template
+              </h3>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Select a preset A4 template below to auto-populate standard barangay legal wording
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Configure certificate template, preview live certificate, and print or export to PDF with zero layout shift.
-          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetCurrentTemplate}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full border border-slate-200/70 transition-colors cursor-pointer"
+              title="Reset template text to default"
+            >
+              <RotateCcw size={12} />
+              <span>Reset Template Text</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={fetchResidentsFromSupabase}
-            disabled={loadingResidents}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
-            title="Reload Residents from Supabase"
-          >
-            <RefreshCw size={14} className={loadingResidents ? 'animate-spin text-blue-600' : ''} />
-            <span>{loadingResidents ? 'Syncing...' : 'Sync Residents'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-          >
-            <Printer size={16} />
-            <span>Print Document</span>
-          </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {templateKeys.map((k) => {
+            const tmpl = documentTemplates[k];
+            const meta = templateMeta[k] || { badge: 'Official', subtitle: 'Standard barangay certificate' };
+            const isActive = selectedTemplateKey === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => handleSelectTemplate(k)}
+                className={`p-3.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                  isActive
+                    ? 'border-[#3b5bfd] bg-gradient-to-br from-[#3b5bfd] to-[#2563eb] text-white shadow-md shadow-blue-500/20'
+                    : 'border-slate-200/70 bg-[#f4f7fb] hover:bg-white hover:border-blue-200 text-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white text-[#3b5bfd] border border-blue-100'
+                    }`}
+                  >
+                    {meta.badge}
+                  </span>
+                  {isActive ? (
+                    <span className="w-5 h-5 rounded-full bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs">
+                      <Check size={12} className="stroke-[3]" />
+                    </span>
+                  ) : (
+                    <FileText size={14} className="text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <p className={`text-xs font-extrabold truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                    {tmpl.title}
+                  </p>
+                  <p className={`text-[10px] truncate mt-0.5 ${isActive ? 'text-white/80' : 'text-slate-400 font-medium'}`}>
+                    {meta.subtitle}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Main 2-Column Split: Left Controls | Right Live A4 Preview */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+      {/* 2. Main 2-Column Split: Left Categorized Form Controls | Right Sticky Live A4 Print Studio */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         
-        {/* LEFT COLUMN: Controls & Certificate Template (5 Cols) */}
-        <div className="xl:col-span-5 space-y-6">
+        {/* LEFT COLUMN: Categorized Form Sections (5 Cols) */}
+        <div className="xl:col-span-5 space-y-5">
           
-          {/* 1. Document Template Quick Switch */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <label className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles size={14} className="text-blue-600" />
-              <span>Select Document Template</span>
-            </label>
-
-            <div className="grid grid-cols-2 gap-2">
-              {templateKeys.map((k) => {
-                const tmpl = documentTemplates[k];
-                const isActive = selectedTemplateKey === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => handleSelectTemplate(k)}
-                    className={`p-2.5 rounded-xl text-left border transition-all text-xs cursor-pointer ${
-                      isActive
-                        ? 'border-blue-600 bg-blue-50/80 text-blue-900 font-bold shadow-xs'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="truncate">{tmpl.title}</span>
-                      {isActive && <Check size={14} className="text-blue-600 shrink-0 ml-1" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 2. Editable Certificate Template Form */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 text-xs">
-            <h3 className="font-bold text-slate-900 uppercase tracking-wider text-xs border-b border-slate-100 pb-2">
-              Certificate Template Fields
-            </h3>
-
-            {/* Variable: documentTitle */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                1. Document Title
-              </label>
-              <input
-                type="text"
-                required
-                value={documentTitle}
-                onChange={(e) => setDocumentTitle(e.target.value.toUpperCase())}
-                placeholder="e.g. BARANGAY CERTIFICATION"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold tracking-wide uppercase text-slate-900"
-              />
-            </div>
-
-            {/* Variable: name & Supabase Selector */}
-            <div className="relative" ref={dropdownRef}>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700 flex items-center gap-1">
-                  <User size={13} className="text-blue-600" />
-                  <span>2. Resident Name</span>
-                </label>
-                <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-semibold border border-blue-200">
-                  {residents.length} Registered Residents
-                </span>
+          {/* CARD A: Resident & Applicant Profile */}
+          <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
+                  <User size={14} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 uppercase tracking-wider text-xs">
+                    Step 2 — Resident Profile
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Auto-fill from registered directory or type manually
+                  </p>
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={fetchResidentsFromSupabase}
+                disabled={loadingResidents}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-[#3b5bfd] bg-blue-50 hover:bg-blue-100/80 rounded-full border border-blue-100 transition-colors cursor-pointer disabled:opacity-50"
+                title="Refresh Registered Residents"
+              >
+                <RefreshCw size={12} className={loadingResidents ? 'animate-spin' : ''} />
+                <span>{loadingResidents ? 'Syncing...' : `${residents.length} Residents`}</span>
+              </button>
+            </div>
+
+            {/* Resident Name & Searchable Directory Selector */}
+            <div className="relative" ref={dropdownRef}>
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Full Name of Resident <span className="text-rose-500">*</span>
+              </label>
 
               <div className="relative">
                 <input
@@ -306,28 +329,28 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                     }
                   }}
                   onFocus={() => setShowResidentDropdown(true)}
-                  placeholder="Select or enter resident name..."
-                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
+                  placeholder="Search registered resident or type full name..."
+                  className="w-full pl-9 pr-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-bold text-slate-900 transition-all"
                 />
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
 
               {/* Resident Dropdown Selection */}
               {showResidentDropdown && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
                   {filteredResidents.length > 0 ? (
                     filteredResidents.map((r) => (
                       <div
                         key={r.id || r.email || r.fullName}
                         onClick={() => handleSelectResident(r)}
-                        className="p-2.5 text-xs hover:bg-blue-50 cursor-pointer flex items-center justify-between transition-colors"
+                        className="p-2.5 text-xs hover:bg-blue-50/70 cursor-pointer flex items-center justify-between transition-colors"
                       >
-                        <div>
-                          <p className="font-bold text-slate-900">{r.fullName}</p>
-                          <p className="text-[10px] text-slate-500">{r.address}</p>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{r.fullName}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{r.address}</p>
                         </div>
                         {r.fullName.toLowerCase() === name.toLowerCase() && (
-                          <Check size={14} className="text-blue-600 shrink-0" />
+                          <Check size={14} className="text-[#3b5bfd] shrink-0 ml-2" />
                         )}
                       </div>
                     ))
@@ -340,103 +363,112 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               )}
             </div>
 
-            {/* Variable: address */}
+            {/* Residential Address */}
             <div>
-              <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <MapPin size={13} className="text-blue-600" />
-                <span>3. Address</span>
+              <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                <MapPin size={12} className="text-[#3b5bfd]" />
+                <span>Complete Residential Address</span>
               </label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="e.g. 197 D. Jakosalem St., Zapatera, Cebu City"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-medium transition-all"
               />
             </div>
 
-            {/* Variables: dateOfBirth & contactNo in grid */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Date of Birth, Contact No, and Years in Barangay */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                  <Cake size={13} className="text-blue-600" />
-                  <span>4. Date of Birth</span>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                  <Cake size={12} className="text-[#3b5bfd]" />
+                  <span>Birthdate</span>
                 </label>
                 <input
                   type="date"
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                  <Phone size={13} className="text-blue-600" />
-                  <span>5. Contact No.</span>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                  <Phone size={12} className="text-[#3b5bfd]" />
+                  <span>Contact No.</span>
                 </label>
                 <input
                   type="text"
                   value={contactNo}
                   onChange={(e) => setContactNo(e.target.value)}
-                  placeholder="e.g. 09171234567"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-900"
+                  placeholder="09171234567"
+                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-mono text-slate-900 transition-all"
                 />
               </div>
-            </div>
 
-            {/* Variable: yearsInBarangay & issuedLocation */}
-            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                  <Clock size={13} className="text-blue-600" />
-                  <span>6. Years in Barangay</span>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                  <Clock size={12} className="text-[#3b5bfd]" />
+                  <span>Residency</span>
                 </label>
                 <input
                   type="text"
                   value={yearsInBarangay}
                   onChange={(e) => setYearsInBarangay(e.target.value)}
-                  placeholder="e.g. 5 years / 10 years"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
-                  <Calendar size={13} className="text-blue-600" />
-                  <span>8. Issued Date</span>
-                </label>
-                <input
-                  type="date"
-                  value={issuedDate}
-                  onChange={(e) => setIssuedDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans text-slate-900"
+                  placeholder="e.g. 5 years"
+                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
                 />
               </div>
             </div>
+          </div>
 
-            {/* Certificate Ordinal Date Preview Banner */}
-            <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-[11px] text-blue-900">
-              <span className="font-bold">Official Ordinal Date: </span>
-              <span className="font-serif italic font-medium">{formatIssuedDateOrdinal(issuedDate)}</span>
+          {/* CARD B: Certificate Content & Signatory Settings */}
+          <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
+                  <FileText size={14} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 uppercase tracking-wider text-xs">
+                    Step 3 — Certificate Details & Signatory
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Customize purpose, issuance date, body text, and official signatory
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* Variable: purpose */}
+            {/* Document Header Title */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700">
-                  7. Purpose
-                </label>
-              </div>
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Certificate Heading Title
+              </label>
+              <input
+                type="text"
+                required
+                value={documentTitle}
+                onChange={(e) => setDocumentTitle(e.target.value.toUpperCase())}
+                placeholder="e.g. BARANGAY CERTIFICATION"
+                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-bold tracking-wide uppercase text-slate-900 transition-all"
+              />
+            </div>
+
+            {/* Purpose + Quick Suggestion Pills */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Issuance Purpose
+              </label>
               <input
                 type="text"
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
                 placeholder="e.g. Local Employment, Scholarship, Bank Requirement"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-900"
+                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-semibold text-slate-900 transition-all"
               />
 
-              {/* Quick Purpose Suggestion Pills */}
               {currentTemplateConfig.suggestedPurposes && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {currentTemplateConfig.suggestedPurposes.map((p) => (
@@ -444,10 +476,10 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                       key={p}
                       type="button"
                       onClick={() => setPurpose(p)}
-                      className={`text-[10px] px-2 py-1 rounded-lg border transition-colors cursor-pointer ${
+                      className={`text-[10px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
                         purpose === p
-                          ? 'bg-blue-600 text-white border-blue-600 font-semibold'
-                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                          ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] font-bold shadow-2xs'
+                          : 'bg-[#f4f7fb] text-slate-600 border-slate-200/70 hover:bg-slate-200/70 font-medium'
                       }`}
                     >
                       {p}
@@ -457,79 +489,143 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               )}
             </div>
 
-            {/* Variable: issuedLocation */}
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                9. Issued Location
-              </label>
-              <input
-                type="text"
-                value={issuedLocation}
-                onChange={(e) => setIssuedLocation(e.target.value)}
-                placeholder="Barangay Zapatera, Cebu City, Philippines"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
-              />
+            {/* Issued Date & Location */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
+                  <Calendar size={12} className="text-[#3b5bfd]" />
+                  <span>Date Issued</span>
+                </label>
+                <input
+                  type="date"
+                  value={issuedDate}
+                  onChange={(e) => setIssuedDate(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">
+                  Place Issued
+                </label>
+                <input
+                  type="text"
+                  value={issuedLocation}
+                  onChange={(e) => setIssuedLocation(e.target.value)}
+                  placeholder="Barangay Zapatera, Cebu City"
+                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                />
+              </div>
             </div>
 
-            {/* Certificate Body Text (Editable & Extensible) */}
+            {/* Ordinal Date Preview Pill */}
+            <div className="px-3.5 py-2.5 bg-blue-50/70 border border-blue-100 rounded-2xl text-[11px] text-blue-900 flex items-center justify-between">
+              <span className="font-bold text-[#3b5bfd]">Formatted Date on Certificate:</span>
+              <span className="font-serif italic font-semibold">{formatIssuedDateOrdinal(issuedDate)}</span>
+            </div>
+
+            {/* Certification Body Text */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold text-slate-700">Certification Body Text</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="font-bold text-slate-700">Certification Body Paragraph</label>
                 <button
                   type="button"
                   onClick={() => setBodyText(currentTemplateConfig.defaultBody)}
-                  className="text-[10px] text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                  className="text-[10px] font-bold text-[#3b5bfd] hover:text-blue-700 flex items-center gap-1 cursor-pointer"
                 >
                   <RotateCcw size={10} />
-                  <span>Reset to default</span>
+                  <span>Restore Default Wording</span>
                 </button>
               </div>
               <textarea
                 rows={3}
                 value={bodyText}
                 onChange={(e) => setBodyText(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 leading-relaxed text-xs"
+                className="w-full px-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 leading-relaxed text-xs transition-all"
               />
             </div>
 
             {/* Signatory Settings */}
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Signatory Name</label>
+                <label className="block font-bold text-slate-700 mb-1.5">Signatory Name</label>
                 <input
                   type="text"
                   value={signatoryName}
                   onChange={(e) => setSignatoryName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 font-bold"
+                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Signatory Title</label>
+                <label className="block font-bold text-slate-700 mb-1.5">Signatory Title</label>
                 <input
                   type="text"
                   value={signatoryTitle}
                   onChange={(e) => setSignatoryTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
+                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
                 />
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Live A4 Preview (7 Cols) */}
-        <div className="xl:col-span-7 bg-slate-100/90 rounded-3xl p-4 sm:p-8 border border-slate-200 flex flex-col items-center justify-start min-h-[750px] overflow-hidden">
+        {/* RIGHT COLUMN: Sticky Live A4 Print Studio (7 Cols) */}
+        <div className="xl:col-span-7 xl:sticky xl:top-4 bg-white rounded-[26px] p-4 sm:p-6 border border-slate-100/80 shadow-xs flex flex-col items-center justify-start overflow-hidden">
           
-          <div className="w-full flex items-center justify-between mb-4 px-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Live A4 Document Preview</span>
-            </span>
+          {/* Studio Action Header Bar */}
+          <div className="w-full flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <div>
+                <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                  Live A4 Print Preview
+                </h4>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {documentTitle} • {name || 'Resident Applicant'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Zoom Scale Pills */}
+              <div className="hidden sm:inline-flex items-center bg-[#f4f7fb] p-1 rounded-full border border-slate-200/70">
+                {[
+                  { label: '75%', value: 0.75 },
+                  { label: '85%', value: 0.85 },
+                  { label: '95%', value: 0.95 },
+                ].map((z) => (
+                  <button
+                    key={z.label}
+                    type="button"
+                    onClick={() => setPreviewZoom(z.value)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                      previewZoom === z.value
+                        ? 'bg-white text-[#3b5bfd] shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-full shadow-md shadow-blue-500/25 transition-all cursor-pointer active:scale-95"
+              >
+                <Printer size={15} />
+                <span>Print Certificate</span>
+              </button>
+            </div>
           </div>
 
-          {/* Scaled Preview Frame */}
-          <div className="w-full overflow-x-auto flex justify-center py-2">
-            <div className="transform scale-[0.80] sm:scale-[0.88] lg:scale-[0.92] origin-top transition-transform duration-200">
+          {/* Scaled A4 Preview Canvas */}
+          <div className="w-full overflow-x-auto flex justify-center py-5 px-2 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 max-h-[820px] overflow-y-auto">
+            <div
+              style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }}
+              className="transition-transform duration-200"
+            >
               <DocumentTemplate
                 documentTitle={documentTitle}
                 name={name}

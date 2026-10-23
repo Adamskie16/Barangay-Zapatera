@@ -215,14 +215,14 @@ export default function DataTable({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-5 ${className}`}>
       {/* TOOLBAR: Status Pills, Search, Filters & PageSize */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100/80 shadow-xs">
         
         {/* Left: Status Filter Pills or Secondary Filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           {statusTabs && statusTabs.tabs && (
-            <div className="flex flex-wrap items-center gap-1.5" role="tablist">
+            <div className="flex flex-wrap items-center gap-2" role="tablist">
               {statusTabs.tabs.map((tab) => {
                 const isActive = statusTabs.activeTab === tab.id;
                 return (
@@ -231,17 +231,17 @@ export default function DataTable({
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => statusTabs.onChange(tab.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-2 ${
                       isActive
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                        : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70 border border-slate-200/60'
                     }`}
                   >
-                    {tab.label}
+                    <span>{tab.label}</span>
                     {tab.count !== undefined && (
                       <span
-                        className={`ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                          isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
                         }`}
                       >
                         {tab.count}
@@ -259,14 +259,14 @@ export default function DataTable({
               {filters.map((filter) => (
                 <div key={filter.id} className="flex items-center space-x-1.5">
                   {filter.label && (
-                    <span className="text-xs font-medium text-slate-500 hidden sm:inline">
+                    <span className="text-xs font-bold text-slate-400 hidden sm:inline">
                       {filter.label}:
                     </span>
                   )}
                   <select
                     value={filter.value || 'all'}
                     onChange={(e) => filter.onChange(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="px-3.5 py-2 text-xs border border-slate-200/70 rounded-full bg-[#f4f7fb] text-slate-700 font-bold focus:bg-white focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] focus:outline-none cursor-pointer transition-all"
                     aria-label={filter.label || filter.id}
                   >
                     {filter.options.map((opt) => (
@@ -282,23 +282,23 @@ export default function DataTable({
         </div>
 
         {/* Right: Search Bar & Clear Filters Action */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
           {searchable && (
             <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder={searchPlaceholder}
                 value={rawSearch}
                 onChange={(e) => setRawSearch(e.target.value)}
-                className="w-full pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white text-slate-900"
+                className="w-full pl-10 pr-9 py-2 text-xs font-medium bg-[#f4f7fb] border border-slate-200/70 rounded-full text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] focus:outline-none transition-all"
                 aria-label="Search records"
               />
               {rawSearch && (
                 <button
                   type="button"
                   onClick={() => setRawSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   title="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -312,11 +312,11 @@ export default function DataTable({
             <button
               type="button"
               onClick={handleClearAllFilters}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              className="px-4 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 rounded-full inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               title="Reset all search filters"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Clear Filters</span>
+              <span>Reset</span>
             </button>
           )}
 
@@ -325,11 +325,11 @@ export default function DataTable({
       </div>
 
       {/* TABLE CONTAINER */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div className="bg-white rounded-[26px] border border-slate-100/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead
-              className={`bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200 text-xs ${
+              className={`bg-[#f8fafd] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100 text-[10px] ${
                 fixedHeader ? 'sticky top-0 z-10' : ''
               }`}
             >
@@ -338,11 +338,12 @@ export default function DataTable({
                   const isSortable = col.sortable !== false;
                   const currentSortKey = col.sortKey || col.key;
                   const isActiveSort = sortKey === currentSortKey;
+                  const headerLabel = col.header || col.label || col.title || col.key;
 
                   return (
                     <th
                       key={col.key}
-                      className={`p-4 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} ${
+                      className={`py-3.5 px-4 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'} ${
                         col.width || ''
                       } ${col.headerClassName || ''}`}
                     >
@@ -350,26 +351,26 @@ export default function DataTable({
                         <button
                           type="button"
                           onClick={() => handleSort(currentSortKey)}
-                          className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                            isActiveSort ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-blue-600'
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            isActiveSort ? 'text-[#3b5bfd]' : 'text-slate-400 hover:text-[#3b5bfd]'
                           }`}
-                          title={`Sort by ${typeof (col.header || col.label || col.title || col.key) === 'string' ? (col.header || col.label || col.title || col.key) : col.key}`}
+                          title={`Sort by ${typeof headerLabel === 'string' ? headerLabel : col.key}`}
                         >
-                          <span>{col.header || col.label || col.title || col.key}</span>
-                          <span className={`inline-block transition-transform p-0.5 rounded ${isActiveSort ? 'bg-blue-50 text-blue-600' : ''}`}>
+                          <span>{headerLabel}</span>
+                          <span className={`inline-block transition-transform p-0.5 rounded ${isActiveSort ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                             {isActiveSort ? (
                               sortDirection === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" />
                               ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                               )
                             ) : (
-                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                             )}
                           </span>
                         </button>
                       ) : (
-                        <span>{col.header || col.label || col.title || col.key}</span>
+                        <span>{headerLabel}</span>
                       )}
                     </th>
                   );
@@ -377,7 +378,7 @@ export default function DataTable({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-100/80 font-medium">
               {loading ? (
                 loadingSkeleton || (
                   <tr>
@@ -388,15 +389,17 @@ export default function DataTable({
                 )
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="p-12 text-center text-slate-400">
-                    <Inbox className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">{emptyTitle}</p>
+                  <td colSpan={columns.length} className="p-14 text-center text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                      <Inbox className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">{emptyTitle}</p>
                     <p className="text-xs text-slate-400 mt-1">{emptySubtitle}</p>
                     {hasActiveFilters && (
                       <button
                         type="button"
                         onClick={handleClearAllFilters}
-                        className="mt-3 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        className="mt-3.5 px-4 py-2 bg-[#f4f7fb] hover:bg-slate-200/70 text-slate-700 text-xs font-bold rounded-full border border-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>Reset Filters</span>
@@ -413,7 +416,7 @@ export default function DataTable({
                     <tr
                       key={rowKey}
                       title={row.rowTitle || row.title || (row.action ? `${row.action}${row.user_email || row.user ? ` - ${row.user_email || row.user}` : ''}` : undefined)}
-                      className={`hover:bg-slate-50/80 transition-colors ${
+                      className={`hover:bg-[#f8fafd] transition-colors ${
                         isZebra ? 'bg-slate-50/40' : 'bg-white'
                       }`}
                     >
@@ -450,25 +453,25 @@ export default function DataTable({
         </div>
 
         {/* ENTERPRISE PAGINATION FOOTER */}
-        <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+        <div className="px-5 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           {/* Status info & Page size dropdown */}
           <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-            <span className="font-medium text-slate-600">
-              Showing <span className="font-bold text-slate-900">{startIndex}</span> to{' '}
-              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
-              <span className="font-bold text-slate-900">{totalEntries}</span> entries
+            <span className="font-medium text-slate-500">
+              Showing <span className="font-bold text-slate-800">{startIndex}</span> to{' '}
+              <span className="font-bold text-slate-800">{endIndex}</span> of{' '}
+              <span className="font-bold text-slate-800">{totalEntries}</span> entries
             </span>
 
             {/* Page Size Selector */}
-            <div className="flex items-center space-x-1.5 text-xs text-slate-500">
-              <span className="hidden md:inline">Rows per page:</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+              <span className="hidden md:inline font-medium">Rows per page:</span>
               <select
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="px-2.5 py-1 text-xs border border-slate-200 rounded-full bg-[#f4f7fb] text-slate-700 font-bold focus:ring-2 focus:ring-[#3b5bfd]/20 focus:outline-none cursor-pointer"
                 aria-label="Rows per page selector"
               >
                 {pageSizeOptions.map((opt) => (
@@ -487,7 +490,7 @@ export default function DataTable({
               type="button"
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="First page"
               aria-label="Go to first page"
             >
@@ -499,7 +502,7 @@ export default function DataTable({
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Previous page"
               aria-label="Go to previous page"
             >
@@ -523,10 +526,10 @@ export default function DataTable({
                     type="button"
                     onClick={() => setCurrentPage(page)}
                     aria-current={isCurrent ? 'page' : undefined}
-                    className={`min-w-7 h-7 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`min-w-7 h-7 px-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       isCurrent
-                        ? 'bg-slate-900 text-white shadow-xs font-bold'
-                        : 'text-slate-700 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                        ? 'bg-[#3b5bfd] text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:bg-[#f4f7fb] border border-transparent hover:border-slate-200'
                     }`}
                   >
                     {page}
@@ -540,7 +543,7 @@ export default function DataTable({
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages || totalEntries === 0}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Next page"
               aria-label="Go to next page"
             >
@@ -552,7 +555,7 @@ export default function DataTable({
               type="button"
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages || totalEntries === 0}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Last page"
               aria-label="Go to last page"
             >

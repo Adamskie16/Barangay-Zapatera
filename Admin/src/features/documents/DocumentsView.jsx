@@ -17,9 +17,16 @@ import {
   Sliders,
   AlertCircle,
   Printer,
+  Clock,
+  ShieldCheck,
+  Search,
+  X,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { formatCurrency, sanitizeInput } from '../../core/security';
 import { StorageService } from '../../core/storage';
+import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import DocumentManagement from './DocumentManagement';
 import ActionModal from '../../components/ActionModal';
 
@@ -27,6 +34,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'info'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
 
   // Reusable ActionModal State
   const [actionModal, setActionModal] = useState({
@@ -384,51 +393,177 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     }
   };
 
+  const activeDocsCount = docTypes.filter((d) => d.is_active).length;
+  const inactiveDocsCount = docTypes.filter((d) => !d.is_active).length;
+  const freeDocsCount = docTypes.filter((d) => Number(d.fee || 0) === 0 && d.fee_type !== 'variable' && !d.is_variable_fee).length;
+  const paidDocsCount = Math.max(0, docTypes.length - freeDocsCount);
+
+  const filteredDocTypes = docTypes.filter((doc) => {
+    const matchesStatus =
+      catalogStatusFilter === 'ALL' ||
+      (catalogStatusFilter === 'ACTIVE' && doc.is_active) ||
+      (catalogStatusFilter === 'INACTIVE' && !doc.is_active);
+    const q = catalogSearch.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      (doc.title || '').toLowerCase().includes(q) ||
+      (doc.code || '').toLowerCase().includes(q) ||
+      (doc.description || '').toLowerCase().includes(q);
+    return matchesStatus && matchesSearch;
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
       {/* Full-Screen Processing Loading Overlay Modal */}
       {isProcessing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-slate-200 text-center space-y-4">
-            <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
+          <div className="bg-white rounded-[26px] p-8 max-w-sm w-full shadow-2xl border border-slate-100 text-center space-y-4">
+            <div className="w-16 h-16 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center mx-auto text-[#3b5bfd]">
               <Loader2 className="w-8 h-8 animate-spin" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">{processingTitle || 'Processing Action...'}</h3>
-              <p className="text-xs text-slate-500 mt-1">{processingMessage || 'Saving changes to official barangay services...'}</p>
+              <h3 className="text-lg font-extrabold text-slate-900">{processingTitle || 'Processing Action...'}</h3>
+              <p className="text-xs text-slate-400 font-medium mt-1">{processingMessage || 'Saving changes to official barangay services...'}</p>
             </div>
             <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-blue-600 h-full w-2/3 animate-pulse rounded-full"></div>
+              <div className="bg-[#3b5bfd] h-full w-2/3 animate-pulse rounded-full"></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Sub-Tab Navigation Header */}
-      <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
-        <button
-          onClick={() => setSubTab('generator')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            subTab === 'generator'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Printer size={16} />
-          <span>Official Document Generator & Print</span>
-        </button>
+      {/* Top Header & Sub-Tab Navigation */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-1">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
+            <FileText className="w-3.5 h-3.5" />
+            <span>Templates & Service Catalog</span>
+          </div>
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
+            Document Catalog & Generator
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Generate walk-in certificates or configure document types, fees, and attachment requirements.
+          </p>
+        </div>
 
-        <button
-          onClick={() => setSubTab('info')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            subTab === 'info'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-              : 'text-slate-600 hover:bg-slate-100'
+        {/* Sub-Tab Pill Switcher */}
+        <div className="inline-flex items-center gap-1.5 bg-white p-1.5 rounded-full border border-slate-200/80 shadow-xs self-start lg:self-auto">
+          <button
+            onClick={() => setSubTab('generator')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              subTab === 'generator'
+                ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                : 'text-slate-600 hover:bg-[#f4f7fb]'
+            }`}
+          >
+            <Printer size={15} />
+            <span>Walk-In Generator & Print</span>
+          </button>
+
+          <button
+            onClick={() => setSubTab('info')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              subTab === 'info'
+                ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                : 'text-slate-600 hover:bg-[#f4f7fb]'
+            }`}
+          >
+            <Sliders size={15} />
+            <span>Service Catalog ({docTypes.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 Colorful Gradient KPI Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Official A4 Templates */}
+        <div
+          onClick={() => setSubTab('generator')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${
+            subTab === 'generator' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
           }`}
         >
-          <Sliders size={16} />
-          <span>Document Information Management</span>
-        </button>
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Printer className="w-5 h-5 text-[#0284c7]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Print Ready
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">4 Templates</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Official A4 Layouts</p>
+            <p className="text-[11px] text-white/75 mt-1">Clearance, Certification, Indigency, Business</p>
+          </div>
+        </div>
+
+        {/* Card 2: Active Service Catalog */}
+        <div
+          onClick={() => setSubTab('info')}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
+            subTab === 'info' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <Layers className="w-5 h-5 text-[#4f46e5]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              {docTypes.length} Total
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">{activeDocsCount} Active</p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Online Request Services</p>
+            <p className="text-[11px] text-white/75 mt-1">{inactiveDocsCount} inactive in catalog</p>
+          </div>
+        </div>
+
+        {/* Card 3: Fee Policy Breakdown */}
+        <div
+          onClick={() => setSubTab('info')}
+          className="relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01]"
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <DollarSign className="w-5 h-5 text-[#059669]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Fee Schedule
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold tracking-tight">
+              {paidDocsCount} Paid / {freeDocsCount} Free
+            </p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Issuance Fee Split</p>
+            <p className="text-[11px] text-white/75 mt-1">Standard & indigent fee policies</p>
+          </div>
+        </div>
+
+        {/* Card 4: Official Signatory */}
+        <div
+          onClick={() => setSubTab('generator')}
+          className="relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#fbbf24] via-[#f59e0b] to-[#ea580c] shadow-amber-500/15 hover:scale-[1.01]"
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+              <ShieldCheck className="w-5 h-5 text-[#ea580c]" />
+            </div>
+            <span className="text-[10px] font-bold bg-white/25 backdrop-blur-xs px-2.5 py-1 rounded-full">
+              Signatory
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-lg font-extrabold tracking-tight truncate">
+              {config?.captainName || 'HON. FRANKLYN A. ONG'}
+            </p>
+            <p className="text-xs font-semibold text-white/90 mt-1">Punong Barangay</p>
+            <p className="text-[11px] text-white/75 mt-1">Default certificate signatory</p>
+          </div>
+        </div>
       </div>
 
       {/* SUB-TAB 1: DOCUMENT GENERATOR & PRINT */}
@@ -437,114 +572,200 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       {/* SUB-TAB 2: DOCUMENT INFORMATION MANAGEMENT */}
       {subTab === 'info' && (
         <>
-          {/* Header Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Document Information Management</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Configure barangay document types, issuance fees, and required attachment guidelines for resident requests.
-              </p>
+          {/* Filter & Action Toolbar */}
+          <div className="bg-white rounded-[26px] border border-slate-100/80 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { key: 'ALL', label: 'All Services', count: docTypes.length },
+                { key: 'ACTIVE', label: 'Active', count: activeDocsCount },
+                { key: 'INACTIVE', label: 'Inactive', count: inactiveDocsCount },
+              ].map((tab) => {
+                const isSelected = catalogStatusFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setCatalogStatusFilter(tab.key)}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                        : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <button
-              onClick={openCreateModal}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-900/20 transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Document Template</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div className="relative min-w-[230px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Search service title or code..."
+                  className="w-full pl-9 pr-8 py-2 bg-[#f4f7fb] border border-transparent focus:border-blue-200 focus:bg-white rounded-full text-xs font-medium text-slate-700 placeholder-slate-400 focus:outline-none transition-all"
+                />
+                {catalogSearch && (
+                  <button
+                    onClick={() => setCatalogSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={openCreateModal}
+                className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-sm shadow-blue-500/25 transition-all cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Document Service</span>
+              </button>
+            </div>
           </div>
 
           {/* Document Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {docTypes.length === 0 ? (
-              <div className="md:col-span-2 bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-                <FileText className="w-10 h-10 mx-auto mb-3 opacity-40 text-slate-400" />
-                <h3 className="text-base font-bold text-slate-700">No Document Information Types</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Click "Add New Document Type" above to configure barangay document guidelines.
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {filteredDocTypes.length === 0 ? (
+              <div className="md:col-span-2 bg-white rounded-[26px] border border-slate-100/80 p-14 text-center text-slate-400 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-700">No Matching Document Services</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Try clearing your search filter or click &ldquo;Add Document Service&rdquo; to create a new entry.
                 </p>
               </div>
             ) : (
-              docTypes.map((doc) => (
+              filteredDocTypes.map((doc) => (
                 <div
                   key={doc.id || doc.code}
-                  className={`bg-white rounded-2xl border ${
-                    doc.is_active ? 'border-slate-200' : 'border-slate-300 bg-slate-50/60 opacity-80'
-                  } p-6 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow`}
+                  className={`bg-white rounded-[26px] border ${
+                    doc.is_active ? 'border-slate-100/80' : 'border-slate-200 bg-slate-50/60 opacity-80'
+                  } p-6 shadow-xs flex flex-col justify-between space-y-5 hover:shadow-md transition-all`}
                 >
                   <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          {doc.code}
-                        </span>
-                        <h3 className="text-lg font-bold text-slate-900 mt-2">{doc.title}</h3>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0 border border-blue-100">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="font-mono text-[10px] font-extrabold text-[#3b5bfd] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                            {doc.code}
+                          </span>
+                          <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mt-1">{doc.title}</h3>
+                        </div>
                       </div>
                       <Badge variant={doc.is_active ? 'active' : 'inactive'}>
                         {doc.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
 
-                    <p className="text-xs text-slate-600 mt-2 leading-relaxed">{doc.description}</p>
+                    <p className="text-xs text-slate-500 font-medium mt-3 leading-relaxed">{doc.description}</p>
 
-                    {/* Issuance Fee Info */}
-                    <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center space-x-2">
-                      <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-slate-400">Processing Fee</p>
-                        <p className="text-xs font-bold text-slate-800">
-                          {doc.fee_type === 'variable' || doc.is_variable_fee ? (
-                            <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                              Depends upon claim
-                            </span>
-                          ) : doc.fee > 0 ? (
-                            formatCurrency(doc.fee)
-                          ) : (
-                            'FREE / Exempt'
-                          )}
-                        </p>
+                    {/* Issuance Fee & Processing Time Info */}
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-white text-emerald-600 flex items-center justify-center shadow-2xs shrink-0">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Processing Fee</p>
+                          <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
+                            {doc.fee_type === 'variable' || doc.is_variable_fee ? (
+                              <span className="text-[#3b5bfd]">Depends upon claim</span>
+                            ) : doc.fee > 0 ? (
+                              formatCurrency(doc.fee)
+                            ) : (
+                              <span className="text-emerald-600">FREE / Exempt</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs shrink-0">
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Est. Turnaround</p>
+                          <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
+                            {doc.processing_time || '15–30 Minutes'}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Requirements List */}
                     <div className="mt-4">
-                      <p className="text-xs font-bold text-slate-700 mb-2">Required Attachments / Guidelines:</p>
-                      {(!doc.requirements || doc.requirements.length === 0 || (doc.requirements.length === 1 && (doc.requirements[0].toLowerCase().includes('no required document') || doc.requirements[0].toLowerCase() === 'none' || doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
-                        <div className="flex items-center text-xs text-slate-500 italic bg-slate-50 py-2 px-3 rounded-xl border border-slate-200">
-                          <CheckCircle className="w-3.5 h-3.5 text-blue-500 mr-2 shrink-0" />
+                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        Required Attachments ({doc.requirements?.length || 0})
+                      </p>
+                      {(!doc.requirements ||
+                        doc.requirements.length === 0 ||
+                        (doc.requirements.length === 1 &&
+                          (doc.requirements[0].toLowerCase().includes('no required document') ||
+                            doc.requirements[0].toLowerCase() === 'none' ||
+                            doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
+                        <div className="flex items-center text-xs text-slate-500 font-medium bg-[#f4f7fb] py-2.5 px-3.5 rounded-2xl border border-slate-200/60">
+                          <CheckCircle className="w-3.5 h-3.5 text-[#3b5bfd] mr-2 shrink-0" />
                           <span>No required documents / No attachments needed</span>
                         </div>
                       ) : (
-                        <ul className="space-y-1">
+                        <div className="flex flex-wrap gap-1.5">
                           {doc.requirements?.map((req, idx) => (
-                            <li key={idx} className="flex items-center text-xs text-slate-600">
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 mr-2 shrink-0" />
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f7fb] border border-slate-200/60 text-xs text-slate-700 font-semibold"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                               <span>{req}</span>
-                            </li>
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {/* Card Actions */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
-                      onClick={() => openEditModal(doc)}
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer"
+                      onClick={() => setSubTab('generator')}
+                      className="px-3.5 py-2 text-xs font-bold text-[#3b5bfd] bg-blue-50 hover:bg-blue-100 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit Info</span>
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Open in Generator</span>
                     </button>
-                    {onDeleteDocType && (
+
+                    <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => openDeleteModal(doc)}
-                        className="px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg flex items-center space-x-1.5 transition-colors cursor-pointer"
+                        onClick={() => openEditModal(doc)}
+                        className="px-4 py-2 text-xs font-bold text-slate-700 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remove</span>
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit Info</span>
                       </button>
-                    )}
+                      {onDeleteDocType && (
+                        <button
+                          onClick={() => openDeleteModal(doc)}
+                          className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -560,32 +781,36 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               setSaveAuthError('');
               setIsModalOpen(true);
             }}
-            title={`Security Verification - ${editingDoc ? 'Update' : 'Add'} Document Information`}
-            darkMode={isDarkMode}
+            title={editingDoc ? 'Authorize Document Update' : 'Authorize New Document Service'}
+            subtitle="Confirm your admin password to save changes"
+            maxWidth="max-w-md"
           >
             <div className="space-y-4 text-xs">
-              <div className="p-4 bg-blue-950/60 border border-blue-800/80 rounded-xl text-blue-200 flex items-start space-x-3">
-                <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+              <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-2xl text-slate-700 flex items-start space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-[#3b5bfd] text-white flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
                 <div>
-                  <p className="font-bold text-sm text-blue-100">{editingDoc ? 'Authorize Document Info Update' : 'Authorize New Document Type'}</p>
-                  <p className="text-xs text-blue-300 mt-1">
-                    Please confirm your logged-in account password to authorize {editingDoc ? 'updating' : 'adding'} document guidelines for{' '}
-                    <strong className="text-white">{formData.title || 'Document Type'}</strong> (
-                    <span className="font-mono text-blue-200">{formData.code || 'CODE'}</span>).
+                  <p className="font-extrabold text-slate-900">
+                    {editingDoc ? 'Save Service Guidelines' : 'Create Document Service'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    Authorize changes for <strong className="text-slate-800">{formData.title || 'Document Type'}</strong> (
+                    <span className="font-mono text-[#3b5bfd] font-bold">{formData.code || 'CODE'}</span>).
                   </p>
                 </div>
               </div>
 
               {saveAuthError && (
-                <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl flex items-center space-x-2 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                   <span>{saveAuthError}</span>
                 </div>
               )}
 
-              <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 space-y-2">
-                <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                  <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Account Password (Required to Authorize)
+              <div className="space-y-1.5">
+                <label className="block font-bold text-[11px] text-slate-600">
+                  Admin Password
                 </label>
                 <div className="relative">
                   <input
@@ -597,22 +822,20 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                       setSavePasswordInput(e.target.value);
                       setSaveAuthError('');
                     }}
-                    placeholder="Enter your logged-in account password"
-                    className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 font-mono text-xs ${
-                      isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                    }`}
+                    placeholder="Enter your admin password..."
+                    className="w-full pl-4 pr-10 py-2.5 bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl font-medium text-xs text-slate-800 outline-none transition-all"
                   />
                   <button
                     type="button"
                     onClick={() => setShowSavePassword(!showSavePassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     {showSavePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2.5">
                 <button
                   type="button"
                   disabled={isSaving}
@@ -622,9 +845,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     setSaveAuthError('');
                     setIsModalOpen(true);
                   }}
-                  className={`px-4 py-2 font-medium rounded-lg cursor-pointer ${
-                    isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className="px-5 py-2.5 font-bold rounded-full cursor-pointer text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 transition-colors"
                 >
                   Cancel
                 </button>
@@ -632,7 +853,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   type="button"
                   disabled={isSaving || !savePasswordInput.trim()}
                   onClick={handleSaveExecute}
-                  className="px-4 py-2 font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md shadow-blue-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
+                  className="px-6 py-2.5 font-bold text-white bg-[#3b5bfd] hover:bg-blue-700 rounded-full shadow-sm shadow-blue-500/25 disabled:opacity-50 flex items-center space-x-2 cursor-pointer transition-all"
                 >
                   {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Authorize & Save</span>
@@ -649,33 +870,36 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               setDeletePasswordInput('');
               setDeleteAuthError('');
             }}
-            title="Security Verification - Delete Document Information"
-            darkMode={isDarkMode}
+            title="Remove Document Service"
+            subtitle="Permanent catalog deletion requires admin authorization"
+            maxWidth="max-w-md"
           >
             {deletingDoc && (
               <div className="space-y-4 text-xs">
-                <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-200 flex items-start space-x-3">
-                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                <div className="p-4 bg-rose-50/70 border border-rose-100 rounded-2xl text-slate-700 flex items-start space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
                   <div>
-                    <p className="font-bold text-sm text-rose-100">Permanent Deletion</p>
-                    <p className="text-xs text-rose-300 mt-1">
-                      Are you sure you want to permanently delete the document information for{' '}
-                      <strong className="text-white">{deletingDoc.title}</strong> (
-                      <span className="font-mono text-rose-200">{deletingDoc.code}</span>)?
+                    <p className="font-extrabold text-slate-900">Permanent Deletion</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      Are you sure you want to remove{' '}
+                      <strong className="text-slate-800">{deletingDoc.title}</strong> (
+                      <span className="font-mono text-rose-600 font-bold">{deletingDoc.code}</span>)?
                     </p>
                   </div>
                 </div>
 
                 {deleteAuthError && (
-                  <div className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-xl flex items-center space-x-2 font-medium">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl flex items-center space-x-2 font-bold">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
                     <span>{deleteAuthError}</span>
                   </div>
                 )}
 
-                <div className="p-3.5 rounded-xl border bg-slate-950/80 border-slate-800 space-y-2">
-                  <label className={`block font-bold text-xs flex items-center ${isDarkMode ? 'text-rose-300' : 'text-rose-700'}`}>
-                    <Lock className="w-3.5 h-3.5 mr-1" /> Logged-in Account Password (Required to Delete)
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-[11px] text-slate-600">
+                    Admin Password
                   </label>
                   <div className="relative">
                     <input
@@ -687,22 +911,20 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                         setDeletePasswordInput(e.target.value);
                         setDeleteAuthError('');
                       }}
-                      placeholder="Enter your logged-in account password"
-                      className={`w-full pl-3 pr-10 py-2 border rounded-xl focus:ring-2 focus:ring-rose-500 font-mono text-xs ${
-                        isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
-                      }`}
+                      placeholder="Enter your admin password..."
+                      className="w-full pl-4 pr-10 py-2.5 bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-rose-500 rounded-2xl font-medium text-xs text-slate-800 outline-none transition-all"
                     />
                     <button
                       type="button"
                       onClick={() => setShowDeletePassword(!showDeletePassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       {showDeletePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-800 flex items-center justify-end space-x-3">
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2.5">
                   <button
                     type="button"
                     disabled={isDeleting}
@@ -711,9 +933,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                       setDeletePasswordInput('');
                       setDeleteAuthError('');
                     }}
-                    className={`px-4 py-2 font-medium rounded-lg cursor-pointer ${
-                      isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
+                    className="px-5 py-2.5 font-bold rounded-full cursor-pointer text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 transition-colors"
                   >
                     Cancel
                   </button>
@@ -721,7 +941,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     type="button"
                     disabled={isDeleting || !deletePasswordInput.trim()}
                     onClick={handleDeleteExecute}
-                    className="px-4 py-2 font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow-md shadow-rose-900/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
+                    className="px-6 py-2.5 font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-full shadow-sm shadow-rose-500/25 disabled:opacity-50 flex items-center space-x-2 cursor-pointer transition-all"
                   >
                     {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>Authorize & Delete</span>
@@ -735,31 +955,32 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           <Modal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            title={editingDoc ? 'Edit Document Template' : 'Add New Document Template'}
+            title={editingDoc ? 'Edit Document Service' : 'Add New Document Service'}
+            subtitle="Configure service code, fee policy, and attachment requirements"
           >
             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Document Code</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Document Code</label>
                   <input
                     type="text"
                     required
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     placeholder="e.g. BC-01"
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono uppercase"
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-mono font-bold uppercase transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Fee Option</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Processing Fee Option</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, fee_type: 'fixed', is_variable_fee: false })}
-                      className={`px-2.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center ${
+                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${
                         formData.fee_type !== 'variable' && !formData.is_variable_fee
-                          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-2xs font-bold'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
+                          : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
                       }`}
                     >
                       Fixed Fee
@@ -767,10 +988,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, fee_type: 'variable', is_variable_fee: true, fee: 0 })}
-                      className={`px-2.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center ${
+                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${
                         formData.fee_type === 'variable' || formData.is_variable_fee
-                          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-2xs font-bold'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
+                          : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
                       }`}
                     >
                       Depends on Claim
@@ -780,18 +1001,18 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               </div>
 
               {formData.fee_type === 'variable' || formData.is_variable_fee ? (
-                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl text-slate-700 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-[#3b5bfd] shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold text-xs">Fee Depends on Claim (Variable)</p>
-                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
-                      The processing fee will be assessed and entered by the admin when the document is officially marked as claimed. The claimed fee will then automatically reflect in all document fee collections.
+                    <p className="font-extrabold text-xs text-slate-900">Fee Depends on Claim (Variable)</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      The processing fee will be assessed when the document is marked as claimed.
                     </p>
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
                     Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
                   </label>
                   <input
@@ -801,66 +1022,66 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     required
                     value={formData.fee}
                     onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
                     placeholder="0.00"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Document Title</label>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Document Title</label>
                 <input
                   type="text"
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="e.g. Barangay Clearance"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Description & Purpose Scope</label>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Description & Purpose Scope</label>
                 <textarea
                   rows={2}
                   required
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe document purpose and certificate eligibility"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-medium transition-all"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Processing Time (Days)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Processing Time (Days)</label>
                   <input
                     type="number"
                     min="1"
                     required
                     value={formData.processing_days}
                     onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Status</label>
                   <select
                     value={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all cursor-pointer"
                   >
-                    <option value="true">Active Document Template</option>
+                    <option value="true">Active Document Service</option>
                     <option value="false">Inactive / Suspended</option>
                   </select>
                 </div>
               </div>
 
-              {/* Required Documents Section with Dropdown List & Ghost Button */}
+              {/* Required Documents Section */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Required Documents
+                  <label className="block text-[11px] font-bold text-slate-600">
+                    Required Attachments
                   </label>
                   <span className="text-[11px] font-medium text-slate-400">
                     Select required attachments from the list
@@ -869,27 +1090,27 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
                 <div className="space-y-2">
                   {formData.requirementsList.length === 0 ? (
-                    <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
+                    <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-center">
                       <p className="text-xs font-bold text-emerald-800">No Required Documents Set</p>
                       <p className="text-[11px] text-emerald-600 mt-0.5">
-                        Residents will not be required to attach or upload any supporting files when requesting this document.
+                        Residents will not be required to attach supporting files.
                       </p>
                     </div>
                   ) : (
                     formData.requirementsList.map((item, index) => (
                       <div
                         key={item.id}
-                        className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2"
+                        className="p-2.5 bg-[#f4f7fb] border border-slate-200/70 rounded-2xl space-y-2"
                       >
                         <div className="flex items-center space-x-2">
-                          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[#3b5bfd] font-bold text-[10px] flex items-center justify-center shrink-0">
                             {index + 1}
                           </span>
                           <div className="flex-1">
                             <select
                               value={item.selectedOption}
                               onChange={(e) => handleRequirementChange(item.id, 'selectedOption', e.target.value)}
-                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 cursor-pointer"
+                              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:border-[#3b5bfd] outline-none font-semibold text-slate-700 cursor-pointer"
                             >
                               <option value="" disabled>-- Select Required Document --</option>
                               {STANDARD_REQUIRED_DOCS.map((opt) => (
@@ -903,7 +1124,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                             type="button"
                             onClick={() => handleRemoveRequirement(item.id)}
                             title="Remove this requirement"
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -912,7 +1133,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                         {item.selectedOption === 'No Required Documents (None)' && (
                           <div className="pl-7 text-[11px] text-emerald-700 font-medium flex items-center space-x-1.5">
                             <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>No attachments required. Residents can submit their request without uploading files.</span>
+                            <span>No attachments required.</span>
                           </div>
                         )}
 
@@ -924,7 +1145,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                               value={item.customText}
                               onChange={(e) => handleRequirementChange(item.id, 'customText', e.target.value)}
                               placeholder="Specify custom requirement name..."
-                              className="w-full px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
+                              className="w-full px-3 py-1.5 text-xs border border-blue-200 rounded-xl bg-white focus:border-[#3b5bfd] outline-none"
                             />
                           </div>
                         )}
@@ -932,11 +1153,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     ))
                   )}
 
-                  {/* Ghost Button to add more required documents */}
                   <button
                     type="button"
                     onClick={handleAddRequirement}
-                    className="w-full py-2.5 px-3 border border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/40 hover:bg-blue-50 text-blue-600 hover:text-blue-700 font-semibold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.99]"
+                    className="w-full py-2.5 px-3 border border-dashed border-blue-300 hover:border-[#3b5bfd] bg-blue-50/40 hover:bg-blue-50 text-[#3b5bfd] font-bold text-xs rounded-2xl flex items-center justify-center space-x-1.5 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>
@@ -948,20 +1168,20 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-3">
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2.5">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  className="px-5 py-2.5 text-xs font-bold text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm cursor-pointer flex items-center space-x-1.5"
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-[#3b5bfd] hover:bg-blue-700 rounded-full shadow-sm shadow-blue-500/25 cursor-pointer flex items-center space-x-1.5 transition-all"
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>Proceed to Security Authorization</span>
+                  <span>Proceed to Authorize</span>
                 </button>
               </div>
             </form>

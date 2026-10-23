@@ -41,24 +41,27 @@ export function getInitials(name) {
  * Reusable UserAvatar component for SuperAdmin:
  * - Renders high-res avatar if `src` is present, valid (not a template), and loads successfully.
  * - Smoothly falls back to dynamic initials badge if `src` is missing, NULL, a template image, or fails to load.
- * - Eliminates all static placeholder silhouettes or stock asset URLs.
  */
 export default function UserAvatar({
+  user,
   src,
   name,
-  role = 'resident',
+  role,
   size = 'md',
   className = '',
   showStatus = false,
   isLocked = false,
-  isDarkMode = false,
 }) {
+  const resolvedSrc = src ?? user?.avatar_url;
+  const resolvedName = name || user?.full_name || user?.email || '';
+  const resolvedRole = String(role || user?.role || 'resident').toLowerCase();
+
   const [imageError, setImageError] = useState(false);
 
   // Reset error state whenever the image source URL changes
   useEffect(() => {
     setImageError(false);
-  }, [src]);
+  }, [resolvedSrc]);
 
   const sizeClasses = {
     xs: 'w-7 h-7 text-[10px]',
@@ -72,44 +75,34 @@ export default function UserAvatar({
   const currentSize = sizeClasses[size] || sizeClasses.md;
 
   const getRoleColors = () => {
-    if (role === 'super_admin') {
-      return isDarkMode
-        ? 'bg-purple-950/60 text-purple-300 border-purple-800'
-        : 'bg-purple-100 text-purple-700 border-purple-200';
+    if (resolvedRole === 'super_admin' || resolvedRole === 'superadmin') {
+      return 'bg-purple-100 text-purple-700 border-purple-200';
     }
-    if (role === 'admin') {
-      return isDarkMode
-        ? 'bg-blue-950/60 text-blue-300 border-blue-800'
-        : 'bg-blue-100 text-blue-700 border-blue-200';
+    if (resolvedRole === 'admin') {
+      return 'bg-blue-100 text-[#3b5bfd] border-blue-200';
     }
-    if (role === 'treasurer') {
-      return isDarkMode
-        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-        : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (resolvedRole === 'treasurer') {
+      return 'bg-teal-100 text-teal-700 border-teal-200';
     }
-    return isDarkMode
-      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-      : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   };
 
-  const initials = getInitials(name);
-  const hasValidUploadedAvatar = Boolean(src && !isTemplateAvatar(src) && !imageError);
+  const initials = getInitials(resolvedName);
+  const hasValidUploadedAvatar = Boolean(resolvedSrc && !isTemplateAvatar(resolvedSrc) && !imageError);
 
   return (
     <div className={`relative inline-flex items-center justify-center shrink-0 ${className}`}>
       {hasValidUploadedAvatar ? (
         <img
-          src={src}
-          alt={name || 'User avatar'}
-          className={`${currentSize} rounded-full object-cover border ${
-            isDarkMode ? 'border-slate-700' : 'border-slate-200'
-          } shadow-2xs`}
+          src={resolvedSrc}
+          alt={resolvedName || 'User avatar'}
+          className={`${currentSize} rounded-full object-cover border border-slate-200 shadow-2xs`}
           onError={() => setImageError(true)}
         />
       ) : (
         <div
           className={`${currentSize} rounded-full flex items-center justify-center font-bold tracking-wider border shadow-2xs transition-colors ${getRoleColors()}`}
-          title={name || 'User Profile'}
+          title={resolvedName || 'User Profile'}
         >
           <span>{initials}</span>
         </div>
@@ -117,11 +110,9 @@ export default function UserAvatar({
 
       {showStatus && (
         <span
-          className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 ${
-            isDarkMode ? 'border-slate-900' : 'border-white'
-          } ${size === 'xl' || size === '2xl' ? 'w-4 h-4' : 'w-2.5 h-2.5'} ${
-            isLocked ? 'bg-rose-500' : 'bg-emerald-500'
-          }`}
+          className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-white ${
+            size === 'xl' || size === '2xl' ? 'w-4 h-4' : 'w-2.5 h-2.5'
+          } ${isLocked ? 'bg-rose-500' : 'bg-emerald-500'}`}
           title={isLocked ? 'Account Locked' : 'Active Account'}
         />
       )}

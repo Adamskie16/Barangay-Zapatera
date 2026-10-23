@@ -790,64 +790,206 @@ export default function ReceiveRequestView({
   const residentCivilStatus = extractCivilStatus(selectedReq);
   const residentYears = extractYearsInBarangay(selectedReq);
 
+  const resubmittedCount = operationalRequests.filter((r) => r.is_resubmitted).length;
+
   return (
-    <div className="space-y-6">
-      {/* Top Banner / Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+    <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
+      {/* Top Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-1">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Document Requests Management Workspace</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Central operational queue for receiving, processing, verifying, and printing official resident certificates.
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
+            <FileBadge className="w-3.5 h-3.5" />
+            <span>Certificate & Clearance Queue</span>
+          </div>
+          <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">
+            Document Requests
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Central operational workspace for receiving, verifying attachments, and printing official resident certificates.
           </p>
         </div>
-        <div className="flex items-center space-x-3">
-          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            {pendingCount} Pending
-          </span>
-          <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            {processingCount} Processing
-          </span>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-slate-200/80 shadow-2xs text-xs font-bold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span>{pendingCount} Pending Verification</span>
+          </div>
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-slate-200/80 shadow-2xs text-xs font-bold text-slate-700">
+            <span className="w-2 h-2 rounded-full bg-[#3b5bfd]" />
+            <span>{processingCount} Ready to Print</span>
+          </div>
+          {resubmittedCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-amber-50 border border-amber-200/80 text-xs font-bold text-amber-800">
+              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+              <span>{resubmittedCount} Resubmitted</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4 Colorful Gradient KPI Cards (Clickable Quick Filters) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: All Operational Requests */}
+        <div
+          onClick={() => setStatusFilter('all')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#4f46e5] via-[#3b5bfd] to-[#2563eb] text-white shadow-lg shadow-blue-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            statusFilter === 'all' ? 'ring-4 ring-blue-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-md">
+              <Inbox className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Active Queue
+            </span>
+          </div>
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Total Operational</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {operationalRequests.length}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              {docTypes.length || 4} Doc Types
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Pending Inbox */}
+        <div
+          onClick={() => setStatusFilter('pending')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#f59e0b] via-[#fb923c] to-[#f97316] text-white shadow-lg shadow-orange-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            statusFilter === 'pending' ? 'ring-4 ring-orange-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-orange-500 flex items-center justify-center shadow-md">
+              <Clock className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Needs Review
+            </span>
+          </div>
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Pending Requests</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {pendingCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              {resubmittedCount} Updated
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Processing */}
+        <div
+          onClick={() => setStatusFilter('processing')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#0ea5e9] via-[#38bdf8] to-[#0284c7] text-white shadow-lg shadow-sky-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            statusFilter === 'processing' ? 'ring-4 ring-sky-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-sky-500 flex items-center justify-center shadow-md">
+              <Printer className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              In Progress
+            </span>
+          </div>
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Under Processing</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {processingCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              Print Queue
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: Declined / Returned */}
+        <div
+          onClick={() => setStatusFilter('declined')}
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#a855f7] via-[#c084fc] to-[#e879f9] text-white shadow-lg shadow-purple-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            statusFilter === 'declined' ? 'ring-4 ring-purple-500/30' : ''
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-11 h-11 rounded-2xl bg-white text-purple-600 flex items-center justify-center shadow-md">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
+              Returned
+            </span>
+          </div>
+          <div className="mt-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-semibold text-white/80">Declined / Action Needed</p>
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5">
+                {declinedCount}
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-white/85 bg-white/15 px-2.5 py-1 rounded-full">
+              Awaiting Fix
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100/80 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: 'all', label: `All Requests (${operationalRequests.length})` },
-            { id: 'pending', label: `Pending (${pendingCount})` },
-            { id: 'processing', label: `Processing (${processingCount})` },
-            { id: 'declined', label: `Declined (${declinedCount})` },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
-                statusFilter === tab.id
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+            { id: 'all', label: 'All Requests', count: operationalRequests.length },
+            { id: 'pending', label: 'Pending', count: pendingCount },
+            { id: 'processing', label: 'Processing', count: processingCount },
+            { id: 'declined', label: 'Declined', count: declinedCount },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-2 ${
+                  isActive
+                    ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                    : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70 border border-slate-200/60'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
           <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search tracking no, resident or purpose..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full pl-10 pr-9 py-2 text-xs font-medium bg-[#f4f7fb] border border-slate-200/70 rounded-full text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] focus:outline-none transition-all"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -862,160 +1004,174 @@ export default function ReceiveRequestView({
                 setSearch('');
                 setStatusFilter('all');
               }}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-lg inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              className="px-4 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 rounded-full inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               title="Reset all filters"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Clear Filters</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 1. Request Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      {/* 1. Request Table Card */}
+      <div className="bg-white rounded-[26px] border border-slate-100/80 overflow-hidden shadow-xs">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <h3 className="text-sm font-extrabold text-slate-900">Operational Request Queue</h3>
+            <span className="px-2.5 py-0.5 rounded-full bg-[#f4f7fb] text-slate-600 text-[11px] font-bold border border-slate-200/60">
+              {totalEntries} {totalEntries === 1 ? 'record' : 'records'}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 font-medium">
+            Click column headers to sort or click <span className="font-bold text-slate-600">Process</span> to verify & print
+          </p>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
+            <thead className="bg-[#f8fafd] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100 text-[10px]">
               <tr>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('tracking_number')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'tracking_number' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'tracking_number' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
-                    <span>Tracking Number</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'tracking_number' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span>Tracking No.</span>
+                    <span className={`p-0.5 rounded ${sortKey === 'tracking_number' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'tracking_number' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('resident_name')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'resident_name' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'resident_name' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
                     <span>Resident Applicant</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'resident_name' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span className={`p-0.5 rounded ${sortKey === 'resident_name' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'resident_name' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('document_title')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'document_title' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'document_title' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
                     <span>Document Requested</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'document_title' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span className={`p-0.5 rounded ${sortKey === 'document_title' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'document_title' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('pickup_time_slot')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'pickup_time_slot' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'pickup_time_slot' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
-                    <span>Pick-up Time Slot</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'pickup_time_slot' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span>Pick-up Slot</span>
+                    <span className={`p-0.5 rounded ${sortKey === 'pickup_time_slot' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'pickup_time_slot' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('purpose')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'purpose' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'purpose' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
                     <span>Purpose</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'purpose' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span className={`p-0.5 rounded ${sortKey === 'purpose' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'purpose' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('status')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'status' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'status' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
                     <span>Status</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'status' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span className={`p-0.5 rounded ${sortKey === 'status' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'status' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4">
+                <th className="py-3.5 px-4">
                   <button
                     type="button"
                     onClick={() => handleSort('created_at')}
-                    className={`inline-flex items-center gap-1.5 font-semibold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
-                      sortKey === 'created_at' ? 'text-blue-600 font-bold' : 'hover:text-blue-600 text-slate-500'
+                    className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                      sortKey === 'created_at' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
                     }`}
                   >
                     <span>Date Submitted</span>
-                    <span className={`p-0.5 rounded ${sortKey === 'created_at' ? 'bg-blue-50 text-blue-600' : ''}`}>
+                    <span className={`p-0.5 rounded ${sortKey === 'created_at' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
                       {sortKey === 'created_at' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-blue-600" /> : <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                        sortDirection === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                       ) : (
-                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-600" />
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                       )}
                     </span>
                   </button>
                 </th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-100/80 font-medium">
               {loading ? (
                 <TableSkeleton rows={6} cols={8} isDarkMode={false} />
               ) : paginatedRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-400">
-                    <Inbox className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-600">No document requests found.</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Try selecting another filter or adjusting your search query.</p>
+                  <td colSpan={8} className="p-14 text-center text-slate-400">
+                    <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                      <Inbox className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700">No document requests found</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Try selecting another status filter or adjusting your search query.</p>
                     {(search || statusFilter !== 'all') && (
                       <button
                         type="button"
@@ -1023,7 +1179,7 @@ export default function ReceiveRequestView({
                           setSearch('');
                           setStatusFilter('all');
                         }}
-                        className="mt-3 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        className="mt-3.5 px-4 py-2 bg-[#f4f7fb] hover:bg-slate-200/70 text-slate-700 text-xs font-bold rounded-full border border-slate-200 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         <span>Reset Filters</span>
@@ -1034,17 +1190,23 @@ export default function ReceiveRequestView({
               ) : (
                 paginatedRequests.map((req) => {
                   const normalizedStatus = (req.status || 'pending').toLowerCase();
+                  const residentInitials = (req.resident_name || 'R')
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join('');
                   return (
-                    <tr key={req.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={req.id} className="hover:bg-[#f8fafd] transition-colors group">
                       {/* Tracking Number */}
                       <td className="p-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                          <span className="font-mono font-bold text-slate-800 bg-[#f4f7fb] px-2.5 py-1 rounded-lg border border-slate-200/80 text-[11px]">
                             {req.tracking_number}
                           </span>
                           {req.is_resubmitted && (
                             <span
-                              className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200"
                               title={`Resubmitted by resident${req.resubmitted_at ? ` on ${formatDate(req.resubmitted_at)}` : ''}`}
                             >
                               <RotateCcw className="w-2.5 h-2.5" />
@@ -1056,27 +1218,35 @@ export default function ReceiveRequestView({
 
                       {/* Resident Applicant */}
                       <td className="p-4">
-                        <p className="font-bold text-slate-800">{req.resident_name || 'Resident Applicant'}</p>
-                        <p className="text-[11px] text-slate-400">{req.resident_email}</p>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 text-[#3b5bfd] font-extrabold text-[11px] flex items-center justify-center shrink-0 border border-blue-100">
+                            {residentInitials || 'RA'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 truncate">{req.resident_name || 'Resident Applicant'}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{req.resident_email}</p>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Document Requested */}
                       <td className="p-4">
-                        <p className="font-semibold text-slate-800">{req.document_title}</p>
-                        <p className="text-[11px] text-emerald-700 font-bold">
+                        <p className="font-bold text-slate-800">{req.document_title}</p>
+                        <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
                           {req.fee > 0 ? formatCurrency(req.fee) : 'Free'}
-                        </p>
+                        </span>
                       </td>
 
                       {/* Pick-up Time Slot */}
                       <td className="p-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded bg-blue-50 text-blue-800 border border-blue-200 font-mono text-[11px] font-bold">
-                          {req.pickup_time_slot || '9:00 AM - 9:30 AM'}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50/80 text-[#3b5bfd] border border-blue-100 font-mono text-[11px] font-bold">
+                          <Clock className="w-3 h-3" />
+                          <span>{req.pickup_time_slot || '9:00 AM - 9:30 AM'}</span>
                         </span>
                       </td>
 
                       {/* Purpose */}
-                      <td className="p-4 text-slate-600 max-w-xs truncate" title={req.purpose}>
+                      <td className="p-4 text-slate-600 max-w-xs truncate font-medium" title={req.purpose}>
                         {req.purpose || 'Local Employment Application'}
                       </td>
 
@@ -1085,7 +1255,7 @@ export default function ReceiveRequestView({
                         <div className="flex flex-col gap-1 items-start">
                           <Badge variant={normalizedStatus}>{normalizedStatus.replace('_', ' ')}</Badge>
                           {req.is_resubmitted && normalizedStatus === 'pending' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
                               <span>Updated Submission</span>
                             </span>
@@ -1094,16 +1264,16 @@ export default function ReceiveRequestView({
                       </td>
 
                       {/* Date Submitted */}
-                      <td className="p-4 text-slate-500 font-medium">
+                      <td className="p-4 text-slate-500 font-semibold">
                         {req.created_at ? formatDate(req.created_at) : formatDate(new Date())}
                       </td>
 
                       {/* Actions: Process and Delete Buttons */}
-                      <td className="p-4 text-right">
+                      <td className="py-4 px-5 text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => handleStartProcess(req)}
-                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold inline-flex items-center space-x-1.5 transition-colors shadow-xs cursor-pointer active:scale-95"
+                            className="px-4 py-2 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full font-bold inline-flex items-center space-x-1.5 transition-all shadow-sm shadow-blue-500/20 cursor-pointer active:scale-95"
                             title="Process Document Request"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1111,7 +1281,7 @@ export default function ReceiveRequestView({
                           </button>
                           <button
                             onClick={() => handlePromptDelete(req)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer border border-transparent hover:border-rose-200"
                             title="Delete Request"
                             aria-label={`Delete Request ${req.tracking_number || ''}`}
                           >
@@ -1128,23 +1298,23 @@ export default function ReceiveRequestView({
         </div>
 
         {/* ENTERPRISE PAGINATION FOOTER */}
-        <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+        <div className="px-5 sm:px-6 py-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-            <span className="font-medium text-slate-600">
-              Showing <span className="font-bold text-slate-900">{startIndex}</span> to{' '}
-              <span className="font-bold text-slate-900">{endIndex}</span> of{' '}
-              <span className="font-bold text-slate-900">{totalEntries}</span> entries
+            <span className="font-medium text-slate-500">
+              Showing <span className="font-bold text-slate-800">{startIndex}</span> to{' '}
+              <span className="font-bold text-slate-800">{endIndex}</span> of{' '}
+              <span className="font-bold text-slate-800">{totalEntries}</span> entries
             </span>
 
-            <div className="flex items-center space-x-1.5 text-xs text-slate-500">
-              <span className="hidden md:inline">Rows per page:</span>
+            <div className="flex items-center space-x-1.5 text-xs text-slate-400">
+              <span className="hidden md:inline font-medium">Rows per page:</span>
               <select
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="px-2.5 py-1 text-xs border border-slate-200 rounded-full bg-[#f4f7fb] text-slate-700 font-bold focus:ring-2 focus:ring-[#3b5bfd]/20 focus:outline-none cursor-pointer"
                 aria-label="Rows per page selector"
               >
                 {[10, 25, 50].map((opt) => (
@@ -1161,7 +1331,7 @@ export default function ReceiveRequestView({
               type="button"
               onClick={() => setCurrentPage(1)}
               disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="First page"
               aria-label="Go to first page"
             >
@@ -1172,7 +1342,7 @@ export default function ReceiveRequestView({
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safeCurrentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Previous page"
               aria-label="Go to previous page"
             >
@@ -1195,10 +1365,10 @@ export default function ReceiveRequestView({
                     type="button"
                     onClick={() => setCurrentPage(page)}
                     aria-current={isCurrent ? 'page' : undefined}
-                    className={`min-w-7 h-7 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`min-w-7 h-7 px-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       isCurrent
-                        ? 'bg-slate-900 text-white shadow-xs font-bold'
-                        : 'text-slate-700 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                        ? 'bg-[#3b5bfd] text-white shadow-xs shadow-blue-500/25'
+                        : 'text-slate-600 hover:bg-[#f4f7fb] border border-transparent hover:border-slate-200'
                     }`}
                   >
                     {page}
@@ -1211,7 +1381,7 @@ export default function ReceiveRequestView({
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage === totalPages || totalEntries === 0}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Next page"
               aria-label="Go to next page"
             >
@@ -1222,7 +1392,7 @@ export default function ReceiveRequestView({
               type="button"
               onClick={() => setCurrentPage(totalPages)}
               disabled={safeCurrentPage === totalPages || totalEntries === 0}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              className="p-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-[#f4f7fb] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               title="Last page"
               aria-label="Go to last page"
             >
