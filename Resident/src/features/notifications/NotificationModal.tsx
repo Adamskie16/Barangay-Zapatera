@@ -1,5 +1,4 @@
-// Resident/src/features/notifications/NotificationModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
+  Platform,
 } from 'react-native';
 import {
   Bell,
@@ -20,8 +20,10 @@ import {
   CheckCheck,
   AlertTriangle,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { ResidentNotification } from '../../types';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface NotificationModalProps {
   visible: boolean;
@@ -35,6 +37,8 @@ interface NotificationModalProps {
   onNotificationClick: (notif: ResidentNotification) => void;
 }
 
+type NotifFilter = 'all' | 'unread' | 'requests' | 'bulletins';
+
 export default function NotificationModal({
   visible,
   notifications,
@@ -46,122 +50,319 @@ export default function NotificationModal({
   onClearAll,
   onNotificationClick,
 }: NotificationModalProps) {
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const [activeFilter, setActiveFilter] = useState<NotifFilter>('all');
 
-  const renderIcon = (type: string) => {
-    switch (type) {
-      case 'ready_pickup':
-        return <PackageCheck size={18} color="#15803d" />;
-      case 'status_update':
-        return <Clock size={18} color="#1d4ed8" />;
-      case 'rejected':
-        return <XCircle size={18} color="#dc2626" />;
-      case 'warning':
-      case 'emergency':
-        return <AlertTriangle size={18} color="#dc2626" />;
-      case 'announcement':
-        return <Megaphone size={18} color="#7c3aed" />;
-      case 'security':
-        return <ShieldCheck size={18} color="#d97706" />;
-      default:
-        return <Bell size={18} color="#1d4ed8" />;
+  useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.is_read).length,
+    [notifications]
+  );
+
+  const isBulletinNotif = (n: ResidentNotification) =>
+    n.type === 'announcement' ||
+    n.type === 'warning' ||
+    (n.type as string) === 'emergency' ||
+    n.link_tab === 'announcements';
+
+  const requestsCount = useMemo(
+    () => notifications.filter((n) => !isBulletinNotif(n)).length,
+    [notifications]
+  );
+
+  const bulletinsCount = useMemo(
+    () => notifications.filter((n) => isBulletinNotif(n)).length,
+    [notifications]
+  );
+
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((n) => {
+      if (activeFilter === 'unread') return !n.is_read;
+      if (activeFilter === 'requests') return !isBulletinNotif(n);
+      if (activeFilter === 'bulletins') return isBulletinNotif(n);
+      return true;
+    });
+  }, [notifications, activeFilter]);
+
+  const getNotifVisual = (notif: ResidentNotification) => {
+    const type = (notif.type || '').toLowerCase();
+    if (type === 'ready_pickup') {
+      return {
+        icon: <PackageCheck size={18} color="#059669" />,
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        badgeBg: '#d1fae5',
+        badgeText: '#047857',
+        label: 'FOR PICKUP',
+      };
     }
+    if (type === 'rejected') {
+      return {
+        icon: <XCircle size={18} color="#dc2626" />,
+        bg: '#fef2f2',
+        border: '#fecaca',
+        badgeBg: '#fee2e2',
+        badgeText: '#b91c1c',
+        label: 'DECLINED',
+      };
+    }
+    if (type === 'warning' || type === 'emergency') {
+      return {
+        icon: <AlertTriangle size={18} color="#dc2626" />,
+        bg: '#fef2f2',
+        border: '#fecaca',
+        badgeBg: '#fee2e2',
+        badgeText: '#b91c1c',
+        label: 'EMERGENCY ALERT',
+      };
+    }
+    if (type === 'announcement' || notif.link_tab === 'announcements') {
+      return {
+        icon: <Megaphone size={18} color="#7c3aed" />,
+        bg: '#f5f3ff',
+        border: '#ddd6fe',
+        badgeBg: '#ede9fe',
+        badgeText: '#6d28d9',
+        label: 'BULLETIN',
+      };
+    }
+    if (type === 'security') {
+      return {
+        icon: <ShieldCheck size={18} color="#d97706" />,
+        bg: '#fffbeb',
+        border: '#fde68a',
+        badgeBg: '#fef3c7',
+        badgeText: '#b45309',
+        label: 'SECURITY',
+      };
+    }
+    return {
+      icon: <Clock size={18} color="#2563eb" />,
+      bg: '#eff6ff',
+      border: '#dbeafe',
+      badgeBg: '#dbeafe',
+      badgeText: '#1d4ed8',
+      label: 'REQUEST UPDATE',
+    };
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          {/* Header */}
+          {/* ================= 1. MODAL HEADER ================= */}
           <View style={styles.modalHeader}>
             <View style={styles.headerLeft}>
-              <Bell size={20} color="#1d4ed8" />
-              <Text style={styles.modalTitle}>Notifications</Text>
-              {unreadCount > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>{unreadCount} new</Text>
-                </View>
-              )}
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color="#64748b" />
-            </TouchableOpacity>
-          </View>
-
-          {/* In-App Request Progress & Status Indicator */}
-          <View style={styles.inAppStatusCard}>
-            <View style={styles.inAppStatusLeft}>
-              <View style={styles.inAppStatusDot} />
+              <View style={styles.headerIconBox}>
+                <Bell size={18} color="#2563eb" />
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inAppStatusTitle}>In-App Progress Notifications Active</Text>
-                <Text style={styles.inAppStatusSub}>
-                  Real-time updates are sent here for document submissions, verification, approval, and pick up readiness.
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.modalTitle}>Notifications</Text>
+                  {unreadCount > 0 ? (
+                    <View style={styles.unreadCountPill}>
+                      <Text style={styles.unreadCountPillText}>{unreadCount} Unread</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.allCaughtUpPill}>
+                      <Text style={styles.allCaughtUpPillText}>All Read</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  Real-time request progress, pickup alerts, and barangay advisories
                 </Text>
               </View>
             </View>
+
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+              <X size={18} color="#475569" />
+            </TouchableOpacity>
           </View>
 
-          {/* Separate Action Bar: Mark all as read & Clear all */}
-          {notifications.length > 0 && (
-            <View style={styles.markAllBar}>
-              <TouchableOpacity
-                style={[styles.markAllBtn, unreadCount === 0 && { opacity: 0.5 }]}
-                onPress={onMarkAllAsRead}
-                disabled={unreadCount === 0}
-              >
-                <CheckCheck size={14} color="#1d4ed8" />
-                <Text style={styles.markAllBtnText}>
-                  {unreadCount > 0 ? `Mark all as read (${unreadCount})` : 'All marked as read'}
-                </Text>
-              </TouchableOpacity>
-
-              {onClearAll && (
-                <TouchableOpacity style={styles.clearAllBtn} onPress={onClearAll}>
-                  <Trash2 size={13} color="#dc2626" />
-                  <Text style={styles.clearAllBtnText}>Clear all</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* Notification Items List */}
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-            {notifications.length > 0 ? (
-              notifications.map((notif) => (
-                <TouchableOpacity
-                  key={notif.id}
-                  style={[
-                    styles.notifCard,
-                    !notif.is_read && styles.notifCardUnread,
-                  ]}
-                  onPress={() => {
-                    onMarkAsRead(notif.id);
-                    onNotificationClick(notif);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      !notif.is_read ? styles.iconCircleUnread : styles.iconCircleRead,
-                    ]}
+          {/* ================= 2. FILTER PILLS & BULK ACTIONS BAR ================= */}
+          <View style={styles.controlsSection}>
+            {/* Filter Pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
+            >
+              {[
+                { key: 'all' as NotifFilter, label: 'All', count: notifications.length },
+                { key: 'unread' as NotifFilter, label: 'Unread', count: unreadCount },
+                { key: 'requests' as NotifFilter, label: 'Requests', count: requestsCount },
+                { key: 'bulletins' as NotifFilter, label: 'Bulletins', count: bulletinsCount },
+              ].map((tab) => {
+                const isSelected = activeFilter === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[styles.filterPill, isSelected && styles.filterPillActive]}
+                    onPress={() => setActiveFilter(tab.key)}
+                    activeOpacity={0.75}
                   >
-                    {renderIcon(notif.type)}
-                  </View>
-
-                  <View style={styles.notifContent}>
-                    <View style={styles.notifTopRow}>
-                      <Text style={[styles.notifTitle, !notif.is_read && styles.notifTitleUnread]}>
-                        {notif.title}
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        isSelected && styles.filterPillTextActive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                    <View
+                      style={[
+                        styles.filterCountBubble,
+                        isSelected && styles.filterCountBubbleActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterCountText,
+                          isSelected && styles.filterCountTextActive,
+                        ]}
+                      >
+                        {tab.count}
                       </Text>
-                      {!notif.is_read && <View style={styles.unreadDot} />}
                     </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Quick Bulk Actions Row */}
+            {notifications.length > 0 && (
+              <View style={styles.bulkActionsRow}>
+                <View style={styles.liveIndicatorRow}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveIndicatorText}>Live In-App Alerts Active</Text>
+                </View>
+
+                <View style={styles.bulkButtonsRight}>
+                  <TouchableOpacity
+                    style={[
+                      styles.markAllBtn,
+                      unreadCount === 0 && styles.markAllBtnDisabled,
+                    ]}
+                    onPress={onMarkAllAsRead}
+                    disabled={unreadCount === 0}
+                    activeOpacity={0.75}
+                  >
+                    <CheckCheck size={13} color={unreadCount > 0 ? '#2563eb' : '#94a3b8'} />
+                    <Text
+                      style={[
+                        styles.markAllBtnText,
+                        unreadCount === 0 && styles.markAllBtnTextDisabled,
+                      ]}
+                    >
+                      Mark all read
+                    </Text>
+                  </TouchableOpacity>
+
+                  {onClearAll && (
+                    <TouchableOpacity
+                      style={styles.clearAllBtn}
+                      onPress={onClearAll}
+                      activeOpacity={0.75}
+                    >
+                      <Trash2 size={12} color="#dc2626" />
+                      <Text style={styles.clearAllBtnText}>Clear all</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* ================= 3. NOTIFICATION ITEMS LIST ================= */}
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {filteredNotifications.length > 0 ? (
+              filteredNotifications.map((notif) => {
+                const visual = getNotifVisual(notif);
+                const isUnread = !notif.is_read;
+
+                return (
+                  <TouchableOpacity
+                    key={notif.id}
+                    style={[styles.notifCard, isUnread && styles.notifCardUnread]}
+                    onPress={() => {
+                      onMarkAsRead(notif.id);
+                      onNotificationClick(notif);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    {/* Top Row: Icon Box + Badges + Title */}
+                    <View style={styles.notifHeaderRow}>
+                      <View
+                        style={[
+                          styles.iconBox,
+                          { backgroundColor: visual.bg, borderColor: visual.border },
+                        ]}
+                      >
+                        {visual.icon}
+                      </View>
+
+                      <View style={styles.notifHeaderMain}>
+                        <View style={styles.badgesAndTimeRow}>
+                          <View style={styles.badgesGroup}>
+                            <View
+                              style={[
+                                styles.typeBadge,
+                                { backgroundColor: visual.badgeBg },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.typeBadgeText,
+                                  { color: visual.badgeText },
+                                ]}
+                              >
+                                {visual.label}
+                              </Text>
+                            </View>
+
+                            {isUnread && (
+                              <View style={styles.newPill}>
+                                <View style={styles.newPillDot} />
+                                <Text style={styles.newPillText}>NEW</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.timeChip}>
+                            <Clock size={10.5} color="#94a3b8" />
+                            <Text style={styles.notifTime}>{notif.created_at}</Text>
+                          </View>
+                        </View>
+
+                        <Text
+                          style={[
+                            styles.notifTitle,
+                            isUnread && styles.notifTitleUnread,
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {notif.title}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Message Body */}
                     <Text style={styles.notifMessage}>{notif.message}</Text>
+
+                    {/* Footer Action Bar */}
                     <View style={styles.notifFooterRow}>
-                      <Text style={styles.notifTime}>{notif.created_at}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.tapHintText}>Tap to open details</Text>
+
+                      <View style={styles.itemActionsRight}>
                         <TouchableOpacity
-                          style={notif.is_read ? styles.markAsUnreadBtn : styles.markAsReadBtn}
+                          style={
+                            notif.is_read
+                              ? styles.markAsUnreadBtn
+                              : styles.markAsReadBtn
+                          }
                           onPress={(e) => {
                             e.stopPropagation?.();
                             if (onToggleReadStatus) {
@@ -170,17 +371,19 @@ export default function NotificationModal({
                               onMarkAsRead(notif.id);
                             }
                           }}
-                          activeOpacity={0.7}
+                          activeOpacity={0.75}
                         >
                           {notif.is_read ? (
                             <>
-                              <Clock size={12} color="#64748b" />
-                              <Text style={styles.markAsUnreadBtnText}>Mark as unread</Text>
+                              <Clock size={11} color="#64748b" />
+                              <Text style={styles.markAsUnreadBtnText}>
+                                Mark unread
+                              </Text>
                             </>
                           ) : (
                             <>
-                              <CheckCircle2 size={12} color="#1d4ed8" />
-                              <Text style={styles.markAsReadBtnText}>Mark as read</Text>
+                              <CheckCircle2 size={11} color="#2563eb" />
+                              <Text style={styles.markAsReadBtnText}>Mark read</Text>
                             </>
                           )}
                         </TouchableOpacity>
@@ -192,31 +395,53 @@ export default function NotificationModal({
                               e.stopPropagation?.();
                               onDeleteNotification(notif.id);
                             }}
-                            activeOpacity={0.7}
+                            activeOpacity={0.75}
                             accessibilityLabel="Delete notification"
                           >
-                            <Trash2 size={12} color="#ef4444" />
+                            <Trash2 size={12} color="#dc2626" />
                           </TouchableOpacity>
                         )}
                       </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              ))
+                  </TouchableOpacity>
+                );
+              })
             ) : (
               <View style={styles.emptyBox}>
-                <Bell size={36} color="#94a3b8" />
-                <Text style={styles.emptyTitle}>No notifications yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  You'll be notified here when your document requests change status or new advisories are posted.
+                <View style={styles.emptyIconCircle}>
+                  <Bell size={26} color="#64748b" />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {activeFilter === 'unread'
+                    ? 'No Unread Notifications'
+                    : 'No Notifications Found'}
                 </Text>
+                <Text style={styles.emptySubtitle}>
+                  {activeFilter === 'unread'
+                    ? "You're all caught up! Switch to 'All' to view previous notifications."
+                    : "You'll receive real-time alerts here when your document requests change status or new advisories are posted."}
+                </Text>
+                {activeFilter !== 'all' && notifications.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.emptyResetBtn}
+                    onPress={() => setActiveFilter('all')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.emptyResetBtnText}>Show All Notifications</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </ScrollView>
 
+          {/* ================= 4. MODAL FOOTER ================= */}
           <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.closeModalBtn} onPress={onClose}>
-              <Text style={styles.closeModalBtnText}>Close</Text>
+            <TouchableOpacity
+              style={styles.closeModalBtn}
+              onPress={onClose}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.closeModalBtnText}>Close Notifications</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -228,61 +453,195 @@ export default function NotificationModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+        } as any)
+      : {}),
   },
   modalContent: {
+    width: '100%',
+    maxWidth: 500,
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    maxHeight: '85%',
+    borderRadius: 22,
+    maxHeight: '88%',
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
+
+  /* ================= 1. HEADER ================= */
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
   },
   headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    flex: 1,
+  },
+  headerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0f172a',
+    letterSpacing: -0.3,
   },
-  unreadBadge: {
-    backgroundColor: '#dbeafe',
-    paddingVertical: 2,
+  unreadCountPill: {
+    backgroundColor: '#2563eb',
     paddingHorizontal: 8,
-    borderRadius: 12,
+    paddingVertical: 2,
+    borderRadius: 999,
   },
-  unreadBadgeText: {
+  unreadCountPillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#1d4ed8',
+    color: '#ffffff',
+  },
+  allCaughtUpPill: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  allCaughtUpPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
   },
   closeBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  markAllBar: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+
+  /* ================= 2. CONTROLS & FILTER BAR ================= */
+  controlsSection: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    gap: 10,
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    borderRadius: 999,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  filterPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  filterPillTextActive: {
+    color: '#ffffff',
+  },
+  filterCountBubble: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
+  filterCountBubbleActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+  },
+  filterCountText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  filterCountTextActive: {
+    color: '#ffffff',
+  },
+
+  /* Bulk Actions Row */
+  bulkActionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  liveIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10b981',
+  },
+  liveIndicatorText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  bulkButtonsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   markAllBtn: {
     flexDirection: 'row',
@@ -290,13 +649,22 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: 7,
     backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  markAllBtnDisabled: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
   markAllBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  markAllBtnTextDisabled: {
+    color: '#94a3b8',
   },
   clearAllBtn: {
     flexDirection: 'row',
@@ -304,112 +672,165 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: 7,
     backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
   clearAllBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10.5,
+    fontWeight: '800',
     color: '#dc2626',
   },
+
+  /* ================= 3. NOTIFICATION CARDS ================= */
   modalBody: {
-    padding: 12,
+    padding: 14,
   },
   notifCard: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 12,
     backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 13,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    marginBottom: 8,
-    gap: 12,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   notifCardUnread: {
-    backgroundColor: '#f0f7ff',
-    borderColor: '#bfdbfe',
+    backgroundColor: '#f8fbff',
+    borderColor: '#93c5fd',
+    borderWidth: 1.5,
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  notifHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 7,
+  },
+  iconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconCircleUnread: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  iconCircleRead: {
-    backgroundColor: '#f1f5f9',
-  },
-  notifContent: {
+  notifHeaderMain: {
     flex: 1,
   },
-  notifTopRow: {
+  badgesAndTimeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
   },
-  notifTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-    flex: 1,
+  badgesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
-  notifTitleUnread: {
+  typeBadge: {
+    paddingHorizontal: 6.5,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  typeBadgeText: {
+    fontSize: 8.5,
     fontWeight: '800',
-    color: '#0f172a',
+    letterSpacing: 0.3,
   },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1d4ed8',
+  newPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
-  notifMessage: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-    lineHeight: 16,
+  newPillDot: {
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.25,
+    backgroundColor: '#ffffff',
+  },
+  newPillText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  timeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
   },
   notifTime: {
     fontSize: 10,
     color: '#94a3b8',
+    fontWeight: '600',
+  },
+  notifTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  notifTitleUnread: {
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  notifMessage: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+    marginBottom: 10,
   },
   notifFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 4,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f8fafc',
+    borderTopColor: '#f1f5f9',
+  },
+  tapHintText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  itemActionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   markAsReadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 3,
+    paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 7,
     backgroundColor: '#eff6ff',
     borderWidth: 1,
     borderColor: '#bfdbfe',
   },
   markAsReadBtnText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#1d4ed8',
+    fontWeight: '800',
+    color: '#2563eb',
   },
   markAsUnreadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 3,
+    paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 7,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -420,78 +841,75 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   deleteSingleBtn: {
-    padding: 3,
-    borderRadius: 6,
+    padding: 5,
+    borderRadius: 7,
     backgroundColor: '#fef2f2',
     borderWidth: 1,
     borderColor: '#fecaca',
   },
+
+  /* Empty State */
   emptyBox: {
     alignItems: 'center',
-    padding: 30,
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   emptyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: '#0f172a',
-    marginTop: 10,
   },
   emptySubtitle: {
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
     marginTop: 4,
+    lineHeight: 17,
+    maxWidth: 280,
   },
+  emptyResetBtn: {
+    marginTop: 12,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  emptyResetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* ================= 4. FOOTER ================= */
   modalFooter: {
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
   },
   closeModalBtn: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   closeModalBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  inAppStatusCard: {
-    backgroundColor: '#eff6ff',
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  inAppStatusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  inAppStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
-    marginRight: 8,
-  },
-  inAppStatusTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1e40af',
-  },
-  inAppStatusSub: {
-    fontSize: 10,
-    color: '#3b82f6',
-    marginTop: 1,
+    fontWeight: '800',
+    color: '#334155',
   },
 });

@@ -16,19 +16,20 @@ import {
   Home,
   HeartHandshake,
   Award,
-  Sparkles,
   ArrowRight,
   Info,
   CheckCircle,
   ArrowUpDown,
-  Filter,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
+  ChevronDown,
+  X,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { DocumentType } from '../../types';
 import { formatCurrency } from '../../core/security';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 import GlobalFooter from '../../components/GlobalFooter';
 
 interface DocumentCatalogViewProps {
@@ -38,6 +39,12 @@ interface DocumentCatalogViewProps {
 }
 
 const CATEGORIES = ['All', 'Clearance', 'Certificate', 'Indigency', 'Permit'];
+
+const SORT_OPTIONS: { key: 'name' | 'fee' | 'time'; label: string }[] = [
+  { key: 'name', label: 'Name (A–Z)' },
+  { key: 'fee', label: 'Lowest Fee' },
+  { key: 'time', label: 'Fastest Processing' },
+];
 
 // Helper to determine the accurate functional category of any document
 export const getDocumentCategory = (doc: DocumentType): string => {
@@ -82,10 +89,15 @@ export default function DocumentCatalogView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState<'name' | 'fee' | 'time'>('name');
+  const [isSortOpen, setIsSortOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const itemsPerPage = 6;
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
 
   // Reset pagination to page 1 on filter or search changes
   useEffect(() => {
@@ -102,6 +114,16 @@ export default function DocumentCatalogView({
     });
     return counts;
   }, [docTypes]);
+
+  const freeDocsCount = useMemo(
+    () => docTypes.filter((d) => Number(d.fee) === 0 && !d.is_variable_fee && d.fee_type !== 'variable').length,
+    [docTypes]
+  );
+
+  const sameDayDocsCount = useMemo(
+    () => docTypes.filter((d) => Number(d.processing_days || 1) <= 1).length,
+    [docTypes]
+  );
 
   // Filter & Sort
   const filteredDocs = useMemo(() => {
@@ -130,7 +152,6 @@ export default function DocumentCatalogView({
         if (sortBy === 'time') {
           return (a.processing_days || 1) - (b.processing_days || 1);
         }
-        // Default: Sort by title A-Z
         return a.title.localeCompare(b.title);
       });
   }, [docTypes, searchQuery, selectedCategory, sortBy]);
@@ -151,56 +172,180 @@ export default function DocumentCatalogView({
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const getVisiblePageNumbers = (current: number, total: number): (number | string)[] => {
-    if (total <= 5) {
-      return Array.from({ length: total }, (_, i) => i + 1);
+  const getDocVisual = (doc: DocumentType) => {
+    const text = `${doc.code || ''} ${doc.title || ''}`.toLowerCase();
+    if (text.includes('clearance')) {
+      return {
+        icon: <ShieldCheck size={20} color="#2563eb" />,
+        bg: '#eff6ff',
+        border: '#dbeafe',
+        accent: '#2563eb',
+      };
     }
-    if (current <= 3) {
-      return [1, 2, 3, 4, '...', total];
+    if (text.includes('residency')) {
+      return {
+        icon: <Home size={20} color="#0284c7" />,
+        bg: '#f0f9ff',
+        border: '#bae6fd',
+        accent: '#0284c7',
+      };
     }
-    if (current >= total - 2) {
-      return [1, '...', total - 3, total - 2, total - 1, total];
+    if (text.includes('indigency')) {
+      return {
+        icon: <HeartHandshake size={20} color="#059669" />,
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        accent: '#059669',
+      };
     }
-    return [1, '...', current - 1, current, current + 1, '...', total];
+    if (text.includes('jobseeker') || text.includes('business') || text.includes('permit')) {
+      return {
+        icon: <Briefcase size={20} color="#7c3aed" />,
+        bg: '#f5f3ff',
+        border: '#ddd6fe',
+        accent: '#7c3aed',
+      };
+    }
+    if (text.includes('moral')) {
+      return {
+        icon: <Award size={20} color="#d97706" />,
+        bg: '#fffbeb',
+        border: '#fde68a',
+        accent: '#d97706',
+      };
+    }
+    return {
+      icon: <FileText size={20} color="#2563eb" />,
+      bg: '#eff6ff',
+      border: '#dbeafe',
+      accent: '#2563eb',
+    };
   };
 
-  const renderIcon = (doc: DocumentType) => {
-    const text = `${doc.code || ''} ${doc.title || ''}`.toLowerCase();
-    if (text.includes('clearance')) return <ShieldCheck size={22} color="#1d4ed8" />;
-    if (text.includes('residency')) return <Home size={22} color="#0284c7" />;
-    if (text.includes('indigency')) return <HeartHandshake size={22} color="#059669" />;
-    if (text.includes('jobseeker') || text.includes('business')) return <Briefcase size={22} color="#7c3aed" />;
-    if (text.includes('moral')) return <Award size={22} color="#d97706" />;
-    return <FileText size={22} color="#1d4ed8" />;
-  };
+  const currentSortLabel =
+    SORT_OPTIONS.find((o) => o.key === sortBy)?.label || 'Name (A–Z)';
 
   return (
-    <View style={styles.container}>
-      {/* Search & Header Bar */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Barangay Document Services</Text>
-        <Text style={styles.subtitle}>
-          Browse official clearances, certifications, and permits. Select a document to review requirements or file an online application.
-        </Text>
-
-        <View style={styles.searchBox}>
-          <Search size={18} color="#64748b" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search clearance, residency, indigency, permit..."
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-              <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: '700' }}>✕</Text>
-            </TouchableOpacity>
-          ) : null}
+    <ScrollView
+      ref={scrollViewRef}
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ================= 1. PAGE HEADER & SUMMARY STRIP ================= */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTextCol}>
+            <View style={styles.heroPill}>
+              <Layers size={11} color="#2563eb" />
+              <Text style={styles.heroPillText}>OFFICIAL BARANGAY CATALOG</Text>
+            </View>
+            <Text style={styles.heroTitle}>Document Services</Text>
+            <Text style={styles.heroSubtitle}>
+              Select an official clearance, certificate, or permit to check requirements or apply online.
+            </Text>
+          </View>
         </View>
 
-        {/* Category Filter Pills with Item Count */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+        {/* Compact 3-Column Metrics Strip */}
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{docTypes.length}</Text>
+            <Text style={styles.summaryLabel}>Total Services</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#059669' }]}>{freeDocsCount}</Text>
+            <Text style={styles.summaryLabel}>Free Certificates</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#2563eb' }]}>{sameDayDocsCount}</Text>
+            <Text style={styles.summaryLabel}>1-Day Release</Text>
+          </View>
+        </View>
+
+        {/* Search Input + Sort Dropdown Trigger Row */}
+        <View style={styles.searchAndSortRow}>
+          <View style={styles.searchBox}>
+            <Search size={16} color="#64748b" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search document or category..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery ? (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearSearchBtn}
+                activeOpacity={0.7}
+              >
+                <X size={14} color="#64748b" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.sortTriggerBtn, isSortOpen && styles.sortTriggerBtnActive]}
+            onPress={() => setIsSortOpen((prev) => !prev)}
+            activeOpacity={0.75}
+          >
+            <ArrowUpDown size={14} color={isSortOpen ? '#1d4ed8' : '#475569'} />
+            <Text
+              style={[
+                styles.sortTriggerText,
+                isSortOpen && styles.sortTriggerTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              {currentSortLabel}
+            </Text>
+            <ChevronDown size={13} color={isSortOpen ? '#1d4ed8' : '#64748b'} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Expandable Sort Dropdown Menu */}
+        {isSortOpen && (
+          <View style={styles.sortDropdownMenu}>
+            {SORT_OPTIONS.map((opt) => {
+              const isSelected = sortBy === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.sortDropdownItem,
+                    isSelected && styles.sortDropdownItemActive,
+                  ]}
+                  onPress={() => {
+                    setSortBy(opt.key);
+                    setIsSortOpen(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.sortDropdownItemText,
+                      isSelected && styles.sortDropdownItemTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {isSelected && <CheckCircle size={14} color="#2563eb" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Horizontal Category Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+          style={styles.categoryScroll}
+        >
           {CATEGORIES.map((cat) => {
             const count = categoryCounts[cat] || 0;
             const isSelected = selectedCategory === cat;
@@ -212,6 +357,7 @@ export default function DocumentCatalogView({
                   isSelected && styles.categoryPillActive,
                 ]}
                 onPress={() => setSelectedCategory(cat)}
+                activeOpacity={0.75}
               >
                 <Text
                   style={[
@@ -219,798 +365,838 @@ export default function DocumentCatalogView({
                     isSelected && styles.categoryPillTextActive,
                   ]}
                 >
-                  {cat} {count > 0 ? `(${count})` : ''}
+                  {cat}
                 </Text>
+                <View
+                  style={[
+                    styles.categoryCountBubble,
+                    isSelected && styles.categoryCountBubbleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryCountText,
+                      isSelected && styles.categoryCountTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-
-        {/* Quick Sorting Toolbar */}
-        <View style={styles.sortBar}>
-          <View style={styles.sortBarLeft}>
-            <ArrowUpDown size={12} color="#64748b" />
-            <Text style={styles.sortBarLabel}>Sort by:</Text>
-          </View>
-          <View style={styles.sortOptionsRow}>
-            <TouchableOpacity
-              style={[styles.sortPill, sortBy === 'name' && styles.sortPillActive]}
-              onPress={() => setSortBy('name')}
-            >
-              <Text style={[styles.sortPillText, sortBy === 'name' && styles.sortPillTextActive]}>
-                Name (A-Z)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortPill, sortBy === 'fee' && styles.sortPillActive]}
-              onPress={() => setSortBy('fee')}
-            >
-              <Text style={[styles.sortPillText, sortBy === 'fee' && styles.sortPillTextActive]}>
-                Fee (Lowest First)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortPill, sortBy === 'time' && styles.sortPillActive]}
-              onPress={() => setSortBy('time')}
-            >
-              <Text style={[styles.sortPillText, sortBy === 'time' && styles.sortPillTextActive]}>
-                Processing Time
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
 
-      {/* Documents List */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.resultsRow}>
-          <View>
-            <Text style={styles.resultsCount}>
-              Available Documents ({totalDocs})
-            </Text>
-            {totalDocs > 0 ? (
-              <Text style={styles.resultsSubtext}>
-                Showing {startIndex + 1}–{endIndex} of {totalDocs} documents • Page {safeCurrentPage} of {totalPages}
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.resultsRowRight}>
-            {selectedCategory !== 'All' ? (
-              <TouchableOpacity onPress={() => setSelectedCategory('All')}>
-                <Text style={styles.clearFilterText}>Reset filter</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
+      {/* ================= 2. RESULTS HEADER ================= */}
+      <View style={styles.resultsHeaderRow}>
+        <Text style={styles.resultsTitle}>
+          {selectedCategory === 'All' ? 'All Official Documents' : `${selectedCategory} Documents`}{' '}
+          <Text style={styles.resultsCountMuted}>({totalDocs})</Text>
+        </Text>
 
-        {paginatedDocs.map((doc) => {
-          const docCategory = getDocumentCategory(doc);
-          return (
-            <View key={doc.id} style={styles.docCard}>
-              <View style={styles.docCardTop}>
-                <View style={styles.iconCircle}>{renderIcon(doc)}</View>
-                <View style={styles.docCardInfo}>
-                  <View style={styles.docTitleRow}>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={styles.docTitle}>{doc.title}</Text>
-                      <Text style={styles.docCategoryBadge}>{docCategory}</Text>
-                    </View>
-                    <View style={[styles.feeBadge, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeBadgePaid : (doc.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid)]}>
-                      <Text style={[styles.feeBadgeText, (doc.fee_type === 'variable' || doc.is_variable_fee) ? styles.feeBadgeTextPaid : (doc.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid)]}>
-                        {doc.fee_type === 'variable' || doc.is_variable_fee ? 'Depends upon claim' : doc.fee === 0 ? 'FREE' : formatCurrency(doc.fee)}
-                      </Text>
-                    </View>
-                  </View>
+        {(selectedCategory !== 'All' || searchQuery.trim() !== '') && (
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedCategory('All');
+              setSearchQuery('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.resetFilterLink}>Reset filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-                  <Text style={styles.docDesc}>{doc.description}</Text>
+      {/* ================= 3. ORGANIZED DOCUMENT CARDS ================= */}
+      {paginatedDocs.map((doc) => {
+        const docCategory = getDocumentCategory(doc);
+        const visual = getDocVisual(doc);
+        const isVariable = doc.fee_type === 'variable' || doc.is_variable_fee;
+        const isFree = !isVariable && Number(doc.fee) === 0;
+        const reqList = Array.isArray(doc.requirements) ? doc.requirements : [];
 
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                      <Clock size={12} color="#64748b" />
-                      <Text style={styles.metaText}>Processing: {doc.processing_days} {Number(doc.processing_days) === 1 ? 'Day' : 'Days'}</Text>
-                    </View>
-                    {doc.validity ? (
-                      <View style={styles.metaItem}>
-                        <ShieldCheck size={12} color="#64748b" />
-                        <Text style={styles.metaText}>Validity: {doc.validity}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+        return (
+          <View key={doc.id} style={styles.docCard}>
+            {/* Card Header: Icon + Title + Category & Fee Pill */}
+            <View style={styles.docCardHeader}>
+              <View
+                style={[
+                  styles.docIconBox,
+                  { backgroundColor: visual.bg, borderColor: visual.border },
+                ]}
+              >
+                {visual.icon}
               </View>
 
-              {/* Requirements Snippet */}
-              {doc.requirements && doc.requirements.length > 0 && (
-                <View style={styles.requirementsBox}>
-                  <Text style={styles.requirementsTitle}>Core Requirements:</Text>
-                  {doc.requirements.slice(0, 2).map((req, i) => (
-                    <View key={i} style={styles.reqRow}>
-                      <CheckCircle size={12} color="#10b981" />
-                      <Text style={styles.reqItemText} numberOfLines={1}>{req}</Text>
-                    </View>
-                  ))}
-                  {doc.requirements.length > 2 && (
-                    <Text style={styles.reqMoreText}>+{doc.requirements.length - 2} more requirement(s)</Text>
-                  )}
-                </View>
-              )}
-
-              {/* Action Buttons */}
-              <View style={styles.cardActions}>
-                <TouchableOpacity
-                  style={styles.reqDetailsBtn}
-                  onPress={() => onViewRequirements(doc)}
-                >
-                  <Info size={14} color="#1d4ed8" />
-                  <Text style={styles.reqDetailsBtnText}>Requirements Guide</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.requestNowBtn}
-                  onPress={() => onSelectDocument(doc)}
-                >
-                  <Text style={styles.requestNowBtnText}>Request Online</Text>
-                  <ArrowRight size={14} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
-
-        {/* Pagination Controls */}
-        {totalDocs > 0 ? (
-          <View style={styles.paginationCard}>
-            <View style={styles.paginationInfoRow}>
-              <Text style={styles.paginationInfoText}>
-                Page <Text style={styles.paginationBoldText}>{safeCurrentPage}</Text> of{' '}
-                <Text style={styles.paginationBoldText}>{totalPages}</Text> •{' '}
-                <Text style={styles.paginationBoldText}>{totalDocs}</Text> total documents
-              </Text>
-
-              <View style={styles.pageSizeRow}>
-                <Text style={styles.pageSizeLabel}>Per page:</Text>
-                {[5, 10, 15].map((size) => (
-                  <TouchableOpacity
-                    key={size}
+              <View style={styles.docHeaderMain}>
+                <View style={styles.docTitleTopRow}>
+                  <Text style={styles.docTitle} numberOfLines={2}>
+                    {doc.title}
+                  </Text>
+                  <View
                     style={[
-                      styles.pageSizeBtn,
-                      itemsPerPage === size ? styles.pageSizeBtnActive : null,
+                      styles.feePill,
+                      isFree ? styles.feePillFree : styles.feePillPaid,
                     ]}
-                    onPress={() => {
-                      setItemsPerPage(size);
-                      setCurrentPage(1);
-                    }}
-                    activeOpacity={0.7}
                   >
                     <Text
                       style={[
-                        styles.pageSizeBtnText,
-                        itemsPerPage === size ? styles.pageSizeBtnTextActive : null,
+                        styles.feePillText,
+                        isFree ? styles.feePillTextFree : styles.feePillTextPaid,
                       ]}
                     >
-                      {size}
+                      {isVariable
+                        ? 'Variable Fee'
+                        : isFree
+                        ? 'FREE'
+                        : formatCurrency(doc.fee)}
                     </Text>
-                  </TouchableOpacity>
-                ))}
+                  </View>
+                </View>
+
+                {/* Inline Meta Pills: Category, Processing Time, Validity */}
+                <View style={styles.metaBadgesRow}>
+                  <View style={[styles.catBadge, { backgroundColor: visual.bg }]}>
+                    <Text style={[styles.catBadgeText, { color: visual.accent }]}>
+                      {docCategory}
+                    </Text>
+                  </View>
+
+                  <View style={styles.metaChip}>
+                    <Clock size={11} color="#64748b" />
+                    <Text style={styles.metaChipText}>
+                      {doc.processing_days || 1}{' '}
+                      {Number(doc.processing_days || 1) === 1 ? 'Day' : 'Days'}
+                    </Text>
+                  </View>
+
+                  {doc.validity ? (
+                    <View style={styles.metaChip}>
+                      <ShieldCheck size={11} color="#64748b" />
+                      <Text style={styles.metaChipText}>{doc.validity}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
 
-            {totalPages > 1 ? (
-              <View style={styles.paginationNavRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.pageNavBtn,
-                    safeCurrentPage === 1 ? styles.pageNavBtnDisabled : null,
-                  ]}
-                  onPress={() => handlePageChange(1)}
-                  disabled={safeCurrentPage === 1}
-                  activeOpacity={0.7}
-                >
-                  <ChevronsLeft size={16} color={safeCurrentPage === 1 ? '#94a3b8' : '#1e293b'} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.pageNavBtn,
-                    safeCurrentPage === 1 ? styles.pageNavBtnDisabled : null,
-                  ]}
-                  onPress={() => handlePageChange(Math.max(1, safeCurrentPage - 1))}
-                  disabled={safeCurrentPage === 1}
-                  activeOpacity={0.7}
-                >
-                  <ChevronLeft size={16} color={safeCurrentPage === 1 ? '#94a3b8' : '#1e293b'} />
-                </TouchableOpacity>
-
-                <View style={styles.pageNumbersRow}>
-                  {getVisiblePageNumbers(safeCurrentPage, totalPages).map((p, idx) => {
-                    if (p === '...') {
-                      return (
-                        <View key={`ellipsis-${idx}`} style={styles.pageEllipsis}>
-                          <Text style={styles.pageEllipsisText}>…</Text>
-                        </View>
-                      );
-                    }
-                    const isCurrent = p === safeCurrentPage;
-                    return (
-                      <TouchableOpacity
-                        key={`page-${p}`}
-                        style={[
-                          styles.pageNumberBtn,
-                          isCurrent ? styles.pageNumberBtnActive : null,
-                        ]}
-                        onPress={() => handlePageChange(p as number)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.pageNumberText,
-                            isCurrent ? styles.pageNumberTextActive : null,
-                          ]}
-                        >
-                          {p}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    styles.pageNavBtn,
-                    safeCurrentPage === totalPages ? styles.pageNavBtnDisabled : null,
-                  ]}
-                  onPress={() => handlePageChange(Math.min(totalPages, safeCurrentPage + 1))}
-                  disabled={safeCurrentPage === totalPages}
-                  activeOpacity={0.7}
-                >
-                  <ChevronRight size={16} color={safeCurrentPage === totalPages ? '#94a3b8' : '#1e293b'} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.pageNavBtn,
-                    safeCurrentPage === totalPages ? styles.pageNavBtnDisabled : null,
-                  ]}
-                  onPress={() => handlePageChange(totalPages)}
-                  disabled={safeCurrentPage === totalPages}
-                  activeOpacity={0.7}
-                >
-                  <ChevronsRight size={16} color={safeCurrentPage === totalPages ? '#94a3b8' : '#1e293b'} />
-                </TouchableOpacity>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {filteredDocs.length === 0 ? (
-          <View style={styles.emptySearchBox}>
-            <Search size={36} color="#94a3b8" />
-            <Text style={styles.emptySearchTitle}>No matching documents found</Text>
-            <Text style={styles.emptySearchSubtitle}>
-              {selectedCategory !== 'All'
-                ? `No documents found in the "${selectedCategory}" category.`
-                : 'Try searching with another keyword like "clearance", "residency", or "indigency".'}
+            {/* Concise Description */}
+            <Text style={styles.docDesc} numberOfLines={2}>
+              {doc.description}
             </Text>
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => {
-                setSelectedCategory('All');
-                setSearchQuery('');
-              }}
-            >
-              <Text style={styles.resetBtnText}>View All Documents</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
 
-        {/* Global Developer & Institution Footer */}
-        <GlobalFooter />
-      </ScrollView>
-    </View>
+            {/* Streamlined Requirements Preview Strip */}
+            {reqList.length > 0 && (
+              <View style={styles.reqStrip}>
+                <View style={styles.reqStripHeader}>
+                  <Sparkles size={11} color="#2563eb" />
+                  <Text style={styles.reqStripTitle}>
+                    Key Requirements ({reqList.length})
+                  </Text>
+                </View>
+                <View style={styles.reqChipsWrap}>
+                  {reqList.slice(0, 2).map((req, idx) => (
+                    <View key={idx} style={styles.reqItemPill}>
+                      <CheckCircle size={11} color="#10b981" />
+                      <Text style={styles.reqItemPillText} numberOfLines={1}>
+                        {req}
+                      </Text>
+                    </View>
+                  ))}
+                  {reqList.length > 2 && (
+                    <TouchableOpacity
+                      style={styles.moreReqsPill}
+                      onPress={() => onViewRequirements(doc)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.moreReqsPillText}>
+                        +{reqList.length - 2} more
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Action Buttons Row */}
+            <View style={styles.cardFooterActions}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => onViewRequirements(doc)}
+                activeOpacity={0.75}
+              >
+                <Info size={14} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Requirements</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => onSelectDocument(doc)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.primaryBtnText}>Apply Online</Text>
+                <ArrowRight size={14} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      })}
+
+      {/* ================= 4. COMPACT PAGINATION BAR ================= */}
+      {totalPages > 1 && (
+        <View style={styles.paginationBar}>
+          <TouchableOpacity
+            style={[
+              styles.pageArrowBtn,
+              safeCurrentPage === 1 && styles.pageArrowBtnDisabled,
+            ]}
+            onPress={() => handlePageChange(Math.max(1, safeCurrentPage - 1))}
+            disabled={safeCurrentPage === 1}
+            activeOpacity={0.7}
+          >
+            <ChevronLeft
+              size={16}
+              color={safeCurrentPage === 1 ? '#94a3b8' : '#1e293b'}
+            />
+          </TouchableOpacity>
+
+          <Text style={styles.pageIndicatorText}>
+            Page <Text style={styles.pageIndicatorBold}>{safeCurrentPage}</Text> of{' '}
+            <Text style={styles.pageIndicatorBold}>{totalPages}</Text>
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.pageArrowBtn,
+              safeCurrentPage === totalPages && styles.pageArrowBtnDisabled,
+            ]}
+            onPress={() => handlePageChange(Math.min(totalPages, safeCurrentPage + 1))}
+            disabled={safeCurrentPage === totalPages}
+            activeOpacity={0.7}
+          >
+            <ChevronRight
+              size={16}
+              color={safeCurrentPage === totalPages ? '#94a3b8' : '#1e293b'}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ================= 5. EMPTY STATE ================= */}
+      {filteredDocs.length === 0 && (
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconCircle}>
+            <Search size={24} color="#64748b" />
+          </View>
+          <Text style={styles.emptyTitle}>No matching documents found</Text>
+          <Text style={styles.emptySubtitle}>
+            {selectedCategory !== 'All'
+              ? `No documents found under "${selectedCategory}".`
+              : 'Try searching for "clearance", "residency", "indigency", or "permit".'}
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyResetBtn}
+            onPress={() => {
+              setSelectedCategory('All');
+              setSearchQuery('');
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.emptyResetBtnText}>Show All Documents</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Global Developer & Institution Footer */}
+      <GlobalFooter />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f4f7fb',
   },
-  header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    padding: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 110,
+  },
+
+  /* Hero & Filter Card */
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    elevation: 2,
+    marginBottom: 16,
   },
-  title: {
-    fontSize: 19,
-    fontWeight: '900',
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  heroTextCol: {
+    flex: 1,
+  },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  heroPillText: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.6,
+  },
+  heroTitle: {
+    fontFamily: 'Inter',
+    fontSize: 20,
+    fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
-  subtitle: {
+  heroSubtitle: {
+    fontFamily: 'Inter',
     fontSize: 12,
     color: '#64748b',
     marginTop: 4,
-    marginBottom: 12,
     lineHeight: 17,
   },
+
+  /* 3-Column Summary Strip */
+  summaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#eef2f6',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  summaryLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e2e8f0',
+  },
+
+  /* Search & Sort Row */
+  searchAndSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
   searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
-    borderWidth: 1.5,
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    height: 42,
+    gap: 8,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontFamily: 'Inter',
+    fontSize: 12.5,
     color: '#0f172a',
     padding: 0,
   },
+  clearSearchBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 42,
+    paddingHorizontal: 11,
+    borderRadius: 13,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sortTriggerBtnActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#93c5fd',
+  },
+  sortTriggerText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  sortTriggerTextActive: {
+    color: '#1d4ed8',
+  },
+
+  /* Sort Dropdown */
+  sortDropdownMenu: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 6,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  sortDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  sortDropdownItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  sortDropdownItemText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  sortDropdownItemTextActive: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+  },
+
+  /* Category Filter Pills */
   categoryScroll: {
     marginTop: 12,
   },
+  categoryScrollContent: {
+    gap: 8,
+    paddingRight: 4,
+  },
   categoryPill: {
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 999,
     backgroundColor: '#f8fafc',
-    marginRight: 8,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   categoryPillActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
   categoryPillText: {
-    fontSize: 11,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#475569',
   },
   categoryPillTextActive: {
     color: '#ffffff',
   },
-  scrollArea: {
-    flex: 1,
+  categoryCountBubble: {
+    minWidth: 20,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 90,
+  categoryCountBubbleActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
-  resultsCount: {
-    fontSize: 12.5,
+  categoryCountText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
     fontWeight: '800',
     color: '#475569',
-    marginBottom: 12,
   },
+  categoryCountTextActive: {
+    color: '#ffffff',
+  },
+
+  /* Results Section Header */
+  resultsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  resultsTitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  resultsCountMuted: {
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  resetFilterLink: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* Document Card */
   docCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.95)',
+    borderColor: '#e2e8f0',
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
     shadowColor: '#0f172a',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
   },
-  docCardTop: {
+  docCardHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
   },
-  iconCircle: {
-    width: 46,
-    height: 46,
+  docIconBox: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#dbeafe',
+    borderWidth: 1,
   },
-  docCardInfo: {
+  docHeaderMain: {
     flex: 1,
   },
-  docTitleRow: {
+  docTitleTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 8,
   },
   docTitle: {
+    flex: 1,
+    fontFamily: 'Inter',
     fontSize: 15,
     fontWeight: '800',
     color: '#0f172a',
-    flex: 1,
+    lineHeight: 20,
   },
-  feeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  feePill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  feeBadgeFree: {
+  feePillFree: {
     backgroundColor: '#dcfce7',
   },
-  feeBadgePaid: {
+  feePillPaid: {
     backgroundColor: '#eff6ff',
   },
-  feeBadgeText: {
+  feePillText: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '800',
   },
-  feeBadgeTextFree: {
+  feePillTextFree: {
     color: '#15803d',
   },
-  feeBadgeTextPaid: {
+  feePillTextPaid: {
     color: '#1d4ed8',
   },
-  docDesc: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  metaRow: {
+
+  metaBadgesRow: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
   },
-  metaItem: {
+  catBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  catBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  metaText: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  requirementsBox: {
     backgroundColor: '#f8fafc',
-    padding: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  metaChipText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+
+  docDesc: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#64748b',
+    lineHeight: 17,
+    marginTop: 10,
+  },
+
+  /* Streamlined Requirements Strip */
+  reqStrip: {
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
+    padding: 10,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#eef2f6',
   },
-  requirementsTitle: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#334155',
+  reqStripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 6,
   },
-  reqRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3,
-  },
-  reqItemText: {
-    fontSize: 11,
-    color: '#475569',
-    flex: 1,
-  },
-  reqMoreText: {
+  reqStripTitle: {
+    fontFamily: 'Inter',
     fontSize: 10.5,
-    color: '#1d4ed8',
     fontWeight: '800',
-    marginTop: 6,
+    color: '#334155',
   },
-  cardActions: {
+  reqChipsWrap: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  reqItemPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
+    gap: 5,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    maxWidth: '100%',
+  },
+  reqItemPillText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  moreReqsPill: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    justifyContent: 'center',
+  },
+  moreReqsPillText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+
+  /* Card Footer Actions */
+  cardFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    gap: 10,
   },
-  reqDetailsBtn: {
+  secondaryBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  reqDetailsBtnText: {
-    fontSize: 11.5,
+  secondaryBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
     fontWeight: '700',
     color: '#334155',
   },
-  requestNowBtn: {
+  primaryBtn: {
+    flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: '#1d4ed8',
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
     elevation: 2,
   },
-  requestNowBtnText: {
-    fontSize: 11.5,
+  primaryBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
     fontWeight: '800',
     color: '#ffffff',
   },
-  emptySearchBox: {
+
+  /* Compact Pagination */
+  paginationBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
+    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 4,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  emptySearchTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginTop: 10,
+  pageArrowBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emptySearchSubtitle: {
+  pageArrowBtnDisabled: {
+    opacity: 0.4,
+  },
+  pageIndicatorText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  pageIndicatorBold: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+
+  /* Empty State */
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 32,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  emptySubtitle: {
+    fontFamily: 'Inter',
     fontSize: 12,
     color: '#64748b',
     textAlign: 'center',
     marginTop: 4,
+    lineHeight: 17,
   },
-  sortBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  sortBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sortBarLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  sortOptionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  sortPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  sortPillActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#93c5fd',
-  },
-  sortPillText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  sortPillTextActive: {
-    color: '#1d4ed8',
-    fontWeight: '700',
-  },
-  resultsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  clearFilterText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
-  docCategoryBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#2563eb',
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 3,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-  },
-  resetBtn: {
+  emptyResetBtn: {
     marginTop: 14,
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#2563eb',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 10,
   },
-  resetBtnText: {
-    color: '#ffffff',
+  emptyResetBtnText: {
+    fontFamily: 'Inter',
     fontSize: 12,
     fontWeight: '700',
-  },
-  resultsSubtext: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  resultsRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  paginationCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 14,
-    marginTop: 6,
-    marginBottom: 20,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  paginationInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  paginationInfoText: {
-    fontSize: 11.5,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  paginationBoldText: {
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  pageSizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  pageSizeLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-    marginRight: 2,
-  },
-  pageSizeBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  pageSizeBtnActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-  },
-  pageSizeBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  pageSizeBtnTextActive: {
     color: '#ffffff',
-  },
-  paginationNavRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  pageNavBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageNavBtnDisabled: {
-    opacity: 0.35,
-    backgroundColor: '#f1f5f9',
-  },
-  pageNumbersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  pageNumberBtn: {
-    minWidth: 34,
-    height: 34,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageNumberBtnActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  pageNumberText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  pageNumberTextActive: {
-    color: '#ffffff',
-    fontWeight: '800',
-  },
-  pageEllipsis: {
-    width: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageEllipsisText: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontWeight: '700',
   },
 });

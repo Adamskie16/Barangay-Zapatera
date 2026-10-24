@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Loader2,
   Image as ImageIcon,
-  Sparkles,
   Lock,
   ShieldCheck,
   Eye,
@@ -108,9 +107,21 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
     const fetchOrCreateProfile = async () => {
       setLoading(true);
       try {
+        const localSession = StorageService.getCurrentUser();
+        const localUsers = StorageService.getUsers();
+        const localMatch = localUsers.find(
+          (u) =>
+            u.id === currentUser?.id ||
+            (u.email || '').toLowerCase().trim() === (currentUser?.email || '').toLowerCase().trim()
+        );
+        const localSavedAvatar =
+          currentUser?.avatar_url || localSession?.avatar_url || localMatch?.avatar_url || '';
+
         if (isSupabaseConfigured() && (currentUser?.id || currentUser?.email)) {
           let data = null;
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser?.id);
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            currentUser?.id
+          );
 
           // 1. Query by UUID id if valid
           if (isUuid) {
@@ -140,16 +151,22 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
           if (data) {
             if (isMounted) {
+              const resolvedAvatar = data.avatar_url || localSavedAvatar || '';
               const loadedProfile = {
                 id: data.id,
                 email: data.email || currentUser.email || 'admin@zapatera.gov.ph',
                 role: data.role || currentUser.role || 'admin',
                 full_name: data.full_name || currentUser.full_name || 'Barangay Admin',
-                username: data.username || currentUser.username || (data.email || currentUser.email)?.split('@')[0] || 'admin',
+                username:
+                  data.username ||
+                  currentUser.username ||
+                  (data.email || currentUser.email)?.split('@')[0] ||
+                  'admin',
                 phone: data.phone || currentUser.phone || '',
                 address: data.address || currentUser.address || 'Barangay Zapatera, Cebu City',
-                avatar_url: data.avatar_url || currentUser.avatar_url || '',
-                created_at: data.created_at || currentUser.created_at || new Date().toISOString(),
+                avatar_url: resolvedAvatar,
+                created_at:
+                  data.created_at || currentUser.created_at || new Date().toISOString(),
                 updated_at: data.updated_at || new Date().toISOString(),
               };
 
@@ -159,20 +176,34 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               try {
                 const currentSession = StorageService.getCurrentUser();
                 if (currentSession && currentSession.role === 'admin') {
-                  StorageService.setCurrentUser({ ...currentSession, ...loadedProfile });
+                  const synced = {
+                    ...currentSession,
+                    ...loadedProfile,
+                    avatar_url: resolvedAvatar || currentSession.avatar_url || '',
+                  };
+                  StorageService.setCurrentUser(synced);
+                  if (onUserUpdated && synced.avatar_url !== currentUser?.avatar_url) {
+                    onUserUpdated(synced);
+                  }
                 }
               } catch (e) {}
             }
           } else {
-            const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser?.id);
+            const isTargetUuid =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                currentUser?.id
+              );
             const newProfile = {
               email: (currentUser?.email || 'admin@zapatera.gov.ph').toLowerCase().trim(),
               role: currentUser?.role || 'admin',
               full_name: currentUser?.full_name || 'Barangay Staff Officer',
-              username: currentUser?.username || (currentUser?.email || 'admin')?.split('@')[0] || 'admin',
+              username:
+                currentUser?.username ||
+                (currentUser?.email || 'admin')?.split('@')[0] ||
+                'admin',
               phone: currentUser?.phone || '09171234567',
               address: currentUser?.address || 'Barangay Zapatera, Cebu City',
-              avatar_url: currentUser?.avatar_url || '',
+              avatar_url: localSavedAvatar,
               created_at: currentUser?.created_at || new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -181,7 +212,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               newProfile.id = currentUser.id;
             }
 
-            const { data: upserted } = await supabase.from('profiles').upsert(newProfile, { onConflict: 'email' }).select().maybeSingle();
+            const { data: upserted } = await supabase
+              .from('profiles')
+              .upsert(newProfile, { onConflict: 'email' })
+              .select()
+              .maybeSingle();
 
             if (isMounted) {
               setProfile({
@@ -191,19 +226,17 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             }
           }
         } else {
-          const users = StorageService.getUsers();
-          const found = users.find((u) => u.id === currentUser?.id || u.email === currentUser?.email);
-          if (found && isMounted) {
+          if (localMatch && isMounted) {
             setProfile({
-              id: found.id,
-              email: found.email || currentUser?.email || 'admin@zapatera.gov.ph',
-              role: found.role || currentUser?.role || 'admin',
-              full_name: found.full_name || currentUser?.full_name || 'Barangay Admin',
-              username: found.username || currentUser?.username || 'admin',
-              phone: found.phone || currentUser?.phone || '09171234567',
-              avatar_url: found.avatar_url || currentUser?.avatar_url || '',
-              created_at: found.created_at || new Date().toISOString(),
-              updated_at: found.updated_at || new Date().toISOString(),
+              id: localMatch.id,
+              email: localMatch.email || currentUser?.email || 'admin@zapatera.gov.ph',
+              role: localMatch.role || currentUser?.role || 'admin',
+              full_name: localMatch.full_name || currentUser?.full_name || 'Barangay Admin',
+              username: localMatch.username || currentUser?.username || 'admin',
+              phone: localMatch.phone || currentUser?.phone || '09171234567',
+              avatar_url: localSavedAvatar,
+              created_at: localMatch.created_at || new Date().toISOString(),
+              updated_at: localMatch.updated_at || new Date().toISOString(),
             });
           }
         }
@@ -220,7 +253,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
     return () => {
       isMounted = false;
     };
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.email]);
 
   // -------------------------------------------------------------
   // PASSWORD VERIFICATION LOGIC FOR SAVING PROFILE
@@ -230,17 +263,30 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
     const session =
       currentUser ||
-      (typeof StorageService !== 'undefined' && StorageService.getCurrentUser ? StorageService.getCurrentUser() : null) ||
+      (typeof StorageService !== 'undefined' && StorageService.getCurrentUser
+        ? StorageService.getCurrentUser()
+        : null) ||
       JSON.parse(
         localStorage.getItem('zapatera_admin_session') ||
-        localStorage.getItem('zapatera_superadmin_session') ||
-        localStorage.getItem('zapatera_account_mgmt_session') ||
-        localStorage.getItem('zapatera_resident_session') ||
-        'null'
+          localStorage.getItem('zapatera_superadmin_session') ||
+          localStorage.getItem('zapatera_account_mgmt_session') ||
+          localStorage.getItem('zapatera_resident_session') ||
+          'null'
       );
     const loggedInEmail = (session?.email || '').trim().toLowerCase();
     if (!loggedInEmail) return false;
 
+    // 1. Check active session or local users store password
+    if (session?.password && session.password === inputPassword) return true;
+    try {
+      const localUsers = StorageService.getUsers();
+      const matchedLocal = localUsers.find(
+        (u) => (u.email || '').trim().toLowerCase() === loggedInEmail
+      );
+      if (matchedLocal?.password && matchedLocal.password === inputPassword) return true;
+    } catch {}
+
+    // 2. Verify with Supabase Auth
     if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -251,51 +297,142 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       } catch (e) {
         return false;
       }
-    } else {
-      if (session?.password && session.password === inputPassword) return true;
     }
     return false;
   }
+
+  // Persist newly uploaded avatar immediately so Sidebar, Header, LocalStorage, and Supabase update in real time
+  const persistAvatarImmediately = async (newAvatarUrl) => {
+    const now = new Date().toISOString();
+    const effectiveRole = currentUser?.role || profile.role || 'admin';
+    const updatedUser = {
+      ...(currentUser || {}),
+      ...profile,
+      role: effectiveRole,
+      avatar_url: newAvatarUrl,
+      updated_at: now,
+    };
+
+    setProfile((prev) => ({ ...prev, avatar_url: newAvatarUrl, updated_at: now }));
+
+    try {
+      if (typeof StorageService.saveUser === 'function') {
+        StorageService.saveUser(updatedUser);
+      }
+      StorageService.setCurrentUser(updatedUser);
+
+      const sessionKeys = [
+        'zapatera_admin_session',
+        'zapatera_superadmin_session',
+        'zapatera_account_mgmt_session',
+      ];
+      sessionKeys.forEach((k) => {
+        const existing = JSON.parse(localStorage.getItem(k) || 'null');
+        if (
+          existing &&
+          ((existing.email || '').toLowerCase() ===
+            (updatedUser.email || '').toLowerCase() ||
+            existing.id === updatedUser.id)
+        ) {
+          localStorage.setItem(
+            k,
+            JSON.stringify({
+              ...existing,
+              ...updatedUser,
+              avatar_url: newAvatarUrl,
+            })
+          );
+        }
+      });
+    } catch {}
+
+    // Immediately notify parent App.jsx so Sidebar and Navbar Header update right away
+    if (onUserUpdated) {
+      onUserUpdated(updatedUser);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_user_updated', { detail: updatedUser }));
+    }
+
+    // Sync to Supabase profiles & auth user metadata
+    if (isSupabaseConfigured()) {
+      try {
+        const isUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            updatedUser.id
+          );
+        if (isUuid) {
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: newAvatarUrl, updated_at: now })
+            .eq('id', updatedUser.id);
+        }
+        if (updatedUser.email) {
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: newAvatarUrl, updated_at: now })
+            .eq('email', updatedUser.email.toLowerCase().trim());
+        }
+        await supabase.auth.updateUser({
+          data: { avatar_url: newAvatarUrl },
+        });
+      } catch (err) {
+        console.warn('Supabase avatar sync notice:', err);
+      }
+    }
+  };
 
   const handleAvatarFileSelected = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingAvatar(true);
     try {
-      const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
+      const result = await uploadAdminAvatar(
+        profile.id || currentUser?.id || 'admin',
+        file
+      );
       if (result.success && result.url) {
-        setProfile((prev) => ({ ...prev, avatar_url: result.url }));
+        await persistAvatarImmediately(result.url);
         setActionModal({
           isOpen: true,
           type: 'success',
-          title: 'Avatar Uploaded',
-          message: 'Avatar image uploaded successfully. Click "Save Profile Changes" to authorize and commit.',
+          title: 'Profile Picture Updated',
+          message:
+            'Your administrator profile photo has been uploaded and updated in the sidebar and header.',
           buttonText: 'OK',
           onClose: () => setActionModal({ isOpen: false }),
         });
       } else {
         const reader = new FileReader();
-        reader.onload = (uploadEvent) => {
-          setProfile((prev) => ({ ...prev, avatar_url: uploadEvent.target.result }));
-          setActionModal({
-            isOpen: true,
-            type: 'info',
-            title: 'Avatar Loaded',
-            message: 'Avatar image loaded. Click "Save Profile Changes" to authorize and commit.',
-            buttonText: 'OK',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
+        reader.onload = async (uploadEvent) => {
+          const dataUrl = uploadEvent.target?.result;
+          if (dataUrl) {
+            await persistAvatarImmediately(dataUrl);
+            setActionModal({
+              isOpen: true,
+              type: 'success',
+              title: 'Profile Picture Updated',
+              message:
+                'Your administrator profile photo has been loaded and updated in the sidebar and header.',
+              buttonText: 'OK',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+          }
         };
         reader.readAsDataURL(file);
       }
-    } catch (err) {
+    } catch {
       const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        setProfile((prev) => ({ ...prev, avatar_url: uploadEvent.target.result }));
+      reader.onload = async (uploadEvent) => {
+        const dataUrl = uploadEvent.target?.result;
+        if (dataUrl) {
+          await persistAvatarImmediately(dataUrl);
+        }
       };
       reader.readAsDataURL(file);
     } finally {
       setUploadingAvatar(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -354,20 +491,39 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
     try {
       // 1. Update Supabase `profiles` table & Auth User Metadata
-      if (isSupabaseConfigured() && currentUser?.id) {
-        const { error: profileErr } = await supabase.from('profiles').upsert({
-          id: currentUser.id,
-          email: profile.email,
-          role: profile.role,
+      if (isSupabaseConfigured()) {
+        const isUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            currentUser?.id || profile.id
+          );
+        const dbPayload = {
+          email: (profile.email || '').toLowerCase().trim(),
+          role: profile.role || 'admin',
           full_name: profile.full_name,
           username: profile.username,
           phone: profile.phone,
           avatar_url: profile.avatar_url,
           updated_at: now,
-        });
+        };
+        if (isUuid) {
+          dbPayload.id = currentUser?.id || profile.id;
+        }
 
-        if (profileErr) {
-          console.warn('Supabase profile update warning:', profileErr);
+        const { error: profileErr } = await supabase
+          .from('profiles')
+          .upsert(dbPayload, { onConflict: 'email' });
+
+        if (profileErr && profile.email) {
+          await supabase
+            .from('profiles')
+            .update({
+              full_name: profile.full_name,
+              username: profile.username,
+              phone: profile.phone,
+              avatar_url: profile.avatar_url,
+              updated_at: now,
+            })
+            .eq('email', profile.email.toLowerCase().trim());
         }
 
         try {
@@ -404,7 +560,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
       // Sync active sessions
       try {
-        const sessionKeys = ['zapatera_admin_session', 'zapatera_superadmin_session', 'zapatera_account_mgmt_session'];
+        const sessionKeys = [
+          'zapatera_admin_session',
+          'zapatera_superadmin_session',
+          'zapatera_account_mgmt_session',
+        ];
         sessionKeys.forEach((k) => {
           const existing = JSON.parse(localStorage.getItem(k) || 'null');
           if (existing) {
@@ -422,11 +582,17 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       setProfile(updatedPayload);
 
       if (onUserUpdated) onUserUpdated(cleanUpdatedUser);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('zapatera_user_updated', { detail: cleanUpdatedUser })
+        );
+      }
+
       setActionModal({
         isOpen: true,
         type: 'success',
         title: 'Profile Updated Successfully',
-        message: 'Your profile information has been saved.',
+        message: 'Your profile information has been saved and synced across the portal.',
         buttonText: 'OK',
         onClose: () => setActionModal({ isOpen: false }),
       });
@@ -458,17 +624,19 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       return;
     }
 
-    // Enforce strong password validation
     const pw = securityForm.newPassword || '';
     const hasMinLength = pw.length >= 8;
     const hasUpper = /[A-Z]/.test(pw);
     const hasLower = /[a-z]/.test(pw);
     const hasNumber = /[0-9]/.test(pw);
     const hasSpecial = /[^A-Za-z0-9]/.test(pw);
-    const isPasswordStrong = hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
+    const isPasswordStrong =
+      hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
 
     if (!isPasswordStrong) {
-      setPasswordError('New password must be strong: at least 8 characters and include uppercase, lowercase, a number, and a special character.');
+      setPasswordError(
+        'New password must be strong: at least 8 characters and include uppercase, lowercase, a number, and a special character.'
+      );
       return;
     }
 
@@ -480,23 +648,17 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
     setUpdatingPassword(true);
 
     try {
-      const userEmail = (currentUser?.email || profile?.email || '').trim().toLowerCase();
-      
-      // Verify current password with Supabase Auth
-      if (isSupabaseConfigured() && userEmail) {
-        const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-          email: userEmail,
-          password: securityForm.currentPassword,
-        });
-
-        if (authErr || !authData?.user) {
-          setPasswordError('Current password authentication failed. Please enter your correct password.');
-          setUpdatingPassword(false);
-          return;
-        }
+      const isCurrentValid = await verifyLoggedInPassword(
+        securityForm.currentPassword
+      );
+      if (!isCurrentValid) {
+        setPasswordError(
+          'Current password authentication failed. Please enter your correct password.'
+        );
+        setUpdatingPassword(false);
+        return;
       }
 
-      // Update password in Supabase Auth if available
       if (isSupabaseConfigured()) {
         try {
           const { error: authErr } = await supabase.auth.updateUser({
@@ -510,7 +672,6 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
         }
       }
 
-      // Update active session & storage with new password
       const updatedUser = {
         ...currentUser,
         password: securityForm.newPassword,
@@ -521,11 +682,18 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       StorageService.setCurrentUser(updatedUser);
 
       try {
-        const sessionKeys = ['zapatera_admin_session', 'zapatera_superadmin_session', 'zapatera_account_mgmt_session'];
+        const sessionKeys = [
+          'zapatera_admin_session',
+          'zapatera_superadmin_session',
+          'zapatera_account_mgmt_session',
+        ];
         sessionKeys.forEach((k) => {
           const existing = JSON.parse(localStorage.getItem(k) || 'null');
           if (existing) {
-            localStorage.setItem(k, JSON.stringify({ ...existing, password: securityForm.newPassword }));
+            localStorage.setItem(
+              k,
+              JSON.stringify({ ...existing, password: securityForm.newPassword })
+            );
           }
         });
       } catch (e) {}
@@ -534,7 +702,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
       setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setPasswordSuccess('Account security credentials updated successfully!');
-      
+
       setActionModal({
         isOpen: true,
         type: 'success',
@@ -632,7 +800,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
         <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#3b5bfd] shadow-xs">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-        <p className="text-xs font-bold text-slate-400">Loading Account Profile & Security Settings...</p>
+        <p className="text-xs font-bold text-slate-400">
+          Loading Account Profile & Security Settings...
+        </p>
       </div>
     );
   }
@@ -710,9 +880,15 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#3b5bfd] via-[#4f6ef7] to-[#60a5fa] text-white shadow-[0_14px_30px_-12px_rgba(59,91,253,0.45)] flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Administrator Role</p>
-            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{getRoleBadgeLabel(profile.role)}</h3>
-            <p className="text-[11px] text-white/80 mt-1 font-mono">@{profile.username || 'admin'}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Administrator Role
+            </p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">
+              {getRoleBadgeLabel(profile.role)}
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 font-mono">
+              @{profile.username || 'admin'}
+            </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-md shrink-0">
             <ShieldCheck className="w-6 h-6" />
@@ -721,9 +897,15 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
         <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#10b981] via-[#14b8a6] to-[#34d399] text-white shadow-[0_14px_30px_-12px_rgba(16,185,129,0.45)] flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Security Status</p>
-            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">Verified Active</h3>
-            <p className="text-[11px] text-white/80 mt-1 truncate max-w-[180px]">{profile.email}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Security Status
+            </p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">
+              Verified Active
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 truncate max-w-[180px]">
+              {profile.email}
+            </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-md shrink-0">
             <CheckCircle2 className="w-6 h-6" />
@@ -732,8 +914,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
         <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#6366f1] via-[#8b5cf6] to-[#a855f7] text-white shadow-[0_14px_30px_-12px_rgba(139,92,246,0.45)] flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Member Since</p>
-            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{formatDate(profile.created_at)}</h3>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Member Since
+            </p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">
+              {formatDate(profile.created_at)}
+            </h3>
             <p className="text-[11px] text-white/80 mt-1">Official Barangay Portal</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-white text-indigo-600 flex items-center justify-center shadow-md shrink-0">
@@ -743,8 +929,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
 
         <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#f59e0b] via-[#f97316] to-[#fb923c] text-white shadow-[0_14px_30px_-12px_rgba(249,115,22,0.42)] flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Last Profile Sync</p>
-            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">{formatDate(profile.updated_at)}</h3>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Last Profile Sync
+            </p>
+            <h3 className="text-lg sm:text-xl font-extrabold mt-1 tracking-tight">
+              {formatDate(profile.updated_at)}
+            </h3>
             <p className="text-[11px] text-white/80 mt-1">Cloud & Local Storage</p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-white text-amber-500 flex items-center justify-center shadow-md shrink-0">
@@ -783,46 +973,24 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     accept="image/*"
                     className="hidden"
                     disabled={uploadingAvatar}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      setUploadingAvatar(true);
-                      const result = await uploadAdminAvatar(profile.id || currentUser?.id || 'admin', file);
-                      if (result.success && result.url) {
-                        setProfile((prev) => ({ ...prev, avatar_url: result.url }));
-                        setActionModal({
-                          isOpen: true,
-                          type: 'success',
-                          title: 'Profile Photo Uploaded',
-                          message: 'Your photo has been uploaded. Click "Save Profile Changes" to persist your updates.',
-                          buttonText: 'OK',
-                          onClose: () => setActionModal({ isOpen: false }),
-                        });
-                      } else {
-                        setActionModal({
-                          isOpen: true,
-                          type: 'error',
-                          title: 'Upload Failed',
-                          message: 'Unable to upload photo. Please check the image file and try again.',
-                          buttonText: 'Close',
-                          onClose: () => setActionModal({ isOpen: false }),
-                        });
-                      }
-                      setUploadingAvatar(false);
-                    }}
+                    onChange={handleAvatarFileSelected}
                   />
                 </label>
               </div>
 
               <div className="text-center sm:text-left flex-1 min-w-0">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  <h3 className="text-lg font-extrabold text-slate-900 truncate">{profile.full_name}</h3>
+                  <h3 className="text-lg font-extrabold text-slate-900 truncate">
+                    {profile.full_name}
+                  </h3>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-[#3b5bfd] border border-blue-200 inline-flex items-center">
                     <ShieldCheck className="w-3 h-3 mr-1 text-[#38bdf8]" />
                     {getRoleBadgeLabel(profile.role)}
                   </span>
                 </div>
-                <p className="text-xs font-mono font-bold text-[#3b5bfd] mt-0.5">@{profile.username || 'admin'}</p>
+                <p className="text-xs font-mono font-bold text-[#3b5bfd] mt-0.5">
+                  @{profile.username || 'admin'}
+                </p>
                 <p className="text-xs text-slate-500 flex items-center justify-center sm:justify-start mt-1.5 truncate">
                   <Mail className="w-3.5 h-3.5 mr-1.5 text-slate-400 shrink-0" />
                   <span className="truncate">{profile.email}</span>
@@ -833,7 +1001,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
             {/* Section Title */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">Profile Details & Personal Information</h3>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Profile Details & Personal Information
+                </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Update your official administrator name, username handle, contact number, and avatar.
                 </p>
@@ -893,7 +1063,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                       type="text"
                       required
                       value={profile.full_name}
-                      onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                      onChange={(e) =>
+                        setProfile({ ...profile, full_name: e.target.value })
+                      }
                       placeholder="Barangay Staff Officer"
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                     />
@@ -905,12 +1077,16 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     Username *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs font-bold">@</span>
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs font-bold">
+                      @
+                    </span>
                     <input
                       type="text"
                       required
                       value={profile.username}
-                      onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                      onChange={(e) =>
+                        setProfile({ ...profile, username: e.target.value })
+                      }
                       placeholder="admin"
                       className="w-full pl-8 pr-3.5 py-2.5 rounded-2xl text-xs font-mono font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                     />
@@ -929,7 +1105,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     <input
                       type="text"
                       value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                      onChange={(e) =>
+                        setProfile({ ...profile, phone: e.target.value })
+                      }
                       placeholder="09171234567"
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-semibold border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                     />
@@ -944,9 +1122,15 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     <div className="relative flex-1">
                       <ImageIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
-                        type="url"
-                        value={profile.avatar_url}
-                        onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
+                        type="text"
+                        value={
+                          profile.avatar_url?.startsWith('data:image/')
+                            ? 'Uploaded Profile Photo'
+                            : profile.avatar_url || ''
+                        }
+                        onChange={(e) =>
+                          setProfile({ ...profile, avatar_url: e.target.value })
+                        }
                         placeholder="https://... or upload file"
                         className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#3b5bfd] focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                       />
@@ -1010,7 +1194,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   <Key className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Password & Authentication</h3>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Password & Authentication
+                  </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Update your administrator login password.
                   </p>
@@ -1048,7 +1234,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     name="account_current_pass"
                     autoComplete="current-password"
                     value={securityForm.currentPassword}
-                    onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })}
+                    onChange={(e) =>
+                      setSecurityForm({
+                        ...securityForm,
+                        currentPassword: e.target.value,
+                      })
+                    }
                     placeholder="Enter existing account password"
                     className="w-full pl-10 pr-10 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                   />
@@ -1057,7 +1248,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     onClick={() => setShowCurrentPass(!showCurrentPass)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showCurrentPass ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -1075,7 +1270,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                       name="account_new_pass"
                       autoComplete="new-password"
                       value={securityForm.newPassword}
-                      onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
+                      onChange={(e) =>
+                        setSecurityForm({
+                          ...securityForm,
+                          newPassword: e.target.value,
+                        })
+                      }
                       placeholder="Min 8 strong chars"
                       className="w-full pl-10 pr-9 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                     />
@@ -1084,7 +1284,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                       onClick={() => setShowNewPass(!showNewPass)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
-                      {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showNewPass ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1101,7 +1305,12 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                       name="account_confirm_pass"
                       autoComplete="new-password"
                       value={securityForm.confirmPassword}
-                      onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
+                      onChange={(e) =>
+                        setSecurityForm({
+                          ...securityForm,
+                          confirmPassword: e.target.value,
+                        })
+                      }
                       placeholder="Re-type new password"
                       className="w-full pl-10 pr-3.5 py-2.5 rounded-2xl text-xs font-mono border border-slate-200 bg-[#f4f7fb] focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all text-slate-900 placeholder-slate-400"
                     />
@@ -1141,24 +1350,74 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   </div>
 
                   <div className="grid grid-cols-1 gap-1 pt-1 text-[11px]">
-                    <div className={`flex items-center space-x-1.5 ${securityForm.newPassword.length >= 8 ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                      {securityForm.newPassword.length >= 8 ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                    <div
+                      className={`flex items-center space-x-1.5 ${
+                        securityForm.newPassword.length >= 8
+                          ? 'text-emerald-600 font-semibold'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {securityForm.newPassword.length >= 8 ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>At least 8 characters</span>
                     </div>
-                    <div className={`flex items-center space-x-1.5 ${/[A-Z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                      {/[A-Z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                    <div
+                      className={`flex items-center space-x-1.5 ${
+                        /[A-Z]/.test(securityForm.newPassword)
+                          ? 'text-emerald-600 font-semibold'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {/[A-Z]/.test(securityForm.newPassword) ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>One uppercase letter (A-Z)</span>
                     </div>
-                    <div className={`flex items-center space-x-1.5 ${/[a-z]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                      {/[a-z]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                    <div
+                      className={`flex items-center space-x-1.5 ${
+                        /[a-z]/.test(securityForm.newPassword)
+                          ? 'text-emerald-600 font-semibold'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {/[a-z]/.test(securityForm.newPassword) ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>One lowercase letter (a-z)</span>
                     </div>
-                    <div className={`flex items-center space-x-1.5 ${/[0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                      {/[0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                    <div
+                      className={`flex items-center space-x-1.5 ${
+                        /[0-9]/.test(securityForm.newPassword)
+                          ? 'text-emerald-600 font-semibold'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {/[0-9]/.test(securityForm.newPassword) ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>One number (0-9)</span>
                     </div>
-                    <div className={`flex items-center space-x-1.5 ${/[^A-Za-z0-9]/.test(securityForm.newPassword) ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                      {/[^A-Za-z0-9]/.test(securityForm.newPassword) ? <Check className="w-3.5 h-3.5 shrink-0" /> : <X className="w-3.5 h-3.5 shrink-0" />}
+                    <div
+                      className={`flex items-center space-x-1.5 ${
+                        /[^A-Za-z0-9]/.test(securityForm.newPassword)
+                          ? 'text-emerald-600 font-semibold'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {/[^A-Za-z0-9]/.test(securityForm.newPassword) ? (
+                        <Check className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <X className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>One special character (!@#$%^&*)</span>
                     </div>
                   </div>
@@ -1196,9 +1455,14 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                     <LogOut className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-extrabold text-slate-900">Active Device Session</h4>
+                    <h4 className="text-xs font-extrabold text-slate-900">
+                      Active Device Session
+                    </h4>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Signed in as <span className="font-mono font-bold text-slate-700">{profile.email}</span>
+                      Signed in as{' '}
+                      <span className="font-mono font-bold text-slate-700">
+                        {profile.email}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -1218,7 +1482,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-extrabold text-rose-700">Danger Zone — Delete Account</h4>
+                  <h4 className="text-xs font-extrabold text-rose-700">
+                    Danger Zone — Delete Account
+                  </h4>
                   <p className="text-[11px] text-rose-600/80 mt-0.5">
                     Permanently remove this administrator profile and revoke access.
                   </p>
@@ -1253,7 +1519,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-extrabold text-rose-900 text-xs">Permanent Account Removal</p>
+              <p className="font-extrabold text-rose-900 text-xs">
+                Permanent Account Removal
+              </p>
               <p className="text-[11px] text-rose-700 mt-0.5 leading-relaxed">
                 Are you sure you want to permanently delete your profile for{' '}
                 <strong className="font-mono">{profile.email}</strong>? This action cannot be undone.
@@ -1322,7 +1590,9 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-extrabold text-xs text-slate-900">Identity Confirmation Required</p>
+              <p className="font-extrabold text-xs text-slate-900">
+                Identity Confirmation Required
+              </p>
               <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
                 Enter your logged-in administrator password to verify your identity and commit your profile updates.
               </p>
@@ -1364,7 +1634,11 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
                 onClick={() => setShowSecurityPassword(!showSecurityPassword)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
-                {showSecurityPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showSecurityPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>

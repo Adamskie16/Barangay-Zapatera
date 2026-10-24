@@ -22,44 +22,128 @@ export const sanitizeFileName = (name) => {
 };
 
 /**
- * Upload an admin avatar to public_assets
+ * Convert an image file into a compact, persistent Data URL (resized up to 320x320)
+ * so avatars always persist in localStorage and profiles.avatar_url even if bucket RLS blocks upload.
+ */
+export const fileToCompressedDataUrl = (file, maxDim = 320, quality = 0.85) =>
+  new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawDataUrl = e.target?.result || '';
+        if (typeof Image === 'undefined' || typeof document === 'undefined') {
+          resolve(rawDataUrl);
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let width = img.width || maxDim;
+            let height = img.height || maxDim;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressed = canvas.toDataURL('image/jpeg', quality);
+              resolve(compressed || rawDataUrl);
+            } else {
+              resolve(rawDataUrl);
+            }
+          } catch {
+            resolve(rawDataUrl);
+          }
+        };
+        img.onerror = () => resolve(rawDataUrl);
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    } catch {
+      resolve('');
+    }
+  });
+
+/**
+ * Upload an admin avatar to Supabase Storage ('avatars' or 'public_assets') with automatic DataURL fallback
  */
 export const uploadAdminAvatar = async (userId, file) => {
   if (!file) return { success: false, error: 'No file provided' };
 
   const sanitized = sanitizeFileName(file.name || 'avatar.jpg');
-  const storagePath = `avatars/${userId}/${sanitized}`;
+  const storagePath = `avatars/${userId || 'admin'}/${sanitized}`;
+  const fallbackDataUrl = await fileToCompressedDataUrl(file);
 
   if (!isSupabaseConfigured()) {
     return {
       success: true,
-      url: typeof URL !== 'undefined' ? URL.createObjectURL(file) : '',
+      url: fallbackDataUrl || (typeof URL !== 'undefined' ? URL.createObjectURL(file) : ''),
       path: storagePath,
     };
   }
 
   try {
-    const { data, error } = await supabase.storage
-      .from('public_assets')
-      .upload(storagePath, file, {
+    let bucketName = 'avatars';
+    let targetPath = `${userId || 'admin'}/${sanitized}`;
+
+    let { data, error } = await supabase.storage
+      .from('avatars')
+      .upload(targetPath, file, {
         contentType: file.type || 'image/jpeg',
         upsert: true,
       });
 
     if (error) {
-      return { success: false, error: error.message };
+      bucketName = 'public_assets';
+      targetPath = storagePath;
+      const fallbackUpload = await supabase.storage
+        .from('public_assets')
+        .upload(targetPath, file, {
+          contentType: file.type || 'image/jpeg',
+          upsert: true,
+        });
+      data = fallbackUpload.data;
+      error = fallbackUpload.error;
+    }
+
+    if (error || !data?.path) {
+      if (fallbackDataUrl) {
+        return {
+          success: true,
+          url: fallbackDataUrl,
+          path: storagePath,
+        };
+      }
+      return { success: false, error: error?.message || 'Upload failed' };
     }
 
     const { data: publicUrlData } = supabase.storage
-      .from('public_assets')
+      .from(bucketName)
       .getPublicUrl(data.path);
 
     return {
       success: true,
-      url: publicUrlData?.publicUrl,
+      url: publicUrlData?.publicUrl || fallbackDataUrl,
       path: data.path,
     };
   } catch (err) {
+    if (fallbackDataUrl) {
+      return {
+        success: true,
+        url: fallbackDataUrl,
+        path: storagePath,
+      };
+    }
     return { success: false, error: err?.message || 'Upload failed' };
   }
 };

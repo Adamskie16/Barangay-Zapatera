@@ -1,4 +1,5 @@
 import './index.css';
+import { ensureInterFontLoaded } from './core/fontSetup';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
@@ -7,6 +8,8 @@ import {
   TouchableOpacity,
   StatusBar,
   StyleSheet,
+  Animated,
+  Easing,
 } from 'react-native';
 import { AlertTriangle, Megaphone, X } from 'lucide-react';
 import {
@@ -50,10 +53,99 @@ import {
 } from './core/phoneNotification';
 import PhoneNotificationPermissionBanner from './components/PhoneNotificationPermissionBanner';
 
+const VALID_NAV_TABS: NavTab[] = ['home', 'documents', 'requests', 'announcements', 'profile'];
+const ACTIVE_TAB_STORAGE_KEY = 'zapatera_resident_active_tab';
+
+function getInitialSavedTab(): NavTab {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY) as NavTab | null;
+      if (saved && VALID_NAV_TABS.includes(saved)) {
+        return saved;
+      }
+    }
+  } catch {}
+  return 'home';
+}
+
+function getInitialSavedResident(): ResidentUser | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = window.localStorage.getItem('zapatera_resident_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && (parsed.role || '').toLowerCase() === 'resident') {
+          return parsed;
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function getInitialSavedRequests(user: ResidentUser | null): DocumentRequest[] {
+  if (!user) return [];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const key = `zapatera_requests_db_${user.id || user.email}`;
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {}
+  return [];
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<NavTab>('home');
-  const [currentUser, setCurrentUser] = useState<ResidentUser | null>(null);
-  const [requests, setRequests] = useState<DocumentRequest[]>([]);
+  const [activeTab, setActiveTabState] = useState<NavTab>(getInitialSavedTab);
+  const prevTabRef = useRef<NavTab>(activeTab);
+  const pageOpacity = useRef(new Animated.Value(1)).current;
+
+  const setActiveTab = (nextTab: NavTab) => {
+    if (!VALID_NAV_TABS.includes(nextTab)) return;
+    setActiveTabState(nextTab);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, nextTab);
+      }
+      MobileStorage.setItem(ACTIVE_TAB_STORAGE_KEY, nextTab).catch(() => {});
+    } catch {}
+  };
+
+  useEffect(() => {
+    // Also restore from MobileStorage for native mobile sessions
+    MobileStorage.getItem(ACTIVE_TAB_STORAGE_KEY)
+      .then((saved) => {
+        if (saved && VALID_NAV_TABS.includes(saved as NavTab)) {
+          setActiveTabState(saved as NavTab);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (prevTabRef.current === activeTab) return;
+    prevTabRef.current = activeTab;
+
+    pageOpacity.setValue(0.65);
+    Animated.timing(pageOpacity, {
+      toValue: 1,
+      duration: 160,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [activeTab, pageOpacity]);
+
+  const initialUser = getInitialSavedResident();
+  const [currentUser, setCurrentUser] = useState<ResidentUser | null>(initialUser);
+  const [isSessionHydrated, setIsSessionHydrated] = useState<boolean>(
+    () => typeof window !== 'undefined' && Boolean(window.localStorage)
+  );
+  const [requests, setRequests] = useState<DocumentRequest[]>(() =>
+    getInitialSavedRequests(initialUser)
+  );
   const [docTypes, setDocTypes] = useState<DocumentType[]>(OFFICIAL_DOC_TYPES);
   const [announcements, setAnnouncements] = useState<BarangayAnnouncement[]>(SAMPLE_ANNOUNCEMENTS);
   const [config, setConfig] = useState<BarangayConfig>(DEFAULT_BARANGAY_CONFIG);
@@ -241,6 +333,7 @@ export default function App() {
   }, [activeAnnouncementBanner]);
 
   useEffect(() => {
+    ensureInterFontLoaded();
     // Initialize service worker and cellphone notification audio listener
     initPhoneNotifications();
 
@@ -502,7 +595,7 @@ export default function App() {
         supabase.removeChannel(deviceChannel);
       }
     };
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.email]);
 
   // -------------------------------------------------------------
   // TWO-WAY RESIDENT PROFILE REALTIME SYNCHRONIZATION & DELETION LISTENER
@@ -811,6 +904,8 @@ export default function App() {
       }
     } catch {
       // Ignore
+    } finally {
+      setIsSessionHydrated(true);
     }
   };
 
@@ -2059,6 +2154,11 @@ export default function App() {
 
   const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
 
+  // Wait for async session check on native platforms so the Login screen never flashes
+  if (!isSessionHydrated) {
+    return <SafeAreaView style={styles.appContainer} />;
+  }
+
   // Unauthenticated screen or Non-Resident role
   if (!currentUser || (currentUser.role || '').toLowerCase() !== 'resident') {
     return (
@@ -2193,61 +2293,73 @@ export default function App() {
 
       {/* Screen Body Router */}
       <View style={styles.mainContent}>
-        {activeTab === 'home' && (
-          <ResidentDashboard
-            currentUser={currentUser}
-            requests={requests}
-            docTypes={docTypes}
-            announcements={announcements}
-            config={config}
-            onNavigateTab={(tab) => setActiveTab(tab)}
-            onRequestDocument={(doc) => handleOpenRequestFlow(doc)}
-            onOpenRequirements={(doc) => handleOpenRequirements(doc)}
-            onViewRequestDetails={handleViewRequestDetails}
-            onViewAnnouncement={(ann) => setActiveTab('announcements')}
-          />
-        )}
+        <Animated.View
+          style={[
+            styles.animatedPageContainer,
+            {
+              opacity: pageOpacity,
+            },
+          ]}
+        >
+          {activeTab === 'home' && (
+            <ResidentDashboard
+              currentUser={currentUser}
+              requests={requests}
+              docTypes={docTypes}
+              announcements={announcements}
+              config={config}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onRequestDocument={(doc) => handleOpenRequestFlow(doc)}
+              onOpenRequirements={(doc) => handleOpenRequirements(doc)}
+              onViewRequestDetails={handleViewRequestDetails}
+              onViewAnnouncement={(ann) => {
+                setSelectedAnnouncementForModal(ann);
+                setActiveTab('announcements');
+              }}
+            />
+          )}
 
-        {activeTab === 'documents' && (
-          <DocumentCatalogView
-            docTypes={docTypes}
-            onSelectDocument={(doc) => handleOpenRequestFlow(doc)}
-            onViewRequirements={(doc) => handleOpenRequirements(doc)}
-          />
-        )}
+          {activeTab === 'documents' && (
+            <DocumentCatalogView
+              docTypes={docTypes}
+              onSelectDocument={(doc) => handleOpenRequestFlow(doc)}
+              onViewRequirements={(doc) => handleOpenRequirements(doc)}
+            />
+          )}
 
-        {activeTab === 'requests' && (
-          <MyRequestsView
-            requests={requests}
-            onViewRequestDetails={handleViewRequestDetails}
-            onRequestNew={() => handleOpenRequestFlow(undefined, true)}
-            onOpenResubmit={handleOpenResubmit}
-          />
-        )}
+          {activeTab === 'requests' && (
+            <MyRequestsView
+              requests={requests}
+              onViewRequestDetails={handleViewRequestDetails}
+              onRequestNew={() => handleOpenRequestFlow(undefined, true)}
+              onOpenResubmit={handleOpenResubmit}
+            />
+          )}
 
-        {activeTab === 'announcements' && (
-          <AnnouncementsView
-            announcements={announcements}
-            selectedAnnouncement={selectedAnnouncementForModal}
-            onCloseAnnouncementModal={() => setSelectedAnnouncementForModal(null)}
-            currentUser={currentUser}
-          />
-        )}
+          {activeTab === 'announcements' && (
+            <AnnouncementsView
+              announcements={announcements}
+              selectedAnnouncement={selectedAnnouncementForModal}
+              onCloseAnnouncementModal={() => setSelectedAnnouncementForModal(null)}
+              currentUser={currentUser}
+            />
+          )}
 
-        {activeTab === 'profile' && (
-          <ProfileView
-            currentUser={currentUser}
-            config={config}
-            announcements={announcements}
-            onUpdateProfile={handleUpdateProfile}
-            onLogout={handleLogout}
-            onViewAnnouncement={(ann) => {
-              setSelectedAnnouncementForModal(ann);
-              setActiveTab('announcements');
-            }}
-            onNavigateTab={(tab: any) => setActiveTab(tab)}
-          />
-        )}
+          {activeTab === 'profile' && (
+            <ProfileView
+              currentUser={currentUser}
+              config={config}
+              announcements={announcements}
+              onUpdateProfile={handleUpdateProfile}
+              onLogout={handleLogout}
+              onViewAnnouncement={(ann) => {
+                setSelectedAnnouncementForModal(ann);
+                setActiveTab('announcements');
+              }}
+              onNavigateTab={(tab: any) => setActiveTab(tab)}
+            />
+          )}
+        </Animated.View>
       </View>
 
       {/* Accessible Bottom Navigation Bar */}
@@ -2327,12 +2439,12 @@ export default function App() {
 const styles = StyleSheet.create({
   authContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f4f7fb',
     minHeight: '100vh' as any,
   },
   appContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f4f7fb',
     height: '100vh' as any,
     maxHeight: '100vh' as any,
     minHeight: '100vh' as any,
@@ -2341,9 +2453,15 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f4f7fb',
     overflow: 'hidden' as any,
     position: 'relative' as any,
+  },
+  animatedPageContainer: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    height: '100%',
   },
 
   floatingBanner: {

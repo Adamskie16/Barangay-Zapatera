@@ -1,5 +1,6 @@
 // Resident/src/components/Navbar.tsx
 import React, { useState, useEffect } from 'react';
+import { ensureInterFontLoaded } from '../core/fontSetup';
 import {
   View,
   Text,
@@ -36,6 +37,10 @@ export default function Navbar({
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
+
+  useEffect(() => {
     setAvatarError(false);
   }, [currentUser.avatar_url]);
 
@@ -66,22 +71,20 @@ export default function Navbar({
   return (
     <>
       <View style={styles.header}>
-        {/* Left Branding */}
+        {/* Left Branding (Matches Admin & SuperAdmin ZAPATERA brand typography) */}
         <View style={styles.headerLeft}>
           <Image
             source={{
-              uri: config.seal_url || config.logo_url || '/zapatera_seal.png',
+              uri: config.seal_url || config.logo_url || '/logo.png',
             }}
             style={styles.sealLogo}
           />
           <View style={styles.brandingTextCol}>
-            <View style={styles.titleRow}>
-              <Text style={styles.barangayName}>{(config.barangay_name || 'Barangay Zapatera').toUpperCase()}</Text>
-              <View style={styles.portalOfficialPill}>
-                <Text style={styles.portalOfficialText}>PORTAL</Text>
-              </View>
+            <Text style={styles.barangayName}>ZAPATERA</Text>
+            <View style={styles.portalOfficialPill}>
+              <View style={styles.portalPulseDot} />
+              <Text style={styles.portalOfficialText}>RESIDENT PORTAL</Text>
             </View>
-            <Text style={styles.portalTagline}>Resident Digital Services • Online Desk</Text>
           </View>
         </View>
 
@@ -272,22 +275,17 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   sealLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-    backgroundColor: '#eff6ff',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    resizeMode: 'contain' as any,
   },
   brandingTextCol: {
     justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   titleRow: {
     flexDirection: 'row',
@@ -295,24 +293,39 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   barangayName: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: 0.4,
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    letterSpacing: 2.24,
+    lineHeight: 18,
+    textTransform: 'uppercase',
   },
   portalOfficialPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#eff6ff',
     paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: 'rgba(191, 219, 254, 0.7)',
+    marginTop: 3,
+  },
+  portalPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3b5bfd',
   },
   portalOfficialText: {
-    fontSize: 8.5,
-    fontWeight: '900',
-    color: '#1d4ed8',
+    fontFamily: 'Inter',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#3b5bfd',
     letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   portalTagline: {
     fontSize: 10.5,

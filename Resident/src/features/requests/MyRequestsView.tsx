@@ -1,5 +1,5 @@
 // Resident/src/features/requests/MyRequestsView.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,19 +13,22 @@ import {
   FileText,
   Clock,
   Calendar,
-  Filter,
   ArrowRight,
-  PlusCircle,
+  Plus,
   PackageCheck,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
+  X,
+  ClipboardCheck,
+  XCircle,
 } from 'lucide-react';
-import { DocumentRequest, RequestStatus } from '../../types';
+import { DocumentRequest } from '../../types';
 import Badge from '../../components/Badge';
 import EmptyState from '../../components/EmptyState';
 import GlobalFooter from '../../components/GlobalFooter';
 import { formatCurrency } from '../../core/security';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface MyRequestsViewProps {
   requests: DocumentRequest[];
@@ -43,7 +46,7 @@ const ACTIVE_STATUS_FILTERS: { label: string; value: string }[] = [
 
 const HISTORY_STATUS_FILTERS: { label: string; value: string }[] = [
   { label: 'All History', value: 'all' },
-  { label: 'Claimed Documents', value: 'claimed' },
+  { label: 'Claimed', value: 'claimed' },
   { label: 'Declined', value: 'declined' },
   { label: 'Cancelled', value: 'cancelled' },
 ];
@@ -54,9 +57,30 @@ export default function MyRequestsView({
   onRequestNew,
   onOpenResubmit,
 }: MyRequestsViewProps) {
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [activeTab, setActiveTabState] = useState<'active' | 'history'>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('zapatera_resident_requests_subtab');
+        if (saved === 'active' || saved === 'history') return saved;
+      }
+    } catch {}
+    return 'active';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  const setActiveTab = (tab: 'active' | 'history') => {
+    setActiveTabState(tab);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('zapatera_resident_requests_subtab', tab);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
 
   // Helper to check if request is claimed / completed
   const isClaimed = (r: DocumentRequest) => {
@@ -64,741 +88,1201 @@ export default function MyRequestsView({
   };
 
   // Filter Active vs Request History (Claimed / Completed / Declined / Cancelled)
-  const activeRequestsList = requests
-    .filter(
-      (r) => !isClaimed(r) && r.status !== 'rejected' && r.status !== 'declined' && r.status !== 'cancelled'
-    )
-    .sort((a, b) => {
-      const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
-      const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
-      return timeB - timeA;
-    });
+  const activeRequestsList = useMemo(
+    () =>
+      requests
+        .filter(
+          (r) =>
+            !isClaimed(r) &&
+            r.status !== 'rejected' &&
+            r.status !== 'declined' &&
+            r.status !== 'cancelled'
+        )
+        .sort((a, b) => {
+          const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
+          const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
+          return timeB - timeA;
+        }),
+    [requests]
+  );
 
   // History sorted from the most recent ones
-  const historyRequestsList = requests
-    .filter(
-      (r) => isClaimed(r) || r.status === 'rejected' || r.status === 'declined' || r.status === 'cancelled'
-    )
-    .sort((a, b) => {
-      const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
-      const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
-      return timeB - timeA;
-    });
+  const historyRequestsList = useMemo(
+    () =>
+      requests
+        .filter(
+          (r) =>
+            isClaimed(r) ||
+            r.status === 'rejected' ||
+            r.status === 'declined' ||
+            r.status === 'cancelled'
+        )
+        .sort((a, b) => {
+          const timeA = new Date(a.created_at || a.request_date || a.updated_at || 0).getTime();
+          const timeB = new Date(b.created_at || b.request_date || b.updated_at || 0).getTime();
+          return timeB - timeA;
+        }),
+    [requests]
+  );
+
+  const readyCount = useMemo(
+    () =>
+      activeRequestsList.filter(
+        (r) => r.status === 'approved' || r.status === 'ready_for_pickup'
+      ).length,
+    [activeRequestsList]
+  );
+
+  const claimedCount = useMemo(
+    () => historyRequestsList.filter((r) => isClaimed(r)).length,
+    [historyRequestsList]
+  );
+
+  const declinedCount = useMemo(
+    () =>
+      historyRequestsList.filter(
+        (r) => r.status === 'declined' || r.status === 'rejected'
+      ).length,
+    [historyRequestsList]
+  );
 
   const baseList = activeTab === 'active' ? activeRequestsList : historyRequestsList;
   const currentFilters = activeTab === 'active' ? ACTIVE_STATUS_FILTERS : HISTORY_STATUS_FILTERS;
 
-  const filteredRequests = baseList.filter((r) => {
+  const matchesFilterValue = (r: DocumentRequest, filterVal: string) => {
+    if (filterVal === 'all') return true;
     const claimed = isClaimed(r);
     const normStatus = (r.status || 'pending').toLowerCase();
-    const matchesSearch =
-      r.document_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.purpose.toLowerCase().includes(searchQuery.toLowerCase());
+    if (filterVal === 'claimed') return claimed;
+    if (filterVal === 'declined') return normStatus === 'declined' || normStatus === 'rejected';
+    if (filterVal === 'cancelled') return normStatus === 'cancelled';
+    if (filterVal === 'pending')
+      return (normStatus === 'pending' || normStatus === 'under_review') && !claimed;
+    if (filterVal === 'processing') return normStatus === 'processing' && !claimed;
+    if (filterVal === 'approved')
+      return (normStatus === 'approved' || normStatus === 'ready_for_pickup') && !claimed;
+    return normStatus === filterVal;
+  };
 
-    let matchesStatus = true;
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'claimed') {
-        matchesStatus = claimed;
-      } else if (statusFilter === 'declined') {
-        matchesStatus = normStatus === 'declined' || normStatus === 'rejected';
-      } else if (statusFilter === 'cancelled') {
-        matchesStatus = normStatus === 'cancelled';
-      } else if (statusFilter === 'pending') {
-        matchesStatus = (normStatus === 'pending' || normStatus === 'under_review') && !claimed;
-      } else if (statusFilter === 'processing') {
-        matchesStatus = normStatus === 'processing' && !claimed;
-      } else if (statusFilter === 'approved') {
-        matchesStatus = (normStatus === 'approved' || normStatus === 'ready_for_pickup') && !claimed;
-      } else {
-        matchesStatus = normStatus === statusFilter;
-      }
+  const filterCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    currentFilters.forEach((f) => {
+      counts[f.value] = baseList.filter((r) => matchesFilterValue(r, f.value)).length;
+    });
+    return counts;
+  }, [baseList, currentFilters]);
+
+  const filteredRequests = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return baseList.filter((r) => {
+      const matchesSearch =
+        !q ||
+        (r.document_title || '').toLowerCase().includes(q) ||
+        (r.tracking_number || '').toLowerCase().includes(q) ||
+        (r.purpose || '').toLowerCase().includes(q);
+
+      return matchesSearch && matchesFilterValue(r, statusFilter);
+    });
+  }, [baseList, searchQuery, statusFilter]);
+
+  const getStatusVisual = (req: DocumentRequest) => {
+    const claimed = isClaimed(req);
+    const isDeclined = req.status === 'declined' || req.status === 'rejected';
+    const isCancelled = req.status === 'cancelled';
+    const isApproved =
+      (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
+
+    if (claimed) {
+      return {
+        icon: <CheckCircle2 size={20} color="#059669" />,
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+      };
     }
-
-    return matchesSearch && matchesStatus;
-  });
+    if (isApproved) {
+      return {
+        icon: <PackageCheck size={20} color="#16a34a" />,
+        bg: '#f0fdf4',
+        border: '#bbf7d0',
+      };
+    }
+    if (isDeclined) {
+      return {
+        icon: <XCircle size={20} color="#dc2626" />,
+        bg: '#fef2f2',
+        border: '#fecaca',
+      };
+    }
+    if (isCancelled) {
+      return {
+        icon: <AlertTriangle size={20} color="#64748b" />,
+        bg: '#f8fafc',
+        border: '#e2e8f0',
+      };
+    }
+    return {
+      icon: <FileText size={20} color="#2563eb" />,
+      bg: '#eff6ff',
+      border: '#dbeafe',
+    };
+  };
 
   return (
-    <View style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <View>
-            <Text style={styles.title}>My Document Requests</Text>
-            <Text style={styles.subtitle}>Track live progress and review document clearance statuses.</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ================= 1. HERO & STATUS SUMMARY CARD ================= */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTitleCol}>
+            <View style={styles.heroPill}>
+              <ClipboardCheck size={11} color="#2563eb" />
+              <Text style={styles.heroPillText}>APPLICATION TRACKER</Text>
+            </View>
+            <Text style={styles.heroTitle}>My Requests</Text>
+            <Text style={styles.heroSubtitle}>
+              Monitor live clearance progress, pickup schedules, and release history.
+            </Text>
           </View>
-          <TouchableOpacity style={styles.newBtn} onPress={onRequestNew}>
-            <PlusCircle size={16} color="#ffffff" />
-            <Text style={styles.newBtnText}>New Request</Text>
+
+          <TouchableOpacity
+            style={styles.newRequestBtn}
+            onPress={onRequestNew}
+            activeOpacity={0.85}
+          >
+            <Plus size={15} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.newRequestBtnText}>New Request</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Tab Switcher: Active vs History */}
-        <View style={styles.tabSwitcher}>
+        {/* 4-Column Status Metrics Strip */}
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#2563eb' }]}>
+              {activeRequestsList.length}
+            </Text>
+            <Text style={styles.summaryLabel}>In Progress</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#16a34a' }]}>{readyCount}</Text>
+            <Text style={styles.summaryLabel}>For Pickup</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#059669' }]}>{claimedCount}</Text>
+            <Text style={styles.summaryLabel}>Claimed</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#dc2626' }]}>{declinedCount}</Text>
+            <Text style={styles.summaryLabel}>Declined</Text>
+          </View>
+        </View>
+
+        {/* Segmented Tab Switcher: Active vs History */}
+        <View style={styles.segmentedBar}>
           <TouchableOpacity
-            style={[styles.switchTab, activeTab === 'active' && styles.switchTabActive]}
+            style={[
+              styles.segmentBtn,
+              activeTab === 'active' && styles.segmentBtnActive,
+            ]}
             onPress={() => {
               setActiveTab('active');
               setStatusFilter('all');
             }}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.switchTabText, activeTab === 'active' && styles.switchTabTextActive]}>
+            <Text
+              style={[
+                styles.segmentBtnText,
+                activeTab === 'active' && styles.segmentBtnTextActive,
+              ]}
+            >
               Active Requests ({activeRequestsList.length})
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.switchTab, activeTab === 'history' && styles.switchTabActive]}
+            style={[
+              styles.segmentBtn,
+              activeTab === 'history' && styles.segmentBtnActive,
+            ]}
             onPress={() => {
               setActiveTab('history');
               setStatusFilter('all');
             }}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.switchTabText, activeTab === 'history' && styles.switchTabTextActive]}>
+            <Text
+              style={[
+                styles.segmentBtnText,
+                activeTab === 'history' && styles.segmentBtnTextActive,
+              ]}
+            >
               Request History ({historyRequestsList.length})
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
+        {/* Search Input */}
+        <View style={styles.searchBox}>
           <Search size={16} color="#64748b" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by Tracking ID, document title, purpose..."
+            placeholder="Search by Tracking ID, document, or purpose..."
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearSearchBtn}
+              activeOpacity={0.7}
+            >
+              <X size={14} color="#64748b" />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        {/* Status Filter Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {currentFilters.map((f) => (
-            <TouchableOpacity
-              key={f.value}
-              style={[
-                styles.filterPill,
-                statusFilter === f.value && styles.filterPillActive,
-              ]}
-              onPress={() => setStatusFilter(f.value)}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  statusFilter === f.value && styles.filterPillTextActive,
-                ]}
-              >
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Requests Content List */}
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {filteredRequests.length > 0 ? (
-          filteredRequests.map((req) => {
-            const claimed = isClaimed(req);
-            const isDeclined = req.status === 'declined' || req.status === 'rejected';
-            const isCancelled = req.status === 'cancelled';
-            const isApproved = (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
-            const declineReasonText = req.declined_details || req.declined_reason || req.rejection_reason || 'Missing required residency documents or incomplete attachments.';
-            const dateDeclinedFormatted = req.declined_at || req.rejected_at || req.updated_at ? new Date(req.declined_at || req.rejected_at || req.updated_at || '').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            const adminProcessor = req.processed_by || 'Barangay Administrator';
-
+        {/* Status Filter Pills with Count Bubbles */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          style={styles.filterScroll}
+        >
+          {currentFilters.map((f) => {
+            const isSelected = statusFilter === f.value;
+            const count = filterCounts[f.value] ?? 0;
             return (
               <TouchableOpacity
-                key={req.id}
-                style={[
-                  styles.requestCard,
-                  isApproved && styles.requestCardReady,
-                  claimed && styles.requestCardClaimed,
-                  isDeclined && styles.requestCardRejected,
-                  isCancelled && styles.requestCardCancelled,
-                ]}
-                onPress={() => onViewRequestDetails(req)}
-                activeOpacity={0.8}
+                key={f.value}
+                style={[styles.filterPill, isSelected && styles.filterPillActive]}
+                onPress={() => setStatusFilter(f.value)}
+                activeOpacity={0.75}
               >
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text style={styles.cardDocTitle}>{req.document_title}</Text>
-                    <Text style={styles.cardTrackingNo}>Ref: <Text style={styles.trackingCodeText}>{req.tracking_number}</Text></Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <Badge status={claimed ? 'issued' : req.status} size="sm" />
-                    {Boolean(req.is_resubmitted) && req.status === 'pending' ? (
-                      <View style={styles.resubmittedBadgePill}>
-                        <RotateCcw size={10} color="#b45309" />
-                        <Text style={styles.resubmittedBadgePillText}>Resubmitted</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-
-                <Text style={styles.cardPurpose} numberOfLines={2}>
-                  Purpose: {req.purpose}
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    isSelected && styles.filterPillTextActive,
+                  ]}
+                >
+                  {f.label}
                 </Text>
-
-                <View style={styles.scheduleRow}>
-                  <View style={styles.scheduleItem}>
-                    <Calendar size={13} color="#64748b" />
-                    <Text style={styles.scheduleLabel}>Date: <Text style={styles.scheduleVal}>{req.pickup_date || 'Scheduled'}</Text></Text>
-                  </View>
-                  <View style={styles.scheduleItem}>
-                    <Clock size={13} color="#64748b" />
-                    <Text style={styles.scheduleLabel}>Slot: <Text style={styles.scheduleVal}>{req.pickup_time_slot || '9:00 AM - 9:30 AM'}</Text></Text>
-                  </View>
-                </View>
-
-                {/* Claimed Box */}
-                {claimed && (
-                  <View style={styles.claimedHighlightBanner}>
-                    <CheckCircle2 size={14} color="#15803d" />
-                    <Text style={styles.claimedHighlightText}>
-                      Document Claimed & Released at Barangay Hall
-                      {req.claimed_at ? ` on ${new Date(req.claimed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}.
-                    </Text>
-                  </View>
-                )}
-
-                {/* Cancelled Box */}
-                {isCancelled && (
-                  <View style={styles.cancelledHighlightBanner}>
-                    <AlertTriangle size={14} color="#64748b" />
-                    <Text style={styles.cancelledHighlightText}>
-                      Request Cancelled by Resident.
-                    </Text>
-                  </View>
-                )}
-
-                {/* 6. Resident-Side Declined Notification Box */}
-                {isDeclined && (
-                  <View style={styles.declinedDetailedBox}>
-                    <View style={styles.declinedHeaderRow}>
-                      <Text style={styles.declinedBadgeTitle}>🔴 Request Declined</Text>
-                      <Text style={styles.declinedStatusText}>Status: DECLINED</Text>
-                    </View>
-                    <View style={styles.declinedDetailItem}>
-                      <Text style={styles.declinedFieldLabel}>Reason for Declining:</Text>
-                      <Text style={styles.declinedFieldVal}>{declineReasonText}</Text>
-                    </View>
-                    {req.declined_details ? (
-                      <View style={styles.declinedDetailItem}>
-                        <Text style={styles.declinedFieldLabel}>Details / Instructions:</Text>
-                        <Text style={styles.declinedFieldVal}>{req.declined_details}</Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.declinedMetaRow}>
-                      <Text style={styles.declinedMetaText}>Date Declined: <Text style={{ fontWeight: '700' }}>{dateDeclinedFormatted}</Text></Text>
-                      <Text style={styles.declinedMetaText}>Processed By: <Text style={{ fontWeight: '700' }}>{adminProcessor}</Text></Text>
-                    </View>
-
-                    {/* Resubmit & Fix Incomplete Requirements Button */}
-                    {onOpenResubmit && (
-                      <TouchableOpacity
-                        style={styles.resubmitCardBtn}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onOpenResubmit(req);
-                        }}
-                      >
-                        <RotateCcw size={13} color="#ffffff" />
-                        <Text style={styles.resubmitCardBtnText}>Resubmit & Fix Requirements</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
-                {/* Resubmitted Pending Banner */}
-                {Boolean(req.is_resubmitted) && req.status === 'pending' ? (
-                  <View style={styles.resubmittedHighlightBanner}>
-                    <RotateCcw size={13} color="#b45309" />
-                    <Text style={styles.resubmittedHighlightText}>
-                      Application Resubmitted (Attempt #{req.resubmission_count || 1}). Pending review by Barangay Staff.
-                    </Text>
-                  </View>
-                ) : null}
-
-                {/* Approved Box */}
-                {isApproved && (
-                  <View style={styles.readyHighlightBanner}>
-                    <PackageCheck size={14} color="#15803d" />
-                    <Text style={styles.readyHighlightText}>
-                      Document Request Approved! Ready for pickup at Express Counter ({req.pickup_time_slot || '9:00 AM - 9:30 AM'}).
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.cardFooter}>
-                  <Text style={styles.feeText}>
-                    {claimed ? 'Claimed Fee: ' : 'Fee: '}
-                    <Text style={styles.feeValue}>
-                      {claimed && (req.claimed_fee !== undefined && req.claimed_fee !== null)
-                        ? formatCurrency(req.claimed_fee)
-                        : (req.is_variable_fee || req.fee_type === 'variable') && !claimed
-                        ? 'Depends upon claim'
-                        : req.fee === 0
-                        ? 'FREE'
-                        : formatCurrency(req.fee)}
-                    </Text>
+                <View
+                  style={[
+                    styles.filterCountBubble,
+                    isSelected && styles.filterCountBubbleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterCountText,
+                      isSelected && styles.filterCountTextActive,
+                    ]}
+                  >
+                    {count}
                   </Text>
-                  <View style={styles.viewDetailsBtn}>
-                    <Text style={styles.viewDetailsBtnText}>
-                      {claimed ? 'View Release Details' : isDeclined ? 'View Decline Details' : isCancelled ? 'View Details' : isApproved ? 'View Claim Pass' : 'Track Progress'}
-                    </Text>
-                    <ArrowRight size={13} color="#1d4ed8" />
-                  </View>
                 </View>
               </TouchableOpacity>
             );
-          })
-        ) : (
-          <EmptyState
-            icon={activeTab === 'active' ? 'requests' : 'history'}
-            title={
-              activeTab === 'active'
-                ? 'No Active Document Requests'
-                : 'No Previous Request History'
-            }
-            description={
-              activeTab === 'active'
-                ? 'You do not have any pending or in-progress applications. You can file a new barangay clearance or certificate anytime.'
-                : 'Your completed or previous document requests will be archived and shown here for future reference.'
-            }
-            actionLabel={activeTab === 'active' ? 'File Document Request' : undefined}
-            onAction={activeTab === 'active' ? onRequestNew : undefined}
-          />
-        )}
+          })}
+        </ScrollView>
+      </View>
 
-        {/* Global Developer & Institution Footer */}
-        <GlobalFooter />
-      </ScrollView>
-    </View>
+      {/* ================= 2. SECTION HEADER ================= */}
+      <View style={styles.resultsHeaderRow}>
+        <Text style={styles.resultsTitle}>
+          {activeTab === 'active' ? 'Active Applications' : 'Completed & Archived'}{' '}
+          <Text style={styles.resultsCountMuted}>({filteredRequests.length})</Text>
+        </Text>
+
+        {(statusFilter !== 'all' || searchQuery.trim() !== '') && (
+          <TouchableOpacity
+            onPress={() => {
+              setStatusFilter('all');
+              setSearchQuery('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.resetFilterLink}>Reset filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ================= 3. ORGANIZED REQUEST CARDS ================= */}
+      {filteredRequests.length > 0 ? (
+        filteredRequests.map((req) => {
+          const claimed = isClaimed(req);
+          const isDeclined = req.status === 'declined' || req.status === 'rejected';
+          const isCancelled = req.status === 'cancelled';
+          const isApproved =
+            (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
+          const visual = getStatusVisual(req);
+
+          const declineReasonText =
+            req.declined_details ||
+            req.declined_reason ||
+            req.rejection_reason ||
+            'Missing required residency documents or incomplete attachments.';
+          const dateDeclinedFormatted =
+            req.declined_at || req.rejected_at || req.updated_at
+              ? new Date(
+                  req.declined_at || req.rejected_at || req.updated_at || ''
+                ).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : new Date().toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                });
+          const adminProcessor = req.processed_by || 'Barangay Administrator';
+
+          const feeDisplay =
+            claimed && req.claimed_fee !== undefined && req.claimed_fee !== null
+              ? formatCurrency(req.claimed_fee)
+              : (req.is_variable_fee || req.fee_type === 'variable') && !claimed
+              ? 'Variable Fee'
+              : Number(req.fee) === 0
+              ? 'FREE'
+              : formatCurrency(req.fee);
+
+          return (
+            <TouchableOpacity
+              key={req.id}
+              style={[
+                styles.requestCard,
+                isApproved && styles.requestCardReady,
+                isDeclined && styles.requestCardDeclined,
+                isCancelled && styles.requestCardCancelled,
+              ]}
+              onPress={() => onViewRequestDetails(req)}
+              activeOpacity={0.82}
+            >
+              {/* Card Top Row: Icon + Title + Ref Code + Status Badge */}
+              <View style={styles.cardHeaderRow}>
+                <View
+                  style={[
+                    styles.cardIconBox,
+                    { backgroundColor: visual.bg, borderColor: visual.border },
+                  ]}
+                >
+                  {visual.icon}
+                </View>
+
+                <View style={styles.cardTitleCol}>
+                  <Text style={styles.cardDocTitle} numberOfLines={1}>
+                    {req.document_title}
+                  </Text>
+                  <View style={styles.refMetaRow}>
+                    <View style={styles.refCodeChip}>
+                      <Text style={styles.refCodeText}>{req.tracking_number}</Text>
+                    </View>
+                    {Boolean(req.is_resubmitted) && req.status === 'pending' && (
+                      <View style={styles.resubmittedTag}>
+                        <RotateCcw size={10} color="#b45309" />
+                        <Text style={styles.resubmittedTagText}>Resubmitted</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.statusBadgeCol}>
+                  <Badge status={claimed ? 'issued' : req.status} size="sm" />
+                </View>
+              </View>
+
+              {/* Compact Purpose & Schedule Strip */}
+              <View style={styles.infoGridStrip}>
+                <View style={styles.purposeRow}>
+                  <Text style={styles.infoLabel}>Purpose:</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>
+                    {req.purpose || 'Official Barangay Application'}
+                  </Text>
+                </View>
+
+                <View style={styles.scheduleChipsRow}>
+                  <View style={styles.scheduleChip}>
+                    <Calendar size={12} color="#64748b" />
+                    <Text style={styles.scheduleChipText}>
+                      {req.pickup_date || 'Scheduled'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.scheduleChip}>
+                    <Clock size={12} color="#64748b" />
+                    <Text style={styles.scheduleChipText}>
+                      {req.pickup_time_slot || '9:00 AM - 9:30 AM'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Status-Specific Callout Banners */}
+              {isApproved && (
+                <View style={styles.readyCallout}>
+                  <PackageCheck size={15} color="#15803d" />
+                  <Text style={styles.readyCalloutText}>
+                    Ready for pickup at the Barangay Express Counter ({req.pickup_time_slot || '9:00 AM - 9:30 AM'}).
+                  </Text>
+                </View>
+              )}
+
+              {claimed && (
+                <View style={styles.claimedCallout}>
+                  <CheckCircle2 size={15} color="#059669" />
+                  <Text style={styles.claimedCalloutText}>
+                    Official document claimed & released
+                    {req.claimed_at
+                      ? ` on ${new Date(req.claimed_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}`
+                      : ''}
+                    .
+                  </Text>
+                </View>
+              )}
+
+              {isCancelled && (
+                <View style={styles.cancelledCallout}>
+                  <AlertTriangle size={14} color="#64748b" />
+                  <Text style={styles.cancelledCalloutText}>
+                    Application cancelled by resident.
+                  </Text>
+                </View>
+              )}
+
+              {Boolean(req.is_resubmitted) && req.status === 'pending' && (
+                <View style={styles.resubmittedCallout}>
+                  <RotateCcw size={13} color="#b45309" />
+                  <Text style={styles.resubmittedCalloutText}>
+                    Resubmitted (Attempt #{req.resubmission_count || 1}) • Awaiting Barangay Staff verification.
+                  </Text>
+                </View>
+              )}
+
+              {isDeclined && (
+                <View style={styles.declinedBox}>
+                  <View style={styles.declinedTopRow}>
+                    <View style={styles.declinedTitleWrap}>
+                      <XCircle size={14} color="#dc2626" />
+                      <Text style={styles.declinedTitle}>Requires Compliance</Text>
+                    </View>
+                    <Text style={styles.declinedDateText}>{dateDeclinedFormatted}</Text>
+                  </View>
+
+                  <Text style={styles.declinedReasonText}>{declineReasonText}</Text>
+
+                  <Text style={styles.declinedProcessorText}>
+                    Reviewed by: <Text style={styles.declinedProcessorBold}>{adminProcessor}</Text>
+                  </Text>
+
+                  {onOpenResubmit && (
+                    <TouchableOpacity
+                      style={styles.resubmitBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onOpenResubmit(req);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <RotateCcw size={13} color="#ffffff" />
+                      <Text style={styles.resubmitBtnText}>
+                        Resubmit & Fix Requirements
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Card Footer: Fee Pill & Track Action */}
+              <View style={styles.cardFooter}>
+                <View style={styles.feeRow}>
+                  <Text style={styles.feeLabel}>
+                    {claimed ? 'Claimed Fee:' : 'Document Fee:'}
+                  </Text>
+                  <View
+                    style={[
+                      styles.feeBadge,
+                      feeDisplay === 'FREE' ? styles.feeBadgeFree : styles.feeBadgePaid,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.feeBadgeText,
+                        feeDisplay === 'FREE'
+                          ? styles.feeBadgeTextFree
+                          : styles.feeBadgeTextPaid,
+                      ]}
+                    >
+                      {feeDisplay}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.trackActionBtn}>
+                  <Text style={styles.trackActionText}>
+                    {claimed
+                      ? 'Release Details'
+                      : isDeclined
+                      ? 'Decline Details'
+                      : isCancelled
+                      ? 'View Details'
+                      : isApproved
+                      ? 'View Claim Pass'
+                      : 'Track Progress'}
+                  </Text>
+                  <ArrowRight size={14} color="#2563eb" />
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        })
+      ) : (
+        <EmptyState
+          icon={activeTab === 'active' ? 'requests' : 'history'}
+          title={
+            activeTab === 'active'
+              ? 'No Active Document Requests'
+              : 'No Previous Request History'
+          }
+          description={
+            activeTab === 'active'
+              ? 'You do not have any pending or in-progress applications. You can file a new barangay clearance or certificate anytime.'
+              : 'Your completed or previous document requests will be archived and shown here for future reference.'
+          }
+          actionLabel={activeTab === 'active' ? 'File Document Request' : undefined}
+          onAction={activeTab === 'active' ? onRequestNew : undefined}
+        />
+      )}
+
+      {/* Global Developer & Institution Footer */}
+      <GlobalFooter />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f4f7fb',
   },
-  header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    padding: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 110,
+  },
+
+  /* Hero & Summary Card */
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    elevation: 2,
+    marginBottom: 16,
   },
-  titleRow: {
+  heroTopRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    gap: 10,
   },
-  title: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -0.3,
+  heroTitleCol: {
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 11.5,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  newBtn: {
+  heroPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#1d4ed8',
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  heroPillText: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.6,
+  },
+  heroTitle: {
+    fontFamily: 'Inter',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.4,
+  },
+  heroSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  newRequestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#2563eb',
     paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 2,
   },
-  newBtnText: {
+  newRequestBtnText: {
+    fontFamily: 'Inter',
     fontSize: 11.5,
     fontWeight: '800',
     color: '#ffffff',
   },
-  tabSwitcher: {
+
+  /* 4-Column Summary Strip */
+  summaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#eef2f6',
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  summaryLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#e2e8f0',
+  },
+
+  /* Segmented Switcher */
+  segmentedBar: {
     flexDirection: 'row',
     backgroundColor: '#f1f5f9',
-    borderRadius: 12,
+    borderRadius: 13,
     padding: 4,
-    marginBottom: 12,
+    marginTop: 14,
   },
-  switchTab: {
+  segmentBtn: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 9,
+    justifyContent: 'center',
+    borderRadius: 10,
   },
-  switchTabActive: {
+  segmentBtnActive: {
     backgroundColor: '#ffffff',
     shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
     elevation: 2,
   },
-  switchTabText: {
+  segmentBtnText: {
+    fontFamily: 'Inter',
     fontSize: 12,
     fontWeight: '600',
     color: '#64748b',
   },
-  switchTabTextActive: {
+  segmentBtnTextActive: {
     color: '#1d4ed8',
     fontWeight: '800',
   },
-  searchBar: {
+
+  /* Search Input */
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    borderRadius: 13,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    height: 42,
     gap: 8,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 10,
+    marginTop: 12,
   },
   searchInput: {
     flex: 1,
+    fontFamily: 'Inter',
     fontSize: 12.5,
     color: '#0f172a',
     padding: 0,
   },
+  clearSearchBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Filter Pills */
   filterScroll: {
-    flexDirection: 'row',
+    marginTop: 12,
+  },
+  filterScrollContent: {
+    gap: 8,
+    paddingRight: 4,
   },
   filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5.5,
-    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 6.5,
+    borderRadius: 999,
     backgroundColor: '#f8fafc',
-    marginRight: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   filterPillActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
   filterPillText: {
-    fontSize: 10.5,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#475569',
   },
   filterPillTextActive: {
     color: '#ffffff',
   },
-  scrollArea: {
-    flex: 1,
+  filterCountBubble: {
+    minWidth: 20,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 90,
+  filterCountBubbleActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
+  filterCountText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  filterCountTextActive: {
+    color: '#ffffff',
+  },
+
+  /* Results Section Header */
+  resultsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  resultsTitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  resultsCountMuted: {
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  resetFilterLink: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* Request Card */
   requestCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.95)',
+    borderColor: '#e2e8f0',
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
     shadowColor: '#0f172a',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
     elevation: 2,
   },
   requestCardReady: {
     borderColor: '#86efac',
     borderWidth: 1.5,
-    shadowColor: '#16a34a',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
   },
-  requestCardClaimed: {
-    borderColor: '#bbf7d0',
-    borderWidth: 1.5,
-    backgroundColor: '#f0fdf4',
-  },
-  requestCardRejected: {
-    borderColor: '#fca5a5',
+  requestCardDeclined: {
+    borderColor: '#fecaca',
   },
   requestCardCancelled: {
-    borderColor: '#cbd5e1',
     backgroundColor: '#f8fafc',
-    opacity: 0.9,
+    borderColor: '#cbd5e1',
   },
-  cardHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
+    gap: 12,
+  },
+  cardIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  cardTitleCol: {
+    flex: 1,
   },
   cardDocTitle: {
+    fontFamily: 'Inter',
     fontSize: 15,
     fontWeight: '800',
     color: '#0f172a',
   },
-  cardTrackingNo: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  trackingCodeText: {
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
-  cardPurpose: {
-    fontSize: 12,
-    color: '#475569',
-    marginBottom: 10,
-    lineHeight: 16,
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    padding: 8,
-    borderRadius: 8,
-    gap: 12,
-    marginBottom: 10,
-  },
-  scheduleItem: {
+  refMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  scheduleLabel: {
-    fontSize: 11,
-    color: '#64748b',
-  },
-  scheduleVal: {
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  readyHighlightBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
-    backgroundColor: '#dcfce7',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 10,
+    marginTop: 4,
   },
-  readyHighlightText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803d',
-    flex: 1,
-  },
-  claimedHighlightBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#dcfce7',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-  claimedHighlightText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803d',
-    flex: 1,
-  },
-  cancelledHighlightBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f1f5f9',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  cancelledHighlightText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748b',
-    flex: 1,
-  },
-  rejectedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fee2e2',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  rejectedBannerText: {
-    fontSize: 11,
-    color: '#b91c1c',
-    fontWeight: '600',
-    flex: 1,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  feeText: {
-    fontSize: 11,
-    color: '#64748b',
-  },
-  feeValue: {
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  viewDetailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  viewDetailsBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
-  declinedDetailedBox: {
-    backgroundColor: '#fff1f2',
-    borderWidth: 1.5,
-    borderColor: '#fecdd3',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    gap: 8,
-  },
-  declinedHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ffe4e6',
-  },
-  declinedBadgeTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#991b1b',
-  },
-  declinedStatusText: {
-    fontSize: 10,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-    color: '#b91c1c',
-    backgroundColor: '#fee2e2',
+  refCodeChip: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
   },
-  declinedDetailItem: {
-    gap: 2,
+  refCodeText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#1d4ed8',
   },
-  declinedFieldLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#7f1d1d',
-    textTransform: 'uppercase',
-  },
-  declinedFieldVal: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#991b1b',
-    lineHeight: 16,
-  },
-  declinedMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#ffe4e6',
-  },
-  declinedMetaText: {
-    fontSize: 10,
-    color: '#9f1239',
-  },
-  resubmitCardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#2563eb',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  resubmitCardBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  resubmittedBadgePill: {
+  resubmittedTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     backgroundColor: '#fef3c7',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#fde68a',
   },
-  resubmittedBadgePillText: {
-    fontSize: 9,
+  resubmittedTagText: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#92400e',
   },
-  resubmittedHighlightBanner: {
+  statusBadgeCol: {
+    alignItems: 'flex-end',
+  },
+
+  /* Purpose & Schedule Strip */
+  infoGridStrip: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#eef2f6',
+    gap: 8,
+  },
+  purposeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  },
+  infoLabel: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  infoValue: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  scheduleChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  scheduleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  scheduleChipText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+
+  /* Status Callout Banners */
+  readyCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#dcfce7',
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: 11,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  readyCalloutText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#15803d',
+    lineHeight: 16,
+  },
+  claimedCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: 11,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  claimedCalloutText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#047857',
+    lineHeight: 16,
+  },
+  cancelledCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  cancelledCalloutText: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  resubmittedCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#fef3c7',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginTop: 10,
     borderWidth: 1,
     borderColor: '#fde68a',
   },
-  resubmittedHighlightText: {
+  resubmittedCalloutText: {
+    flex: 1,
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
     color: '#92400e',
-    flex: 1,
+  },
+
+  /* Declined Compliance Box */
+  declinedBox: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 13,
+    padding: 12,
+    marginTop: 10,
+    gap: 6,
+  },
+  declinedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  declinedTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  declinedTitle: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991b1b',
+  },
+  declinedDateText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#be123c',
+  },
+  declinedReasonText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#881337',
+    lineHeight: 16,
+  },
+  declinedProcessorText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    color: '#9f1239',
+  },
+  declinedProcessorBold: {
+    fontWeight: '700',
+  },
+  resubmitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  resubmitBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+
+  /* Card Footer */
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  feeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  feeLabel: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  feeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  feeBadgeFree: {
+    backgroundColor: '#dcfce7',
+  },
+  feeBadgePaid: {
+    backgroundColor: '#eff6ff',
+  },
+  feeBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  feeBadgeTextFree: {
+    color: '#15803d',
+  },
+  feeBadgeTextPaid: {
+    color: '#1d4ed8',
+  },
+  trackActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  trackActionText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#2563eb',
   },
 });
-

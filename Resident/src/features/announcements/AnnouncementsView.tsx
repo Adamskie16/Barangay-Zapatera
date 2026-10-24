@@ -18,18 +18,19 @@ import {
   MapPin,
   User,
   X,
-  Share2,
-  Bookmark,
   ArrowRight,
   Info,
   MessageSquare,
   Send,
   CornerDownRight,
   ShieldCheck,
-  CheckCircle2,
   Trash2,
   Reply,
   Lock,
+  Sparkles,
+  Wrench,
+  Users,
+  Bell,
 } from 'lucide-react';
 import { BarangayAnnouncement, AnnouncementCategory, ResidentUser } from '../../types';
 import {
@@ -43,6 +44,7 @@ import {
 import ActionModal from '../../components/ActionModal';
 import GlobalFooter from '../../components/GlobalFooter';
 import { checkContentModeration } from '../../core/contentModerationService';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface AnnouncementsViewProps {
   announcements: BarangayAnnouncement[];
@@ -61,6 +63,8 @@ const CATEGORIES: ('All' | AnnouncementCategory)[] = [
   'Maintenance',
 ];
 
+const BULLETIN_CATEGORY_STORAGE_KEY = 'zapatera_resident_bulletins_category';
+
 export default function AnnouncementsView({
   announcements,
   selectedAnnouncement: initialSelected,
@@ -68,8 +72,33 @@ export default function AnnouncementsView({
   currentUser,
 }: AnnouncementsViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [activeModalItem, setActiveModalItem] = useState<BarangayAnnouncement | null>(initialSelected || null);
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem(BULLETIN_CATEGORY_STORAGE_KEY);
+        if (saved && CATEGORIES.includes(saved as any)) {
+          return saved;
+        }
+      }
+    } catch {}
+    return 'All';
+  });
+  const [activeModalItem, setActiveModalItem] = useState<BarangayAnnouncement | null>(
+    initialSelected || null
+  );
+
+  const handleSelectCategory = (cat: string) => {
+    setSelectedCategory(cat);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(BULLETIN_CATEGORY_STORAGE_KEY, cat);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
 
   // Comments state
   const [comments, setComments] = useState<BulletinComment[]>([]);
@@ -82,22 +111,33 @@ export default function AnnouncementsView({
 
   const commentInputRef = useRef<any>(null);
 
+  // Deduplicate announcements list once for consistent metrics and filtering
+  const uniqueAnnouncements = useMemo(() => {
+    const seen = new Set<string>();
+    return announcements.filter((ann) => {
+      if (!ann || !ann.id) return false;
+      if (seen.has(ann.id)) return false;
+      seen.add(ann.id);
+      return true;
+    });
+  }, [announcements]);
+
   // Load counts for all announcements
   useEffect(() => {
     let isMounted = true;
     const loadAllCounts = async () => {
       try {
-        const counts = await getBulletinCommentCounts(announcements.map((a) => a.id));
+        const counts = await getBulletinCommentCounts(uniqueAnnouncements.map((a) => a.id));
         if (isMounted) setCommentCounts(counts);
       } catch {}
     };
-    if (announcements.length > 0) {
+    if (uniqueAnnouncements.length > 0) {
       loadAllCounts();
     }
     return () => {
       isMounted = false;
     };
-  }, [announcements]);
+  }, [uniqueAnnouncements]);
 
   useEffect(() => {
     if (initialSelected) {
@@ -132,7 +172,6 @@ export default function AnnouncementsView({
 
     fetchCurrentComments();
 
-    // Subscribe to REAL TIME updates
     const unsubscribe = subscribeToBulletinComments(activeModalItem.id, () => {
       fetchCurrentComments();
     });
@@ -159,7 +198,6 @@ export default function AnnouncementsView({
       return;
     }
 
-    // AI Content Moderation: Check for foul / bad words in Cebuano, Tagalog, and English
     const modResult = checkContentModeration(commentInput.trim());
     if (!modResult.isClean) {
       setCommentModerationError(modResult.warningMessage);
@@ -219,7 +257,9 @@ export default function AnnouncementsView({
     setIsDeletingComment(true);
     try {
       await deleteBulletinComment(commentToDelete.id, activeModalItem.id);
-      setComments((prev) => prev.filter((c) => c.id !== commentToDelete.id && c.parent_id !== commentToDelete.id));
+      setComments((prev) =>
+        prev.filter((c) => c.id !== commentToDelete.id && c.parent_id !== commentToDelete.id)
+      );
       setCommentCounts((prev) => ({
         ...prev,
         [activeModalItem.id]: Math.max(0, (prev[activeModalItem.id] || 1) - 1),
@@ -232,25 +272,44 @@ export default function AnnouncementsView({
     }
   };
 
-  const filteredAnnouncements = useMemo(() => {
-    const seen = new Set<string>();
-    return announcements.filter((ann) => {
-      if (!ann || !ann.id) return false;
-      if (seen.has(ann.id)) return false;
-      seen.add(ann.id);
+  // Category Counts & Summary Metrics
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: uniqueAnnouncements.length };
+    CATEGORIES.forEach((cat) => {
+      if (cat !== 'All') {
+        counts[cat] = uniqueAnnouncements.filter((a) => a.category === cat).length;
+      }
+    });
+    return counts;
+  }, [uniqueAnnouncements]);
 
+  const emergencyCount = useMemo(
+    () =>
+      uniqueAnnouncements.filter((a) => a.is_emergency || a.category === 'Emergency').length,
+    [uniqueAnnouncements]
+  );
+
+  const totalCommentsCount = useMemo(
+    () => Object.values(commentCounts).reduce((sum, n) => sum + (n || 0), 0),
+    [commentCounts]
+  );
+
+  const filteredAnnouncements = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return uniqueAnnouncements.filter((ann) => {
       const title = (ann.title || '').toLowerCase();
       const desc = (ann.description || '').toLowerCase();
       const content = (ann.content || '').toLowerCase();
-      const q = searchQuery.toLowerCase().trim();
+      const loc = (ann.location || '').toLowerCase();
 
-      const matchesSearch = !q || title.includes(q) || desc.includes(q) || content.includes(q);
+      const matchesSearch =
+        !q || title.includes(q) || desc.includes(q) || content.includes(q) || loc.includes(q);
       const matchesCategory =
         selectedCategory === 'All' || ann.category === selectedCategory;
 
       return matchesSearch && matchesCategory;
     });
-  }, [announcements, searchQuery, selectedCategory]);
+  }, [uniqueAnnouncements, searchQuery, selectedCategory]);
 
   // Group comments into root comments and their replies
   const rootComments = comments.filter((c) => !c.parent_id);
@@ -278,179 +337,458 @@ export default function AnnouncementsView({
     }
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Barangay Bulletins & News</Text>
-        <Text style={styles.subtitle}>
-          Official public advisories, community programs, emergency notices, and schedule updates.
-        </Text>
+  const getBulletinVisual = (item: BarangayAnnouncement) => {
+    if (item.is_emergency || item.category === 'Emergency') {
+      return {
+        icon: <AlertTriangle size={20} color="#dc2626" />,
+        bg: '#fef2f2',
+        border: '#fecaca',
+        badgeBg: '#fee2e2',
+        badgeText: '#b91c1c',
+      };
+    }
+    if (item.category === 'Events') {
+      return {
+        icon: <Calendar size={20} color="#7c3aed" />,
+        bg: '#f5f3ff',
+        border: '#ddd6fe',
+        badgeBg: '#ede9fe',
+        badgeText: '#6d28d9',
+      };
+    }
+    if (item.category === 'Government Services') {
+      return {
+        icon: <ShieldCheck size={20} color="#059669" />,
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        badgeBg: '#d1fae5',
+        badgeText: '#047857',
+      };
+    }
+    if (item.category === 'Maintenance') {
+      return {
+        icon: <Wrench size={20} color="#d97706" />,
+        bg: '#fffbeb',
+        border: '#fde68a',
+        badgeBg: '#fef3c7',
+        badgeText: '#b45309',
+      };
+    }
+    if (item.category === 'Community') {
+      return {
+        icon: <Users size={20} color="#0284c7" />,
+        bg: '#f0f9ff',
+        border: '#bae6fd',
+        badgeBg: '#e0f2fe',
+        badgeText: '#0369a1',
+      };
+    }
+    return {
+      icon: <Megaphone size={20} color="#2563eb" />,
+      bg: '#eff6ff',
+      border: '#dbeafe',
+      badgeBg: '#dbeafe',
+      badgeText: '#1d4ed8',
+    };
+  };
 
-        <View style={styles.searchBar}>
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ================= 1. HERO & SUMMARY STRIP CARD ================= */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroTextCol}>
+            <View style={styles.heroPill}>
+              <Megaphone size={11} color="#2563eb" />
+              <Text style={styles.heroPillText}>PUBLIC INFORMATION DESK</Text>
+            </View>
+            <Text style={styles.heroTitle}>Barangay Bulletins</Text>
+            <Text style={styles.heroSubtitle}>
+              Official public advisories, community programs, emergency alerts, and schedule updates.
+            </Text>
+          </View>
+        </View>
+
+        {/* Compact 3-Column Metrics Strip */}
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{uniqueAnnouncements.length}</Text>
+            <Text style={styles.summaryLabel}>Total Bulletins</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#dc2626' }]}>{emergencyCount}</Text>
+            <Text style={styles.summaryLabel}>Emergency Alerts</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#2563eb' }]}>{totalCommentsCount}</Text>
+            <Text style={styles.summaryLabel}>Community Q&A</Text>
+          </View>
+        </View>
+
+        {/* Search Input */}
+        <View style={styles.searchBox}>
           <Search size={16} color="#64748b" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search bulletins, events, advisories..."
+            placeholder="Search bulletins, events, advisories, or venues..."
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearSearchBtn}
+              activeOpacity={0.7}
+            >
+              <X size={14} color="#64748b" />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        {/* Category Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryPill,
-                selectedCategory === cat && styles.categoryPillActive,
-                cat === 'Emergency' && styles.categoryPillEmergency,
-              ]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
+        {/* Category Filter Pills with Count Bubbles */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+          style={styles.categoryScroll}
+        >
+          {CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            const isEmergencyCat = cat === 'Emergency';
+            const count = categoryCounts[cat] ?? 0;
+
+            return (
+              <TouchableOpacity
+                key={cat}
                 style={[
-                  styles.categoryPillText,
-                  selectedCategory === cat && styles.categoryPillTextActive,
-                  cat === 'Emergency' && selectedCategory !== 'Emergency' && styles.categoryPillTextEmergency,
+                  styles.categoryPill,
+                  isEmergencyCat && !isSelected && styles.categoryPillEmergency,
+                  isSelected &&
+                    (isEmergencyCat
+                      ? styles.categoryPillEmergencyActive
+                      : styles.categoryPillActive),
                 ]}
+                onPress={() => handleSelectCategory(cat)}
+                activeOpacity={0.75}
               >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    isEmergencyCat && !isSelected && styles.categoryPillTextEmergency,
+                    isSelected && styles.categoryPillTextActive,
+                  ]}
+                >
+                  {cat}
+                </Text>
+                <View
+                  style={[
+                    styles.categoryCountBubble,
+                    isEmergencyCat && !isSelected && styles.categoryCountBubbleEmergency,
+                    isSelected && styles.categoryCountBubbleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryCountText,
+                      isEmergencyCat && !isSelected && styles.categoryCountTextEmergency,
+                      isSelected && styles.categoryCountTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Main Bulletins Feed */}
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
-        {filteredAnnouncements.map((item, index) => {
+      {/* ================= 2. RESULTS HEADER ================= */}
+      <View style={styles.resultsHeaderRow}>
+        <Text style={styles.resultsTitle}>
+          {selectedCategory === 'All'
+            ? 'All Official Bulletins'
+            : `${selectedCategory} Bulletins`}{' '}
+          <Text style={styles.resultsCountMuted}>({filteredAnnouncements.length})</Text>
+        </Text>
+
+        {(selectedCategory !== 'All' || searchQuery.trim() !== '') && (
+          <TouchableOpacity
+            onPress={() => {
+              handleSelectCategory('All');
+              setSearchQuery('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.resetFilterLink}>Reset filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ================= 3. ORGANIZED BULLETIN CARDS ================= */}
+      {filteredAnnouncements.length > 0 ? (
+        filteredAnnouncements.map((item, index) => {
           const itemCommentCount = commentCounts[item.id] || 0;
+          const visual = getBulletinVisual(item);
+          const isEmergency = item.is_emergency || item.category === 'Emergency';
+
           return (
             <TouchableOpacity
               key={`${item.id}-${index}`}
               style={[
-                styles.card,
-                item.is_emergency && styles.cardEmergency,
-                item.is_important && !item.is_emergency && styles.cardImportant,
+                styles.bulletinCard,
+                isEmergency && styles.bulletinCardEmergency,
               ]}
               activeOpacity={0.88}
               onPress={() => setActiveModalItem(item)}
             >
+              {/* Optional Banner Image */}
               {item.banner_url ? (
-                <Image source={{ uri: item.banner_url }} style={styles.cardImage} />
+                <View style={styles.bannerImageWrap}>
+                  <Image source={{ uri: item.banner_url }} style={styles.cardImage} />
+                </View>
               ) : null}
 
               <View style={styles.cardBody}>
-                <View style={styles.cardMetaRow}>
+                {/* Card Top Header: Icon Box + Badges + Date */}
+                <View style={styles.cardTopRow}>
                   <View
                     style={[
-                      styles.categoryBadge,
-                      item.is_emergency && styles.categoryBadgeEmergency,
+                      styles.cardIconBox,
+                      { backgroundColor: visual.bg, borderColor: visual.border },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.categoryBadgeText,
-                        item.is_emergency && styles.categoryBadgeTextEmergency,
-                      ]}
-                    >
-                      {item.category.toUpperCase()}
+                    {visual.icon}
+                  </View>
+
+                  <View style={styles.cardHeaderMain}>
+                    <View style={styles.badgesAndDateRow}>
+                      <View style={styles.badgesGroup}>
+                        <View
+                          style={[
+                            styles.categoryBadge,
+                            { backgroundColor: visual.badgeBg },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.categoryBadgeText,
+                              { color: visual.badgeText },
+                            ]}
+                          >
+                            {item.category.toUpperCase()}
+                          </Text>
+                        </View>
+
+                        {isEmergency ? (
+                          <View style={styles.urgentBadge}>
+                            <AlertTriangle size={10} color="#ffffff" />
+                            <Text style={styles.urgentBadgeText}>URGENT</Text>
+                          </View>
+                        ) : item.is_important ? (
+                          <View style={styles.importantBadge}>
+                            <Sparkles size={10} color="#1d4ed8" />
+                            <Text style={styles.importantBadgeText}>PRIORITY</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.dateChip}>
+                        <Calendar size={11} color="#64748b" />
+                        <Text style={styles.cardDate}>{item.date}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.cardTitle} numberOfLines={2}>
+                      {item.title}
                     </Text>
                   </View>
-                  <Text style={styles.cardDate}>{item.date}</Text>
                 </View>
 
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardDesc} numberOfLines={3}>{item.description}</Text>
+                {/* Description */}
+                <Text style={styles.cardDesc} numberOfLines={3}>
+                  {item.description}
+                </Text>
 
+                {/* Structured Meta Strip (Venue / Issued By) */}
+                {(item.location || item.author) ? (
+                  <View style={styles.metaStrip}>
+                    {item.location ? (
+                      <View style={styles.metaStripItem}>
+                        <MapPin size={12} color="#2563eb" />
+                        <Text style={styles.metaStripText} numberOfLines={1}>
+                          {item.location}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {item.author ? (
+                      <View style={styles.metaStripItem}>
+                        <User size={12} color="#64748b" />
+                        <Text style={styles.metaStripTextMuted} numberOfLines={1}>
+                          {item.author}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* Footer Action Row */}
                 <View style={styles.cardFooter}>
-                  {item.location ? (
-                    <View style={styles.locationRow}>
-                      <MapPin size={12} color="#64748b" />
-                      <Text style={styles.locationText} numberOfLines={1}>{item.location}</Text>
-                    </View>
-                  ) : <View />}
+                  <View style={styles.commentCountPill}>
+                    <MessageSquare size={12} color="#2563eb" />
+                    <Text style={styles.commentCountText}>
+                      {itemCommentCount}{' '}
+                      {itemCommentCount === 1 ? 'Comment / Q&A' : 'Comments / Q&A'}
+                    </Text>
+                  </View>
 
-                  <View style={styles.cardActionsRight}>
-                    {/* Real-time comment pill */}
-                    <View style={styles.commentCountPill}>
-                      <MessageSquare size={12} color="#2563eb" />
-                      <Text style={styles.commentCountText}>
-                        {itemCommentCount} {itemCommentCount === 1 ? 'comment' : 'comments'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.readMoreRow}>
-                      <Text style={styles.readMoreText}>Read</Text>
-                      <ArrowRight size={12} color="#1d4ed8" />
-                    </View>
+                  <View style={styles.readMoreBtn}>
+                    <Text style={styles.readMoreText}>Read Bulletin</Text>
+                    <ArrowRight size={13} color="#2563eb" />
                   </View>
                 </View>
               </View>
             </TouchableOpacity>
           );
-        })}
-
-        {filteredAnnouncements.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Megaphone size={36} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No announcements found</Text>
-            <Text style={styles.emptySubtitle}>
-              Try searching with another keyword or selecting "All" categories.
-            </Text>
+        })
+      ) : (
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconCircle}>
+            <Megaphone size={26} color="#64748b" />
           </View>
-        ) : null}
+          <Text style={styles.emptyTitle}>No Bulletins Found</Text>
+          <Text style={styles.emptySubtitle}>
+            No official advisories match your current search or category filter.
+          </Text>
+          {(selectedCategory !== 'All' || searchQuery.trim() !== '') && (
+            <TouchableOpacity
+              style={styles.emptyResetBtn}
+              onPress={() => {
+                handleSelectCategory('All');
+                setSearchQuery('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.emptyResetBtnText}>Show All Bulletins</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
-        {/* Global Developer & Institution Footer */}
-        <GlobalFooter />
-      </ScrollView>
+      {/* Global Developer & Institution Footer */}
+      <GlobalFooter />
 
-      {/* Full Announcement Reader & Real-Time Comments Modal */}
+      {/* ================= FULL BULLETIN READER & REAL-TIME Q&A MODAL ================= */}
       {activeModalItem ? (
-        <Modal visible={true} animationType="slide" transparent onRequestClose={handleCloseModal}>
+        <Modal visible={true} animationType="fade" transparent onRequestClose={handleCloseModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               {/* Modal Header */}
               <View style={styles.modalHeader}>
-                <View style={styles.modalCategoryBadge}>
-                  <Text style={styles.modalCategoryText}>{activeModalItem.category.toUpperCase()}</Text>
+                <View style={styles.modalHeaderLeft}>
+                  <View
+                    style={[
+                      styles.modalHeaderIconBox,
+                      (activeModalItem.is_emergency ||
+                        activeModalItem.category === 'Emergency') &&
+                        styles.modalHeaderIconBoxEmergency,
+                    ]}
+                  >
+                    {activeModalItem.is_emergency ||
+                    activeModalItem.category === 'Emergency' ? (
+                      <AlertTriangle size={18} color="#dc2626" />
+                    ) : (
+                      <Megaphone size={18} color="#2563eb" />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View
+                        style={[
+                          styles.modalCategoryBadge,
+                          (activeModalItem.is_emergency ||
+                            activeModalItem.category === 'Emergency') &&
+                            styles.modalCategoryBadgeEmergency,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.modalCategoryText,
+                            (activeModalItem.is_emergency ||
+                              activeModalItem.category === 'Emergency') &&
+                              styles.modalCategoryTextEmergency,
+                          ]}
+                        >
+                          {activeModalItem.category.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={styles.modalHeaderSub}>{activeModalItem.date}</Text>
+                    </View>
+                    <Text style={styles.modalHeaderLabel} numberOfLines={1}>
+                      Official Barangay Bulletin
+                    </Text>
+                  </View>
                 </View>
-                <TouchableOpacity onPress={handleCloseModal} style={styles.modalCloseBtn}>
-                  <X size={20} color="#64748b" />
+
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={styles.modalCloseBtn}
+                  activeOpacity={0.7}
+                >
+                  <X size={18} color="#475569" />
                 </TouchableOpacity>
               </View>
 
               {/* Scrollable Content + Discussion */}
               <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                 {activeModalItem.banner_url ? (
-                  <Image source={{ uri: activeModalItem.banner_url }} style={styles.modalBanner} />
+                  <Image
+                    source={{ uri: activeModalItem.banner_url }}
+                    style={styles.modalBanner}
+                  />
                 ) : null}
 
                 <Text style={styles.modalTitleText}>{activeModalItem.title}</Text>
 
+                {/* Structured Metadata Card */}
                 <View style={styles.modalMetaCard}>
                   <View style={styles.modalMetaItem}>
-                    <Calendar size={13} color="#64748b" />
-                    <Text style={styles.modalMetaLabel}>Date: <Text style={styles.modalMetaVal}>{activeModalItem.date}</Text></Text>
+                    <Calendar size={14} color="#2563eb" />
+                    <Text style={styles.modalMetaLabel}>
+                      Published: <Text style={styles.modalMetaVal}>{activeModalItem.date}</Text>
+                    </Text>
                   </View>
                   {activeModalItem.location ? (
                     <View style={styles.modalMetaItem}>
-                      <MapPin size={13} color="#64748b" />
-                      <Text style={styles.modalMetaLabel}>Venue: <Text style={styles.modalMetaVal}>{activeModalItem.location}</Text></Text>
+                      <MapPin size={14} color="#2563eb" />
+                      <Text style={styles.modalMetaLabel}>
+                        Venue: <Text style={styles.modalMetaVal}>{activeModalItem.location}</Text>
+                      </Text>
                     </View>
                   ) : null}
                   {activeModalItem.author ? (
                     <View style={styles.modalMetaItem}>
-                      <User size={13} color="#64748b" />
-                      <Text style={styles.modalMetaLabel}>Issued by: <Text style={styles.modalMetaVal}>{activeModalItem.author}</Text></Text>
+                      <User size={14} color="#2563eb" />
+                      <Text style={styles.modalMetaLabel}>
+                        Issued By: <Text style={styles.modalMetaVal}>{activeModalItem.author}</Text>
+                      </Text>
                     </View>
                   ) : null}
                 </View>
 
-                <Text style={styles.modalContentText}>{activeModalItem.content}</Text>
+                {/* Full Announcement Text */}
+                <View style={styles.modalArticleBox}>
+                  <Text style={styles.modalContentText}>
+                    {activeModalItem.content || activeModalItem.description}
+                  </Text>
+                </View>
 
                 {/* Section Divider */}
                 <View style={styles.discussionDivider} />
@@ -458,7 +796,7 @@ export default function AnnouncementsView({
                 {/* Community Comments & Official Replies Header */}
                 <View style={styles.discussionHeader}>
                   <View style={styles.discussionTitleRow}>
-                    <MessageSquare size={18} color="#1d4ed8" />
+                    <MessageSquare size={16} color="#2563eb" />
                     <Text style={styles.discussionTitle}>
                       Community Discussion & Official Q&A
                     </Text>
@@ -467,7 +805,7 @@ export default function AnnouncementsView({
                     </View>
                   </View>
                   <Text style={styles.discussionSubtitle}>
-                    Residents can ask questions or post remarks. SuperAdmin & Admin can reply directly with official notices.
+                    Ask a question or post a remark below. Barangay Officials respond directly with verified updates.
                   </Text>
                 </View>
 
@@ -482,184 +820,222 @@ export default function AnnouncementsView({
                 {/* Empty State */}
                 {!loadingComments && comments.length === 0 ? (
                   <View style={styles.commentsEmptyCard}>
-                    <MessageSquare size={28} color="#94a3b8" />
+                    <MessageSquare size={26} color="#94a3b8" />
                     <Text style={styles.commentsEmptyTitle}>No inquiries or comments yet</Text>
                     <Text style={styles.commentsEmptySubtitle}>
-                      Have a question regarding this announcement? Ask below and Barangay Officials will reply in real time.
+                      Have a question regarding this bulletin? Ask below and Barangay Officials will reply in real time.
                     </Text>
                   </View>
                 ) : null}
 
                 {/* Comments List */}
-                {!loadingComments ? rootComments.map((comment, commentIdx) => {
-                  const replies = repliesByParent[comment.id] || [];
-                  const isAuthor =
-                    currentUser?.id &&
-                    (comment.author_id === currentUser.id ||
-                      currentUser.role === 'admin' ||
-                      currentUser.role === 'super_admin');
-                  const isOfficial = comment.is_official_response || comment.author_role === 'admin' || comment.author_role === 'super_admin';
+                {!loadingComments
+                  ? rootComments.map((comment, commentIdx) => {
+                      const replies = repliesByParent[comment.id] || [];
+                      const isAuthor =
+                        currentUser?.id &&
+                        (comment.author_id === currentUser.id ||
+                          currentUser.role === 'admin' ||
+                          currentUser.role === 'super_admin');
+                      const isOfficial =
+                        comment.is_official_response ||
+                        comment.author_role === 'admin' ||
+                        comment.author_role === 'super_admin';
 
-                  return (
-                    <View key={`${comment.id}-${commentIdx}`} style={styles.commentItemWrapper}>
-                      {/* Root Comment Box */}
-                      <View style={[styles.commentBubble, isOfficial && styles.commentBubbleOfficial]}>
-                        <View style={styles.commentHeaderRow}>
-                          <View style={styles.commentAuthorRow}>
-                            <View style={[styles.avatarCircle, isOfficial && styles.avatarCircleOfficial]}>
-                              {isOfficial ? (
-                                <ShieldCheck size={14} color="#ffffff" />
-                              ) : (
-                                <Text style={styles.avatarInitials}>
-                                  {comment.author_name.charAt(0).toUpperCase()}
-                                </Text>
-                              )}
-                            </View>
-
-                            <View>
-                              <View style={styles.nameBadgeRow}>
-                                <Text style={styles.commentAuthorName}>{comment.author_name}</Text>
-                                {isOfficial ? (
-                                  <View style={styles.officialBadge}>
-                                    <ShieldCheck size={10} color="#1d4ed8" />
-                                    <Text style={styles.officialBadgeText}>
-                                      {comment.author_role === 'super_admin' ? 'Super Admin' : 'Barangay Official'}
-                                    </Text>
-                                  </View>
-                                ) : null}
-                              </View>
-                              <Text style={styles.commentTime}>{formatCommentTime(comment.created_at)}</Text>
-                            </View>
-                          </View>
-
-                          {/* Delete Button for Author / Admin */}
-                          {Boolean(isAuthor) ? (
-                            <TouchableOpacity
-                              onPress={() => promptDeleteComment(comment)}
-                              style={styles.commentDeleteBtn}
-                            >
-                              <Trash2 size={13} color="#ef4444" />
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
-
-                        <Text style={styles.commentBodyText}>{comment.content}</Text>
-
-                        {/* Reply Button */}
-                        <View style={styles.commentActionRow}>
-                          <TouchableOpacity
-                            style={styles.replyBtn}
-                            onPress={() => {
-                              setReplyingTo(comment);
-                              commentInputRef.current?.focus();
-                            }}
+                      return (
+                        <View
+                          key={`${comment.id}-${commentIdx}`}
+                          style={styles.commentItemWrapper}
+                        >
+                          {/* Root Comment Box */}
+                          <View
+                            style={[
+                              styles.commentBubble,
+                              isOfficial && styles.commentBubbleOfficial,
+                            ]}
                           >
-                            <Reply size={12} color="#1d4ed8" />
-                            <Text style={styles.replyBtnText}>Reply</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      {/* Nested Replies */}
-                      {replies.map((reply, replyIdx) => {
-                        const isReplyOfficial =
-                          reply.is_official_response ||
-                          reply.author_role === 'admin' ||
-                          reply.author_role === 'super_admin';
-                        const isReplyAuthor =
-                          currentUser?.id &&
-                          (reply.author_id === currentUser.id ||
-                            currentUser.role === 'admin' ||
-                            currentUser.role === 'super_admin');
-
-                        return (
-                          <View key={`${reply.id}-${replyIdx}`} style={styles.replyItemWrapper}>
-                            <CornerDownRight size={14} color="#94a3b8" style={styles.replyCornerIcon} />
-                            <View
-                              style={[
-                                styles.replyBubble,
-                                isReplyOfficial && styles.replyBubbleOfficial,
-                              ]}
-                            >
-                              <View style={styles.commentHeaderRow}>
-                                <View style={styles.commentAuthorRow}>
-                                  <View
-                                    style={[
-                                      styles.avatarCircleSmall,
-                                      isReplyOfficial && styles.avatarCircleOfficial,
-                                    ]}
-                                  >
-                                    {isReplyOfficial ? (
-                                      <ShieldCheck size={12} color="#ffffff" />
-                                    ) : (
-                                      <Text style={styles.avatarInitialsSmall}>
-                                        {reply.author_name.charAt(0).toUpperCase()}
-                                      </Text>
-                                    )}
-                                  </View>
-
-                                  <View>
-                                    <View style={styles.nameBadgeRow}>
-                                      <Text style={styles.commentAuthorName}>{reply.author_name}</Text>
-                                      {isReplyOfficial ? (
-                                        <View style={styles.officialBadge}>
-                                          <ShieldCheck size={9} color="#1d4ed8" />
-                                          <Text style={styles.officialBadgeText}>
-                                            {reply.author_role === 'super_admin'
-                                              ? 'Official Response'
-                                              : 'Barangay Official'}
-                                          </Text>
-                                        </View>
-                                      ) : null}
-                                    </View>
-                                    <Text style={styles.commentTime}>{formatCommentTime(reply.created_at)}</Text>
-                                  </View>
+                            <View style={styles.commentHeaderRow}>
+                              <View style={styles.commentAuthorRow}>
+                                <View
+                                  style={[
+                                    styles.avatarCircle,
+                                    isOfficial && styles.avatarCircleOfficial,
+                                  ]}
+                                >
+                                  {isOfficial ? (
+                                    <ShieldCheck size={14} color="#ffffff" />
+                                  ) : (
+                                    <Text style={styles.avatarInitials}>
+                                      {comment.author_name.charAt(0).toUpperCase()}
+                                    </Text>
+                                  )}
                                 </View>
 
-                                {Boolean(isReplyAuthor) ? (
-                                  <TouchableOpacity
-                                    onPress={() => promptDeleteComment(reply)}
-                                    style={styles.commentDeleteBtn}
-                                  >
-                                    <Trash2 size={12} color="#ef4444" />
-                                  </TouchableOpacity>
-                                ) : null}
+                                <View>
+                                  <View style={styles.nameBadgeRow}>
+                                    <Text style={styles.commentAuthorName}>
+                                      {comment.author_name}
+                                    </Text>
+                                    {isOfficial ? (
+                                      <View style={styles.officialBadge}>
+                                        <ShieldCheck size={10} color="#1d4ed8" />
+                                        <Text style={styles.officialBadgeText}>
+                                          {comment.author_role === 'super_admin'
+                                            ? 'Super Admin'
+                                            : 'Barangay Official'}
+                                        </Text>
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                  <Text style={styles.commentTime}>
+                                    {formatCommentTime(comment.created_at)}
+                                  </Text>
+                                </View>
                               </View>
 
-                              {reply.reply_to_name ? (
-                                <Text style={styles.replyingToTag}>
-                                  Replying to <Text style={styles.replyingToTarget}>@{reply.reply_to_name}</Text>
-                                </Text>
+                              {Boolean(isAuthor) ? (
+                                <TouchableOpacity
+                                  onPress={() => promptDeleteComment(comment)}
+                                  style={styles.commentDeleteBtn}
+                                >
+                                  <Trash2 size={13} color="#ef4444" />
+                                </TouchableOpacity>
                               ) : null}
+                            </View>
 
-                              <Text style={styles.commentBodyText}>{reply.content}</Text>
+                            <Text style={styles.commentBodyText}>{comment.content}</Text>
+
+                            <View style={styles.commentActionRow}>
+                              <TouchableOpacity
+                                style={styles.replyBtn}
+                                onPress={() => {
+                                  setReplyingTo(comment);
+                                  commentInputRef.current?.focus();
+                                }}
+                              >
+                                <Reply size={12} color="#2563eb" />
+                                <Text style={styles.replyBtnText}>Reply</Text>
+                              </TouchableOpacity>
                             </View>
                           </View>
-                        );
-                      })}
-                    </View>
-                  );
-                }) : null}
+
+                          {/* Nested Replies */}
+                          {replies.map((reply, replyIdx) => {
+                            const isReplyOfficial =
+                              reply.is_official_response ||
+                              reply.author_role === 'admin' ||
+                              reply.author_role === 'super_admin';
+                            const isReplyAuthor =
+                              currentUser?.id &&
+                              (reply.author_id === currentUser.id ||
+                                currentUser.role === 'admin' ||
+                                currentUser.role === 'super_admin');
+
+                            return (
+                              <View
+                                key={`${reply.id}-${replyIdx}`}
+                                style={styles.replyItemWrapper}
+                              >
+                                <CornerDownRight
+                                  size={14}
+                                  color="#94a3b8"
+                                  style={styles.replyCornerIcon}
+                                />
+                                <View
+                                  style={[
+                                    styles.replyBubble,
+                                    isReplyOfficial && styles.replyBubbleOfficial,
+                                  ]}
+                                >
+                                  <View style={styles.commentHeaderRow}>
+                                    <View style={styles.commentAuthorRow}>
+                                      <View
+                                        style={[
+                                          styles.avatarCircleSmall,
+                                          isReplyOfficial && styles.avatarCircleOfficial,
+                                        ]}
+                                      >
+                                        {isReplyOfficial ? (
+                                          <ShieldCheck size={12} color="#ffffff" />
+                                        ) : (
+                                          <Text style={styles.avatarInitialsSmall}>
+                                            {reply.author_name.charAt(0).toUpperCase()}
+                                          </Text>
+                                        )}
+                                      </View>
+
+                                      <View>
+                                        <View style={styles.nameBadgeRow}>
+                                          <Text style={styles.commentAuthorName}>
+                                            {reply.author_name}
+                                          </Text>
+                                          {isReplyOfficial ? (
+                                            <View style={styles.officialBadge}>
+                                              <ShieldCheck size={9} color="#1d4ed8" />
+                                              <Text style={styles.officialBadgeText}>
+                                                {reply.author_role === 'super_admin'
+                                                  ? 'Official Response'
+                                                  : 'Barangay Official'}
+                                              </Text>
+                                            </View>
+                                          ) : null}
+                                        </View>
+                                        <Text style={styles.commentTime}>
+                                          {formatCommentTime(reply.created_at)}
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {Boolean(isReplyAuthor) ? (
+                                      <TouchableOpacity
+                                        onPress={() => promptDeleteComment(reply)}
+                                        style={styles.commentDeleteBtn}
+                                      >
+                                        <Trash2 size={12} color="#ef4444" />
+                                      </TouchableOpacity>
+                                    ) : null}
+                                  </View>
+
+                                  {reply.reply_to_name ? (
+                                    <Text style={styles.replyingToTag}>
+                                      Replying to{' '}
+                                      <Text style={styles.replyingToTarget}>
+                                        @{reply.reply_to_name}
+                                      </Text>
+                                    </Text>
+                                  ) : null}
+
+                                  <Text style={styles.commentBodyText}>{reply.content}</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
+                    })
+                  : null}
               </ScrollView>
 
               {/* Bottom Interactive Comment Composer Bar */}
               <View style={styles.modalInputSection}>
-                {/* Active Reply Banner */}
                 {replyingTo ? (
                   <View style={styles.replyBanner}>
                     <View style={styles.replyBannerLeft}>
                       <CornerDownRight size={13} color="#1d4ed8" />
                       <Text style={styles.replyBannerText}>
-                        Replying to <Text style={styles.replyBannerName}>{replyingTo.author_name}</Text>
+                        Replying to{' '}
+                        <Text style={styles.replyBannerName}>{replyingTo.author_name}</Text>
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyBannerClose}>
+                    <TouchableOpacity
+                      onPress={() => setReplyingTo(null)}
+                      style={styles.replyBannerClose}
+                    >
                       <X size={14} color="#64748b" />
                     </TouchableOpacity>
                   </View>
                 ) : null}
 
-                {/* AI Content Moderation Warning Banner */}
                 {commentModerationError ? (
                   <View style={styles.moderationAlertBox}>
                     <AlertTriangle size={15} color="#b91c1c" />
@@ -690,7 +1066,8 @@ export default function AnnouncementsView({
                     <TouchableOpacity
                       style={[
                         styles.sendCommentBtn,
-                        (!commentInput.trim() || isSubmittingComment) && styles.sendCommentBtnDisabled,
+                        (!commentInput.trim() || isSubmittingComment) &&
+                          styles.sendCommentBtnDisabled,
                       ]}
                       onPress={handlePostComment}
                       disabled={!commentInput.trim() || isSubmittingComment}
@@ -715,7 +1092,11 @@ export default function AnnouncementsView({
 
               {/* Footer */}
               <View style={styles.modalFooter}>
-                <TouchableOpacity style={styles.closeFullBtn} onPress={handleCloseModal}>
+                <TouchableOpacity
+                  style={styles.closeFullBtn}
+                  onPress={handleCloseModal}
+                  activeOpacity={0.8}
+                >
                   <Text style={styles.closeFullBtnText}>Close Bulletin</Text>
                 </TouchableOpacity>
               </View>
@@ -733,7 +1114,14 @@ export default function AnnouncementsView({
         message={
           commentToDelete ? (
             <View style={{ gap: 12, width: '100%' }}>
-              <Text style={{ fontSize: 13, color: '#475569', lineHeight: 19, textAlign: 'center' }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: '#475569',
+                  lineHeight: 19,
+                  textAlign: 'center',
+                }}
+              >
                 Are you sure you want to permanently delete this comment?
               </Text>
 
@@ -748,7 +1136,14 @@ export default function AnnouncementsView({
                   borderLeftColor: '#ef4444',
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginBottom: 4,
+                  }}
+                >
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
                     {commentToDelete.author_name}
                   </Text>
@@ -759,14 +1154,26 @@ export default function AnnouncementsView({
                   ) : null}
                 </View>
                 <Text
-                  style={{ fontSize: 12, color: '#334155', fontStyle: 'italic', lineHeight: 18 }}
+                  style={{
+                    fontSize: 12,
+                    color: '#334155',
+                    fontStyle: 'italic',
+                    lineHeight: 18,
+                  }}
                   numberOfLines={4}
                 >
                   "{commentToDelete.content}"
                 </Text>
               </View>
 
-              <Text style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 16 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: '#94a3b8',
+                  textAlign: 'center',
+                  lineHeight: 16,
+                }}
+              >
                 This action cannot be undone. Any nested replies will also be permanently removed.
               </Text>
             </View>
@@ -782,7 +1189,7 @@ export default function AnnouncementsView({
           if (!isDeletingComment) setCommentToDelete(null);
         }}
       />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -791,228 +1198,454 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  header: {
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    padding: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 96,
   },
-  title: {
-    fontSize: 19,
+
+  /* ================= 1. HERO & SUMMARY STRIP CARD ================= */
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  heroTextCol: {
+    flex: 1,
+  },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    marginBottom: 6,
+  },
+  heroPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.6,
+  },
+  heroTitle: {
+    fontSize: 20,
     fontWeight: '900',
     color: '#0f172a',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
-  subtitle: {
-    fontSize: 11.5,
+  heroSubtitle: {
+    fontSize: 12,
     color: '#64748b',
-    marginTop: 2,
-    marginBottom: 12,
-    lineHeight: 16,
+    lineHeight: 17,
+    marginTop: 3,
   },
-  searchBar: {
+
+  /* Summary Metrics Strip */
+  summaryStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  summaryLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e2e8f0',
+  },
+
+  /* Search Input */
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    height: 40,
     gap: 8,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     fontSize: 12.5,
     color: '#0f172a',
     padding: 0,
+    outlineStyle: 'none' as any,
   },
+  clearSearchBtn: {
+    padding: 2,
+  },
+
+  /* Category Filter Pills */
   categoryScroll: {
     flexDirection: 'row',
   },
+  categoryScrollContent: {
+    gap: 6,
+    paddingRight: 4,
+  },
   categoryPill: {
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    borderRadius: 18,
+    borderRadius: 999,
     backgroundColor: '#f8fafc',
-    marginRight: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   categoryPillActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
   categoryPillEmergency: {
-    borderColor: '#fecdd3',
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
+  },
+  categoryPillEmergencyActive: {
+    backgroundColor: '#dc2626',
+    borderColor: '#dc2626',
   },
   categoryPillText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#475569',
+  },
+  categoryPillTextEmergency: {
+    color: '#b91c1c',
   },
   categoryPillTextActive: {
     color: '#ffffff',
   },
-  categoryPillTextEmergency: {
-    color: '#be123c',
+  categoryCountBubble: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
   },
-  scrollArea: {
-    flex: 1,
+  categoryCountBubbleEmergency: {
+    backgroundColor: '#fee2e2',
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 90,
+  categoryCountBubbleActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.95)',
-    overflow: 'hidden',
-    marginBottom: 14,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  categoryCountText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
   },
-  cardEmergency: {
-    borderColor: '#fecdd3',
-    borderWidth: 1.5,
+  categoryCountTextEmergency: {
+    color: '#b91c1c',
   },
-  cardImportant: {
-    borderColor: '#bfdbfe',
+  categoryCountTextActive: {
+    color: '#ffffff',
   },
-  cardImage: {
-    width: '100%',
-    height: 155,
-    backgroundColor: '#cbd5e1',
-  },
-  cardBody: {
-    padding: 16,
-  },
-  cardMetaRow: {
+
+  /* ================= 2. RESULTS HEADER ================= */
+  resultsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  resultsTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  resultsCountMuted: {
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  resetFilterLink: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* ================= 3. ORGANIZED BULLETIN CARDS ================= */
+  bulletinCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    marginBottom: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  bulletinCardEmergency: {
+    borderColor: '#fca5a5',
+    borderWidth: 1.5,
+  },
+  bannerImageWrap: {
+    width: '100%',
+    height: 148,
+    backgroundColor: '#e2e8f0',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardBody: {
+    padding: 15,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    marginBottom: 9,
+  },
+  cardIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHeaderMain: {
+    flex: 1,
+  },
+  badgesAndDateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  badgesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   categoryBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
-  },
-  categoryBadgeEmergency: {
-    backgroundColor: '#ffe4e6',
   },
   categoryBadgeText: {
     fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  urgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  urgentBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  importantBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  importantBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
     color: '#1d4ed8',
   },
-  categoryBadgeTextEmergency: {
-    color: '#be123c',
+  dateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   cardDate: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500',
+    fontSize: 10.5,
+    color: '#64748b',
+    fontWeight: '600',
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: '#0f172a',
-    lineHeight: 19,
-    marginBottom: 6,
+    lineHeight: 20,
   },
   cardDesc: {
     fontSize: 12,
+    color: '#475569',
+    lineHeight: 17.5,
+    marginBottom: 11,
+  },
+  metaStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 11,
+  },
+  metaStripItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaStripText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  metaStripTextMuted: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#64748b',
-    lineHeight: 16,
-    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flex: 1,
-    marginRight: 8,
-  },
-  locationText: {
-    fontSize: 11,
-    color: '#64748b',
-  },
-  cardActionsRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   commentCountPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: '#eff6ff',
     borderWidth: 1,
     borderColor: '#dbeafe',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   commentCountText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#2563eb',
   },
-  readMoreRow: {
+  readMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   readMoreText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
+    fontWeight: '800',
+    color: '#2563eb',
   },
-  emptyBox: {
+
+  /* Empty State */
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
+    marginBottom: 10,
   },
   emptyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 10,
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#1e293b',
   },
   emptySubtitle: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     textAlign: 'center',
     marginTop: 4,
-    maxWidth: 240,
+    maxWidth: 260,
+    lineHeight: 17,
   },
+  emptyResetBtn: {
+    marginTop: 12,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  emptyResetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  /* ================= MODAL STYLES ================= */
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -1025,12 +1658,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 520,
     maxHeight: '92%',
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
     elevation: 8,
     display: 'flex',
     flexDirection: 'column',
@@ -1040,23 +1673,68 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  modalHeaderIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderIconBoxEmergency: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
   },
   modalCategoryBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  modalCategoryBadgeEmergency: {
+    backgroundColor: '#fee2e2',
   },
   modalCategoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: '#1d4ed8',
   },
+  modalCategoryTextEmergency: {
+    color: '#b91c1c',
+  },
+  modalHeaderSub: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  modalHeaderLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 2,
+  },
   modalCloseBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
     padding: 16,
@@ -1064,45 +1742,48 @@ const styles = StyleSheet.create({
   },
   modalBanner: {
     width: '100%',
-    height: 180,
-    borderRadius: 12,
+    height: 175,
+    borderRadius: 14,
     marginBottom: 14,
     backgroundColor: '#cbd5e1',
   },
   modalTitleText: {
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0f172a',
     lineHeight: 23,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   modalMetaCard: {
     backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 6,
+    gap: 7,
   },
   modalMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
   modalMetaLabel: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748b',
   },
   modalMetaVal: {
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#0f172a',
+  },
+  modalArticleBox: {
+    backgroundColor: '#ffffff',
+    marginBottom: 8,
   },
   modalContentText: {
     fontSize: 13,
     color: '#334155',
     lineHeight: 20,
-    marginBottom: 10,
   },
   discussionDivider: {
     height: 1,
@@ -1280,9 +1961,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   replyBtnText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#1d4ed8',
+    color: '#2563eb',
   },
   replyItemWrapper: {
     flexDirection: 'row',
@@ -1321,7 +2002,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
   replyBanner: {
@@ -1378,7 +2059,7 @@ const styles = StyleSheet.create({
   },
   commentInput: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -1386,13 +2067,14 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     maxHeight: 70,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
+    outlineStyle: 'none' as any,
   },
   sendCommentBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1419,20 +2101,22 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f8fafc',
   },
   closeFullBtn: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   closeFullBtnText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
+    fontWeight: '800',
+    color: '#334155',
   },
 });

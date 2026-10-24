@@ -1,5 +1,5 @@
 // Resident/src/features/requests/RequestFlowModal.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,9 @@ import {
   Phone,
   Mail,
   Copy,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from 'lucide-react';
 import {
   DocumentType,
@@ -47,6 +50,7 @@ import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/stor
 import ActionModal from '../../components/ActionModal';
 import { analyzeDocumentImage } from '../../core/documentAiService';
 import { checkContentModeration } from '../../core/contentModerationService';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface RequestFlowModalProps {
   visible: boolean;
@@ -71,23 +75,37 @@ const COMMON_PURPOSES = [
   'Other Official Purpose',
 ];
 
+const STEP_META = [
+  { num: 1, short: 'Document', subtitle: 'Select Document & Purpose' },
+  { num: 2, short: 'Resident', subtitle: 'Verify Resident Profile & Residency' },
+  { num: 3, short: 'Uploads', subtitle: 'Attach Supporting Requirements' },
+  { num: 4, short: 'Schedule', subtitle: 'Choose Express Pickup Schedule' },
+  { num: 5, short: 'Review', subtitle: 'Final Review & Submission' },
+];
+
 export default function RequestFlowModal({
   visible,
   initialDoc,
   docTypes,
   currentUser,
   config,
-  showDocSelector = false,
   onClose,
   onRequestSubmitted,
   onTrackSubmittedRequest,
 }: RequestFlowModalProps) {
-  // Steps: 1: Document, 2: Resident Info, 3: Uploads, 4: Schedule, 5: Review, 6: Confirmation
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [selectedDocId, setSelectedDocId] = useState<string>(initialDoc?.id || docTypes[0]?.id || 'dt-001');
+  const [selectedDocId, setSelectedDocId] = useState<string>(
+    initialDoc?.id || docTypes[0]?.id || 'dt-001'
+  );
+  const [isDocDropdownOpen, setIsDocDropdownOpen] = useState<boolean>(false);
   const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
-  const [customPurpose, setCustomPurpose] = useState<string>('');
+  const [customPurpose, setCustomPurpose] = useState<string>(COMMON_PURPOSES[0]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Tracks whether the user attempted to proceed on the current step so missing required fields highlight prominently
+  const [showStepValidation, setShowStepValidation] = useState<boolean>(false);
+  const bodyScrollRef = useRef<ScrollView>(null);
+
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     type?: 'success' | 'error' | 'confirmation' | 'info';
@@ -104,6 +122,10 @@ export default function RequestFlowModal({
   });
 
   useEffect(() => {
+    ensureInterFontLoaded();
+  }, []);
+
+  useEffect(() => {
     if (initialDoc?.id) {
       setSelectedDocId(initialDoc.id);
     } else if (docTypes.length > 0 && !selectedDocId) {
@@ -117,7 +139,9 @@ export default function RequestFlowModal({
   );
 
   // Step 3 Uploads State
-  const [uploadedFiles, setUploadedFiles] = useState<{ [reqKey: string]: UploadedRequirementFile }>({});
+  const [uploadedFiles, setUploadedFiles] = useState<{
+    [reqKey: string]: UploadedRequirementFile;
+  }>({});
   const [uploadingMap, setUploadingMap] = useState<{ [reqKey: string]: boolean }>({});
   const [uploadError, setUploadError] = useState<string>('');
 
@@ -125,8 +149,8 @@ export default function RequestFlowModal({
   const today = new Date();
   const getNextBusinessDays = () => {
     const days: string[] = [];
-    let d = new Date(today);
-    d.setDate(d.getDate() + 1); // Start tomorrow
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
     while (days.length < 10) {
       const dayOfWeek = d.getDay();
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
@@ -139,7 +163,7 @@ export default function RequestFlowModal({
 
   const availableDates = getNextBusinessDays();
   const [selectedDate, setSelectedDate] = useState<string>(availableDates[0]);
-  const [selectedSlot, setSelectedSlot] = useState<string>(APPOINTMENT_TIME_SLOTS[2]); // Default 9:00 AM - 9:30 AM
+  const [selectedSlot, setSelectedSlot] = useState<string>(APPOINTMENT_TIME_SLOTS[2]);
 
   // Confirmation State
   const [submittedReq, setSubmittedReq] = useState<DocumentRequest | null>(null);
@@ -155,27 +179,55 @@ export default function RequestFlowModal({
     }
   };
 
-  const selectedDoc = docTypes.find((d) => d.id === selectedDocId) || initialDoc || docTypes[0];
+  const availableDocTypes = useMemo(
+    () =>
+      docTypes.filter(
+        (dt) => dt.is_active !== false && (dt as any).is_available !== false
+      ),
+    [docTypes]
+  );
+
+  const selectedDoc =
+    availableDocTypes.find((d) => d.id === selectedDocId) ||
+    initialDoc ||
+    docTypes[0];
 
   // Requirements list normalized from selectedDoc
-  const requirementsToUpload = (selectedDoc?.requirements && Array.isArray(selectedDoc.requirements) && selectedDoc.requirements.length > 0)
-    ? selectedDoc.requirements
-        .filter((r) => {
-          const str = typeof r === 'string' ? r : (r as any).name || (r as any).title || '';
-          const s = str.trim().toLowerCase();
-          return s && s !== 'none' && !s.includes('no required document') && !s.startsWith('none (');
-        })
-        .map((r, i) => {
-          const name = typeof r === 'string' ? r : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
-          const isReq = typeof r === 'object' && 'is_required' in (r as any) ? !!(r as any).is_required : true;
-          return {
-            id: `req-${i}`,
-            name: name,
-            description: 'Original or clear digital scanned copy / camera photo',
-            is_required: isReq,
-          };
-        })
-    : (selectedDoc?.requirement_items || []);
+  const requirementsToUpload =
+    selectedDoc?.requirements &&
+    Array.isArray(selectedDoc.requirements) &&
+    selectedDoc.requirements.length > 0
+      ? selectedDoc.requirements
+          .filter((r) => {
+            const str =
+              typeof r === 'string'
+                ? r
+                : (r as any).name || (r as any).title || '';
+            const s = str.trim().toLowerCase();
+            return (
+              s &&
+              s !== 'none' &&
+              !s.includes('no required document') &&
+              !s.startsWith('none (')
+            );
+          })
+          .map((r, i) => {
+            const name =
+              typeof r === 'string'
+                ? r
+                : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
+            const isReq =
+              typeof r === 'object' && 'is_required' in (r as any)
+                ? !!(r as any).is_required
+                : true;
+            return {
+              id: `req-${i}`,
+              name,
+              description: 'Original or clear digital scanned copy / camera photo',
+              is_required: isReq,
+            };
+          })
+      : selectedDoc?.requirement_items || [];
 
   // Mandatory requirements calculation for Step 3 progress
   const mandatoryItems = useMemo(
@@ -187,13 +239,26 @@ export default function RequestFlowModal({
     () => mandatoryItems.filter((m) => !!uploadedFiles[m.name]).length,
     [mandatoryItems, uploadedFiles]
   );
-  const isAllMandatoryUploaded = totalMandatory === 0 || mandatoryUploadedCount >= totalMandatory;
-  const uploadProgressPercentage = totalMandatory > 0
-    ? Math.round((mandatoryUploadedCount / totalMandatory) * 100)
-    : 100;
+  const isAllMandatoryUploaded =
+    totalMandatory === 0 || mandatoryUploadedCount >= totalMandatory;
+  const uploadProgressPercentage =
+    totalMandatory > 0
+      ? Math.round((mandatoryUploadedCount / totalMandatory) * 100)
+      : 100;
+
+  // Derived required-field validation states
+  const activePurposeValue =
+    customPurpose.trim() ||
+    (purpose !== 'Other Official Purpose' ? purpose.trim() : '');
+  const isPurposeEmpty = !activePurposeValue;
+  const isYearsEmpty = !yearsInBarangay || !yearsInBarangay.trim();
+  const isScheduleIncomplete = !selectedDate || !selectedSlot;
 
   // Real browser/device file and camera upload handler using Supabase Storage
-  const handleRealFileUpload = (reqName: string, mode: 'camera' | 'photo' | 'document' = 'photo') => {
+  const handleRealFileUpload = (
+    reqName: string,
+    mode: 'camera' | 'photo' | 'document' = 'photo'
+  ) => {
     if (typeof document === 'undefined') return;
 
     const input = document.createElement('input');
@@ -229,9 +294,10 @@ export default function RequestFlowModal({
           return;
         }
 
-        const isPdf = result.fileType === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const isPdf =
+          result.fileType === 'application/pdf' ||
+          file.name.toLowerCase().endsWith('.pdf');
 
-        // Execute AI Document Quality & Blur/Cut-Off Inspection
         const aiQuality = await analyzeDocumentImage(file);
 
         const newFile: UploadedRequirementFile = {
@@ -272,49 +338,76 @@ export default function RequestFlowModal({
     });
   };
 
-  // Validate step transitions
+  // Validate step transitions with prominent field highlighting
   const handleNextStep = () => {
     if (currentStep === 1) {
-      const activePurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '');
-      if (!activePurpose) {
-        setUploadError('Please enter or select your purpose for requesting this document.');
+      if (isPurposeEmpty) {
+        setShowStepValidation(true);
+        setUploadError(
+          'Required Field Missing: Please enter or select your purpose for requesting this document.'
+        );
+        bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
 
-      // AI Content Moderation Check
-      const modCheck = checkContentModeration(activePurpose);
+      const modCheck = checkContentModeration(activePurposeValue);
       if (!modCheck.isClean) {
-        setUploadError(`Inappropriate language detected in purpose (${modCheck.flaggedWords.join(', ')}). Please provide a formal, valid purpose.`);
+        setShowStepValidation(true);
+        setUploadError(
+          `Inappropriate language detected in purpose (${modCheck.flaggedWords.join(
+            ', '
+          )}). Please provide a formal, valid purpose.`
+        );
+        bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
 
+      setShowStepValidation(false);
       setUploadError('');
       setCurrentStep(2);
+      bodyScrollRef.current?.scrollTo({ y: 0, animated: false });
     } else if (currentStep === 2) {
-      if (!yearsInBarangay || !yearsInBarangay.trim()) {
-        setUploadError('Please specify how many years you have resided in Barangay Zapatera.');
+      if (isYearsEmpty) {
+        setShowStepValidation(true);
+        setUploadError(
+          'Required Field Missing: Please enter how many years you have resided in Barangay Zapatera.'
+        );
+        bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
+      setShowStepValidation(false);
       setUploadError('');
       setCurrentStep(3);
+      bodyScrollRef.current?.scrollTo({ y: 0, animated: false });
     } else if (currentStep === 3) {
-      // Validate that all required fields are submitted before proceeding to Step 4
       if (!isAllMandatoryUploaded) {
+        setShowStepValidation(true);
         const missing = mandatoryItems.find((m) => !uploadedFiles[m.name]);
         setUploadError(
-          `Upload Required: Please upload or capture all required attachments (${mandatoryUploadedCount} of ${totalMandatory} submitted). Missing: "${missing?.name || 'Required Document'}".`
+          `Required Attachment Missing: Please upload all mandatory documents (${mandatoryUploadedCount} of ${totalMandatory} submitted). Missing: "${
+            missing?.name || 'Required Document'
+          }".`
         );
+        bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
+      setShowStepValidation(false);
       setUploadError('');
       setCurrentStep(4);
+      bodyScrollRef.current?.scrollTo({ y: 0, animated: false });
     } else if (currentStep === 4) {
-      if (!selectedDate || !selectedSlot) {
-        setUploadError('Please select both a pickup date and a 30-minute time slot.');
+      if (isScheduleIncomplete) {
+        setShowStepValidation(true);
+        setUploadError(
+          'Required Selection Missing: Please choose both a pickup date and a 30-minute time slot.'
+        );
+        bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
+      setShowStepValidation(false);
       setUploadError('');
       setCurrentStep(5);
+      bodyScrollRef.current?.scrollTo({ y: 0, animated: false });
     } else if (currentStep === 5) {
       handleFinalSubmit();
     }
@@ -326,16 +419,19 @@ export default function RequestFlowModal({
 
     try {
       const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
-      const finalPurpose = customPurpose.trim() || (purpose !== 'Other Official Purpose' ? purpose.trim() : '') || 'Local Employment Application';
+      const finalPurpose = activePurposeValue || 'Local Employment Application';
 
       const newRequest: DocumentRequest = {
         id: `req-${Date.now()}`,
         tracking_number: trackingNo,
         resident_id: currentUser.id || 'res-user',
-        resident_name: currentUser.full_name || `${currentUser.first_name} ${currentUser.last_name}`,
+        resident_name:
+          currentUser.full_name ||
+          `${currentUser.first_name} ${currentUser.last_name}`,
         resident_email: currentUser.email,
         resident_phone: currentUser.phone || '0917-000-0000',
-        resident_address: currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
+        resident_address:
+          currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
         resident_birth_date: currentUser.birth_date || currentUser.birthdate,
         years_in_barangay: yearsInBarangay.trim(),
         document_type_id: selectedDoc.id,
@@ -348,23 +444,38 @@ export default function RequestFlowModal({
         pickup_time_slot: selectedSlot,
         status: 'pending',
         pickup_location: '2nd Floor, Barangay Hall Lobby, Rahmann St.',
-        is_variable_fee: Boolean(selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee),
-        pickup_instructions: (selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee)
-          ? `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID; the processing fee will be assessed and collected upon claiming at counter.`
-          : `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${selectedDoc.fee === 0 ? '₱0.00 (FREE)' : formatCurrency(selectedDoc.fee)}.`,
+        is_variable_fee: Boolean(
+          selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
+        ),
+        pickup_instructions:
+          selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
+            ? `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID; the processing fee will be assessed and collected upon claiming at counter.`
+            : `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${
+                selectedDoc.fee === 0
+                  ? '₱0.00 (FREE)'
+                  : formatCurrency(selectedDoc.fee)
+              }.`,
         timeline: [
           {
             status: 'pending',
             label: 'Request Submitted',
-            description: 'Document request submitted online and registered into the records queue.',
-            timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            description:
+              'Document request submitted online and registered into the records queue.',
+            timestamp: new Date().toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
             is_completed: true,
             is_current: true,
           },
           {
             status: 'under_review',
             label: 'Under Review',
-            description: 'Barangay administrative staff is reviewing details and verifying clearance.',
+            description:
+              'Barangay administrative staff is reviewing details and verifying clearance.',
             timestamp: 'Pending Staff Review',
             is_completed: false,
             is_current: false,
@@ -380,7 +491,8 @@ export default function RequestFlowModal({
           {
             status: 'completed',
             label: 'Completed',
-            description: 'Official document claimed and successfully released to resident.',
+            description:
+              'Official document claimed and successfully released to resident.',
             timestamp: 'Pending Release',
             is_completed: false,
             is_current: false,
@@ -394,7 +506,6 @@ export default function RequestFlowModal({
         await onRequestSubmitted(newRequest);
       }
       setSubmittedReq(newRequest);
-      // Directly transition to Step 6 (Confirmation Screen)
       setCurrentStep(6);
     } catch (err) {
       console.error('Submission failed:', err);
@@ -402,7 +513,8 @@ export default function RequestFlowModal({
         isOpen: true,
         type: 'error',
         title: 'Request Submission Failed',
-        message: 'We could not submit your document request. Please check your information and try again.',
+        message:
+          'We could not submit your document request. Please check your information and try again.',
         buttonText: 'Try Again',
         onClose: () => setActionModal({ isOpen: false, title: '' }),
       });
@@ -415,6 +527,8 @@ export default function RequestFlowModal({
     setCurrentStep(1);
     setUploadedFiles({});
     setUploadError('');
+    setShowStepValidation(false);
+    setIsDocDropdownOpen(false);
     setSubmittedReq(null);
     setCopiedTracking(false);
     setIsSubmitting(false);
@@ -423,272 +537,549 @@ export default function RequestFlowModal({
 
   if (!visible) return null;
 
+  const activeStepMeta = STEP_META.find((s) => s.num === currentStep);
+  const isSelectedDocVariable =
+    selectedDoc?.fee_type === 'variable' || selectedDoc?.is_variable_fee;
+  const isSelectedDocFree = !isSelectedDocVariable && Number(selectedDoc?.fee) === 0;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={resetForm}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={resetForm}
+    >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          {/* Header */}
+          {/* ================= 1. MODAL HEADER ================= */}
           <View style={styles.modalHeader}>
             <View style={styles.headerLeft}>
-              {currentStep === 6 ? (
-                <View style={styles.headerSuccessBadge}>
-                  <CheckCircle2 size={18} color="#16a34a" />
-                </View>
-              ) : (
-                <FileText size={20} color="#1d4ed8" />
-              )}
-              <Text style={[styles.modalTitle, currentStep === 6 && { color: '#16a34a' }]}>
-                {currentStep === 6 ? 'Request Submitted' : `File Request: Step ${currentStep} of 5`}
-              </Text>
+              <View
+                style={[
+                  styles.headerIconBox,
+                  currentStep === 6 && styles.headerIconBoxSuccess,
+                ]}
+              >
+                {currentStep === 6 ? (
+                  <CheckCircle2 size={20} color="#16a34a" />
+                ) : (
+                  <FileText size={19} color="#2563eb" />
+                )}
+              </View>
+              <View style={styles.headerTextCol}>
+                <Text style={styles.headerStepTag}>
+                  {currentStep === 6
+                    ? 'APPLICATION COMPLETED'
+                    : `STEP ${currentStep} OF 5 • ${activeStepMeta?.short.toUpperCase()}`}
+                </Text>
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    currentStep === 6 && { color: '#15803d' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {currentStep === 6
+                    ? 'Request Submitted'
+                    : activeStepMeta?.subtitle || 'File Document Request'}
+                </Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={resetForm} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <X size={20} color="#64748b" />
+
+            <TouchableOpacity
+              onPress={resetForm}
+              style={styles.closeBtn}
+              activeOpacity={0.7}
+            >
+              <X size={18} color="#475569" />
             </TouchableOpacity>
           </View>
 
-          {/* Progress Indicator (Steps 1 to 5) */}
+          {/* ================= 2. CONNECTED 5-STEP PROGRESS BAR ================= */}
           {currentStep <= 5 && (
-            <View style={styles.progressBar}>
-              {['Document', 'Resident', 'Uploads', 'Schedule', 'Review'].map((stepLabel, idx) => {
-                const stepNum = idx + 1;
-                const isDone = currentStep > stepNum;
-                const isCurr = currentStep === stepNum;
-                return (
-                  <View key={stepNum} style={styles.progressStepItem}>
-                    <View
-                      style={[
-                        styles.stepCircle,
-                        isDone && styles.stepCircleDone,
-                        isCurr && styles.stepCircleCurr,
-                      ]}
-                    >
-                      {isDone ? (
-                        <Check size={12} color="#ffffff" />
-                      ) : (
-                        <Text style={[styles.stepNumText, isCurr && styles.stepNumTextCurr]}>{stepNum}</Text>
+            <View style={styles.stepperWrap}>
+              <View style={styles.stepperRow}>
+                {STEP_META.map((step, idx) => {
+                  const isDone = currentStep > step.num;
+                  const isCurr = currentStep === step.num;
+                  const hasStepError =
+                    showStepValidation && isCurr && Boolean(uploadError);
+
+                  return (
+                    <React.Fragment key={step.num}>
+                      <View style={styles.stepNodeCol}>
+                        <View
+                          style={[
+                            styles.stepCircle,
+                            isDone && styles.stepCircleDone,
+                            isCurr && styles.stepCircleCurr,
+                            hasStepError && styles.stepCircleError,
+                          ]}
+                        >
+                          {isDone ? (
+                            <Check size={12} color="#ffffff" strokeWidth={2.8} />
+                          ) : hasStepError ? (
+                            <AlertCircle size={12} color="#ffffff" />
+                          ) : (
+                            <Text
+                              style={[
+                                styles.stepNumText,
+                                isCurr && styles.stepNumTextCurr,
+                              ]}
+                            >
+                              {step.num}
+                            </Text>
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            styles.stepLabel,
+                            isCurr && styles.stepLabelCurr,
+                            isDone && styles.stepLabelDone,
+                            hasStepError && styles.stepLabelError,
+                          ]}
+                        >
+                          {step.short}
+                        </Text>
+                      </View>
+
+                      {idx < STEP_META.length - 1 && (
+                        <View
+                          style={[
+                            styles.stepConnectorLine,
+                            isDone && styles.stepConnectorLineDone,
+                          ]}
+                        />
                       )}
-                    </View>
-                    <Text style={[styles.stepLabel, isCurr && styles.stepLabelCurr]}>{stepLabel}</Text>
-                  </View>
-                );
-              })}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
             </View>
           )}
 
-          {/* Body Content */}
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          {/* ================= 3. SCROLLABLE BODY CONTENT ================= */}
+          <ScrollView
+            ref={bodyScrollRef}
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Global Validation Error Banner */}
             {uploadError ? (
               <View style={styles.errorBanner}>
-                <AlertCircle size={16} color="#b91c1c" />
-                <Text style={styles.errorBannerText}>{uploadError}</Text>
+                <View style={styles.errorBannerIconBox}>
+                  <AlertCircle size={16} color="#dc2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.errorBannerTitle}>
+                    Action Required Before Proceeding
+                  </Text>
+                  <Text style={styles.errorBannerText}>{uploadError}</Text>
+                </View>
               </View>
             ) : null}
 
-            {/* STEP 1: SELECT DOCUMENT & PURPOSE */}
+            {/* ================= STEP 1: DOCUMENT & PURPOSE ================= */}
             {currentStep === 1 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>
-                  Select Document & Purpose
-                </Text>
-                <Text style={styles.stepSubtitle}>
-                  Choose from available official documents and provide the purpose of your application.
-                </Text>
-
-                {/* Available Documents Dropbox Filter */}
-                <View style={{ marginBottom: 14 }}>
-                  <Text style={styles.inputLabel}>Available Documents (Select from List) *</Text>
-                  <View style={{
-                    marginTop: 6,
-                    borderWidth: 1.5,
-                    borderColor: '#93c5fd',
-                    backgroundColor: '#eff6ff',
-                    borderRadius: 12,
-                    padding: 4,
-                  }}>
-                    <select
-                      value={selectedDoc.id}
-                      onChange={(e) => setSelectedDocId(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 14px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        backgroundColor: '#ffffff',
-                        fontSize: '13px',
-                        fontWeight: '700',
-                        color: '#1e3a8a',
-                        outline: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {docTypes
-                        .filter((dt) => dt.is_active !== false && (dt as any).is_available !== false)
-                        .map((dt) => (
-                          <option key={dt.id} value={dt.id}>
-                            {dt.title} — {dt.fee_type === 'variable' || dt.is_variable_fee ? 'Depends upon claim' : dt.fee === 0 ? 'FREE' : formatCurrency(dt.fee)} ({dt.processing_days || 1} {Number(dt.processing_days) === 1 ? 'day' : 'days'})
-                          </option>
-                        ))}
-                    </select>
+                {/* Field 1: Custom Expandable Document Dropdown */}
+                <View style={styles.fieldGroup}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      1. Official Document Type <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+                    <View style={styles.statusIndicatorDone}>
+                      <CheckCircle2 size={11} color="#059669" />
+                      <Text style={styles.statusIndicatorDoneText}>SELECTED</Text>
+                    </View>
                   </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.dropdownTrigger,
+                      isDocDropdownOpen && styles.dropdownTriggerOpen,
+                    ]}
+                    onPress={() => setIsDocDropdownOpen((prev) => !prev)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.dropdownTriggerLeft}>
+                      <View style={styles.dropdownDocIcon}>
+                        <FileText size={16} color="#2563eb" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.dropdownSelectedTitle} numberOfLines={1}>
+                          {selectedDoc?.title}
+                        </Text>
+                        <Text style={styles.dropdownSelectedSub}>
+                          {isSelectedDocVariable
+                            ? 'Variable Fee'
+                            : isSelectedDocFree
+                            ? 'FREE'
+                            : formatCurrency(selectedDoc?.fee)}{' '}
+                          • {selectedDoc?.processing_days || 1}{' '}
+                          {Number(selectedDoc?.processing_days || 1) === 1
+                            ? 'Working Day'
+                            : 'Working Days'}
+                        </Text>
+                      </View>
+                    </View>
+                    {isDocDropdownOpen ? (
+                      <ChevronUp size={18} color="#2563eb" />
+                    ) : (
+                      <ChevronDown size={18} color="#64748b" />
+                    )}
+                  </TouchableOpacity>
+
+                  {isDocDropdownOpen && (
+                    <View style={styles.dropdownMenuCard}>
+                      {availableDocTypes.map((dt) => {
+                        const isSelected = dt.id === selectedDoc?.id;
+                        const dtVar = dt.fee_type === 'variable' || dt.is_variable_fee;
+                        const dtFree = !dtVar && Number(dt.fee) === 0;
+                        return (
+                          <TouchableOpacity
+                            key={dt.id}
+                            style={[
+                              styles.dropdownOptionRow,
+                              isSelected && styles.dropdownOptionRowActive,
+                            ]}
+                            onPress={() => {
+                              setSelectedDocId(dt.id);
+                              setIsDocDropdownOpen(false);
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <Text
+                                style={[
+                                  styles.dropdownOptionTitle,
+                                  isSelected && styles.dropdownOptionTitleActive,
+                                ]}
+                              >
+                                {dt.title}
+                              </Text>
+                              <Text style={styles.dropdownOptionMeta}>
+                                Processing: {dt.processing_days || 1}{' '}
+                                {Number(dt.processing_days || 1) === 1 ? 'day' : 'days'}
+                              </Text>
+                            </View>
+                            <View style={styles.dropdownOptionRight}>
+                              <View
+                                style={[
+                                  styles.miniFeePill,
+                                  dtFree ? styles.miniFeePillFree : styles.miniFeePillPaid,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.miniFeePillText,
+                                    dtFree
+                                      ? styles.miniFeePillTextFree
+                                      : styles.miniFeePillTextPaid,
+                                  ]}
+                                >
+                                  {dtVar
+                                    ? 'Variable'
+                                    : dtFree
+                                    ? 'FREE'
+                                    : formatCurrency(dt.fee)}
+                                </Text>
+                              </View>
+                              {isSelected && <CheckCircle2 size={15} color="#2563eb" />}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
 
                 {/* Selected Document Overview Card */}
                 <View style={styles.selectedDocCard}>
                   <View style={styles.selectedDocHeader}>
-                    <Text style={styles.selectedDocName}>{selectedDoc.title}</Text>
-                    <Text style={styles.selectedDocFee}>
-                      {selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee ? 'Depends upon claim' : selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}
-                    </Text>
-                  </View>
-                  <Text style={styles.selectedDocDesc}>{selectedDoc.description}</Text>
-                  <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Clock size={12} color="#1d4ed8" />
-                    <Text style={{ fontSize: 11, color: '#1d4ed8', fontWeight: '600' }}>
-                      Standard Processing Time: {selectedDoc.processing_days || 1} Working Day{Number(selectedDoc.processing_days) > 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Purpose of Request - Manual Text Input Field */}
-                <View style={{ marginTop: 14 }}>
-                  <Text style={styles.inputLabel}>Purpose of Request (Manual Input / Specific Reason) *</Text>
-                  <TextInput
-                    style={[styles.textInput, { fontSize: 13, minHeight: 44 }]}
-                    placeholder="Enter purpose (e.g. Local Employment, Bank Account Opening, Scholarship...)"
-                    placeholderTextColor="#94a3b8"
-                    value={customPurpose || (purpose !== 'Other Official Purpose' ? purpose : '')}
-                    onChangeText={(txt) => {
-                      setCustomPurpose(txt);
-                      setPurpose('Other Official Purpose');
-                    }}
-                  />
-                </View>
-
-                {/* Quick Selection Presets */}
-                <Text style={[styles.inputLabel, { marginTop: 14 }]}>Or choose from common purposes:</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                  {COMMON_PURPOSES.filter((p) => p !== 'Other Official Purpose').map((p) => {
-                    const isSelected = (customPurpose ? customPurpose === p : purpose === p);
-                    return (
-                      <TouchableOpacity
-                        key={p}
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.selectedDocTag}>SELECTED SERVICE</Text>
+                      <Text style={styles.selectedDocName}>{selectedDoc?.title}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.selectedDocFeeBadge,
+                        isSelectedDocFree
+                          ? styles.selectedDocFeeBadgeFree
+                          : styles.selectedDocFeeBadgePaid,
+                      ]}
+                    >
+                      <Text
                         style={[
-                          styles.docPill,
-                          isSelected && styles.docPillActive,
-                          { paddingHorizontal: 12, paddingVertical: 6 }
+                          styles.selectedDocFeeText,
+                          isSelectedDocFree
+                            ? styles.selectedDocFeeTextFree
+                            : styles.selectedDocFeeTextPaid,
                         ]}
-                        onPress={() => {
-                          setPurpose(p);
-                          setCustomPurpose(p);
-                        }}
                       >
-                        <Text
-                          style={[
-                            styles.docPillText,
-                            isSelected && styles.docPillTextActive,
-                            { fontSize: 11 }
-                          ]}
-                        >
-                          {p}
+                        {isSelectedDocVariable
+                          ? 'Variable Fee'
+                          : isSelectedDocFree
+                          ? 'FREE'
+                          : formatCurrency(selectedDoc?.fee)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.selectedDocDesc}>{selectedDoc?.description}</Text>
+                </View>
+
+                {/* Field 2: Purpose of Request (Required Field with Indicator) */}
+                <View
+                  style={[
+                    styles.fieldCard,
+                    isPurposeEmpty && styles.fieldCardMissing,
+                    showStepValidation && isPurposeEmpty && styles.fieldCardErrorStrong,
+                  ]}
+                >
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      2. Purpose of Request <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+
+                    {isPurposeEmpty ? (
+                      <View style={styles.statusIndicatorRequired}>
+                        <AlertCircle size={11} color="#dc2626" />
+                        <Text style={styles.statusIndicatorRequiredText}>
+                          REQUIRED — NOT INPUTTED
                         </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.statusIndicatorDone}>
+                        <CheckCircle2 size={11} color="#059669" />
+                        <Text style={styles.statusIndicatorDoneText}>COMPLETED</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View
+                    style={[
+                      styles.inputBoxRow,
+                      isPurposeEmpty ? styles.inputBoxRowMissing : styles.inputBoxRowValid,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.textInputFlex}
+                      placeholder="Type your specific purpose (e.g., Local Employment, Scholarship...)"
+                      placeholderTextColor="#94a3b8"
+                      value={customPurpose}
+                      onChangeText={(txt) => {
+                        setCustomPurpose(txt);
+                        setPurpose('Other Official Purpose');
+                        if (txt.trim()) {
+                          setUploadError('');
+                        }
+                      }}
+                    />
+                    {customPurpose ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setCustomPurpose('');
+                          setPurpose('Other Official Purpose');
+                        }}
+                        style={styles.clearInputBtn}
+                      >
+                        <X size={13} color="#64748b" />
                       </TouchableOpacity>
-                    );
-                  })}
+                    ) : (
+                      <AlertCircle size={16} color="#ef4444" />
+                    )}
+                  </View>
+
+                  {isPurposeEmpty && (
+                    <View style={styles.inlineMissingHint}>
+                      <AlertCircle size={12} color="#dc2626" />
+                      <Text style={styles.inlineMissingHintText}>
+                        This field is required. Type a reason above or tap a quick preset below.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Quick Selection Presets */}
+                  <Text style={styles.presetsHeading}>Quick Purpose Presets:</Text>
+                  <View style={styles.presetsWrap}>
+                    {COMMON_PURPOSES.filter((p) => p !== 'Other Official Purpose').map(
+                      (p) => {
+                        const isSelected = customPurpose.trim() === p;
+                        return (
+                          <TouchableOpacity
+                            key={p}
+                            style={[
+                              styles.presetChip,
+                              isSelected && styles.presetChipActive,
+                            ]}
+                            onPress={() => {
+                              setPurpose(p);
+                              setCustomPurpose(p);
+                              setUploadError('');
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <Text
+                              style={[
+                                styles.presetChipText,
+                                isSelected && styles.presetChipTextActive,
+                              ]}
+                            >
+                              {p}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }
+                    )}
+                  </View>
                 </View>
               </View>
             )}
 
-            {/* STEP 2: RESIDENT INFORMATION REVIEW */}
+            {/* ================= STEP 2: RESIDENT INFORMATION ================= */}
             {currentStep === 2 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Review Resident Information</Text>
-                <Text style={styles.stepSubtitle}>
-                  The system automatically pulls your registered resident profile to eliminate manual paperwork.
-                </Text>
+                {/* Required Input First: Years in the Barangay (Highlighted if empty!) */}
+                <View
+                  style={[
+                    styles.fieldCard,
+                    isYearsEmpty && styles.fieldCardMissing,
+                    showStepValidation && isYearsEmpty && styles.fieldCardErrorStrong,
+                  ]}
+                >
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      Length of Residency (Years in Barangay) <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+                    {isYearsEmpty ? (
+                      <View style={styles.statusIndicatorRequired}>
+                        <AlertCircle size={11} color="#dc2626" />
+                        <Text style={styles.statusIndicatorRequiredText}>
+                          REQUIRED — NOT INPUTTED
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.statusIndicatorDone}>
+                        <CheckCircle2 size={11} color="#059669" />
+                        <Text style={styles.statusIndicatorDoneText}>COMPLETED</Text>
+                      </View>
+                    )}
+                  </View>
 
+                  <View
+                    style={[
+                      styles.inputBoxRow,
+                      isYearsEmpty ? styles.inputBoxRowMissing : styles.inputBoxRowValid,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.textInputFlex}
+                      placeholder="Enter number of years living in Barangay Zapatera (e.g. 5)"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      value={yearsInBarangay}
+                      onChangeText={(val) => {
+                        setYearsInBarangay(val);
+                        if (val.trim()) setUploadError('');
+                      }}
+                    />
+                    {isYearsEmpty ? (
+                      <AlertCircle size={16} color="#ef4444" />
+                    ) : (
+                      <CheckCircle2 size={16} color="#10b981" />
+                    )}
+                  </View>
+
+                  {isYearsEmpty && (
+                    <View style={styles.inlineMissingHint}>
+                      <AlertCircle size={12} color="#dc2626" />
+                      <Text style={styles.inlineMissingHintText}>
+                        Required field: Please input how many years you have lived in Barangay Zapatera.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Auto-Filled Resident Profile Summary Card */}
                 <View style={styles.residentInfoCard}>
+                  <View style={styles.residentInfoCardHeader}>
+                    <ShieldCheck size={15} color="#2563eb" />
+                    <Text style={styles.residentInfoCardTitle}>
+                      VERIFIED RESIDENT PROFILE
+                    </Text>
+                  </View>
+
                   <View style={styles.infoRow}>
-                    <User size={15} color="#1d4ed8" />
+                    <User size={15} color="#2563eb" />
                     <View style={styles.infoCol}>
                       <Text style={styles.infoLabel}>Full Legal Name</Text>
-                      <Text style={styles.infoValue}>{currentUser.full_name || 'Resident Name'}</Text>
+                      <Text style={styles.infoValue}>
+                        {currentUser.full_name || 'Resident Name'}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.infoRow}>
-                    <MapPin size={15} color="#1d4ed8" />
+                    <MapPin size={15} color="#2563eb" />
                     <View style={styles.infoCol}>
                       <Text style={styles.infoLabel}>Registered Sitio / Address</Text>
-                      <Text style={styles.infoValue}>{currentUser.sitio || currentUser.address || 'Barangay Zapatera, Cebu City'}</Text>
+                      <Text style={styles.infoValue}>
+                        {currentUser.sitio ||
+                          currentUser.address ||
+                          'Barangay Zapatera, Cebu City'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoGrid2Col}>
+                    <View style={styles.infoRowHalf}>
+                      <Calendar size={14} color="#2563eb" />
+                      <View style={styles.infoCol}>
+                        <Text style={styles.infoLabel}>Date of Birth</Text>
+                        <Text style={styles.infoValue}>
+                          {currentUser.birth_date ||
+                            currentUser.birthdate ||
+                            'Not specified'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.infoRowHalf}>
+                      <Phone size={14} color="#2563eb" />
+                      <View style={styles.infoCol}>
+                        <Text style={styles.infoLabel}>Mobile Number</Text>
+                        <Text style={styles.infoValue}>
+                          {currentUser.phone || '0917-123-4567'}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
                   <View style={styles.infoRow}>
-                    <Calendar size={15} color="#1d4ed8" />
-                    <View style={styles.infoCol}>
-                      <Text style={styles.infoLabel}>Date of Birth</Text>
-                      <Text style={styles.infoValue}>{currentUser.birth_date || currentUser.birthdate || 'Not specified'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Phone size={15} color="#1d4ed8" />
-                    <View style={styles.infoCol}>
-                      <Text style={styles.infoLabel}>Contact Mobile Number</Text>
-                      <Text style={styles.infoValue}>{currentUser.phone || '0917-123-4567'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Mail size={15} color="#1d4ed8" />
+                    <Mail size={15} color="#2563eb" />
                     <View style={styles.infoCol}>
                       <Text style={styles.infoLabel}>Verified Email Address</Text>
                       <Text style={styles.infoValue}>{currentUser.email}</Text>
                     </View>
                   </View>
-
-                  <View style={styles.infoRow}>
-                    <ShieldCheck size={15} color="#1d4ed8" />
-                    <View style={styles.infoCol}>
-                      <Text style={styles.infoLabel}>Voter Registration Status</Text>
-                      <Text style={styles.infoValue}>{currentUser.voter_status || 'Registered Voter'}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Input field: Years in the Barangay */}
-                <View style={{ marginTop: 14 }}>
-                  <Text style={styles.inputLabel}>Years in the Barangay (Length of Residency) *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. 5 (Number of years living in Barangay Zapatera)"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={yearsInBarangay}
-                    onChangeText={setYearsInBarangay}
-                  />
-                </View>
-
-                <View style={styles.tipBox}>
-                  <ShieldCheck size={14} color="#059669" />
-                  <Text style={styles.tipText}>
-                    Verified Zapatera resident record. If you need to update contact info, you can edit your profile under Settings.
-                  </Text>
                 </View>
               </View>
             )}
 
-            {/* STEP 3: UPLOAD REQUIREMENTS */}
+            {/* ================= STEP 3: UPLOAD REQUIREMENTS ================= */}
             {currentStep === 3 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Upload Requirements</Text>
-                <Text style={styles.stepSubtitle}>
-                  Attach clear photos, camera captures, or PDF copies of the required supporting documents for {selectedDoc.title}.
-                </Text>
-
-                {/* Upload Requirements Progress Bar */}
+                {/* Upload Requirements Progress Card */}
                 {requirementsToUpload.length > 0 && (
-                  <View style={styles.reqProgressCard}>
+                  <View
+                    style={[
+                      styles.reqProgressCard,
+                      !isAllMandatoryUploaded &&
+                        showStepValidation &&
+                        styles.reqProgressCardError,
+                    ]}
+                  >
                     <View style={styles.reqProgressHeader}>
                       <View style={styles.reqProgressHeaderLeft}>
                         <View
@@ -702,17 +1093,19 @@ export default function RequestFlowModal({
                           {isAllMandatoryUploaded ? (
                             <CheckCircle2 size={18} color="#059669" />
                           ) : (
-                            <Upload size={18} color="#1d4ed8" />
+                            <Upload size={18} color="#2563eb" />
                           )}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.reqProgressTitle}>Upload Requirements Progress</Text>
+                          <Text style={styles.reqProgressTitle}>
+                            Mandatory Attachments
+                          </Text>
                           <Text style={styles.reqProgressSubtitle}>
                             {totalMandatory === 0
                               ? 'No mandatory attachments required'
                               : isAllMandatoryUploaded
-                              ? 'All required attachments completed (100%)'
-                              : `${mandatoryUploadedCount} of ${totalMandatory} required attachment(s) submitted`}
+                              ? 'All required attachments uploaded (100%)'
+                              : `${mandatoryUploadedCount} of ${totalMandatory} required document(s) attached`}
                           </Text>
                         </View>
                       </View>
@@ -738,7 +1131,6 @@ export default function RequestFlowModal({
                       </View>
                     </View>
 
-                    {/* Progress Bar Track */}
                     <View style={styles.reqProgressBarTrack}>
                       <View
                         style={[
@@ -748,35 +1140,6 @@ export default function RequestFlowModal({
                         ]}
                       />
                     </View>
-
-                    {/* Status Alert Banner */}
-                    {isAllMandatoryUploaded ? (
-                      <View style={styles.reqProgressSuccessBanner}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                          <CheckCircle2 size={16} color="#059669" />
-                          <Text style={styles.reqProgressSuccessText}>
-                            All required fields submitted! You can now proceed to Step 4 (Schedule).
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.reqQuickProceedBtn}
-                          onPress={() => {
-                            setUploadError('');
-                            setCurrentStep(4);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.reqQuickProceedBtnText}>Proceed to Step 4 →</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.reqProgressPendingBanner}>
-                        <AlertCircle size={15} color="#b45309" />
-                        <Text style={styles.reqProgressPendingText}>
-                          {totalMandatory - mandatoryUploadedCount} mandatory requirement(s) remaining. Upload all required attachments marked with [REQUIRED] to unlock Step 4.
-                        </Text>
-                      </View>
-                    )}
                   </View>
                 )}
 
@@ -784,46 +1147,70 @@ export default function RequestFlowModal({
                   <View style={styles.tipBox}>
                     <ShieldCheck size={16} color="#059669" />
                     <Text style={styles.tipText}>
-                      No supporting documents or attachments required for this document. You can proceed directly to select your express pickup schedule.
+                      No supporting documents or attachments required for this service. You may proceed directly to schedule your pickup.
                     </Text>
                   </View>
                 ) : (
                   <View style={styles.uploadsList}>
                     {requirementsToUpload.map((item) => {
                       const uploaded = uploadedFiles[item.name];
+                      const isMissingMandatory = item.is_required && !uploaded;
+
                       return (
-                        <View key={item.id || item.name} style={styles.uploadItemCard}>
+                        <View
+                          key={item.id || item.name}
+                          style={[
+                            styles.uploadItemCard,
+                            isMissingMandatory && styles.uploadItemCardMissing,
+                            showStepValidation &&
+                              isMissingMandatory &&
+                              styles.uploadItemCardErrorStrong,
+                            uploaded && styles.uploadItemCardUploaded,
+                          ]}
+                        >
                           <View style={styles.uploadItemHeader}>
                             <View style={{ flex: 1 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <Text style={styles.uploadItemName}>{item.name}</Text>
-                                <View style={[styles.reqTag, item.is_required ? styles.reqTagRequired : styles.reqTagOptional]}>
-                                  <Text style={[styles.reqTagText, item.is_required ? styles.reqTagTextRequired : styles.reqTagTextOptional]}>
-                                    {item.is_required ? 'REQUIRED' : 'OPTIONAL'}
-                                  </Text>
-                                </View>
+                              <View style={styles.uploadItemTitleRow}>
+                                <Text style={styles.uploadItemName}>
+                                  {item.name}
+                                  {item.is_required ? (
+                                    <Text style={styles.reqAsterisk}> *</Text>
+                                  ) : null}
+                                </Text>
+
                                 {uploaded ? (
-                                  <View style={styles.uploadedCheckTag}>
+                                  <View style={styles.statusIndicatorDone}>
                                     <CheckCircle2 size={11} color="#059669" />
-                                    <Text style={styles.uploadedCheckTagText}>SUBMITTED</Text>
+                                    <Text style={styles.statusIndicatorDoneText}>
+                                      ATTACHED
+                                    </Text>
                                   </View>
                                 ) : item.is_required ? (
-                                  <View style={styles.pendingActionTag}>
-                                    <AlertCircle size={11} color="#b91c1c" />
-                                    <Text style={styles.pendingActionTagText}>ACTION REQUIRED</Text>
+                                  <View style={styles.statusIndicatorRequired}>
+                                    <AlertCircle size={11} color="#dc2626" />
+                                    <Text style={styles.statusIndicatorRequiredText}>
+                                      REQUIRED — NOT UPLOADED
+                                    </Text>
                                   </View>
-                                ) : null}
+                                ) : (
+                                  <View style={styles.optionalTag}>
+                                    <Text style={styles.optionalTagText}>OPTIONAL</Text>
+                                  </View>
+                                )}
                               </View>
+
                               {item.description ? (
-                                <Text style={styles.uploadItemDesc}>{item.description}</Text>
+                                <Text style={styles.uploadItemDesc}>
+                                  {item.description}
+                                </Text>
                               ) : null}
                             </View>
                           </View>
 
                           {uploadingMap[item.name] ? (
-                            <View style={[styles.uploadedFileContainer, { paddingVertical: 14, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 }]}>
-                              <ActivityIndicator size="small" color="#1d4ed8" />
-                              <Text style={{ fontSize: 12, color: '#1d4ed8', fontWeight: '600' }}>
+                            <View style={styles.uploadingSpinnerBox}>
+                              <ActivityIndicator size="small" color="#2563eb" />
+                              <Text style={styles.uploadingSpinnerText}>
                                 Uploading securely to Barangay Storage...
                               </Text>
                             </View>
@@ -842,16 +1229,19 @@ export default function RequestFlowModal({
                                   </View>
                                 )}
                                 <View style={styles.uploadedFileLeft}>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <CheckCircle2 size={14} color="#16a34a" />
-                                    <Text style={styles.uploadedFileName} numberOfLines={1}>{uploaded.file_name}</Text>
-                                  </View>
-                                  <Text style={styles.uploadedFileSize}>{uploaded.file_size} • Ready for verification</Text>
+                                  <Text
+                                    style={styles.uploadedFileName}
+                                    numberOfLines={1}
+                                  >
+                                    {uploaded.file_name}
+                                  </Text>
+                                  <Text style={styles.uploadedFileSize}>
+                                    {uploaded.file_size} • Ready for verification
+                                  </Text>
                                 </View>
                                 <TouchableOpacity
                                   style={styles.removeFileBtn}
                                   onPress={() => handleRemoveFile(item.name)}
-                                  title="Remove attachment"
                                 >
                                   <Trash2 size={15} color="#ef4444" />
                                 </TouchableOpacity>
@@ -859,37 +1249,59 @@ export default function RequestFlowModal({
 
                               {/* AI Document Quality Inspection Result */}
                               {uploaded.ai_quality && (
-                                <View style={[
-                                  styles.aiQualityBox,
-                                  uploaded.ai_quality.status === 'passed' ? styles.aiQualityBoxPass : styles.aiQualityBoxWarn
-                                ]}>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View
+                                  style={[
+                                    styles.aiQualityBox,
+                                    uploaded.ai_quality.status === 'passed'
+                                      ? styles.aiQualityBoxPass
+                                      : styles.aiQualityBoxWarn,
+                                  ]}
+                                >
+                                  <View
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                    }}
+                                  >
                                     {uploaded.ai_quality.status === 'passed' ? (
                                       <Sparkles size={14} color="#15803d" />
                                     ) : (
                                       <AlertTriangle size={14} color="#b45309" />
                                     )}
-                                    <Text style={[
-                                      styles.aiQualityTitle,
-                                      uploaded.ai_quality.status === 'passed' ? styles.aiQualityTitlePass : styles.aiQualityTitleWarn
-                                    ]}>
+                                    <Text
+                                      style={[
+                                        styles.aiQualityTitle,
+                                        uploaded.ai_quality.status === 'passed'
+                                          ? styles.aiQualityTitlePass
+                                          : styles.aiQualityTitleWarn,
+                                      ]}
+                                    >
                                       {uploaded.ai_quality.status === 'passed'
-                                        ? `AI Check: Sharp & Full Document (${uploaded.ai_quality.qualityScore}%)`
-                                        : `AI Quality Check: ${uploaded.ai_quality.issues.join(', ') || 'Quality Notice'}`}
+                                        ? `AI Check: Clear & Readable (${uploaded.ai_quality.qualityScore}%)`
+                                        : `AI Quality Notice: ${
+                                            uploaded.ai_quality.issues.join(', ') ||
+                                            'Check clarity'
+                                          }`}
                                     </Text>
                                   </View>
 
                                   {uploaded.ai_quality.status !== 'passed' && (
                                     <View style={{ marginTop: 4, paddingLeft: 19 }}>
                                       <Text style={styles.aiQualityWarningText}>
-                                        {uploaded.ai_quality.suggestions[0] || 'Please make sure all four corners are visible and text is sharp.'}
+                                        {uploaded.ai_quality.suggestions[0] ||
+                                          'Make sure all four corners are visible and text is sharp.'}
                                       </Text>
                                       <TouchableOpacity
                                         style={styles.aiRetakeBtn}
-                                        onPress={() => handleRealFileUpload(item.name, 'camera')}
+                                        onPress={() =>
+                                          handleRealFileUpload(item.name, 'camera')
+                                        }
                                       >
                                         <Camera size={11} color="#92400e" />
-                                        <Text style={styles.aiRetakeBtnText}>Re-take / Replace Photo</Text>
+                                        <Text style={styles.aiRetakeBtnText}>
+                                          Re-take / Replace Photo
+                                        </Text>
                                       </TouchableOpacity>
                                     </View>
                                   )}
@@ -897,31 +1309,65 @@ export default function RequestFlowModal({
                               )}
                             </View>
                           ) : (
-                            <View style={styles.uploadActionButtons}>
-                              <TouchableOpacity
-                                style={styles.uploadActionBtn}
-                                onPress={() => handleRealFileUpload(item.name, 'camera')}
-                              >
-                                <Camera size={14} color="#1d4ed8" />
-                                <Text style={styles.uploadActionText}>Photo / Camera</Text>
-                              </TouchableOpacity>
+                            <>
+                              <View style={styles.uploadActionButtons}>
+                                <TouchableOpacity
+                                  style={styles.uploadActionBtn}
+                                  onPress={() =>
+                                    handleRealFileUpload(item.name, 'camera')
+                                  }
+                                  activeOpacity={0.75}
+                                >
+                                  <Camera size={14} color="#2563eb" />
+                                  <Text style={styles.uploadActionText}>Camera</Text>
+                                </TouchableOpacity>
 
-                              <TouchableOpacity
-                                style={styles.uploadActionBtn}
-                                onPress={() => handleRealFileUpload(item.name, 'photo')}
-                              >
-                                <ImageIcon size={14} color="#059669" />
-                                <Text style={[styles.uploadActionText, { color: '#059669' }]}>Upload Picture</Text>
-                              </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.uploadActionBtn}
+                                  onPress={() =>
+                                    handleRealFileUpload(item.name, 'photo')
+                                  }
+                                  activeOpacity={0.75}
+                                >
+                                  <ImageIcon size={14} color="#059669" />
+                                  <Text
+                                    style={[
+                                      styles.uploadActionText,
+                                      { color: '#059669' },
+                                    ]}
+                                  >
+                                    Gallery
+                                  </Text>
+                                </TouchableOpacity>
 
-                              <TouchableOpacity
-                                style={styles.uploadActionBtn}
-                                onPress={() => handleRealFileUpload(item.name, 'document')}
-                              >
-                                <Upload size={14} color="#7c3aed" />
-                                <Text style={[styles.uploadActionText, { color: '#7c3aed' }]}>Upload PDF</Text>
-                              </TouchableOpacity>
-                            </View>
+                                <TouchableOpacity
+                                  style={styles.uploadActionBtn}
+                                  onPress={() =>
+                                    handleRealFileUpload(item.name, 'document')
+                                  }
+                                  activeOpacity={0.75}
+                                >
+                                  <Upload size={14} color="#7c3aed" />
+                                  <Text
+                                    style={[
+                                      styles.uploadActionText,
+                                      { color: '#7c3aed' },
+                                    ]}
+                                  >
+                                    PDF File
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {showStepValidation && isMissingMandatory && (
+                                <View style={styles.inlineMissingHint}>
+                                  <AlertCircle size={12} color="#dc2626" />
+                                  <Text style={styles.inlineMissingHintText}>
+                                    Required attachment not uploaded. Please attach a photo or PDF above.
+                                  </Text>
+                                </View>
+                              )}
+                            </>
                           )}
                         </View>
                       );
@@ -931,57 +1377,127 @@ export default function RequestFlowModal({
               </View>
             )}
 
-            {/* STEP 4: SELECT PICKUP APPOINTMENT SCHEDULE (30-MIN INTERVALS) */}
+            {/* ================= STEP 4: SCHEDULE PICKUP ================= */}
             {currentStep === 4 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Select Express Pickup Schedule</Text>
-                <Text style={styles.stepSubtitle}>
-                  Choose your preferred pickup date and a specific 30-minute interval window at the Barangay Hall.
-                </Text>
-
-                {/* Date Picker Horizontal Pills */}
-                <Text style={styles.inputLabel}>1. Select Pickup Date (Monday – Friday):</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
-                  {availableDates.map((dateStr) => {
-                    const dateObj = new Date(dateStr);
-                    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                    const monthDay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    const isSelected = selectedDate === dateStr;
-                    return (
-                      <TouchableOpacity
-                        key={dateStr}
-                        style={[styles.dateCard, isSelected && styles.dateCardActive]}
-                        onPress={() => setSelectedDate(dateStr)}
-                      >
-                        <Text style={[styles.dayNameText, isSelected && styles.dayNameTextActive]}>{dayName}</Text>
-                        <Text style={[styles.monthDayText, isSelected && styles.monthDayTextActive]}>{monthDay}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-
-                {/* 30-Minute Interval Time Slots */}
-                <Text style={[styles.inputLabel, { marginTop: 16 }]}>2. Select 30-Minute Pickup Interval:</Text>
-                <View style={styles.slotGrid}>
-                  {APPOINTMENT_TIME_SLOTS.map((slot) => {
-                    const isSelected = selectedSlot === slot;
-                    return (
-                      <TouchableOpacity
-                        key={slot}
-                        style={[styles.timeSlotPill, isSelected && styles.timeSlotPillActive]}
-                        onPress={() => setSelectedSlot(slot)}
-                      >
-                        <Clock size={12} color={isSelected ? '#ffffff' : '#64748b'} />
-                        <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive]}>
-                          {slot}
+                <View style={styles.fieldCard}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      1. Pickup Date (Mon–Fri) <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+                    {selectedDate ? (
+                      <View style={styles.statusIndicatorDone}>
+                        <CheckCircle2 size={11} color="#059669" />
+                        <Text style={styles.statusIndicatorDoneText}>
+                          {selectedDate}
                         </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                      </View>
+                    ) : (
+                      <View style={styles.statusIndicatorRequired}>
+                        <AlertCircle size={11} color="#dc2626" />
+                        <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.dateScroll}
+                  >
+                    {availableDates.map((dateStr) => {
+                      const dateObj = new Date(dateStr);
+                      const dayName = dateObj.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                      });
+                      const monthDay = dateObj.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      });
+                      const isSelected = selectedDate === dateStr;
+                      return (
+                        <TouchableOpacity
+                          key={dateStr}
+                          style={[
+                            styles.dateCard,
+                            isSelected && styles.dateCardActive,
+                          ]}
+                          onPress={() => setSelectedDate(dateStr)}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.dayNameText,
+                              isSelected && styles.dayNameTextActive,
+                            ]}
+                          >
+                            {dayName}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.monthDayText,
+                              isSelected && styles.monthDayTextActive,
+                            ]}
+                          >
+                            {monthDay}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                <View style={styles.fieldCard}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.inputLabel}>
+                      2. 30-Minute Pickup Window <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+                    {selectedSlot ? (
+                      <View style={styles.statusIndicatorDone}>
+                        <CheckCircle2 size={11} color="#059669" />
+                        <Text style={styles.statusIndicatorDoneText}>SELECTED</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.statusIndicatorRequired}>
+                        <AlertCircle size={11} color="#dc2626" />
+                        <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.slotGrid}>
+                    {APPOINTMENT_TIME_SLOTS.map((slot) => {
+                      const isSelected = selectedSlot === slot;
+                      return (
+                        <TouchableOpacity
+                          key={slot}
+                          style={[
+                            styles.timeSlotPill,
+                            isSelected && styles.timeSlotPillActive,
+                          ]}
+                          onPress={() => setSelectedSlot(slot)}
+                          activeOpacity={0.8}
+                        >
+                          <Clock
+                            size={12}
+                            color={isSelected ? '#ffffff' : '#64748b'}
+                          />
+                          <Text
+                            style={[
+                              styles.timeSlotText,
+                              isSelected && styles.timeSlotTextActive,
+                            ]}
+                          >
+                            {slot}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
 
                 <View style={styles.scheduleNotice}>
-                  <MapPin size={14} color="#1d4ed8" />
+                  <MapPin size={15} color="#2563eb" />
                   <Text style={styles.scheduleNoticeText}>
                     Claiming Counter: 2nd Floor, Barangay Hall Lobby, Rahmann St.
                   </Text>
@@ -989,21 +1505,25 @@ export default function RequestFlowModal({
               </View>
             )}
 
-            {/* STEP 5: REVIEW REQUEST SUMMARY */}
+            {/* ================= STEP 5: REVIEW REQUEST SUMMARY ================= */}
             {currentStep === 5 && (
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Review & Confirm Request</Text>
-                <Text style={styles.stepSubtitle}>
-                  Please verify all details before submitting your official barangay request.
-                </Text>
-
                 <View style={styles.summaryCard}>
                   <View style={styles.summarySection}>
                     <Text style={styles.summaryHeader}>DOCUMENT & PURPOSE</Text>
-                    <Text style={styles.summaryMainText}>{selectedDoc.title}</Text>
-                    <Text style={styles.summarySubText}>Purpose: {purpose === 'Other Official Purpose' ? customPurpose : purpose}</Text>
+                    <Text style={styles.summaryMainText}>{selectedDoc?.title}</Text>
+                    <Text style={styles.summarySubText}>
+                      Purpose: {activePurposeValue}
+                    </Text>
                     <Text style={styles.summaryFeeText}>
-                      Document Fee: <Text style={{ color: '#1d4ed8', fontWeight: '800' }}>{selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee ? 'Depends upon claim' : selectedDoc.fee === 0 ? 'FREE' : formatCurrency(selectedDoc.fee)}</Text>
+                      Document Fee:{' '}
+                      <Text style={{ color: '#2563eb', fontWeight: '800' }}>
+                        {isSelectedDocVariable
+                          ? 'Depends upon claim'
+                          : isSelectedDocFree
+                          ? 'FREE'
+                          : formatCurrency(selectedDoc?.fee)}
+                      </Text>
                     </Text>
                   </View>
 
@@ -1011,11 +1531,18 @@ export default function RequestFlowModal({
 
                   <View style={styles.summarySection}>
                     <Text style={styles.summaryHeader}>RESIDENT DETAILS</Text>
-                    <Text style={styles.summarySubText}>Name: {currentUser.full_name}</Text>
-                    <Text style={styles.summarySubText}>Address: {currentUser.sitio || currentUser.address || 'Barangay Zapatera'}</Text>
-                    <Text style={styles.summarySubText}>Date of Birth: {currentUser.birth_date || currentUser.birthdate || 'On Record'}</Text>
-                    <Text style={styles.summarySubText}>Mobile: {currentUser.phone || '0917-000-0000'}</Text>
-                    <Text style={styles.summarySubText}>Years in Barangay: {yearsInBarangay ? `${yearsInBarangay} year(s)` : 'Not specified'}</Text>
+                    <Text style={styles.summarySubText}>
+                      Name: {currentUser.full_name}
+                    </Text>
+                    <Text style={styles.summarySubText}>
+                      Address:{' '}
+                      {currentUser.sitio ||
+                        currentUser.address ||
+                        'Barangay Zapatera'}
+                    </Text>
+                    <Text style={styles.summarySubText}>
+                      Years in Barangay: {yearsInBarangay} year(s)
+                    </Text>
                   </View>
 
                   <View style={styles.summaryDivider} />
@@ -1023,9 +1550,9 @@ export default function RequestFlowModal({
                   <View style={styles.summarySection}>
                     <Text style={styles.summaryHeader}>PICKUP APPOINTMENT</Text>
                     <View style={styles.appointmentBadge}>
-                      <Calendar size={13} color="#1d4ed8" />
+                      <Calendar size={13} color="#2563eb" />
                       <Text style={styles.appointmentDateText}>{selectedDate}</Text>
-                      <Clock size={13} color="#1d4ed8" style={{ marginLeft: 8 }} />
+                      <Clock size={13} color="#2563eb" style={{ marginLeft: 8 }} />
                       <Text style={styles.appointmentSlotText}>{selectedSlot}</Text>
                     </View>
                   </View>
@@ -1037,49 +1564,59 @@ export default function RequestFlowModal({
                     {Object.keys(uploadedFiles).length > 0 ? (
                       Object.values(uploadedFiles).map((file, i) => (
                         <View key={i} style={styles.summaryFileRow}>
-                          <CheckCircle2 size={12} color="#16a34a" />
-                          <Text style={styles.summaryFileName}>{file.requirement_name} ({file.file_name})</Text>
+                          <CheckCircle2 size={13} color="#16a34a" />
+                          <Text style={styles.summaryFileName}>
+                            {file.requirement_name} ({file.file_name})
+                          </Text>
                         </View>
                       ))
                     ) : (
-                      <Text style={styles.summarySubText}>Standard resident identification on file</Text>
+                      <Text style={styles.summarySubText}>
+                        Standard resident identification on file
+                      </Text>
                     )}
                   </View>
                 </View>
               </View>
             )}
 
-            {/* STEP 6: CONFIRMATION SCREEN */}
+            {/* ================= STEP 6: CONFIRMATION SCREEN ================= */}
             {currentStep === 6 && submittedReq && (
               <View style={styles.confirmationContent}>
-                {/* Glowing Concentric Success Circle */}
                 <View style={styles.successIconOuter}>
                   <View style={styles.successIconInner}>
-                    <Check size={32} color="#ffffff" strokeWidth={3} />
+                    <Check size={30} color="#ffffff" strokeWidth={3} />
                   </View>
                 </View>
 
-                <Text style={styles.successTitle}>Request Submitted Successfully!</Text>
+                <Text style={styles.successTitle}>
+                  Request Submitted Successfully!
+                </Text>
                 <Text style={styles.successSub}>
-                  Your document request has been officially recorded and queued for Barangay Zapatera administration review.
+                  Your application is now queued for Barangay Zapatera administration verification.
                 </Text>
 
                 {/* Tracking Reference Highlight Card */}
                 <View style={styles.trackingBox}>
                   <View style={styles.trackingHeaderRow}>
                     <View style={styles.trackingHeaderLeft}>
-                      <ShieldCheck size={14} color="#1d4ed8" />
-                      <Text style={styles.trackingLabel}>OFFICIAL TRACKING NUMBER</Text>
+                      <ShieldCheck size={14} color="#2563eb" />
+                      <Text style={styles.trackingLabel}>
+                        OFFICIAL TRACKING NUMBER
+                      </Text>
                     </View>
                     <TouchableOpacity
-                      style={[styles.copyPill, copiedTracking && styles.copyPillActive]}
+                      style={[
+                        styles.copyPill,
+                        copiedTracking && styles.copyPillActive,
+                      ]}
                       onPress={handleCopyTracking}
                       activeOpacity={0.7}
                     >
                       {copiedTracking ? (
                         <>
                           <Check size={12} color="#16a34a" strokeWidth={2.5} />
-                          <Text style={styles.copyPillTextSuccess}>Copied!</Text>
+                          <Text style={styles.copyPillTextSuccess}>Copied</Text>
                         </>
                       ) : (
                         <>
@@ -1089,9 +1626,11 @@ export default function RequestFlowModal({
                       )}
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.trackingCode}>{submittedReq.tracking_number}</Text>
+                  <Text style={styles.trackingCode}>
+                    {submittedReq.tracking_number}
+                  </Text>
                   <Text style={styles.trackingInstruction}>
-                    Save or take a screenshot of this tracking code for verification upon claiming.
+                    Save or screenshot this tracking code for verification upon claiming.
                   </Text>
                 </View>
 
@@ -1102,17 +1641,9 @@ export default function RequestFlowModal({
                       <FileText size={14} color="#64748b" />
                       <Text style={styles.confirmLabel}>Document:</Text>
                     </View>
-                    <Text style={styles.confirmValueBold}>{submittedReq.document_title}</Text>
-                  </View>
-
-                  <View style={styles.confirmDivider} />
-
-                  <View style={styles.confirmRow}>
-                    <View style={styles.confirmLabelGroup}>
-                      <User size={14} color="#64748b" />
-                      <Text style={styles.confirmLabel}>Applicant:</Text>
-                    </View>
-                    <Text style={styles.confirmValue}>{submittedReq.resident_name}</Text>
+                    <Text style={styles.confirmValueBold}>
+                      {submittedReq.document_title}
+                    </Text>
                   </View>
 
                   <View style={styles.confirmDivider} />
@@ -1138,59 +1669,23 @@ export default function RequestFlowModal({
                     </View>
                     <Text style={styles.confirmValue}>Barangay Zapatera Hall</Text>
                   </View>
-
-                  <View style={styles.confirmDivider} />
-
-                  <View style={styles.confirmRow}>
-                    <View style={styles.confirmLabelGroup}>
-                      <Text style={styles.confirmLabel}>Document Fee:</Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.feeBadge,
-                        submittedReq.fee === 0 ? styles.feeBadgeFree : styles.feeBadgePaid,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.feeBadgeText,
-                          submittedReq.fee === 0 ? styles.feeBadgeTextFree : styles.feeBadgeTextPaid,
-                        ]}
-                      >
-                        {submittedReq.is_variable_fee || submittedReq.fee_type === 'variable'
-                          ? 'FEE ASSESSED UPON CLAIM'
-                          : submittedReq.fee === 0
-                          ? 'FREE OF CHARGE'
-                          : `${formatCurrency(submittedReq.fee)} (Pay at Counter)`}
-                      </Text>
-                    </View>
-                  </View>
                 </View>
 
-                {/* Important Guidelines / Next Steps */}
+                {/* Guidelines Card */}
                 <View style={styles.guideCard}>
-                  <Text style={styles.guideTitle}>📌 Next Steps & Guidelines</Text>
-                  <View style={styles.guideItem}>
-                    <Text style={styles.guideBullet}>•</Text>
-                    <Text style={styles.guideText}>
-                      Our barangay officers will review your application. Check status updates under the <Text style={{ fontWeight: '700', color: '#1d4ed8' }}>Requests</Text> tab.
-                    </Text>
+                  <View style={styles.guideHeaderRow}>
+                    <Info size={14} color="#2563eb" />
+                    <Text style={styles.guideTitle}>Next Steps & Reminders</Text>
                   </View>
-                  <View style={styles.guideItem}>
-                    <Text style={styles.guideBullet}>•</Text>
-                    <Text style={styles.guideText}>
-                      Bring at least 1 valid government ID when claiming your physical document.
-                    </Text>
-                  </View>
-                  <View style={styles.guideItem}>
-                    <Text style={styles.guideBullet}>•</Text>
-                    <Text style={styles.guideText}>
-                      Present tracking code <Text style={{ fontWeight: '700', color: '#1e40af' }}>#{submittedReq.tracking_number}</Text> at the Releasing Counter.
-                    </Text>
-                  </View>
+                  <Text style={styles.guideText}>
+                    • Bring at least 1 valid government ID and present tracking code{' '}
+                    <Text style={{ fontWeight: '800', color: '#1e3a8a' }}>
+                      #{submittedReq.tracking_number}
+                    </Text>{' '}
+                    at the Releasing Counter.
+                  </Text>
                 </View>
 
-                {/* Action Buttons */}
                 <View style={styles.confirmActions}>
                   <TouchableOpacity
                     style={styles.trackNowBtn}
@@ -1201,7 +1696,9 @@ export default function RequestFlowModal({
                     }}
                   >
                     <Clock size={16} color="#ffffff" />
-                    <Text style={styles.trackNowBtnText}>Track Request Timeline</Text>
+                    <Text style={styles.trackNowBtnText}>
+                      Track Request Timeline
+                    </Text>
                     <ArrowRight size={16} color="#ffffff" />
                   </TouchableOpacity>
 
@@ -1217,7 +1714,7 @@ export default function RequestFlowModal({
             )}
           </ScrollView>
 
-          {/* Footer Navigation (Steps 1 to 5) */}
+          {/* ================= 4. FOOTER NAVIGATION ================= */}
           {currentStep <= 5 && (
             <View style={styles.modalFooter}>
               {currentStep > 1 ? (
@@ -1225,14 +1722,20 @@ export default function RequestFlowModal({
                   style={styles.backBtn}
                   onPress={() => {
                     setUploadError('');
+                    setShowStepValidation(false);
                     setCurrentStep((prev) => prev - 1);
                   }}
+                  activeOpacity={0.75}
                 >
-                  <ArrowLeft size={16} color="#64748b" />
+                  <ArrowLeft size={15} color="#475569" />
                   <Text style={styles.backBtnText}>Back</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.backBtn} onPress={resetForm}>
+                <TouchableOpacity
+                  style={styles.backBtn}
+                  onPress={resetForm}
+                  activeOpacity={0.75}
+                >
                   <Text style={styles.backBtnText}>Cancel</Text>
                 </TouchableOpacity>
               )}
@@ -1241,28 +1744,18 @@ export default function RequestFlowModal({
                 style={[
                   styles.nextBtn,
                   isSubmitting && { opacity: 0.6 },
-                  currentStep === 3 && !isAllMandatoryUploaded && styles.nextBtnIncomplete,
-                  currentStep === 3 && isAllMandatoryUploaded && styles.nextBtnReady,
+                  currentStep === 3 &&
+                    !isAllMandatoryUploaded &&
+                    styles.nextBtnIncomplete,
                 ]}
                 onPress={handleNextStep}
                 disabled={isSubmitting}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isSubmitting
-                    ? 'Submitting Request...'
-                    : currentStep === 5
-                    ? 'Submit Application'
-                    : currentStep === 3
-                    ? isAllMandatoryUploaded
-                      ? 'Proceed to Schedule (Step 4)'
-                      : `Complete Required Uploads (${mandatoryUploadedCount}/${totalMandatory})`
-                    : 'Next Step'
-                }
+                activeOpacity={0.85}
               >
                 {isSubmitting ? (
                   <>
                     <ActivityIndicator size="small" color="#ffffff" />
-                    <Text style={styles.nextBtnText}>Submitting Request...</Text>
+                    <Text style={styles.nextBtnText}>Submitting...</Text>
                   </>
                 ) : (
                   <>
@@ -1271,11 +1764,11 @@ export default function RequestFlowModal({
                         ? 'Submit Application'
                         : currentStep === 3
                         ? isAllMandatoryUploaded
-                          ? 'Proceed to Schedule (Step 4)'
-                          : `Complete Uploads (${mandatoryUploadedCount}/${totalMandatory})`
-                        : 'Next Step'}
+                          ? 'Continue to Schedule'
+                          : `Upload Required (${mandatoryUploadedCount}/${totalMandatory})`
+                        : 'Continue'}
                     </Text>
-                    <ArrowRight size={16} color="#ffffff" />
+                    <ArrowRight size={15} color="#ffffff" />
                   </>
                 )}
               </TouchableOpacity>
@@ -1284,7 +1777,6 @@ export default function RequestFlowModal({
         </View>
       </View>
 
-      {/* Action Feedback & Confirmation Modal */}
       <ActionModal
         isOpen={actionModal.isOpen}
         type={actionModal.type}
@@ -1294,7 +1786,10 @@ export default function RequestFlowModal({
         cancelText={actionModal.cancelText}
         buttonText={actionModal.buttonText}
         onConfirm={actionModal.onConfirm}
-        onClose={actionModal.onClose || (() => setActionModal({ isOpen: false, title: '' }))}
+        onClose={
+          actionModal.onClose ||
+          (() => setActionModal({ isOpen: false, title: '' }))
+        }
       />
     </Modal>
   );
@@ -1303,55 +1798,492 @@ export default function RequestFlowModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.68)',
     justifyContent: 'center',
-    padding: 16,
+    padding: 14,
   },
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    maxHeight: '92%',
+    backgroundColor: '#f4f7fb',
+    borderRadius: 24,
+    maxHeight: '93%',
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
   },
+
+  /* Header */
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 11,
+    flex: 1,
+  },
+  headerIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconBoxSuccess: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#bbf7d0',
+  },
+  headerTextCol: {
+    flex: 1,
+  },
+  headerStepTag: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.6,
   },
   modalTitle: {
-    fontSize: 15,
+    fontFamily: 'Inter',
+    fontSize: 15.5,
     fontWeight: '800',
     color: '#0f172a',
+    marginTop: 1,
   },
   closeBtn: {
-    padding: 4,
-  },
-  progressBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#f8fafc',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Connected Stepper */
+  stepperWrap: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  progressStepItem: {
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepNodeCol: {
     alignItems: 'center',
     gap: 4,
   },
   stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleCurr: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  stepCircleDone: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
+  },
+  stepCircleError: {
+    backgroundColor: '#dc2626',
+    borderColor: '#dc2626',
+  },
+  stepNumText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  stepNumTextCurr: {
+    color: '#ffffff',
+  },
+  stepLabel: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  stepLabelCurr: {
+    color: '#2563eb',
+    fontWeight: '800',
+  },
+  stepLabelDone: {
+    color: '#15803d',
+    fontWeight: '700',
+  },
+  stepLabelError: {
+    color: '#dc2626',
+    fontWeight: '800',
+  },
+  stepConnectorLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 4,
+    marginBottom: 14,
+  },
+  stepConnectorLineDone: {
+    backgroundColor: '#86efac',
+  },
+
+  /* Body */
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 14,
+    paddingBottom: 22,
+  },
+  stepContent: {
+    gap: 12,
+  },
+
+  /* Validation Error Banner */
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1.5,
+    borderColor: '#f87171',
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  errorBannerIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorBannerTitle: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#991b1b',
+  },
+  errorBannerText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#b91c1c',
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+
+  /* Field Containers & Required Highlighting */
+  fieldGroup: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  fieldCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  fieldCardMissing: {
+    borderColor: '#fca5a5',
+    backgroundColor: '#fffafb',
+  },
+  fieldCardErrorStrong: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+    backgroundColor: '#fef2f2',
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  reqAsterisk: {
+    color: '#ef4444',
+    fontWeight: '900',
+  },
+
+  /* Status Indicators (Required vs Completed) */
+  statusIndicatorRequired: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  statusIndicatorRequiredText: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#b91c1c',
+    letterSpacing: 0.3,
+  },
+  statusIndicatorDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  statusIndicatorDoneText: {
+    fontFamily: 'Inter',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803d',
+    letterSpacing: 0.3,
+  },
+  optionalTag: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+  },
+  optionalTagText: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+
+  /* Custom Document Dropdown */
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 13,
+    padding: 11,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+  },
+  dropdownTriggerOpen: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  dropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
+  },
+  dropdownDocIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownSelectedTitle: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  dropdownSelectedSub: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2563eb',
+    marginTop: 1,
+  },
+  dropdownMenuCard: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 6,
+    gap: 4,
+  },
+  dropdownOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  dropdownOptionRowActive: {
+    backgroundColor: '#eff6ff',
+  },
+  dropdownOptionTitle: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  dropdownOptionTitleActive: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+  },
+  dropdownOptionMeta: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  dropdownOptionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniFeePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  miniFeePillFree: {
+    backgroundColor: '#dcfce7',
+  },
+  miniFeePillPaid: {
+    backgroundColor: '#eff6ff',
+  },
+  miniFeePillText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  miniFeePillTextFree: {
+    color: '#15803d',
+  },
+  miniFeePillTextPaid: {
+    color: '#1d4ed8',
+  },
+
+  /* Selected Document Summary Card */
+  selectedDocCard: {
+    backgroundColor: '#eff6ff',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  selectedDocHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  selectedDocTag: {
+    fontFamily: 'Inter',
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.6,
+  },
+  selectedDocName: {
+    fontFamily: 'Inter',
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#1e3a8a',
+    marginTop: 2,
+  },
+  selectedDocFeeBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  selectedDocFeeBadgeFree: {
+    backgroundColor: '#dcfce7',
+  },
+  selectedDocFeeBadgePaid: {
+    backgroundColor: '#ffffff',
+  },
+  selectedDocFeeText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  selectedDocFeeTextFree: {
+    color: '#15803d',
+  },
+  selectedDocFeeTextPaid: {
+    color: '#1d4ed8',
+  },
+  selectedDocDesc: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#334155',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+
+  /* Highlighted Input Box */
+  inputBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    borderWidth: 1.5,
+    gap: 8,
+  },
+  inputBoxRowValid: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#cbd5e1',
+  },
+  inputBoxRowMissing: {
+    backgroundColor: '#ffffff',
+    borderColor: '#ef4444',
+  },
+  textInputFlex: {
+    flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    color: '#0f172a',
+    paddingVertical: 8,
+  },
+  clearInputBtn: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -1359,197 +2291,112 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepCircleCurr: {
-    backgroundColor: '#1d4ed8',
-  },
-  stepCircleDone: {
-    backgroundColor: '#16a34a',
-  },
-  stepNumText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  stepNumTextCurr: {
-    color: '#ffffff',
-  },
-  stepLabel: {
-    fontSize: 9,
-    color: '#94a3b8',
-    fontWeight: '600',
-  },
-  stepLabelCurr: {
-    color: '#1d4ed8',
-    fontWeight: '800',
-  },
-  modalBody: {
-    padding: 16,
-  },
-  errorBanner: {
+  inlineMissingHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
+    marginTop: 6,
     backgroundColor: '#fee2e2',
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
-  errorBannerText: {
-    fontSize: 11,
-    color: '#b91c1c',
-    fontWeight: '700',
+  inlineMissingHintText: {
     flex: 1,
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b91c1c',
   },
-  stepContent: {
-    gap: 12,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  stepSubtitle: {
-    fontSize: 12,
+
+  /* Presets */
+  presetsHeading: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#64748b',
-    lineHeight: 16,
+    marginTop: 12,
     marginBottom: 6,
   },
-  selectedDocCard: {
-    backgroundColor: '#eff6ff',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  selectedDocHeader: {
+  presetsWrap: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  selectedDocName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1e40af',
-  },
-  selectedDocFee: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1d4ed8',
-  },
-  selectedDocDesc: {
-    fontSize: 11,
-    color: '#3b82f6',
-    marginTop: 4,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  docPillScroll: {
-    flexDirection: 'row',
-    marginVertical: 4,
-  },
-  docPill: {
+  presetChip: {
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    marginRight: 8,
+    borderRadius: 999,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  docPillActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
+  presetChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
-  docPillText: {
+  presetChipText: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
-  docPillTextActive: {
+  presetChipTextActive: {
     color: '#ffffff',
     fontWeight: '700',
   },
-  purposeOptionsList: {
-    gap: 6,
-  },
-  purposeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f8fafc',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  purposeOptionActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#93c5fd',
-  },
-  radioCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#94a3b8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleActive: {
-    borderColor: '#1d4ed8',
-  },
-  radioDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#1d4ed8',
-  },
-  purposeOptionText: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  purposeOptionTextActive: {
-    color: '#1d4ed8',
-    fontWeight: '700',
-  },
-  textInput: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 12,
-    color: '#0f172a',
-    marginTop: 4,
-  },
+
+  /* Resident Profile Card */
   residentInfoCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 12,
+    gap: 11,
+  },
+  residentInfoCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  residentInfoCardTitle: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.5,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
   },
+  infoGrid2Col: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  infoRowHalf: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   infoCol: {
     flex: 1,
   },
   infoLabel: {
+    fontFamily: 'Inter',
     fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
   },
   infoValue: {
-    fontSize: 13,
+    fontFamily: 'Inter',
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0f172a',
     marginTop: 1,
@@ -1559,663 +2406,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#ecfdf5',
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#a7f3d0',
   },
   tipText: {
-    fontSize: 11,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
     color: '#065f46',
-    flex: 1,
-    lineHeight: 15,
-  },
-  uploadsList: {
-    gap: 10,
-  },
-  uploadItemCard: {
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    gap: 8,
-  },
-  uploadItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  uploadItemName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  uploadItemDesc: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  reqTag: {
-    paddingVertical: 1,
-    paddingHorizontal: 5,
-    borderRadius: 4,
-  },
-  reqTagRequired: {
-    backgroundColor: '#fee2e2',
-  },
-  reqTagOptional: {
-    backgroundColor: '#dcfce7',
-  },
-  reqTagText: {
-    fontSize: 8,
-    fontWeight: '800',
-  },
-  reqTagTextRequired: {
-    color: '#b91c1c',
-  },
-  reqTagTextOptional: {
-    color: '#15803d',
-  },
-  uploadActionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  uploadActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#ffffff',
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  uploadActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
-  uploadedFileContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    overflow: 'hidden',
-  },
-  uploadedFileRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 8,
-    gap: 8,
-  },
-  uploadedThumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#f1f5f9',
-  },
-  pdfBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    backgroundColor: '#fee2e2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-  },
-  uploadedFileLeft: {
-    flexDirection: 'column',
-    gap: 2,
-    flex: 1,
-  },
-  uploadedFileName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  uploadedFileSize: {
-    fontSize: 10,
-    color: '#64748b',
-  },
-  removeFileBtn: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: '#fee2e2',
-  },
-  dateScroll: {
-    flexDirection: 'row',
-    marginVertical: 4,
-  },
-  dateCard: {
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minWidth: 70,
-  },
-  dateCardActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-  },
-  dayNameText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  dayNameTextActive: {
-    color: '#bfdbfe',
-  },
-  monthDayText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 2,
-  },
-  monthDayTextActive: {
-    color: '#ffffff',
-  },
-  slotGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 6,
-  },
-  timeSlotPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    width: '48%',
-    backgroundColor: '#f8fafc',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  timeSlotPillActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#1d4ed8',
-  },
-  timeSlotText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  timeSlotTextActive: {
-    color: '#ffffff',
-  },
-  scheduleNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    padding: 10,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  scheduleNoticeText: {
-    fontSize: 11,
-    color: '#1e40af',
-    fontWeight: '600',
-    flex: 1,
-  },
-  summaryCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  summarySection: {
-    paddingVertical: 6,
-  },
-  summaryHeader: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748b',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  summaryMainText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  summarySubText: {
-    fontSize: 12,
-    color: '#334155',
-    marginTop: 2,
-  },
-  summaryFeeText: {
-    fontSize: 12,
-    color: '#0f172a',
-    marginTop: 4,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#e2e8f0',
-    marginVertical: 8,
-  },
-  appointmentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  appointmentDateText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1d4ed8',
-    marginLeft: 4,
-  },
-  appointmentSlotText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1d4ed8',
-    marginLeft: 4,
-  },
-  summaryFileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3,
-  },
-  summaryFileName: {
-    fontSize: 11,
-    color: '#334155',
-  },
-  headerSuccessBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#dcfce7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmationContent: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  successIconOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#dcfce7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    borderWidth: 3,
-    borderColor: '#bbf7d0',
-  },
-  successIconInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#16a34a',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#16a34a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  successTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#0f172a',
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  successSub: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 16,
-    lineHeight: 18,
-    paddingHorizontal: 12,
-  },
-  trackingBox: {
-    width: '100%',
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#93c5fd',
-    marginBottom: 14,
-  },
-  trackingHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  trackingHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  trackingLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#1e40af',
-    letterSpacing: 0.5,
-  },
-  copyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  copyPillActive: {
-    borderColor: '#86efac',
-    backgroundColor: '#f0fdf4',
-  },
-  copyPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#2563eb',
-  },
-  copyPillTextSuccess: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#16a34a',
-  },
-  trackingCode: {
-    fontSize: 22,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-    color: '#1d4ed8',
-    marginVertical: 8,
-    textAlign: 'center',
-    letterSpacing: 1,
-  },
-  trackingInstruction: {
-    fontSize: 11,
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  confirmDetailsCard: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 14,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  confirmLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  confirmLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  confirmValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  confirmValueBold: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  confirmDivider: {
-    height: 1,
-    backgroundColor: '#e2e8f0',
-    marginVertical: 6,
-  },
-  scheduleBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  scheduleBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1d4ed8',
-  },
-  feeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  feeBadgeFree: {
-    backgroundColor: '#dcfce7',
-  },
-  feeBadgePaid: {
-    backgroundColor: '#eff6ff',
-  },
-  feeBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  feeBadgeTextFree: {
-    color: '#15803d',
-  },
-  feeBadgeTextPaid: {
-    color: '#1d4ed8',
-  },
-  guideCard: {
-    width: '100%',
-    backgroundColor: '#fefce8',
-    borderColor: '#fef08a',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 18,
-  },
-  guideTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#854d0e',
-    marginBottom: 6,
-  },
-  guideItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 4,
-  },
-  guideBullet: {
-    fontSize: 12,
-    color: '#a16207',
-    fontWeight: '700',
-  },
-  guideText: {
-    fontSize: 11,
-    color: '#713f12',
     flex: 1,
     lineHeight: 16,
   },
-  confirmActions: {
-    width: '100%',
-    gap: 10,
-    marginBottom: 8,
-  },
-  trackNowBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#1d4ed8',
-    paddingVertical: 13,
-    borderRadius: 12,
-    shadowColor: '#1d4ed8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  trackNowBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  doneBtn: {
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-  },
-  doneBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    gap: 16,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    marginRight: 10,
-  },
-  backBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  nextBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: '#1d4ed8',
-  },
-  nextBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  docSelectCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-  },
-  docSelectCardActive: {
-    borderColor: '#2563eb',
-    backgroundColor: '#eff6ff',
-  },
-  docSelectCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    paddingRight: 8,
-  },
-  radioOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#94a3b8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterActive: {
-    borderColor: '#2563eb',
-  },
-  radioInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#2563eb',
-  },
-  docSelectTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  docSelectTitleActive: {
-    color: '#1d4ed8',
-  },
-  docSelectDesc: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  docSelectCardRight: {
-    alignItems: 'flex-end',
-    minWidth: 65,
-  },
-  docSelectFee: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  docSelectFeeActive: {
-    color: '#15803d',
-  },
-  docSelectTime: {
-    fontSize: 10,
-    color: '#64748b',
-    marginTop: 2,
-  },
+
+  /* Step 3 Uploads */
   reqProgressCard: {
-    backgroundColor: '#eff6ff',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1.5,
     borderColor: '#bfdbfe',
-    marginBottom: 16,
+  },
+  reqProgressCardError: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fffafb',
   },
   reqProgressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   reqProgressHeaderLeft: {
     flexDirection: 'row',
@@ -2231,47 +2451,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reqProgressIconPending: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
   },
   reqProgressIconDone: {
     backgroundColor: '#dcfce7',
   },
   reqProgressTitle: {
+    fontFamily: 'Inter',
     fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
   },
   reqProgressSubtitle: {
+    fontFamily: 'Inter',
     fontSize: 11,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 1,
   },
   reqProgressBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 999,
   },
   reqProgressBadgePending: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
   },
   reqProgressBadgeDone: {
     backgroundColor: '#dcfce7',
   },
   reqProgressBadgeText: {
-    fontSize: 12,
+    fontFamily: 'Inter',
+    fontSize: 11.5,
     fontWeight: '800',
   },
   reqProgressBadgeTextPending: {
-    color: '#1d4ed8',
+    color: '#2563eb',
   },
   reqProgressBadgeTextDone: {
     color: '#15803d',
   },
   reqProgressBarTrack: {
-    height: 8,
+    height: 7,
     borderRadius: 4,
-    backgroundColor: '#cbd5e1',
-    marginTop: 12,
+    backgroundColor: '#e2e8f0',
+    marginTop: 10,
     overflow: 'hidden',
   },
   reqProgressBarFill: {
@@ -2282,90 +2505,145 @@ const styles = StyleSheet.create({
   reqProgressBarFillDone: {
     backgroundColor: '#16a34a',
   },
-  reqProgressSuccessBanner: {
+
+  uploadsList: {
+    gap: 10,
+  },
+  uploadItemCard: {
+    backgroundColor: '#ffffff',
+    padding: 13,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    gap: 9,
+  },
+  uploadItemCardMissing: {
+    borderColor: '#fca5a5',
+    backgroundColor: '#fffafb',
+  },
+  uploadItemCardErrorStrong: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+    backgroundColor: '#fef2f2',
+  },
+  uploadItemCardUploaded: {
+    borderColor: '#86efac',
+    backgroundColor: '#ffffff',
+  },
+  uploadItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  uploadItemTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  uploadItemName: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  uploadItemDesc: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 3,
+  },
+  uploadingSpinnerBox: {
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#f0fdf4',
-    padding: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+  },
+  uploadingSpinnerText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  uploadActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  uploadActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#f8fafc',
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  uploadActionText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  uploadedFileContainer: {
+    backgroundColor: '#f8fafc',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#bbf7d0',
-    marginTop: 12,
+    overflow: 'hidden',
   },
-  reqProgressSuccessText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803d',
-    flex: 1,
-  },
-  reqQuickProceedBtn: {
-    backgroundColor: '#15803d',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  reqQuickProceedBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  reqProgressPendingBanner: {
+  uploadedFileRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 8,
     gap: 8,
-    backgroundColor: '#fffbeb',
-    padding: 10,
-    borderRadius: 10,
+  },
+  uploadedThumbnail: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#fde68a',
-    marginTop: 12,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f1f5f9',
   },
-  reqProgressPendingText: {
-    fontSize: 11,
-    color: '#92400e',
-    fontWeight: '600',
-    flex: 1,
-  },
-  uploadedCheckTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#dcfce7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  uploadedCheckTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#15803d',
-  },
-  pendingActionTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  pdfBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
     backgroundColor: '#fee2e2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  pendingActionTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#b91c1c',
+  uploadedFileLeft: {
+    flex: 1,
+    gap: 2,
   },
-  nextBtnIncomplete: {
-    backgroundColor: '#64748b',
-    opacity: 0.85,
+  uploadedFileName: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  nextBtnReady: {
-    backgroundColor: '#2563eb',
-    shadowColor: '#2563eb',
+  uploadedFileSize: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    color: '#15803d',
+    fontWeight: '600',
+  },
+  removeFileBtn: {
+    padding: 7,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
   },
   aiQualityBox: {
-    marginTop: 8,
+    margin: 8,
+    marginTop: 0,
     borderRadius: 8,
     padding: 8,
     borderWidth: 1,
@@ -2379,6 +2657,7 @@ const styles = StyleSheet.create({
     borderColor: '#fde68a',
   },
   aiQualityTitle: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -2389,6 +2668,7 @@ const styles = StyleSheet.create({
     color: '#92400e',
   },
   aiQualityWarningText: {
+    fontFamily: 'Inter',
     fontSize: 10,
     color: '#78350f',
     lineHeight: 14,
@@ -2407,8 +2687,446 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   aiRetakeBtnText: {
+    fontFamily: 'Inter',
     fontSize: 10,
     fontWeight: '700',
     color: '#92400e',
+  },
+
+  /* Step 4 Schedule */
+  dateScroll: {
+    flexDirection: 'row',
+    marginTop: 2,
+  },
+  dateCard: {
+    backgroundColor: '#f8fafc',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minWidth: 72,
+  },
+  dateCardActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  dayNameText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  dayNameTextActive: {
+    color: '#dbeafe',
+  },
+  monthDayText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 2,
+  },
+  monthDayTextActive: {
+    color: '#ffffff',
+  },
+  slotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  timeSlotPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: '48%',
+    backgroundColor: '#f8fafc',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  timeSlotPillActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  timeSlotText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  timeSlotTextActive: {
+    color: '#ffffff',
+  },
+  scheduleNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  scheduleNoticeText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#1e40af',
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  /* Step 5 Summary */
+  summaryCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  summarySection: {
+    paddingVertical: 4,
+  },
+  summaryHeader: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  summaryMainText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  summarySubText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 2,
+  },
+  summaryFeeText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#0f172a',
+    marginTop: 4,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 10,
+  },
+  appointmentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    padding: 9,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  appointmentDateText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginLeft: 5,
+  },
+  appointmentSlotText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    marginLeft: 5,
+  },
+  summaryFileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  summaryFileName: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#334155',
+    fontWeight: '600',
+  },
+
+  /* Step 6 Confirmation */
+  confirmationContent: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  successIconOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: '#bbf7d0',
+  },
+  successIconInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successTitle: {
+    fontFamily: 'Inter',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  successSub: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+    lineHeight: 17,
+  },
+  trackingBox: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    padding: 15,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#93c5fd',
+    marginBottom: 12,
+  },
+  trackingHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  trackingHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trackingLabel: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1e40af',
+    letterSpacing: 0.5,
+  },
+  copyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  copyPillActive: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+  },
+  copyPillText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  copyPillTextSuccess: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+  },
+  trackingCode: {
+    fontSize: 21,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    color: '#1d4ed8',
+    marginVertical: 8,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  trackingInstruction: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  confirmDetailsCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  confirmLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  confirmLabel: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  confirmValue: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  confirmValueBold: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 6,
+  },
+  scheduleBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  scheduleBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  guideCard: {
+    width: '100%',
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  guideHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  guideTitle: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1e3a8a',
+  },
+  guideText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    color: '#334155',
+    lineHeight: 16,
+  },
+  confirmActions: {
+    width: '100%',
+    gap: 8,
+  },
+  trackNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2563eb',
+    paddingVertical: 13,
+    borderRadius: 13,
+  },
+  trackNowBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  doneBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  doneBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  /* Footer */
+  modalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    gap: 10,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+  },
+  backBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  nextBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+  },
+  nextBtnIncomplete: {
+    backgroundColor: '#475569',
+  },
+  nextBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ensureInterFontLoaded } from '../../core/fontSetup';
 import {
   View,
   Text,
@@ -12,6 +13,10 @@ import {
 } from 'react-native';
 import {
   ArrowLeft,
+  ArrowRight,
+  Mail,
+  KeyRound,
+  UserPlus,
   Eye,
   EyeOff,
   CheckCircle2,
@@ -26,6 +31,7 @@ import {
   CheckSquare,
   Square,
   Calendar,
+  ChevronDown,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
 import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts, unlockUserAccount, checkRateLimit, checkAccountExists } from '../../core/security';
@@ -153,12 +159,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
   // Privacy Policy Modal State
   const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState<boolean>(false);
+  const [openDropdown, setOpenDropdown] = useState<'civil_status' | 'sitio' | null>(null);
 
   // Resend Confirmation State
   const [showResendConfirmation, setShowResendConfirmation] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
+    ensureInterFontLoaded();
     // 1. Detect if redirected with error, password recovery, or signup verification
     const hash = typeof window !== 'undefined' ? window.location.hash : '';
     const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -1020,78 +1028,50 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         {/* Top Header & Branding */}
         <View style={styles.headerArea}>
           <View style={styles.topNavRow}>
-            {(activeTab === 'register' || authStep !== 'credentials') ? (
-              <TouchableOpacity
-                style={styles.circleBackBtn}
-                onPress={() => {
-                  if (authStep !== 'credentials') {
-                    setAuthStep('credentials');
-                    setErrorMessage('');
-                    setSuccessBanner('');
-                    setInfoBanner('');
-                  } else {
-                    setActiveTab('login');
-                    setErrorMessage('');
-                    setSuccessBanner('');
-                    setInfoBanner('');
-                  }
-                }}
-              >
-                <ArrowLeft size={18} color="#1e293b" />
-              </TouchableOpacity>
-            ) : (
-              <View style={{ width: 36 }} />
-            )}
-
-            {/* Modern Brand Logo with Official Seal */}
             <View style={styles.brandLogoWrapper}>
-              <Image
-                source={{ uri: '/logo.png' }}
-                style={{ width: 28, height: 28, resizeMode: 'contain', marginRight: 8, borderRadius: 14 }}
-              />
-              <Text style={styles.brandLogoText}>zapatera</Text>
-              <View style={styles.dotAccents}>
-                <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
-                <View style={[styles.dot, { backgroundColor: '#10b981' }]} />
-                <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
+              {(activeTab === 'register' || authStep !== 'credentials') && (
+                <TouchableOpacity
+                  style={styles.circleBackBtn}
+                  onPress={() => {
+                    if (authStep !== 'credentials') {
+                      setAuthStep('credentials');
+                      setErrorMessage('');
+                      setSuccessBanner('');
+                      setInfoBanner('');
+                    } else {
+                      setActiveTab('login');
+                      setErrorMessage('');
+                      setSuccessBanner('');
+                      setInfoBanner('');
+                    }
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <ArrowLeft size={16} color="#1e293b" />
+                </TouchableOpacity>
+              )}
+
+              <View style={styles.sealBadgeBox}>
+                <Image
+                  source={{ uri: '/logo.png' }}
+                  style={{ width: 28, height: 28, resizeMode: 'contain', borderRadius: 6 }}
+                />
+              </View>
+
+              <View style={styles.brandTextCol}>
+                <Text style={styles.brandLogoText}>ZAPATERA</Text>
+                <View style={styles.brandRolePill}>
+                  <View style={styles.brandRoleDot} />
+                  <Text style={styles.brandRoleText}>RESIDENT PORTAL</Text>
+                </View>
               </View>
             </View>
 
-            <View style={{ width: 36 }} />
+            <View style={styles.govPhBadge}>
+              <Text style={styles.govPhBadgeText}>GovPH</Text>
+            </View>
           </View>
         </View>
-
-        {/* Top Segmented Sign In / Register Tab Switcher */}
-        {authStep === 'credentials' && (
-          <View style={styles.authTabSwitcher}>
-            <TouchableOpacity
-              style={[styles.authTabBtn, activeTab === 'login' && styles.authTabBtnActive]}
-              onPress={() => {
-                setActiveTab('login');
-                setErrorMessage('');
-                setSuccessBanner('');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.authTabBtnText, activeTab === 'login' && styles.authTabBtnTextActive]}>
-                Sign In
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.authTabBtn, activeTab === 'register' && styles.authTabBtnActive]}
-              onPress={() => {
-                setActiveTab('register');
-                setErrorMessage('');
-                setSuccessBanner('');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.authTabBtnText, activeTab === 'register' && styles.authTabBtnTextActive]}>
-                Register Account
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* ================================================================= */}
         {/* 7. REGISTRATION ALERTS & NOTICES */}
@@ -1178,30 +1158,54 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         {activeTab === 'login' ? (
           authStep === 'credentials' ? (
             <View style={styles.formContainer}>
-              <Text style={styles.formTitle}>Login to your Account</Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>
-                  Email <Text style={styles.requiredAsterisk}>*</Text>
+              <View style={styles.headingBlock}>
+                <Text style={styles.formTitle}>Resident Sign In</Text>
+                <Text style={styles.formSubtitle}>
+                  Enter your registered credentials to access Barangay Zapatera digital services.
                 </Text>
-                <TextInput
-                  style={styles.modernInput}
-                  placeholder="name@gmail.com"
-                  placeholderTextColor="#94a3b8"
-                  value={loginEmail}
-                  onChangeText={setLoginEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>
-                  Password <Text style={styles.requiredAsterisk}>*</Text>
+                  Registered Gmail <Text style={styles.requiredAsterisk}>*</Text>
                 </Text>
-                <View style={styles.passwordWrapper}>
+                <View style={styles.inputWithIconWrapper}>
+                  <View style={styles.leadingIconBox}>
+                    <Mail size={16} color="#94a3b8" />
+                  </View>
                   <TextInput
-                    style={styles.passwordInput}
+                    style={styles.inputWithLeadingIcon}
+                    placeholder="name@gmail.com"
+                    placeholderTextColor="#94a3b8"
+                    value={loginEmail}
+                    onChangeText={setLoginEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRowBetween}>
+                  <Text style={[styles.inputLabel, { marginBottom: 0 }]}>
+                    Password <Text style={styles.requiredAsterisk}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setAuthStep('forgot_password');
+                      setErrorMessage('');
+                      setSuccessBanner('');
+                    }}
+                  >
+                    <Text style={styles.forgotPasswordLink}>Forgot password?</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.passwordWrapper}>
+                  <View style={styles.leadingIconBox}>
+                    <KeyRound size={16} color="#94a3b8" />
+                  </View>
+                  <TextInput
+                    style={styles.passwordInputWithIcon}
                     placeholder="••••••••••••"
                     placeholderTextColor="#94a3b8"
                     value={loginPassword}
@@ -1212,39 +1216,56 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                     style={styles.eyeBtn}
                     onPress={() => setShowLoginPassword(!showLoginPassword)}
                   >
-                    {showLoginPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                    {showLoginPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
                   </TouchableOpacity>
                 </View>
               </View>
 
               <View style={styles.rememberForgotRow}>
                 <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}
                   onPress={() => setRememberMe(!rememberMe)}
+                  activeOpacity={0.75}
                 >
-                  {rememberMe ? <CheckSquare size={16} color="#1e3a8a" /> : <Square size={16} color="#94a3b8" />}
-                  <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '500' }}>Remember me</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { setAuthStep('forgot_password'); setErrorMessage(''); setSuccessBanner(''); }}>
-                  <Text style={{ color: '#1e3a8a', fontSize: 12, fontWeight: '600' }}>Forgot password?</Text>
+                  {rememberMe ? <CheckSquare size={16} color="#2563eb" /> : <Square size={16} color="#94a3b8" />}
+                  <Text style={styles.rememberMeText}>Keep me signed in</Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleCredentialsSubmit} disabled={loading}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, loading && styles.btnDisabled]}
+                onPress={handleCredentialsSubmit}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
                 {loading ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.primaryBtnText}>Sign in</Text>
+                  <View style={styles.btnContentRow}>
+                    <Text style={styles.primaryBtnText}>Sign In</Text>
+                    <ArrowRight size={16} color="#ffffff" />
+                  </View>
                 )}
               </TouchableOpacity>
 
-              <View style={styles.footerLinkRow}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => { setActiveTab('register'); setErrorMessage(''); setSuccessBanner(''); }}>
-                  <Text style={styles.footerLinkText}>Sign up</Text>
-                </TouchableOpacity>
+              <View style={styles.authDividerRow}>
+                <View style={styles.authDividerLine} />
+                <Text style={styles.authDividerText}>NEW RESIDENT?</Text>
+                <View style={styles.authDividerLine} />
               </View>
+
+              <TouchableOpacity
+                style={styles.secondaryActionBtn}
+                onPress={() => {
+                  setActiveTab('register');
+                  setErrorMessage('');
+                  setSuccessBanner('');
+                }}
+                activeOpacity={0.8}
+              >
+                <UserPlus size={15} color="#1d4ed8" />
+                <Text style={styles.secondaryActionBtnText}>Create a Resident Account</Text>
+              </TouchableOpacity>
             </View>
           ) : authStep === 'forgot_password' ? (
             <View style={styles.formContainer}>
@@ -1397,7 +1418,16 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           /* 1. RESIDENT SIGN UP TAB (ALL FIELDS REQUIRED + GMAIL + PASSWORD)   */
           /* ================================================================= */
           <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>Create your Account</Text>
+            <View style={styles.headingBlock}>
+              <Text style={styles.formTitle}>Create Resident Account</Text>
+              <Text style={styles.formSubtitle}>
+                Fill out your official details below to register for Barangay Zapatera services.
+              </Text>
+            </View>
+
+            <View style={styles.sectionDividerBadge}>
+              <Text style={styles.sectionDividerText}>ACCOUNT CREDENTIALS</Text>
+            </View>
 
             {/* 2. Gmail Address Field */}
             <View style={styles.inputGroup}>
@@ -1421,7 +1451,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               ) : null}
             </View>
 
-            {/* 3. Password Field & Live Requirements */}
+            {/* 3. Password & Confirm Password in Compact Layout */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
                 Password <Text style={styles.requiredAsterisk}>*</Text>
@@ -1432,7 +1462,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               ]}>
                 <TextInput
                   style={styles.passwordInput}
-                  placeholder="Enter strong password"
+                  placeholder="Create a strong password"
                   placeholderTextColor="#94a3b8"
                   value={regData.password}
                   onChangeText={(txt) => handleFieldChange('password', txt)}
@@ -1442,39 +1472,30 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                   style={styles.eyeBtn}
                   onPress={() => setShowRegPassword(!showRegPassword)}
                 >
-                  {showRegPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  {showRegPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
                 </TouchableOpacity>
               </View>
               {fieldErrors.password ? (
                 <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
               ) : null}
 
-              {/* Live Password Requirements Checklist */}
+              {/* Compact 2-Column Password Requirements Grid */}
               <View style={styles.pwdReqBox}>
-                <Text style={styles.pwdReqHeader}>Password requirements:</Text>
-                <View style={styles.pwdReqRow}>
+                <View style={styles.pwdReqGrid}>
                   <Text style={[styles.pwdReqItem, passwordStrength.hasLength ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasLength ? '✓' : '•'} At least 8 characters
+                    {passwordStrength.hasLength ? '✓' : '•'} 8+ characters
                   </Text>
-                </View>
-                <View style={styles.pwdReqRow}>
                   <Text style={[styles.pwdReqItem, passwordStrength.hasUpper ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasUpper ? '✓' : '•'} One uppercase letter
+                    {passwordStrength.hasUpper ? '✓' : '•'} Uppercase (A-Z)
                   </Text>
-                </View>
-                <View style={styles.pwdReqRow}>
                   <Text style={[styles.pwdReqItem, passwordStrength.hasLower ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasLower ? '✓' : '•'} One lowercase letter
+                    {passwordStrength.hasLower ? '✓' : '•'} Lowercase (a-z)
                   </Text>
-                </View>
-                <View style={styles.pwdReqRow}>
                   <Text style={[styles.pwdReqItem, passwordStrength.hasNumber ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasNumber ? '✓' : '•'} One number
+                    {passwordStrength.hasNumber ? '✓' : '•'} Number (0-9)
                   </Text>
-                </View>
-                <View style={styles.pwdReqRow}>
                   <Text style={[styles.pwdReqItem, passwordStrength.hasSpecial ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasSpecial ? '✓' : '•'} One special character
+                    {passwordStrength.hasSpecial ? '✓' : '•'} Special char (!@#$)
                   </Text>
                 </View>
               </View>
@@ -1501,12 +1522,16 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                   style={styles.eyeBtn}
                   onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
                 >
-                  {showRegConfirmPassword ? <EyeOff size={18} color="#94a3b8" /> : <Eye size={18} color="#94a3b8" />}
+                  {showRegConfirmPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
                 </TouchableOpacity>
               </View>
               {fieldErrors.confirmPassword ? (
                 <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
               ) : null}
+            </View>
+
+            <View style={[styles.sectionDividerBadge, { marginTop: 4 }]}>
+              <Text style={styles.sectionDividerText}>RESIDENT INFORMATION</Text>
             </View>
 
             {/* Full Name Fields */}
@@ -1627,63 +1652,129 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               </View>
             </View>
 
-            {/* Civil Status Selection */}
+            {/* Civil Status & Sitio Dropdowns */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
                 Civil Status <Text style={styles.requiredAsterisk}>*</Text>
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
-                {CIVIL_STATUS_OPTIONS.map((status) => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.sitioPill,
-                      regData.civil_status === status && styles.sitioPillActive,
-                    ]}
-                    onPress={() => handleFieldChange('civil_status', status)}
-                  >
-                    <Text
-                      style={[
-                        styles.sitioPillText,
-                        regData.civil_status === status && styles.sitioPillTextActive,
-                      ]}
-                    >
-                      {status}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <TouchableOpacity
+                style={[
+                  styles.dropdownTrigger,
+                  openDropdown === 'civil_status' && styles.dropdownTriggerActive,
+                  fieldErrors.civil_status ? styles.inputErrorBorder : null,
+                ]}
+                onPress={() =>
+                  setOpenDropdown((prev) => (prev === 'civil_status' ? null : 'civil_status'))
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dropdownTriggerText}>
+                  {regData.civil_status || 'Select Civil Status'}
+                </Text>
+                <ChevronDown
+                  size={17}
+                  color={openDropdown === 'civil_status' ? '#2563eb' : '#64748b'}
+                  style={{
+                    transform: [{ rotate: openDropdown === 'civil_status' ? '180deg' : '0deg' }],
+                  } as any}
+                />
+              </TouchableOpacity>
+
+              {openDropdown === 'civil_status' && (
+                <View style={styles.dropdownMenuList}>
+                  {CIVIL_STATUS_OPTIONS.map((status) => {
+                    const isSelected = regData.civil_status === status;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        style={[
+                          styles.dropdownOptionItem,
+                          isSelected && styles.dropdownOptionItemActive,
+                        ]}
+                        onPress={() => {
+                          handleFieldChange('civil_status', status);
+                          setOpenDropdown(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionText,
+                            isSelected && styles.dropdownOptionTextActive,
+                          ]}
+                        >
+                          {status}
+                        </Text>
+                        {isSelected && <Check size={15} color="#2563eb" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
               {fieldErrors.civil_status ? (
                 <Text style={styles.fieldErrorText}>{fieldErrors.civil_status}</Text>
               ) : null}
             </View>
 
-            {/* Select Sitio */}
+            {/* Select Sitio Dropdown */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>
                 Select Sitio (Barangay Zapatera) <Text style={styles.requiredAsterisk}>*</Text>
               </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sitioScroll}>
-                {SAMPLE_SITIOS.map((sitioName) => (
-                  <TouchableOpacity
-                    key={sitioName}
-                    style={[
-                      styles.sitioPill,
-                      regData.sitio === sitioName && styles.sitioPillActive,
-                    ]}
-                    onPress={() => handleFieldChange('sitio', sitioName)}
-                  >
-                    <Text
-                      style={[
-                        styles.sitioPillText,
-                        regData.sitio === sitioName && styles.sitioPillTextActive,
-                      ]}
-                    >
-                      {sitioName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <TouchableOpacity
+                style={[
+                  styles.dropdownTrigger,
+                  openDropdown === 'sitio' && styles.dropdownTriggerActive,
+                  fieldErrors.sitio ? styles.inputErrorBorder : null,
+                ]}
+                onPress={() =>
+                  setOpenDropdown((prev) => (prev === 'sitio' ? null : 'sitio'))
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dropdownTriggerText}>
+                  {regData.sitio || 'Select Sitio'}
+                </Text>
+                <ChevronDown
+                  size={17}
+                  color={openDropdown === 'sitio' ? '#2563eb' : '#64748b'}
+                  style={{
+                    transform: [{ rotate: openDropdown === 'sitio' ? '180deg' : '0deg' }],
+                  } as any}
+                />
+              </TouchableOpacity>
+
+              {openDropdown === 'sitio' && (
+                <View style={styles.dropdownMenuList}>
+                  {SAMPLE_SITIOS.map((sitioName) => {
+                    const isSelected = regData.sitio === sitioName;
+                    return (
+                      <TouchableOpacity
+                        key={sitioName}
+                        style={[
+                          styles.dropdownOptionItem,
+                          isSelected && styles.dropdownOptionItemActive,
+                        ]}
+                        onPress={() => {
+                          handleFieldChange('sitio', sitioName);
+                          setOpenDropdown(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionText,
+                            isSelected && styles.dropdownOptionTextActive,
+                          ]}
+                        >
+                          {sitioName}
+                        </Text>
+                        {isSelected && <Check size={15} color="#2563eb" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
               {fieldErrors.sitio ? (
                 <Text style={styles.fieldErrorText}>{fieldErrors.sitio}</Text>
               ) : null}
@@ -1896,120 +1987,258 @@ const styles = StyleSheet.create({
 
   authCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 28,
-    padding: 26,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingTop: 24,
+    paddingBottom: 20,
     width: '100%',
-    maxWidth: 450,
-    shadowColor: '#1e3a8a',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 36,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-  },
-  authTabSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 16,
-  },
-  authTabBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 11,
-  },
-  authTabBtnActive: {
-    backgroundColor: '#ffffff',
+    maxWidth: 440,
     shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  authTabBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  authTabBtnTextActive: {
-    color: '#1d4ed8',
-    fontWeight: '800',
+    shadowRadius: 32,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   headerArea: {
-    marginBottom: 8,
+    marginBottom: 18,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
   topNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 40,
+    minHeight: 42,
   },
   circleBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
+  },
+  sealBadgeBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
   },
   brandLogoWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  brandLogoText: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#1e3a8a',
-    letterSpacing: -0.5,
+  brandTextCol: {
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  dotAccents: {
+  brandLogoText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    letterSpacing: 2.1,
+    lineHeight: 18,
+    textTransform: 'uppercase',
+  },
+  brandRolePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginLeft: 4,
-    marginTop: 2,
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(191, 219, 254, 0.8)',
+    marginTop: 3,
   },
-  dot: {
+  brandRoleDot: {
     width: 5.5,
     height: 5.5,
     borderRadius: 3,
+    backgroundColor: '#2563eb',
+  },
+  brandRoleText: {
+    fontFamily: 'Inter',
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#2563eb',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  govPhBadge: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  govPhBadgeText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  headingBlock: {
+    marginBottom: 18,
   },
   formContainer: {
-    marginTop: 4,
+    marginTop: 2,
   },
   formTitle: {
+    fontFamily: 'Inter',
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 18,
-    letterSpacing: -0.3,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 6,
+    letterSpacing: -0.4,
   },
   formSubtitle: {
-    fontSize: 12,
+    fontFamily: 'Inter',
+    fontSize: 12.5,
     color: '#64748b',
-    marginTop: -10,
-    marginBottom: 16,
     lineHeight: 18,
+  },
+  sectionDividerBadge: {
+    backgroundColor: '#f8fafc',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2563eb',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  sectionDividerText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#334155',
+    letterSpacing: 0.8,
+  },
+  labelRowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  forgotPasswordLink: {
+    fontFamily: 'Inter',
+    color: '#2563eb',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  inputWithIconWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+  },
+  leadingIconBox: {
+    paddingLeft: 13,
+    paddingRight: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputWithLeadingIcon: {
+    fontFamily: 'Inter',
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    color: '#0f172a',
+    fontSize: 13,
+  },
+  passwordInputWithIcon: {
+    fontFamily: 'Inter',
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 11,
+    color: '#0f172a',
+    fontSize: 13,
+  },
+  rememberMeText: {
+    fontFamily: 'Inter',
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  btnContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  authDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 10,
+  },
+  authDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  authDividerText: {
+    fontFamily: 'Inter',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: 0.8,
+  },
+  secondaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  secondaryActionBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  pwdReqGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   inputGroup: {
     marginBottom: 14,
   },
   inputLabel: {
+    fontFamily: 'Inter',
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
     marginBottom: 6,
   },
   requiredAsterisk: {
+    fontFamily: 'Inter',
     color: '#ef4444',
     fontWeight: 'bold',
   },
   fieldErrorText: {
+    fontFamily: 'Inter',
     color: '#dc2626',
     fontSize: 11,
     fontWeight: '500',
@@ -2017,6 +2246,7 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   modernInput: {
+    fontFamily: 'Inter',
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -2053,6 +2283,7 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   passwordInput: {
+    fontFamily: 'Inter',
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -2071,6 +2302,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   pwdReqHeader: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '700',
     color: '#475569',
@@ -2080,14 +2312,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   pwdReqItem: {
+    fontFamily: 'Inter',
     fontSize: 11,
     lineHeight: 16,
   },
   pwdReqItemValid: {
+    fontFamily: 'Inter',
     color: '#059669',
     fontWeight: '600',
   },
   pwdReqItemInvalid: {
+    fontFamily: 'Inter',
     color: '#94a3b8',
     fontWeight: '400',
   },
@@ -2114,6 +2349,7 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   primaryBtnText: {
+    fontFamily: 'Inter',
     color: '#ffffff',
     fontSize: 14,
     fontWeight: 'bold',
@@ -2125,10 +2361,12 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   footerText: {
+    fontFamily: 'Inter',
     fontSize: 13,
     color: '#64748b',
   },
   footerLinkText: {
+    fontFamily: 'Inter',
     fontSize: 13,
     color: '#1e3a8a',
     fontWeight: 'bold',
@@ -2137,34 +2375,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  sitioScroll: {
-    flexDirection: 'row',
-    marginTop: 2,
-  },
-  sitioPill: {
+  dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginRight: 8,
-    gap: 4,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  sitioPillActive: {
-    backgroundColor: '#1e3a8a',
-    borderColor: '#1e3a8a',
+  dropdownTriggerActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#2563eb',
   },
-  sitioPillText: {
-    fontSize: 11,
-    color: '#64748b',
+  dropdownTriggerText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
     fontWeight: '500',
+    color: '#0f172a',
   },
-  sitioPillTextActive: {
-    color: '#ffffff',
-    fontWeight: 'bold',
+  dropdownMenuList: {
+    marginTop: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingVertical: 4,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  dropdownOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  dropdownOptionItemActive: {
+    backgroundColor: '#eff6ff',
+  },
+  dropdownOptionText: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  dropdownOptionTextActive: {
+    fontFamily: 'Inter',
+    fontWeight: '700',
+    color: '#1d4ed8',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -2187,11 +2452,13 @@ const styles = StyleSheet.create({
     borderColor: '#1e3a8a',
   },
   toggleBtnText: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '600',
     color: '#64748b',
   },
   toggleBtnTextActive: {
+    fontFamily: 'Inter',
     color: '#ffffff',
     fontWeight: 'bold',
   },
@@ -2225,12 +2492,14 @@ const styles = StyleSheet.create({
     borderColor: '#1e3a8a',
   },
   privacyPolicyLabel: {
+    fontFamily: 'Inter',
     flex: 1,
     fontSize: 11,
     color: '#475569',
     lineHeight: 16,
   },
   privacyPolicyLink: {
+    fontFamily: 'Inter',
     color: '#1e3a8a',
     fontWeight: 'bold',
     textDecorationLine: 'underline',

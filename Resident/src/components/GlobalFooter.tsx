@@ -33,9 +33,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 24,
   },
   systemTitle: {
+    fontFamily: 'Inter',
     fontSize: 11,
     fontWeight: '700',
     color: '#334155',
@@ -43,12 +44,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   developerText: {
+    fontFamily: 'Inter',
     fontSize: 10,
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 14,
   },
   boldText: {
+    fontFamily: 'Inter',
     fontWeight: '700',
     color: '#1e293b',
   },
