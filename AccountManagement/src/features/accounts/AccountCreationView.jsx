@@ -434,7 +434,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
   const [processingTitle, setProcessingTitle] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
 
-  const [formData, setFormData] = useState({
+  const INITIAL_USER_FORM = {
     email: '',
     full_name: '',
     first_name: '',
@@ -448,15 +448,30 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     sitio: 'Sitio Zapatera Proper',
     role: 'admin',
     phone: '',
-    address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
+    address: 'Barangay Zapatera Hall, Cebu City',
     office: 'Barangay Zapatera Hall, Cebu City',
-    position: '',
+    position: 'Barangay Admin',
     id_type: 'Government ID',
     id_number: '',
     is_active: true,
     password: '',
     confirm_password: '',
-  });
+  };
+
+  const clearForm = () => {
+    setFormData(INITIAL_USER_FORM);
+    setFieldErrors({});
+    setFormGeneralError('');
+    setShowProvisionPassword(false);
+    setShowProvisionConfirmPassword(false);
+    setEditingId(null);
+    setEditingUser(null);
+    setPendingUserPayload(null);
+    setSavePasswordInput('');
+    setSaveAuthError('');
+  };
+
+  const [formData, setFormData] = useState(INITIAL_USER_FORM);
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [formGeneralError, setFormGeneralError] = useState('');
@@ -1064,12 +1079,10 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         : 'Resident';
     const isNew = !editingId && !editingUser;
 
+    saveCompletedRef.current = true;
     setIsSaveSecurityModalOpen(false);
-    setEditingId(null);
-    setEditingUser(null);
     setIsModalOpen(false);
-    setPendingUserPayload(null);
-    setSavePasswordInput('');
+    clearForm();
     setIsSaving(false);
     setIsProcessing(false);
     fetchUsers();
@@ -1082,7 +1095,11 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         ? `The ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
         : `The profile details for "${savedName}" (${savedEmail}) were updated successfully.`,
       buttonText: 'Done',
-      onClose: () => setActionModal({ isOpen: false }),
+      onClose: () => {
+        setActionModal({ isOpen: false });
+        setIsModalOpen(false);
+        clearForm();
+      },
     });
   }
 
@@ -1229,35 +1246,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
   }
 
   const openCreateModal = () => {
-    setEditingId(null);
-    setEditingUser(null);
-    setFieldErrors({});
-    setFormGeneralError('');
-    setShowProvisionPassword(false);
-    setShowProvisionConfirmPassword(false);
-    setFormData({
-      email: '',
-      full_name: '',
-      first_name: '',
-      middle_initial: '',
-      last_name: '',
-      gender: 'Male',
-      age: '',
-      birth_date: '',
-      civil_status: 'Single',
-      voter_status: 'Registered Voter',
-      sitio: 'Sitio Zapatera Proper',
-      role: 'admin', // Default to Barangay Admin for streamlined creation
-      phone: '',
-      address: 'Barangay Zapatera Hall, Cebu City',
-      office: 'Barangay Zapatera Hall, Cebu City',
-      position: 'Barangay Admin',
-      id_type: 'Government ID',
-      id_number: '',
-      is_active: true,
-      password: '',
-      confirm_password: '',
-    });
+    clearForm();
     setIsModalOpen(true);
   };
 
@@ -1848,7 +1837,12 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
           setIsSaveSecurityModalOpen(false);
           setSavePasswordInput('');
           setSaveAuthError('');
-          setIsModalOpen(true);
+          if (!saveCompletedRef.current) {
+            setIsModalOpen(true);
+          } else {
+            setIsModalOpen(false);
+            clearForm();
+          }
         }}
         title={`Security Verification - ${editingId ? 'Update' : 'Create'} Account`}
         darkMode={isDarkMode}
@@ -2142,8 +2136,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingId(null);
-          setEditingUser(null);
+          clearForm();
         }}
         title={(editingId || editingUser) ? 'Edit User Profile & Role' : 'Create New Account'}
         darkMode={isDarkMode}
@@ -2269,7 +2262,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
                   2. Personal Status & Birth Details *
                 </span>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
                     <label className="block text-xs font-semibold mb-1">
                       Date of Birth <span className="text-red-500">*</span>
@@ -2297,10 +2290,50 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
                   <div>
                     <label className="block text-xs font-semibold mb-1">
+                      Age
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="Auto / e.g. 28"
+                      value={formData.age}
+                      onChange={(e) => handleFieldChange('age', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg font-mono outline-none ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
+                      Gender <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.gender || 'Male'}
+                      onChange={(e) => handleFieldChange('gender', e.target.value)}
+                      className={`w-full px-3 py-2 text-xs border rounded-lg outline-none cursor-pointer ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    >
+                      {GENDER_OPTIONS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">
                       Civil Status <span className="text-red-500">*</span>
                     </label>
                     <select
-                      value={formData.civil_status}
+                      value={formData.civil_status || 'Single'}
                       onChange={(e) => handleFieldChange('civil_status', e.target.value)}
                       className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 ${
                         fieldErrors.civil_status
@@ -2530,8 +2563,23 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                   </div>
                 )}
 
-                {/* 2. Personal Credentials: Age, Gender, Date of Birth, Civil Status */}
+                {/* 2. Personal Credentials: Date of Birth, Age, Gender, Civil Status */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      max={new Date().toISOString().split('T')[0]}
+                      value={formData.birth_date}
+                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
+                      className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:ring-2 ${
+                        isDarkMode
+                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
+                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
+                      }`}
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold mb-1">
                       Age <span className="text-red-500">*</span>
@@ -2586,21 +2634,6 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                         <span>{fieldErrors.gender}</span>
                       </p>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      max={new Date().toISOString().split('T')[0]}
-                      value={formData.birth_date}
-                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
-                      className={`w-full px-2.5 py-2 text-xs border rounded-lg focus:ring-2 ${
-                        isDarkMode
-                          ? 'bg-slate-950 border-slate-800 text-white focus:ring-blue-500'
-                          : 'bg-white border-slate-300 text-slate-900 focus:ring-blue-500'
-                      }`}
-                    />
                   </div>
 
                   <div>
@@ -2889,8 +2922,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
               type="button"
               onClick={() => {
                 setIsModalOpen(false);
-                setEditingId(null);
-                setEditingUser(null);
+                clearForm();
               }}
               className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
             >

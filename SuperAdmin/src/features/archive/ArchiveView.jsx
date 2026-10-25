@@ -34,6 +34,7 @@ import { StorageService } from '../../core/storage';
 import { formatDate } from '../../core/security';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { getLogCategory } from '../logs/LogsView';
+import { ArchiveSkeleton, TableSkeleton } from '../../components/SkeletonLoader';
 
 export default function ArchiveView({ currentUser, isDarkMode = false }) {
   // RBAC Guard - strictly accessible ONLY by admin and super_admin
@@ -368,6 +369,10 @@ export default function ArchiveView({ currentUser, isDarkMode = false }) {
   }
 
   const totalArchivedCount = archivedNews.length + archivedUsers.length + archivedActivityLogs.length;
+
+  if (loading && !archivedNews.length && !archivedUsers.length && !archivedActivityLogs.length) {
+    return <ArchiveSkeleton isDarkMode={isDarkMode} />;
+  }
 
   return (
     <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">

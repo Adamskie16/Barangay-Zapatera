@@ -541,6 +541,21 @@ export const StorageService = {
     return req;
   },
 
+  updateRequestStatus: async (requestIdOrPayload, status, additionalData = {}, adminUser = null) => {
+    if (typeof requestIdOrPayload === 'object' && requestIdOrPayload !== null) {
+      return StorageService.saveRequest(requestIdOrPayload, status || adminUser);
+    }
+    const allRequests = StorageService.getRequests();
+    const existing = allRequests.find((r) => (requestIdOrPayload && r.id === requestIdOrPayload) || (requestIdOrPayload && r.tracking_number === requestIdOrPayload)) || {};
+    const updated = {
+      ...existing,
+      id: requestIdOrPayload,
+      status: status || existing.status,
+      ...additionalData,
+    };
+    return StorageService.saveRequest(updated, adminUser);
+  },
+
   deleteRequest: async (requestId, trackingNumber, adminUser) => {
     // If deleting an approved document, soft-archive it to approved documents archive
     const allRequests = StorageService.getRequests();

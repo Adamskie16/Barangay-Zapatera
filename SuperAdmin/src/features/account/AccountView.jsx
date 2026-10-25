@@ -30,6 +30,7 @@ import { uploadSuperAdminAvatar } from '../../core/storageService';
 import ActionModal from '../../components/ActionModal';
 import Modal from '../../components/Modal';
 import UserAvatar from '../../components/UserAvatar';
+import { ProfileSkeleton } from '../../components/SkeletonLoader';
 
 export default function AccountView({ currentUser, onUserUpdated, onLogout, isDarkMode }) {
   const [loading, setLoading] = useState(true);
@@ -632,14 +633,7 @@ export default function AccountView({ currentUser, onUserUpdated, onLogout, isDa
   };
 
   if (loading) {
-    return (
-      <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 flex flex-col items-center justify-center min-h-[420px] space-y-3 font-sans">
-        <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#3b5bfd] shadow-xs">
-          <Loader2 className="w-6 h-6 animate-spin" />
-        </div>
-        <p className="text-xs font-bold text-slate-400">Loading Account Profile & Security Settings...</p>
-      </div>
-    );
+    return <ProfileSkeleton isDarkMode={isDarkMode} className="p-2 sm:p-4" />;
   }
 
   const passwordStrengthChecks = [

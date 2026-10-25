@@ -236,6 +236,22 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
 
     setTimeout(() => {
       onRegisterSuccess(newUser);
+      setFormData({
+        first_name: '',
+        last_name: '',
+        middle_initial: '',
+        birth_date: '',
+        civil_status: 'Single',
+        email: '',
+        phone: '',
+        voter_status: 'Registered Voter',
+        sitio: SAMPLE_SITIOS[0],
+        password: '',
+        confirmPassword: '',
+        privacyPolicyAccepted: false,
+      });
+      setError('');
+      setSuccessMessage('');
       onClose();
     }, 1500);
   };

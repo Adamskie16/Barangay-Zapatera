@@ -1,5 +1,5 @@
 // SuperAdmin/src/features/users/UsersView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import UserAvatar from '../../components/UserAvatar';
@@ -55,6 +55,36 @@ import { validateEmail, sanitizeInput, unlockUserAccount, lockUserAccount, forma
 import { supabase, supabaseAdmin, signUpUserWithoutPersistSession, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton } from '../../components/SkeletonLoader';
+
+export const purgeStaleLocalUser = (emailToClean) => {
+  if (!emailToClean || typeof localStorage === 'undefined') return;
+  const targetEmail = emailToClean.toLowerCase().trim();
+
+  const keys = [
+    'zapatera_residents_db',
+    'zapatera_admins_db',
+    'zapatera_super_admins_db',
+    'zapatera_users',
+    'zapatera_users_archive_db',
+    'zapatera_deleted_accounts',
+  ];
+
+  keys.forEach((key) => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((item) => {
+            const itemEmail = (typeof item === 'string' ? item : item?.email || '').toLowerCase().trim();
+            return itemEmail !== targetEmail;
+          });
+          localStorage.setItem(key, JSON.stringify(filtered));
+        }
+      }
+    } catch (_) {}
+  });
+};
 
 const SAMPLE_SITIOS = [
   'Sitio Zapatera Proper',
@@ -436,7 +466,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
   const [processingTitle, setProcessingTitle] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
 
-  const [formData, setFormData] = useState({
+  const INITIAL_USER_FORM = {
     email: '',
     full_name: '',
     first_name: '',
@@ -450,15 +480,31 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     sitio: 'Sitio Zapatera Proper',
     role: 'admin',
     phone: '',
-    address: 'Sitio Zapatera Proper, Barangay Zapatera, Cebu City',
+    address: 'Barangay Zapatera Hall, Cebu City',
     office: 'Barangay Zapatera Hall, Cebu City',
-    position: '',
+    position: 'Barangay Admin',
     id_type: 'Government ID',
     id_number: '',
     is_active: true,
     password: '',
     confirm_password: '',
-  });
+  };
+
+  const clearForm = () => {
+    setFormData(INITIAL_USER_FORM);
+    setFieldErrors({});
+    setFormGeneralError('');
+    setShowProvisionPassword(false);
+    setShowProvisionConfirmPassword(false);
+    setEditingId(null);
+    setEditingUser(null);
+    setPendingUserPayload(null);
+    setSavePasswordInput('');
+    setSaveAuthError('');
+  };
+
+  const saveCompletedRef = useRef(false);
+  const [formData, setFormData] = useState(INITIAL_USER_FORM);
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [formGeneralError, setFormGeneralError] = useState('');
@@ -685,6 +731,20 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             });
           }
 
+          // Synchronize and prune deleted Supabase accounts from local caches
+          try {
+            ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_super_admins_db'].forEach((key) => {
+              const stored = localStorage.getItem(key);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                  const cleaned = parsed.filter((u) => u?.email && seenEmails.has(u.email.toLowerCase().trim()));
+                  localStorage.setItem(key, JSON.stringify(cleaned));
+                }
+              }
+            });
+          } catch (_) {}
+
           setUsersList(uniqueProfiles);
           setLoadingUsers(false);
           return;
@@ -810,53 +870,23 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     if (!isValid) {
       return;
     }
+    saveCompletedRef.current = false;
 
     const cleanEmail = sanitizeInput((formData.email || '').toLowerCase().trim());
     const isNew = !editingId && !editingUser;
 
     // Check if Gmail / Email is already in use
     if (isNew) {
-      const emailInUseInState = users.some(
-        (u) => u.email && u.email.toLowerCase().trim() === cleanEmail
-      );
-
-      const emailInUseInLocalDbs = (() => {
-        try {
-          const residents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
-          const admins = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
-          const superAdmins = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
-          return (
-            (Array.isArray(residents) && residents.some((r) => r.email && r.email.toLowerCase().trim() === cleanEmail)) ||
-            (Array.isArray(admins) && admins.some((a) => a.email && a.email.toLowerCase().trim() === cleanEmail)) ||
-            (Array.isArray(superAdmins) && superAdmins.some((s) => s.email && s.email.toLowerCase().trim() === cleanEmail))
-          );
-        } catch {
-          return false;
-        }
-      })();
-
-      if (emailInUseInState || emailInUseInLocalDbs) {
-        setActionModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Gmail / Email Already in Use',
-          message: `The email address "${formData.email.trim()}" has already been used for an existing account. Please enter a different Gmail or email address to create this account.`,
-          buttonText: 'OK',
-          onClose: () => setActionModal({ isOpen: false }),
-        });
-        return;
-      }
-
-      // Check against Supabase profiles table
       if (isSupabaseConfigured()) {
         try {
+          // Query live Supabase profiles table (single source of truth)
           const { data: existingProfile } = await supabase
             .from('profiles')
-            .select('id, email, full_name')
-            .eq('email', cleanEmail)
+            .select('id, email, full_name, is_archived, deleted_at')
+            .ilike('email', cleanEmail)
             .maybeSingle();
 
-          if (existingProfile) {
+          if (existingProfile && existingProfile.is_archived !== true && !existingProfile.deleted_at) {
             setActionModal({
               isOpen: true,
               type: 'error',
@@ -866,26 +896,71 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               onClose: () => setActionModal({ isOpen: false }),
             });
             return;
+          } else {
+            // Not in Supabase or deleted in Supabase: purge stale localStorage caches for this email immediately
+            purgeStaleLocalUser(cleanEmail);
+            setUsersList((prev) => prev.filter((u) => (u.email || '').toLowerCase().trim() !== cleanEmail));
           }
         } catch (chkErr) {
           console.warn('Supabase email uniqueness check notice:', chkErr);
         }
+      } else {
+        // Fallback for purely offline / demo mode
+        const emailInUseInState = usersList.some(
+          (u) => u.email && u.email.toLowerCase().trim() === cleanEmail && u.is_archived !== true && !u.deleted_at
+        );
+        if (emailInUseInState) {
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Gmail / Email Already in Use',
+            message: `The email address "${formData.email.trim()}" has already been used for an existing account. Please enter a different Gmail or email address to create this account.`,
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+          return;
+        }
       }
     } else {
       const targetId = editingId || editingUser?.id;
-      const emailConflict = users.some(
-        (u) => u.id !== targetId && u.email && u.email.toLowerCase().trim() === cleanEmail
-      );
-      if (emailConflict) {
-        setActionModal({
-          isOpen: true,
-          type: 'error',
-          title: 'Gmail / Email Already in Use',
-          message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
-          buttonText: 'OK',
-          onClose: () => setActionModal({ isOpen: false }),
-        });
-        return;
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: conflictProfile } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .ilike('email', cleanEmail)
+            .neq('id', targetId)
+            .maybeSingle();
+
+          if (conflictProfile) {
+            setActionModal({
+              isOpen: true,
+              type: 'error',
+              title: 'Gmail / Email Already in Use',
+              message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
+              buttonText: 'OK',
+              onClose: () => setActionModal({ isOpen: false }),
+            });
+            return;
+          }
+        } catch (cErr) {
+          console.warn('Supabase edit email conflict check notice:', cErr);
+        }
+      } else {
+        const emailConflict = usersList.some(
+          (u) => u.id !== targetId && u.email && u.email.toLowerCase().trim() === cleanEmail
+        );
+        if (emailConflict) {
+          setActionModal({
+            isOpen: true,
+            type: 'error',
+            title: 'Gmail / Email Already in Use',
+            message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
+            buttonText: 'OK',
+            onClose: () => setActionModal({ isOpen: false }),
+          });
+          return;
+        }
       }
     }
 
@@ -1001,18 +1076,86 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               if (adminErr) {
                 const errMsg = (adminErr.message || '').toLowerCase();
                 if (errMsg.includes('already') || errMsg.includes('exists') || adminErr.status === 422) {
-                  setIsSaveSecurityModalOpen(false);
-                  setIsSaving(false);
-                  setIsProcessing(false);
-                  setActionModal({
-                    isOpen: true,
-                    type: 'error',
-                    title: 'Gmail / Email Already in Use',
-                    message: `The Gmail address "${pendingUserPayload.email}" has already been registered in the system. Please use a different Gmail address.`,
-                    buttonText: 'OK',
-                    onClose: () => setActionModal({ isOpen: false }),
-                  });
-                  return;
+                  // Check if a profile actually exists in public.profiles
+                  const { data: profCheck } = await supabase
+                    .from('profiles')
+                    .select('id, email, is_archived, deleted_at')
+                    .ilike('email', cleanEmail)
+                    .maybeSingle();
+
+                  // If no active profile exists in public.profiles, this is an orphaned auth.user record from an earlier manual deletion
+                  if (!profCheck || profCheck.is_archived === true || profCheck.deleted_at) {
+                    try {
+                      const { data: userListData } = await supabaseAdmin.auth.admin.listUsers();
+                      const existingAuthUser = (userListData?.users || []).find(
+                        (u) => (u.email || '').toLowerCase().trim() === cleanEmail
+                      );
+
+                      if (existingAuthUser) {
+                        // Delete the orphaned auth record and create fresh
+                        await supabaseAdmin.auth.admin.deleteUser(existingAuthUser.id);
+                        const { data: reCreated, error: reErr } = await supabaseAdmin.auth.admin.createUser({
+                          email: pendingUserPayload.email,
+                          password: formData.password || 'password123',
+                          email_confirm: true,
+                          user_metadata: {
+                            full_name: pendingUserPayload.full_name,
+                            first_name: pendingUserPayload.first_name,
+                            middle_initial: pendingUserPayload.middle_initial,
+                            last_name: pendingUserPayload.last_name,
+                            gender: pendingUserPayload.gender,
+                            age: pendingUserPayload.age,
+                            birth_date: pendingUserPayload.birth_date,
+                            civil_status: pendingUserPayload.civil_status,
+                            office: pendingUserPayload.office,
+                            position: pendingUserPayload.position,
+                            role: pendingUserPayload.role,
+                            phone: pendingUserPayload.phone,
+                          },
+                        });
+                        if (!reErr && reCreated?.user?.id) {
+                          assignedId = reCreated.user.id;
+                        } else {
+                          // Or update password and reuse the auth ID
+                          await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+                            password: formData.password || 'password123',
+                            user_metadata: {
+                              full_name: pendingUserPayload.full_name,
+                              first_name: pendingUserPayload.first_name,
+                              middle_initial: pendingUserPayload.middle_initial,
+                              last_name: pendingUserPayload.last_name,
+                              gender: pendingUserPayload.gender,
+                              age: pendingUserPayload.age,
+                              birth_date: pendingUserPayload.birth_date,
+                              civil_status: pendingUserPayload.civil_status,
+                              office: pendingUserPayload.office,
+                              position: pendingUserPayload.position,
+                              role: pendingUserPayload.role,
+                              phone: pendingUserPayload.phone,
+                            },
+                          });
+                          assignedId = existingAuthUser.id;
+                        }
+                      }
+                    } catch (orphanErr) {
+                      console.warn('Orphaned auth user recovery warning:', orphanErr);
+                    }
+                  }
+
+                  if (!assignedId) {
+                    setIsSaveSecurityModalOpen(false);
+                    setIsSaving(false);
+                    setIsProcessing(false);
+                    setActionModal({
+                      isOpen: true,
+                      type: 'error',
+                      title: 'Gmail / Email Already in Use',
+                      message: `The Gmail address "${pendingUserPayload.email}" is already registered in Supabase Authentication. If deleted in profiles table, please also delete it in Supabase Authentication -> Users tab.`,
+                      buttonText: 'OK',
+                      onClose: () => setActionModal({ isOpen: false }),
+                    });
+                    return;
+                  }
                 }
               }
               if (!adminErr && adminCreated?.user?.id) {
@@ -1240,12 +1383,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         : 'Resident';
     const isNew = !editingId && !editingUser;
 
+    saveCompletedRef.current = true;
     setIsSaveSecurityModalOpen(false);
-    setEditingId(null);
-    setEditingUser(null);
     setIsModalOpen(false);
-    setPendingUserPayload(null);
-    setSavePasswordInput('');
+    clearForm();
     setIsSaving(false);
     setIsProcessing(false);
     fetchUsers();
@@ -1258,7 +1399,11 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         ? `The new ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
         : `The profile details for "${savedName}" (${savedEmail}) were updated successfully.`,
       buttonText: 'Done',
-      onClose: () => setActionModal({ isOpen: false }),
+      onClose: () => {
+        setActionModal({ isOpen: false });
+        setIsModalOpen(false);
+        clearForm();
+      },
     });
   }
 
@@ -1416,35 +1561,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
   }
 
   const openCreateModal = () => {
-    setEditingId(null);
-    setEditingUser(null);
-    setFieldErrors({});
-    setFormGeneralError('');
-    setShowProvisionPassword(false);
-    setShowProvisionConfirmPassword(false);
-    setFormData({
-      email: '',
-      full_name: '',
-      first_name: '',
-      middle_initial: '',
-      last_name: '',
-      gender: 'Male',
-      age: '',
-      birth_date: '',
-      civil_status: 'Single',
-      voter_status: 'Registered Voter',
-      sitio: 'Sitio Zapatera Proper',
-      role: 'admin', // Default to Barangay Admin for streamlined creation
-      phone: '',
-      address: 'Barangay Zapatera Hall, Cebu City',
-      office: 'Barangay Zapatera Hall, Cebu City',
-      position: 'Barangay Admin',
-      id_type: 'Government ID',
-      id_number: '',
-      is_active: true,
-      password: '',
-      confirm_password: '',
-    });
+    clearForm();
     setIsModalOpen(true);
   };
 
@@ -2231,7 +2348,12 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           setIsSaveSecurityModalOpen(false);
           setSavePasswordInput('');
           setSaveAuthError('');
-          setIsModalOpen(true);
+          if (!saveCompletedRef.current) {
+            setIsModalOpen(true);
+          } else {
+            setIsModalOpen(false);
+            clearForm();
+          }
         }}
         onVerified={() => handleSaveExecute(true)}
         currentUser={currentUser}
@@ -2286,8 +2408,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingId(null);
-          setEditingUser(null);
+          clearForm();
         }}
         title={(editingId || editingUser) ? 'Edit User Profile & Role' : 'Create New Account'}
         subtitle="Configure official credentials, personal details, and role permissions"
@@ -2404,7 +2525,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                 <span className="text-[10px] font-extrabold text-[#3b5bfd] uppercase tracking-wider block">
                   2. Personal Status & Birth Details *
                 </span>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Date of Birth <span className="text-rose-500">*</span>
@@ -2414,7 +2535,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       max={new Date().toISOString().split('T')[0]}
                       value={formData.birth_date}
                       onChange={(e) => handleFieldChange('birth_date', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${
+                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl outline-none ${
                         fieldErrors.birth_date
                           ? 'border-rose-500'
                           : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
@@ -2430,10 +2551,42 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Age
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="Auto / e.g. 28"
+                      value={formData.age}
+                      onChange={(e) => handleFieldChange('age', e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl font-mono text-slate-900 focus:border-[#3b5bfd] outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Gender <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={formData.gender || 'Male'}
+                      onChange={(e) => handleFieldChange('gender', e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-900 focus:border-[#3b5bfd] outline-none cursor-pointer"
+                    >
+                      {GENDER_OPTIONS.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
                       Civil Status <span className="text-rose-500">*</span>
                     </label>
                     <select
-                      value={formData.civil_status}
+                      value={formData.civil_status || 'Single'}
                       onChange={(e) => handleFieldChange('civil_status', e.target.value)}
                       className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${
                         fieldErrors.civil_status
@@ -2645,8 +2798,19 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   </div>
                 )}
 
-                {/* 2. Personal Credentials: Age, Gender, Date of Birth, Civil Status */}
+                {/* 2. Personal Credentials: Date of Birth, Age, Gender, Civil Status */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      max={new Date().toISOString().split('T')[0]}
+                      value={formData.birth_date}
+                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
+                      className="w-full px-2.5 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-900 focus:border-[#3b5bfd] outline-none"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Age <span className="text-rose-500">*</span>
@@ -2697,17 +2861,6 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                         <span>{fieldErrors.gender}</span>
                       </p>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      max={new Date().toISOString().split('T')[0]}
-                      value={formData.birth_date}
-                      onChange={(e) => handleFieldChange('birth_date', e.target.value)}
-                      className="w-full px-2.5 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-900 focus:border-[#3b5bfd] outline-none"
-                    />
                   </div>
 
                   <div>
@@ -2933,8 +3086,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               type="button"
               onClick={() => {
                 setIsModalOpen(false);
-                setEditingId(null);
-                setEditingUser(null);
+                clearForm();
               }}
               className="px-5 py-2.5 font-bold text-slate-600 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full cursor-pointer transition-colors"
             >

@@ -206,19 +206,19 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       return;
     }
 
-    // 2. Pre-Authentication Account Existence Check
-    const accountExists = await checkAccountExists(cleanEmail);
-    if (!accountExists) {
-      setError('Invalid Email and Password');
-      setLoading(false);
-      return;
-    }
-
-    // 3. Account Lockout Check (Pre-auth check)
+    // 2. Account Lockout Check (Pre-auth check)
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
       setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
+      setLoading(false);
+      return;
+    }
+
+    // 3. Pre-Authentication Account Existence Check
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setError('Invalid Email and Password');
       setLoading(false);
       return;
     }
@@ -304,13 +304,36 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
     }
 
     // If profile not found, is inactive, or is locked -> immediately terminate session
-    if (!profile || profile.is_active === false || profile.is_locked === true) {
+    if (!profile) {
       try {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
       } catch {}
       setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_locked === true || ((profile as any).failed_login_attempts >= 3) || ((profile as any).failed_attempts >= 3)) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setIsLocked(true);
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_active === false) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Your account is currently deactivated. Please contact an administrator.');
       setLoading(false);
       return;
     }

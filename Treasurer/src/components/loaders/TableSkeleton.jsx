@@ -2,50 +2,41 @@ import React from 'react';
 
 /**
  * TableSkeleton
- * Enterprise 10-row data table skeleton designed to eliminate Cumulative Layout Shift (CLS).
- * Mirrors the exact geometry, column paddings, and height of Barangay Zapatera's
- * Document Requests and Transaction tables.
+ * Enterprise data table skeleton designed to eliminate Cumulative Layout Shift (CLS).
+ * Matches the light civic theme of Barangay Zapatera with zero black/dark backgrounds.
  *
  * @param {number} rows - Number of skeleton rows (default: 10)
  * @param {number} columns - Number of columns (default: 6)
- * @param {boolean} isDarkMode
  */
 export function TableSkeleton({
   rows = 10,
   columns = 6,
-  isDarkMode = false,
   className = '',
 }) {
-  const pulseBg = isDarkMode ? 'bg-slate-800/80' : 'bg-slate-200/80';
-  const pulseSubtle = isDarkMode ? 'bg-slate-800/50' : 'bg-slate-200/50';
+  const pulseBg = 'bg-slate-200/80';
+  const pulseSubtle = 'bg-slate-200/50';
 
   return (
     <div
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className={`w-full overflow-hidden rounded-2xl border ${
-        isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white'
-      } shadow-sm select-none ${className}`}
+      className={`w-full overflow-hidden rounded-[24px] border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.03)] select-none ${className}`}
     >
       <span className="sr-only">Loading document records...</span>
 
-      {/* Optional Table Top Controls Skeleton */}
-      <div
-        className={`px-6 py-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-100 bg-slate-50/50'
-        }`}
-      >
+      {/* Table Top Controls Skeleton */}
+      <div className="px-6 py-4 border-b border-slate-100 bg-[#f8fafc]/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           {/* Search bar skeleton */}
-          <div className={`h-10 w-64 rounded-xl animate-pulse ${pulseBg}`} />
+          <div className={`h-9 w-64 rounded-full animate-pulse ${pulseBg}`} />
           {/* Filter dropdown skeleton */}
-          <div className={`h-10 w-32 rounded-xl animate-pulse ${pulseSubtle}`} />
+          <div className={`h-9 w-32 rounded-full animate-pulse ${pulseSubtle}`} />
         </div>
         {/* Right action / count skeleton */}
         <div className="flex items-center gap-2">
-          <div className={`h-8 w-24 rounded-lg animate-pulse ${pulseSubtle}`} />
-          <div className={`h-8 w-8 rounded-lg animate-pulse ${pulseBg}`} />
+          <div className={`h-8 w-24 rounded-full animate-pulse ${pulseSubtle}`} />
+          <div className={`h-8 w-8 rounded-full animate-pulse ${pulseBg}`} />
         </div>
       </div>
 
@@ -54,11 +45,7 @@ export function TableSkeleton({
         <table className="w-full text-left border-collapse">
           {/* Header row with simulated column titles */}
           <thead>
-            <tr
-              className={`border-b text-xs font-semibold uppercase tracking-wider ${
-                isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-slate-50'
-              }`}
-            >
+            <tr className="border-b border-slate-200/80 text-xs font-semibold uppercase tracking-wider bg-[#f8fafc]">
               <th className="px-6 py-3.5">
                 <div className={`h-3 w-20 rounded animate-pulse ${pulseBg}`} />
               </th>
@@ -81,13 +68,8 @@ export function TableSkeleton({
           </thead>
 
           {/* 10 Data Rows matching exact geometry */}
-          <tbody
-            className={`divide-y ${
-              isDarkMode ? 'divide-slate-800/70' : 'divide-slate-100'
-            }`}
-          >
+          <tbody className="divide-y divide-slate-100">
             {Array.from({ length: rows }).map((_, rIdx) => {
-              // Vary widths slightly across rows for natural skeleton aesthetic
               const idWidths = ['w-24', 'w-20', 'w-28', 'w-22'];
               const nameWidths = ['w-36', 'w-44', 'w-32', 'w-40'];
               const purposeWidths = ['w-48', 'w-56', 'w-40', 'w-52'];
@@ -97,12 +79,7 @@ export function TableSkeleton({
               const purpW = purposeWidths[rIdx % purposeWidths.length];
 
               return (
-                <tr
-                  key={rIdx}
-                  className={`transition-colors ${
-                    isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/50'
-                  }`}
-                >
+                <tr key={rIdx} className="hover:bg-slate-50/50 transition-colors">
                   {/* Column 1: Tracking Number Pill */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -156,11 +133,7 @@ export function TableSkeleton({
       </div>
 
       {/* Pagination Footer Skeleton */}
-      <div
-        className={`px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-100 bg-slate-50/50'
-        }`}
-      >
+      <div className="px-6 py-4 border-t border-slate-100 bg-[#f8fafc]/50 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className={`h-4 w-48 rounded animate-pulse ${pulseSubtle}`} />
         <div className="flex items-center gap-2">
           <div className={`h-8 w-20 rounded-lg animate-pulse ${pulseSubtle}`} />

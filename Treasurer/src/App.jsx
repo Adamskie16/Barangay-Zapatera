@@ -7,6 +7,7 @@ import TreasurerDashboardView from './features/dashboard/TreasurerDashboardView'
 import TreasurerReportsView from './features/reports/TreasurerReportsView';
 import AccountView from './features/account/AccountView';
 import GlobalFooter from './components/GlobalFooter';
+import { GlobalPageSkeleton } from './components/SkeletonLoader';
 import { StorageService } from './core/storage';
 import { supabase, isSupabaseConfigured } from './core/supabase';
 import { LogOut, X, AlertTriangle } from 'lucide-react';
@@ -20,14 +21,43 @@ export default function App() {
     }
     return user;
   });
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('zapatera_treasurer_active_tab');
+      if (saved && ['dashboard', 'reports', 'collections', 'account'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'dashboard';
+  });
+
+  useEffect(() => {
+    try {
+      if (activeTab && ['dashboard', 'reports', 'collections', 'account'].includes(activeTab)) {
+        localStorage.setItem('zapatera_treasurer_active_tab', activeTab);
+      }
+    } catch {}
+  }, [activeTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [tabTransitioning, setTabTransitioning] = useState(false);
   const [requests, setRequests] = useState([]);
   const [docTypes, setDocTypes] = useState([]);
   const [config, setConfig] = useState(() => StorageService.getConfig());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  const handleNavigateTab = (nextTab) => {
+    if (!nextTab || nextTab === activeTab) return;
+    setTabTransitioning(true);
+    setActiveTab(nextTab);
+    try {
+      localStorage.setItem('zapatera_treasurer_active_tab', nextTab);
+    } catch {}
+    setTimeout(() => {
+      setTabTransitioning(false);
+    }, 200);
+  };
 
   // Load Initial Financial Data
   const refreshFinancialData = async () => {
@@ -100,25 +130,29 @@ export default function App() {
     return StorageService.calculateFinancialMetrics(requests, docTypes);
   }, [requests, docTypes]);
 
+  const tabTitles = {
+    dashboard: 'Treasurer Dashboard',
+    reports: 'Collection Reports & Financial Summaries',
+    collections: 'Collections Ledger & Financial Audit',
+    account: 'My Profile & Account',
+  };
+
+  const isCurrentTabLoading = loading || tabTransitioning;
+
   // Auth Guard: Strictly Barangay Treasurer Only
   if (!currentUser || currentUser.role !== 'treasurer') {
     return <TreasurerLoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  const tabTitles = {
-    dashboard: 'Treasurer Dashboard',
-    reports: 'Collection Reports & Summaries',
-    account: 'My Profile & Account',
-  };
-
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#f4f7fb] text-slate-800 overflow-hidden font-sans">
       {/* Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleNavigateTab}
         currentUser={currentUser}
         onLogout={handleLogout}
+        loading={loading}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
@@ -130,40 +164,48 @@ export default function App() {
           isRefreshing={isRefreshing}
           onRefresh={refreshFinancialData}
           paidTodayCount={metrics.paidCount}
+          requests={requests}
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
           onLogout={handleLogout}
-          onNavigate={(tab) => setActiveTab(tab)}
+          onNavigate={(tab) => handleNavigateTab(tab)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 w-full max-w-full overflow-x-hidden">
           <div className="max-w-7xl mx-auto pb-12">
-            {activeTab === 'dashboard' && (
-              <TreasurerDashboardView
-                metrics={metrics}
-                requests={requests}
-                docTypes={docTypes}
-                config={config}
-                onRefresh={refreshFinancialData}
-                onNavigateToReports={() => setActiveTab('reports')}
-              />
-            )}
+            {/* Global Skeletal Loading State matching SuperAdmin & Admin */}
+            {isCurrentTabLoading ? (
+              <GlobalPageSkeleton page={activeTab} isDarkMode={false} />
+            ) : (
+              <>
+                {activeTab === 'dashboard' && (
+                  <TreasurerDashboardView
+                    metrics={metrics}
+                    requests={requests}
+                    docTypes={docTypes}
+                    config={config}
+                    onRefresh={refreshFinancialData}
+                    onNavigateToReports={() => handleNavigateTab('reports')}
+                  />
+                )}
 
-            {activeTab === 'reports' && (
-              <TreasurerReportsView
-                requests={requests}
-                docTypes={docTypes}
-                config={config}
-                currentUser={currentUser}
-              />
-            )}
+                {(activeTab === 'reports' || activeTab === 'collections') && (
+                  <TreasurerReportsView
+                    requests={requests}
+                    docTypes={docTypes}
+                    config={config}
+                    currentUser={currentUser}
+                  />
+                )}
 
-            {activeTab === 'account' && (
-              <AccountView
-                currentUser={currentUser}
-                onProfileUpdated={(updated) => setCurrentUser(updated)}
-                onLogout={handleLogout}
-              />
+                {activeTab === 'account' && (
+                  <AccountView
+                    currentUser={currentUser}
+                    onProfileUpdated={(updated) => setCurrentUser(updated)}
+                    onLogout={handleLogout}
+                  />
+                )}
+              </>
             )}
 
             {/* Global Enterprise Developer & Institution Footer */}

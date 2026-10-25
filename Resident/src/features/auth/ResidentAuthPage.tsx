@@ -474,14 +474,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       return;
     }
 
-    // 2. Pre-Authentication Account Existence Check
-    // If the account does not exist, show "Invalid Email and Password" and avoid invoking signInWithPassword (no 400 Bad Request console log)
-    const accountExists = await checkAccountExists(cleanEmail);
-    if (!accountExists) {
-      setAuthError('Invalid Email and Password');
-      return;
-    }
-
+    // 2. Pre-Authentication Account Lockout Check
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
@@ -492,6 +485,14 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         type: 'locked',
         message: msg,
       });
+      return;
+    }
+
+    // 3. Pre-Authentication Account Existence Check
+    // If the account does not exist, show "Invalid Email and Password" and avoid invoking signInWithPassword (no 400 Bad Request console log)
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setAuthError('Invalid Email and Password');
       return;
     }
 
@@ -581,13 +582,42 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }
 
       // If profile not found, is inactive, or is locked -> immediately terminate session
-      if (!verifiedProfile || verifiedProfile.is_active === false || verifiedProfile.is_locked === true) {
+      if (!verifiedProfile) {
         try {
           if (isSupabaseConfigured()) {
             await supabase.auth.signOut();
           }
         } catch {}
         setAuthError('Email or password is incorrect.');
+        setLoading(false);
+        return;
+      }
+
+      if (verifiedProfile.is_locked === true || ((verifiedProfile as any).failed_login_attempts >= 3) || ((verifiedProfile as any).failed_attempts >= 3)) {
+        try {
+          if (isSupabaseConfigured()) {
+            await supabase.auth.signOut();
+          }
+        } catch {}
+        const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
+        setIsLocked(true);
+        setAuthError(msg);
+        setSecurityNoticeModal({
+          isOpen: true,
+          type: 'locked',
+          message: msg,
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (verifiedProfile.is_active === false) {
+        try {
+          if (isSupabaseConfigured()) {
+            await supabase.auth.signOut();
+          }
+        } catch {}
+        setAuthError('Your account is currently deactivated. Please contact an administrator.');
         setLoading(false);
         return;
       }

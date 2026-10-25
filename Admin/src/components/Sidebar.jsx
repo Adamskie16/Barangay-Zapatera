@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import UserAvatar from './UserAvatar';
+import { SidebarSkeleton } from './SkeletonLoader';
 
 export default function Sidebar({
   activeTab,
@@ -30,6 +31,7 @@ export default function Sidebar({
   onLogout,
   isMobileOpen = false,
   onCloseMobile,
+  loading = false,
 }) {
   const documentGroupIds = ['receive_request', 'approved_documents', 'doc_info'];
   const controlGroupIds = ['users', 'logs', 'archive'];
@@ -80,6 +82,10 @@ export default function Sidebar({
   const isDocGroupActive = documentGroupIds.includes(activeTab);
   const isControlGroupActive = controlGroupIds.includes(activeTab);
   const isAccountActive = activeTab === 'account';
+
+  if (loading) {
+    return <SidebarSkeleton isCollapsed={isCollapsed} isMobileOpen={isMobileOpen} />;
+  }
 
   return (
     <>

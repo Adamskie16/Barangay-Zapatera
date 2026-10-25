@@ -13,6 +13,8 @@ import ArchiveView from './features/archive/ArchiveView';
 import SuperAdminLoginPage from './features/auth/SuperAdminLoginPage';
 import GlobalFooter from './components/GlobalFooter';
 import { StorageService } from './core/storage';
+import { supabase, isSupabaseConfigured } from './core/supabase';
+import { GlobalPageSkeleton } from './components/SkeletonLoader';
 import { ShieldAlert, Building2, X, LogOut } from 'lucide-react';
 import './index.css';
 
@@ -49,6 +51,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   // Mobile responsive drawer state (< 1024px)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [tabTransitioning, setTabTransitioning] = useState(false);
 
   useEffect(() => {
     try {
@@ -67,29 +70,107 @@ export default function App() {
   const [logs, setLogs] = useState(StorageService.getLogs());
   const [notifications, setNotifications] = useState(StorageService.getNotifications());
 
-  const refreshState = async () => {
-    const [usrList, docs, evts, reqs, cfg, logsData, notifs] = await Promise.all([
-      StorageService.getUsersAsync(),
-      StorageService.getDocTypesAsync(),
-      StorageService.getEventsAsync(),
-      StorageService.getRequestsAsync(),
-      StorageService.getConfigAsync(),
-      StorageService.getLogsAsync(),
-      StorageService.getNotificationsAsync(),
-    ]);
-    if (usrList) setUsers(usrList);
-    if (docs) setDocTypes(docs);
-    if (evts) setEvents(evts);
-    if (reqs) setRequests(reqs);
-    if (cfg) setConfig(cfg);
-    if (logsData) setLogs(logsData);
-    if (notifs) setNotifications(notifs);
-    const user = StorageService.getCurrentUser();
-    if (user && user.role !== 'super_admin') {
-      StorageService.setCurrentUser(null);
-      setCurrentUser(null);
-    } else {
-      setCurrentUser(user);
+  // Global Skeletal Loading State
+  // Prioritizes the Superadmin Dashboard first when data is loading
+  const [isDashboardReady, setIsDashboardReady] = useState(false);
+  const [pageLoadingState, setPageLoadingState] = useState({
+    dashboard: true,
+    documents: true,
+    news: true,
+    users: true,
+    archive: true,
+    config: true,
+    reports: true,
+    logs: true,
+    account: false,
+  });
+
+  /**
+   * Prioritized Refresh State:
+   * Phase 1: Superadmin Dashboard Core Data (requests, users, docTypes, events, config)
+   *          Unblocks and reveals the Superadmin dashboard immediately.
+   * Phase 2: Secondary Background Data (audit logs, notifications)
+   *          Runs in the background without holding up the dashboard or primary workspace.
+   */
+  const refreshState = async (options = {}) => {
+    const { isInitial = false } = options;
+
+    if (isInitial) {
+      setIsDashboardReady(false);
+      setPageLoadingState({
+        dashboard: true,
+        documents: true,
+        news: true,
+        users: true,
+        archive: true,
+        config: true,
+        reports: true,
+        logs: true,
+        account: false,
+      });
+    }
+
+    // =========================================================================
+    // PRIORITY 1: Superadmin Dashboard Core Data (Fast Track)
+    // =========================================================================
+    try {
+      const [reqs, usrList, docs, evts, cfg] = await Promise.all([
+        StorageService.getRequestsAsync(),
+        StorageService.getUsersAsync(),
+        StorageService.getDocTypesAsync(),
+        StorageService.getEventsAsync(),
+        StorageService.getConfigAsync(),
+      ]);
+
+      if (reqs) setRequests(reqs);
+      if (usrList) setUsers(usrList);
+      if (docs) setDocTypes(docs);
+      if (evts) setEvents(evts);
+      if (cfg) setConfig(cfg);
+
+      const user = StorageService.getCurrentUser();
+      if (user && user.role !== 'super_admin') {
+        StorageService.setCurrentUser(null);
+        setCurrentUser(null);
+      } else if (user) {
+        setCurrentUser(user);
+      }
+
+      // Mark Superadmin Dashboard & core tabs as completely ready!
+      setIsDashboardReady(true);
+      setPageLoadingState((prev) => ({
+        ...prev,
+        dashboard: false,
+        documents: false,
+        news: false,
+        users: false,
+        config: false,
+      }));
+    } catch (err) {
+      console.warn('SuperAdmin priority dashboard sync error:', err);
+      setIsDashboardReady(true);
+      setPageLoadingState((prev) => ({ ...prev, dashboard: false }));
+    }
+
+    // =========================================================================
+    // PRIORITY 2: Background Secondary Data (Logs & Notifications)
+    // =========================================================================
+    try {
+      const [logsData, notifs] = await Promise.all([
+        StorageService.getLogsAsync(),
+        StorageService.getNotificationsAsync(),
+      ]);
+      if (logsData) setLogs(logsData);
+      if (notifs) setNotifications(notifs);
+    } catch (err) {
+      console.warn('SuperAdmin background sync error:', err);
+    } finally {
+      setPageLoadingState((prev) => ({
+        ...prev,
+        reports: false,
+        logs: false,
+        archive: false,
+      }));
     }
   };
 
@@ -99,7 +180,7 @@ export default function App() {
       StorageService.setCurrentUser(null);
       setCurrentUser(null);
     }
-    refreshState();
+    refreshState({ isInitial: true });
 
     // 1. Cross-tab BroadcastChannel listener for live request status updates & deletions from Admin
     let bc = null;
@@ -158,25 +239,43 @@ export default function App() {
       );
       refreshState();
     };
-    window.addEventListener('zapatera_request_deleted', handleCustomDeleted);
+    window.addEventListener('zapatera_request_deleted_local', handleCustomDeleted);
 
-    // 4. Focus sync
-    const handleFocus = () => refreshState();
-    window.addEventListener('focus', handleFocus);
+    // 4. Listen for cross-tab user account updates
+    const handleUserUpdated = (e) => {
+      if (e.detail) {
+        setCurrentUser(e.detail);
+      }
+    };
+    window.addEventListener('zapatera_user_updated', handleUserUpdated);
 
-    // 5. Periodic polling (every 3 seconds) to immediately sync any delete or status update from Admin via Supabase
-    const pollInterval = setInterval(() => {
-      StorageService.getRequestsAsync().then((reqs) => {
-        if (reqs) setRequests(reqs);
-      });
-    }, 3000);
+    // 5. Account deletion listener
+    const handleStorageDeleted = (e) => {
+      if (e.key === 'zapatera_account_deleted_event' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          const deletedEmail = (parsed.email || '').toLowerCase().trim();
+          const user = StorageService.getCurrentUser();
+          const myEmail = (user?.email || '').toLowerCase().trim();
+          if (parsed.userId === user?.id || (deletedEmail && deletedEmail === myEmail)) {
+            setAccountDeletedNotice(
+              parsed.details ||
+                'Notice: This account has been deleted by Barangay Zapatera administration. You have been logged out.'
+            );
+            StorageService.setCurrentUser(null);
+            setCurrentUser(null);
+          }
+        } catch (_) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageDeleted);
 
     return () => {
       if (bc) bc.close();
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('zapatera_request_deleted', handleCustomDeleted);
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(pollInterval);
+      window.removeEventListener('zapatera_request_deleted_local', handleCustomDeleted);
+      window.removeEventListener('zapatera_user_updated', handleUserUpdated);
+      window.removeEventListener('storage', handleStorageDeleted);
     };
   }, []);
 
@@ -187,7 +286,7 @@ export default function App() {
       return;
     }
     setCurrentUser(user);
-    refreshState();
+    refreshState({ isInitial: true });
   };
 
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -196,12 +295,15 @@ export default function App() {
     setIsLogoutModalOpen(true);
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setIsLogoutModalOpen(false);
     setIsMobileMenuOpen(false);
     setActiveTab('dashboard');
     try {
       localStorage.removeItem('zapatera_superadmin_active_tab');
+      if (isSupabaseConfigured()) {
+        await supabase.auth.signOut();
+      }
     } catch {}
     StorageService.setCurrentUser(null);
     setCurrentUser(null);
@@ -256,6 +358,37 @@ export default function App() {
     });
     await refreshState();
   };
+
+  // Tab Titles Map
+  const tabTitles = {
+    dashboard: 'Super Admin System Dashboard',
+    documents: 'Official Document Generator & Guidelines',
+    news: 'Barangay News & Bulletin Management',
+    users: 'User Accounts & Roles',
+    archive: 'Archive & Trash Management',
+    config: 'Global System Configurations',
+    reports: 'Document Issuance Reports & Analytics',
+    logs: 'System Security Audit Trail',
+    account: 'My Account Profile & Security Settings',
+  };
+
+  const handleNavigateTab = (nextTab) => {
+    if (!nextTab || nextTab === activeTab) return;
+    setTabTransitioning(true);
+    setActiveTab(nextTab);
+    try {
+      localStorage.setItem('zapatera_superadmin_active_tab', nextTab);
+    } catch {}
+    setTimeout(() => {
+      setTabTransitioning(false);
+    }, 200);
+  };
+
+  const isCurrentTabLoading =
+    tabTransitioning ||
+    (activeTab === 'dashboard'
+      ? !isDashboardReady || pageLoadingState.dashboard
+      : Boolean(pageLoadingState[activeTab]));
 
   // Auth Guard
   if (!currentUser || currentUser.role !== 'super_admin') {
@@ -317,28 +450,16 @@ export default function App() {
     );
   }
 
-  // Tab Titles Map
-  const tabTitles = {
-    dashboard: 'Super Admin System Dashboard',
-    documents: 'Official Document Generator & Guidelines',
-    news: 'Barangay News & Bulletin Management',
-    users: 'User Accounts & Roles',
-    archive: 'Archive & Trash Management',
-    config: 'Global System Configurations',
-    reports: 'Document Issuance Reports & Analytics',
-    logs: 'System Security Audit Trail',
-    account: 'My Account Profile & Security Settings',
-  };
-
   return (
     <div className="flex h-screen font-sans overflow-hidden bg-[#f4f7fb] text-slate-800">
       {/* Responsive Sidebar (Off-canvas drawer on mobile < 1024px, static on desktop >= 1024px) */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleNavigateTab}
         currentUser={currentUser}
         onLogout={handleLogoutRequest}
         isDarkMode={false}
+        loading={!isDashboardReady}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
@@ -355,81 +476,88 @@ export default function App() {
           onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
           currentUser={currentUser}
           onLogout={handleLogoutRequest}
-          onNavigate={(tab) => setActiveTab(tab)}
+          onNavigate={(tab) => handleNavigateTab(tab)}
         />
 
         <main className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 sm:py-5 transition-colors duration-200 w-full max-w-full overflow-x-hidden bg-[#f4f7fb] text-slate-800">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              users={users}
-              docTypes={docTypes}
-              requests={requests}
-              events={events}
-              logs={logs}
-              config={config}
-              setActiveTab={setActiveTab}
-            />
-          )}
+          {/* Global Skeletal Loading State for the Pages with Superadmin Dashboard Prioritized */}
+          {isCurrentTabLoading ? (
+            <GlobalPageSkeleton page={activeTab} isDarkMode={false} />
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardView
+                  users={users}
+                  docTypes={docTypes}
+                  requests={requests}
+                  events={events}
+                  logs={logs}
+                  config={config}
+                  setActiveTab={handleNavigateTab}
+                />
+              )}
 
-          {activeTab === 'documents' && (
-            <DocumentsView
-              docTypes={docTypes}
-              onSaveDocType={handleSaveDocType}
-              onDeleteDocType={handleDeleteDocType}
-              currentUser={currentUser}
-              config={config}
-            />
-          )}
+              {activeTab === 'documents' && (
+                <DocumentsView
+                  docTypes={docTypes}
+                  onSaveDocType={handleSaveDocType}
+                  onDeleteDocType={handleDeleteDocType}
+                  currentUser={currentUser}
+                  config={config}
+                />
+              )}
 
-          {activeTab === 'news' && (
-            <NewsView
-              currentUser={currentUser}
-              events={events}
-              onSaveEvent={handleSaveEvent}
-              onDeleteEvent={handleDeleteEvent}
-              isDarkMode={false}
-            />
-          )}
+              {activeTab === 'news' && (
+                <NewsView
+                  currentUser={currentUser}
+                  events={events}
+                  onSaveEvent={handleSaveEvent}
+                  onDeleteEvent={handleDeleteEvent}
+                  isDarkMode={false}
+                />
+              )}
 
-          {activeTab === 'users' && (
-            <UsersView
-              users={users}
-              onSaveUser={handleSaveUser}
-              onDeleteUser={handleDeleteUser}
-              isDarkMode={false}
-            />
-          )}
+              {activeTab === 'users' && (
+                <UsersView
+                  users={users}
+                  onSaveUser={handleSaveUser}
+                  onDeleteUser={handleDeleteUser}
+                  isDarkMode={false}
+                />
+              )}
 
-          {activeTab === 'archive' && (
-            <ArchiveView currentUser={currentUser} isDarkMode={false} />
-          )}
+              {activeTab === 'archive' && (
+                <ArchiveView currentUser={currentUser} isDarkMode={false} />
+              )}
 
-          {activeTab === 'config' && (
-            <ConfigView config={config} onSaveConfig={handleSaveConfig} />
-          )}
+              {activeTab === 'config' && (
+                <ConfigView config={config} onSaveConfig={handleSaveConfig} />
+              )}
 
-          {activeTab === 'reports' && (
-            <ReportsView
-              requests={requests}
-              docTypes={docTypes}
-              users={users}
-              config={config}
-              currentUser={currentUser}
-            />
-          )}
+              {activeTab === 'reports' && (
+                <ReportsView
+                  requests={requests}
+                  docTypes={docTypes}
+                  users={users}
+                  config={config}
+                  currentUser={currentUser}
+                />
+              )}
 
-          {activeTab === 'logs' && <LogsView logs={logs} currentUser={currentUser} />}
+              {activeTab === 'logs' && <LogsView logs={logs} currentUser={currentUser} />}
 
-          {activeTab === 'account' && (
-            <AccountView
-              currentUser={currentUser}
-              onUserUpdated={(updated) => {
-                setCurrentUser(updated);
-                refreshState();
-              }}
-              onLogout={handleLogoutRequest}
-              isDarkMode={false}
-            />
+              {activeTab === 'account' && (
+                <AccountView
+                  currentUser={currentUser}
+                  onUserUpdated={(updated) => {
+                    setCurrentUser(updated);
+                    refreshState();
+                  }}
+                  onLogout={handleLogoutRequest}
+                  isDarkMode={false}
+                />
+              )}
+            </>
           )}
 
           {/* Global Enterprise Developer & Institution Footer */}
@@ -452,17 +580,16 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsLogoutModalOpen(false)}
-                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold border transition-colors cursor-pointer bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
-                Stay Signed In
+                Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmLogout}
-                className="flex-1 py-2.5 px-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 shadow-md shadow-rose-600/25 transition-colors cursor-pointer"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Yes, Sign Out</span>
+                Sign Out
               </button>
             </div>
           </div>

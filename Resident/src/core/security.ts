@@ -101,7 +101,7 @@ export const checkAccountExists = async (email: string): Promise<boolean> => {
         .maybeSingle();
 
       if (!error && data?.id) {
-        if (data.is_archived === true || data.deleted_at || data.is_active === false) {
+        if (data.is_archived === true || data.deleted_at) {
           return false;
         }
         return true;
@@ -248,6 +248,24 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
           return false;
         }
       }
+
+      // Check account_unlock_requests table for pending lockout requests
+      try {
+        const { data: unlockReq } = await supabase
+          .from('account_unlock_requests')
+          .select('id, status, used')
+          .eq('email', cleanEmail)
+          .eq('status', 'pending')
+          .eq('used', false)
+          .maybeSingle();
+
+        if (unlockReq?.id) {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+          }
+          return true;
+        }
+      } catch (e) {}
 
       // 2. Try atomic SECURITY DEFINER RPC fallback
       try {

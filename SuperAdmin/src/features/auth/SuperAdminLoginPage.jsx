@@ -253,20 +253,20 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 2. Pre-Authentication Account Existence Check
-    const accountExists = await checkAccountExists(cleanEmail);
-    if (!accountExists) {
-      setError('Invalid Email and Password');
-      setLoading(false);
-      return;
-    }
-
-    // 3. STRICT: Pre-Authentication Account Lockout Check
+    // 2. STRICT: Pre-Authentication Account Lockout Check
     // If account is already locked in Supabase database, DO NOT call signInWithPassword!
     const locked = await isAccountLocked(cleanEmail);
     if (locked) {
       setIsLocked(true);
-      setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please unlock your account or contact an administrator.');
+      setLoading(false);
+      return;
+    }
+
+    // 3. Pre-Authentication Account Existence Check
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setError('Invalid Email and Password');
       setLoading(false);
       return;
     }
@@ -355,13 +355,36 @@ export default function SuperAdminLoginPage({ onLoginSuccess }) {
     }
 
     // If profile not found, is inactive, or is locked -> immediately terminate session
-    if (!profile || profile.is_active === false || profile.is_locked === true) {
+    if (!profile) {
       try {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
       } catch {}
       setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_locked === true || (profile.failed_login_attempts >= 3) || (profile.failed_attempts >= 3)) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setIsLocked(true);
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please unlock your account or contact an administrator.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_active === false) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch {}
+      setError('Your account is currently deactivated. Please contact an administrator.');
       setLoading(false);
       return;
     }

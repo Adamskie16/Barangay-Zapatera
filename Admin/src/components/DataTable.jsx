@@ -264,27 +264,29 @@ export default function DataTable({
           {/* Secondary Dropdown Filters */}
           {filters && filters.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              {filters.map((filter) => (
-                <div key={filter.id} className="flex items-center space-x-1.5">
-                  {filter.label && (
-                    <span className="text-xs font-bold text-slate-400 hidden sm:inline">
-                      {filter.label}:
-                    </span>
-                  )}
-                  <select
-                    value={filter.value || 'all'}
-                    onChange={(e) => filter.onChange(e.target.value)}
-                    className="px-3.5 py-2 text-xs border border-slate-200/70 rounded-full bg-[#f4f7fb] text-slate-700 font-bold focus:bg-white focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] focus:outline-none cursor-pointer transition-all"
-                    aria-label={filter.label || filter.id}
-                  >
-                    {filter.options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label} {opt.count !== undefined ? `(${opt.count})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+              {filters
+                .filter((filter) => Array.isArray(filter.options) && filter.options.length > 0)
+                .map((filter) => (
+                  <div key={filter.id} className="flex items-center space-x-1.5">
+                    {filter.label && (
+                      <span className="text-xs font-bold text-slate-400 hidden sm:inline">
+                        {filter.label}:
+                      </span>
+                    )}
+                    <select
+                      value={filter.value || 'all'}
+                      onChange={(e) => filter.onChange(e.target.value)}
+                      className="px-3.5 py-2 text-xs border border-slate-200/70 rounded-full bg-[#f4f7fb] text-slate-700 font-bold focus:bg-white focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] focus:outline-none cursor-pointer transition-all"
+                      aria-label={filter.label || filter.id}
+                    >
+                      {filter.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label} {opt.count !== undefined ? `(${opt.count})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
             </div>
           )}
         </div>

@@ -402,21 +402,27 @@ export default function CollectionsLedgerView({
         </div>
       )}
 
-      {/* Top Banner Card */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Top Banner Card matching Admin */}
+      <div className="bg-white p-5 sm:p-6 rounded-[24px] border border-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.03)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-blue-600" />
-            <h1 className="text-lg font-bold text-slate-900">Document Payments & Receipts</h1>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3b5bfd] border border-blue-100 flex items-center justify-center">
+              <Receipt className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                Document Payments & Receipts
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Collect document processing fees, issue official receipts, and process indigency waivers.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Collect fees from residents, issue official receipts, and record payment waivers.
-          </p>
         </div>
 
         <button
           onClick={onNavigateToReports}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+          className="px-4 py-2 bg-[#3b5bfd] hover:bg-blue-700 text-white text-xs font-bold rounded-full transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
         >
           <FileText className="w-4 h-4" />
           <span>Print Collection Report</span>

@@ -95,7 +95,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
             }
           });
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     StorageService.getSupabaseLoginAssetsAsync('admin')
@@ -254,7 +254,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
           setLoading(false);
           return;
         }
-      } catch {}
+      } catch { }
     }
 
     // 1. Rate Limiting Check
@@ -265,19 +265,19 @@ export default function AdminLoginPage({ onLoginSuccess }) {
       return;
     }
 
-    // 2. Pre-Authentication Account Existence Check
-    const accountExists = await checkAccountExists(cleanEmail);
-    if (!accountExists) {
-      setError('Invalid Email and Password');
+    // 2. STRICT: Pre-Authentication Account Lockout Check
+    const locked = await isAccountLocked(cleanEmail);
+    if (locked) {
+      setIsLocked(true);
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please unlock your account or contact an administrator.');
       setLoading(false);
       return;
     }
 
-    // 3. STRICT: Pre-Authentication Account Lockout Check
-    const locked = await isAccountLocked(cleanEmail);
-    if (locked) {
-      setIsLocked(true);
-      setError('Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.');
+    // 3. Pre-Authentication Account Existence Check
+    const accountExists = await checkAccountExists(cleanEmail);
+    if (!accountExists) {
+      setError('Invalid Email and Password');
       setLoading(false);
       return;
     }
@@ -302,7 +302,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
           // Track consecutive failed login attempt in database
           const lockRes = await recordFailedAttempt(cleanEmail, 'admin');
-          
+
           if (lockRes.accountExists === false) {
             setError('Invalid Email and Password');
             setLoading(false);
@@ -362,17 +362,40 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         if (match) {
           profile = match;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // If profile not found, is inactive, or is locked -> immediately terminate session
-    if (!profile || profile.is_active === false || profile.is_locked === true) {
+    if (!profile) {
       try {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
-      } catch {}
+      } catch { }
       setError('Email or password is incorrect.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_locked === true || (profile.failed_login_attempts >= 3) || (profile.failed_attempts >= 3)) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch { }
+      setIsLocked(true);
+      setError('Your account is temporarily locked due to multiple failed login attempts. Please unlock your account or contact an administrator.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.is_active === false) {
+      try {
+        if (isSupabaseConfigured()) {
+          await supabase.auth.signOut();
+        }
+      } catch { }
+      setError('Your account is currently deactivated. Please contact an administrator.');
       setLoading(false);
       return;
     }
@@ -385,7 +408,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
-      } catch {}
+      } catch { }
       setError('Email or password is incorrect.');
       setLoading(false);
       return;
@@ -479,7 +502,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
-      } catch {}
+      } catch { }
       setError('Email or password is incorrect.');
       setLoading(false);
       return;
@@ -903,9 +926,8 @@ export default function AdminLoginPage({ onLoginSuccess }) {
 
               {/* Status & Error Alerts */}
               {error && (
-                <div className={`p-4 rounded-xl border mb-5 flex flex-col gap-2.5 text-xs animate-in fade-in duration-200 ${
-                  isLocked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-rose-50 border-rose-200 text-rose-800'
-                }`}>
+                <div className={`p-4 rounded-xl border mb-5 flex flex-col gap-2.5 text-xs animate-in fade-in duration-200 ${isLocked ? 'bg-red-50 border-red-200 text-red-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}>
                   <div className="flex items-start gap-2.5">
                     <ShieldAlert className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                     <span className="font-medium leading-relaxed">{error}</span>
@@ -989,7 +1011,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
+                      placeholder="••••••••••••••••"
                       className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <button
@@ -1510,7 +1532,7 @@ export default function AdminLoginPage({ onLoginSuccess }) {
             Barangay Zapatera Document & Records Management System
           </p>
           <p className="text-[10px] text-slate-400 mt-1">
-            Developed by <span className="font-semibold text-slate-700">Binghay, Adam Keith Mardee and Medina, Joshua C.</span> • Powered by <span className="font-semibold text-slate-700">Southwestern University PHINMA</span>
+            Developed by <span className="font-semibold text-slate-700">Binghay, Adam Keith Mardee and Medina, Joshua C.</span> â€¢ Powered by <span className="font-semibold text-slate-700">Southwestern University PHINMA</span>
           </p>
         </div>
       </div>

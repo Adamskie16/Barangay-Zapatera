@@ -14,9 +14,17 @@ import {
   Clock,
   Gift,
   ChevronDown,
+  Search,
+  Sparkles,
+  BarChart2,
+  Layers,
+  ArrowUpRight,
+  ShieldCheck,
+  CheckSquare,
 } from 'lucide-react';
 import PrintableFinancialModal, { PrintableFinancialDocument } from './PrintableFinancialModal';
-import { formatCurrency } from '../../core/security';
+import DataTable from '../../components/DataTable';
+import { formatCurrency, formatDate } from '../../core/security';
 import { StorageService } from '../../core/storage';
 
 export default function TreasurerReportsView({
@@ -24,10 +32,157 @@ export default function TreasurerReportsView({
   docTypes = [],
   config = {},
   currentUser = {},
+  loading = false,
 }) {
   const [dateRange, setDateRange] = useState('all'); // 'all' | 'today' | 'month' | 'year'
-
+  const [activeBreakdownTab, setActiveBreakdownTab] = useState('documents'); // 'documents' | 'monthly'
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [docFilter, setDocFilter] = useState('all');
+
+  // Filter requests based on selected date range
+  const filteredRequests = useMemo(() => {
+    if (dateRange === 'all') return requests;
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    return requests.filter((r) => {
+      const d = new Date(r.payment_date || r.created_at || now);
+      if (dateRange === 'today') {
+        return d.toISOString().split('T')[0] === todayStr;
+      }
+      if (dateRange === 'month') {
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      }
+      if (dateRange === 'year') {
+        return d.getFullYear() === currentYear;
+      }
+      return true;
+    });
+  }, [requests, dateRange]);
+
+  // Compute metrics for filtered requests
+  const filteredMetrics = useMemo(() => {
+    return StorageService.calculateFinancialMetrics(filteredRequests, docTypes);
+  }, [filteredRequests, docTypes]);
+
+  const periodLabel = useMemo(() => {
+    const now = new Date();
+    if (dateRange === 'today') {
+      return `Today (${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+    }
+    if (dateRange === 'month') {
+      return `This Month (${now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`;
+    }
+    if (dateRange === 'year') {
+      return `Fiscal Year ${now.getFullYear()}`;
+    }
+    return `All Records (Fiscal Year ${now.getFullYear()})`;
+  }, [dateRange]);
+
+  // Monthly Revenue Breakdown for interactive chart
+  const monthlyRevenueData = useMemo(() => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentYear = new Date().getFullYear();
+    const map = {};
+
+    monthNames.forEach((m, idx) => {
+      map[idx] = { month: m, revenue: 0, count: 0, waived: 0 };
+    });
+
+    filteredRequests.forEach((req) => {
+      const d = new Date(req.payment_date || req.created_at || new Date());
+      if (d.getFullYear() === currentYear) {
+        const mIdx = d.getMonth();
+        const fee = Number(req.fee ?? req.amount ?? 0);
+        const isPaid = req.payment_status === 'paid' || req.is_paid === true || req.status === 'released' || req.status === 'completed';
+        const isWaived = req.payment_status === 'waived' || req.is_waived === true;
+
+        if (isPaid) {
+          map[mIdx].revenue += fee;
+          map[mIdx].count += 1;
+        } else if (isWaived) {
+          map[mIdx].waived += fee;
+        }
+      }
+    });
+
+    return Object.values(map);
+  }, [filteredRequests]);
+
+  const maxMonthlyRevenue = useMemo(() => {
+    const max = Math.max(...monthlyRevenueData.map((m) => m.revenue), 1000);
+    return max;
+  }, [monthlyRevenueData]);
+
+  // Status counts for filtered tabs
+  const counts = useMemo(() => {
+    let paid = 0;
+    let unpaid = 0;
+    let waived = 0;
+
+    filteredRequests.forEach((r) => {
+      const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
+      const isWaived = r.payment_status === 'waived' || r.is_waived === true;
+      if (isPaid) paid++;
+      else if (isWaived) waived++;
+      else unpaid++;
+    });
+
+    return { all: filteredRequests.length, paid, unpaid, waived };
+  }, [filteredRequests]);
+
+  const statusTabs = {
+    activeTab: statusFilter,
+    onChange: setStatusFilter,
+    tabs: [
+      { id: 'all', label: 'All Records', count: counts.all },
+      { id: 'paid', label: 'Paid', count: counts.paid },
+      { id: 'unpaid', label: 'Waiting Payment', count: counts.unpaid },
+      { id: 'waived', label: 'Free / Waived', count: counts.waived },
+    ],
+  };
+
+  const docTypeOptions = useMemo(() => {
+    const list = [{ value: 'all', label: 'All Document Types' }];
+    docTypes.forEach((d) => {
+      list.push({ value: d.title || d.code, label: d.title || d.code });
+    });
+    return list;
+  }, [docTypes]);
+
+  const filters = [
+    {
+      id: 'docType',
+      label: 'Document Type',
+      value: docFilter,
+      onChange: setDocFilter,
+      options: docTypeOptions,
+      filterFn: (row, val) => {
+        if (val === 'all') return true;
+        const rowDoc = row.document_type || row.document_name || '';
+        return rowDoc.toLowerCase() === val.toLowerCase();
+      },
+    },
+    {
+      id: 'status',
+      value: statusFilter,
+      onChange: setStatusFilter,
+      filterFn: (row, val) => {
+        if (val === 'all') return true;
+        const isPaid = row.payment_status === 'paid' || row.is_paid === true || row.status === 'released' || row.status === 'completed';
+        const isWaived = row.payment_status === 'waived' || row.is_waived === true;
+        if (val === 'paid') return isPaid;
+        if (val === 'waived') return isWaived;
+        if (val === 'unpaid') return !isPaid && !isWaived;
+        return true;
+      },
+    },
+  ];
 
   // Helper to build formal financial statement HTML
   const getFinancialReportHtml = () => {
@@ -47,7 +202,7 @@ export default function TreasurerReportsView({
     const treasurerName = currentUser?.full_name || config.treasurer_name || 'HON. MA. LOURDES S. RAMOS';
     const controlNo = `BZ-FIN-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const rowsHtml = filteredRequests.slice(0, 100).map((r, i) => {
+    const rowsHtml = filteredRequests.slice(0, 150).map((r, i) => {
       const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
       const isWaived = r.payment_status === 'waived' || r.is_waived === true;
       const statusText = isPaid ? 'PAID' : isWaived ? 'WAIVED' : 'UNPAID';
@@ -59,6 +214,7 @@ export default function TreasurerReportsView({
           <td style="padding: 6px 8px;">${r.document_type || r.document_name || 'Barangay Clearance'}</td>
           <td style="padding: 6px 8px; text-align: right; font-weight: 700;">PHP ${Number(r.fee ?? r.amount ?? 0).toFixed(2)}</td>
           <td style="padding: 6px 8px; text-align: center; color: ${statusColor}; font-weight: 700;">${statusText}</td>
+          <td style="padding: 6px 8px;">${r.or_number || '—'}</td>
           <td style="padding: 6px 8px;">${r.payment_method || r.payment_mode || 'Cash on Pickup'}</td>
         </tr>
       `;
@@ -71,8 +227,8 @@ export default function TreasurerReportsView({
         <meta charset="utf-8" />
         <title>Barangay Zapatera Financial Statement - ${controlNo}</title>
         <style>
-          @page { size: A4 portrait; margin: 15mm 15mm; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; }
+          @page { size: A4 portrait; margin: 12mm 15mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 0; padding: 15px; }
           .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; position: relative; }
           .logo { width: 64px; height: 64px; object-fit: contain; }
           .rep { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; margin: 0; }
@@ -147,11 +303,12 @@ export default function TreasurerReportsView({
               <th>Document Type</th>
               <th style="text-align: right;">Fee Amount</th>
               <th style="text-align: center;">Status</th>
+              <th>OR Number</th>
               <th>Payment Mode</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #94a3b8;">No collection records found for this period.</td></tr>'}
+            ${rowsHtml || '<tr><td colspan="7" style="text-align: center; padding: 20px; color: #94a3b8;">No collection records found for this period.</td></tr>'}
           </tbody>
         </table>
 
@@ -207,7 +364,7 @@ export default function TreasurerReportsView({
     setIsExportMenuOpen(false);
   };
 
-  // Direct print handler with isolated iframe for clean official document printing
+  // Direct print handler
   const handlePrintOfficialReport = () => {
     const printableHtml = getFinancialReportHtml();
 
@@ -238,7 +395,7 @@ export default function TreasurerReportsView({
 
   // Direct export report handlers
   const handleExportCSV = () => {
-    const headers = ['Tracking Number', 'Resident Name', 'Document Type', 'Fee Amount (PHP)', 'Payment Status', 'Payment Mode', 'Date'];
+    const headers = ['Tracking Number', 'Resident Name', 'Document Type', 'Fee Amount (PHP)', 'Payment Status', 'OR Number', 'Payment Mode', 'Date'];
     const rows = filteredRequests.map((r) => {
       const isPaid = r.payment_status === 'paid' || r.is_paid === true || r.status === 'released' || r.status === 'completed';
       const isWaived = r.payment_status === 'waived' || r.is_waived === true;
@@ -249,6 +406,7 @@ export default function TreasurerReportsView({
         `"${r.document_type || r.document_name || 'Clearance'}"`,
         Number(r.fee ?? r.amount ?? 0),
         `"${statusStr}"`,
+        `"${r.or_number || ''}"`,
         `"${r.payment_method || r.payment_mode || 'Cash'}"`,
         `"${r.payment_date || r.created_at || ''}"`,
       ].join(',');
@@ -307,240 +465,413 @@ export default function TreasurerReportsView({
     setIsExportMenuOpen(false);
   };
 
-  // Filter requests based on selected date range
-  const filteredRequests = useMemo(() => {
-    if (dateRange === 'all') return requests;
+  // Table Columns for DataTable
+  const columns = [
+    {
+      key: 'tracking_number',
+      header: 'Tracking No.',
+      sortable: true,
+      render: (row) => (
+        <span className="font-mono font-bold text-slate-800 bg-slate-100/80 px-2 py-0.5 rounded-lg border border-slate-200/80 text-[11px]">
+          {row.tracking_number || 'BZ-2026-PEND'}
+        </span>
+      ),
+    },
+    {
+      key: 'full_name',
+      header: 'Resident Name',
+      sortable: true,
+      accessor: (row) => row.full_name || row.user_name || row.resident_name || 'Resident',
+      render: (row) => (
+        <div>
+          <p className="font-bold text-slate-900 leading-tight text-xs">
+            {row.full_name || row.user_name || row.resident_name || 'Resident'}
+          </p>
+          <p className="text-[10px] text-slate-400 font-mono mt-0.5">{row.email || row.contact_number || ''}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'document_type',
+      header: 'Document Type',
+      sortable: true,
+      accessor: (row) => row.document_type || row.document_name || 'Clearance',
+      render: (row) => (
+        <span className="font-semibold text-slate-700 text-xs">
+          {row.document_type || row.document_name || 'Clearance'}
+        </span>
+      ),
+    },
+    {
+      key: 'fee',
+      header: 'Fee (PHP)',
+      sortable: true,
+      align: 'right',
+      accessor: (row) => Number(row.fee ?? row.amount ?? 0),
+      render: (row) => {
+        const fee = Number(row.fee ?? row.amount ?? 0);
+        return <span className="font-extrabold text-slate-900 text-xs">{formatCurrency(fee)}</span>;
+      },
+    },
+    {
+      key: 'payment_status',
+      header: 'Status',
+      sortable: true,
+      align: 'center',
+      render: (row) => {
+        const isPaid = row.payment_status === 'paid' || row.is_paid === true || row.status === 'released' || row.status === 'completed';
+        const isWaived = row.payment_status === 'waived' || row.is_waived === true;
 
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    return requests.filter((r) => {
-      const d = new Date(r.payment_date || r.created_at || now);
-      if (dateRange === 'today') {
-        return d.toISOString().split('T')[0] === todayStr;
-      }
-      if (dateRange === 'month') {
-        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-      }
-      if (dateRange === 'year') {
-        return d.getFullYear() === currentYear;
-      }
-      return true;
-    });
-  }, [requests, dateRange]);
-
-  // Compute metrics for filtered requests
-  const filteredMetrics = useMemo(() => {
-    return StorageService.calculateFinancialMetrics(filteredRequests, docTypes);
-  }, [filteredRequests, docTypes]);
-
-  const periodLabel = useMemo(() => {
-    if (dateRange === 'today') return 'Today (' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ')';
-    if (dateRange === 'month') return 'This Month (' + new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ')';
-    if (dateRange === 'year') return 'Year ' + new Date().getFullYear();
-    return 'All Records (Fiscal Year ' + new Date().getFullYear() + ')';
-  }, [dateRange]);
+        if (isPaid) {
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              Paid
+            </span>
+          );
+        }
+        if (isWaived) {
+          return (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200/80">
+              <Gift className="w-3 h-3 text-purple-600" />
+              Waived
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200/80">
+            <Clock className="w-3 h-3 text-blue-600" />
+            Unpaid
+          </span>
+        );
+      },
+    },
+    {
+      key: 'or_number',
+      header: 'OR Number',
+      sortable: true,
+      render: (row) => {
+        const or = row.or_number || row.official_receipt_number;
+        if (or) {
+          return (
+            <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+              {or}
+            </span>
+          );
+        }
+        return <span className="text-slate-400 font-mono text-[11px]">—</span>;
+      },
+    },
+    {
+      key: 'payment_date',
+      header: 'Date Logged',
+      sortable: true,
+      render: (row) => (
+        <span className="text-slate-500 font-mono text-[11px]">
+          {formatDate(row.payment_date || row.created_at)}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Top Header Card */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Top Banner Card matching Admin Reports */}
+      <div className="bg-white p-5 sm:p-6 rounded-[24px] border border-slate-200/80 shadow-[0_2px_12px_rgba(15,23,42,0.03)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-            <h1 className="text-lg font-bold text-slate-900">Collection Reports & Summaries</h1>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3b5bfd] border border-blue-100 flex items-center justify-center">
+              <FileSpreadsheet className="w-4 h-4" />
+            </div>
+            <div>
+              <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                Collections & Financial Reports
+              </h1>
+              <p className="text-xs text-slate-500">
+                Official revenue statements, document breakdowns, and certified audit ledgers.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            View and print official certified financial collections statements for Barangay Zapatera.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {/* Date Range Selector */}
-          <div className="flex items-center space-x-1.5 text-xs">
-            <span className="font-semibold text-slate-600 hidden md:inline">Period:</span>
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer"
-            >
-              <option value="all">All Records</option>
-              <option value="today">Today's Collections</option>
-              <option value="month">Current Month</option>
-              <option value="year">Current Year</option>
-            </select>
+        {/* Date Selector & Export Actions */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Period selector pills */}
+          <div className="flex items-center bg-[#f4f7fb] p-1 rounded-full border border-slate-200/70 text-xs font-semibold">
+            {[
+              { id: 'all', label: 'All Year' },
+              { id: 'today', label: 'Today' },
+              { id: 'month', label: 'This Month' },
+            ].map((p) => {
+              const active = dateRange === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setDateRange(p.id)}
+                  className={`px-3 py-1.5 rounded-full transition-all text-xs cursor-pointer ${
+                    active
+                      ? 'bg-[#3b5bfd] text-white font-bold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 font-semibold'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Export to Downloads Dropdown Button */}
+          {/* Export Dropdown Button */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-full text-xs font-bold shadow-2xs transition-colors cursor-pointer shrink-0"
               title="Export report summaries directly to Downloads"
             >
-              <Download className="w-4 h-4" />
-              <span>Export Reports</span>
-              <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
 
             {isExportMenuOpen && (
-              <div
-                className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
-                onMouseLeave={() => setIsExportMenuOpen(false)}
-              >
-                <div className="px-3 py-1.5 border-b border-slate-100">
-                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="w-3 h-3" /> Official PDF Documents
-                  </p>
+              <>
+                <div
+                  className="fixed inset-0 z-40 bg-slate-950/10 backdrop-blur-[1px] sm:bg-transparent sm:backdrop-blur-none"
+                  onClick={() => setIsExportMenuOpen(false)}
+                />
+                <div
+                  className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200/80 py-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                >
+                  <div className="px-3.5 py-1.5 border-b border-slate-100">
+                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3 h-3" /> Official PDF Statement
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadPDF}
+                    className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-rose-50 hover:text-rose-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-slate-900">Official Financial Statement (PDF)</p>
+                      <p className="text-[10px] text-slate-400">Certified collections statement with control no.</p>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-slate-100 my-1" />
+                  <div className="px-3.5 py-1.5 border-b border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Download className="w-3 h-3" /> Data Spreadsheets
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Collections Ledger (CSV)</p>
+                      <p className="text-[10px] text-slate-400">Detailed line-by-line audit</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportSummaryCSV}
+                    className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Executive KPI Summary (CSV)</p>
+                      <p className="text-[10px] text-slate-400">Totals, rates & aggregates</p>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-slate-100 my-1" />
+
+                  <button
+                    type="button"
+                    onClick={handleExportJSON}
+                    className="w-full text-left px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-slate-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Full Database Backup (JSON)</p>
+                      <p className="text-[10px] text-slate-400">Complete raw records</p>
+                    </div>
+                  </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadPDF}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-red-600 shrink-0" />
-                  <div>
-                    <p className="font-semibold text-slate-900">Official Financial Statement (PDF)</p>
-                    <p className="text-[10px] text-slate-400">Certified collections statement with control no.</p>
-                  </div>
-                </button>
-
-                <div className="border-t border-slate-100 my-1.5" />
-                <div className="px-3 py-1.5 border-b border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Download className="w-3 h-3" /> Data Spreadsheets & Backups
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <p className="font-semibold">Collections Ledger (CSV)</p>
-                    <p className="text-[10px] text-slate-400">Detailed line-by-line transactions</p>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleExportSummaryCSV}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2.5 transition-colors cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                  <div>
-                    <p className="font-semibold">Executive KPI Summary (CSV)</p>
-                    <p className="text-[10px] text-slate-400">Total gross revenue & rates</p>
-                  </div>
-                </button>
-
-                <div className="border-t border-slate-100 my-1" />
-
-                <button
-                  type="button"
-                  onClick={handleExportJSON}
-                  className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 flex items-center space-x-2.5 transition-colors cursor-pointer"
-                >
-                  <Download className="w-4 h-4 text-slate-600 shrink-0" />
-                  <div>
-                    <p className="font-semibold">All Records Backup (JSON)</p>
-                    <p className="text-[10px] text-slate-400">Complete data backup</p>
-                  </div>
-                </button>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Print Official Report Button (Direct Print) */}
+          {/* Direct Print Button */}
           <button
             type="button"
             onClick={handlePrintOfficialReport}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
-            title="Print Official Report Directly"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Print Official Report</span>
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Money Collected</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {formatCurrency(filteredMetrics.totalRevenue)}
-          </h3>
-          <p className="text-[11px] text-emerald-600 font-semibold mt-1">
-            {filteredMetrics.paidCount} Paid Requests
-          </p>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Documents</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {filteredRequests.length}
-          </h3>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Document Requests Processed
-          </p>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Free / Waived</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {formatCurrency(filteredMetrics.waivedAmount)}
-          </h3>
-          <p className="text-[11px] text-purple-600 font-semibold mt-1">
-            {filteredMetrics.waivedCount} Indigent / Free
-          </p>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Waiting for Payment</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1">
-            {formatCurrency(filteredMetrics.unpaidAmount)}
-          </h3>
-          <p className="text-[11px] text-blue-600 font-semibold mt-1">
-            {filteredMetrics.unpaidCount} Pending Collection
-          </p>
-        </div>
-      </div>
-
-      {/* Document Type Collections Breakdown Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Collections Breakdown by Document Type</h2>
-            <p className="text-xs text-slate-500">Summary totals for {periodLabel}</p>
-          </div>
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+            className="inline-flex items-center space-x-2 px-4 py-2 bg-[#3b5bfd] hover:bg-blue-700 text-white rounded-full text-xs font-bold shadow-xs transition-colors cursor-pointer shrink-0"
+            title="Print Official Certified Report Directly"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Print View</span>
+            <span>Print Report</span>
           </button>
         </div>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
-              <tr>
-                <th className="p-3">Document Type</th>
-                <th className="p-3 text-center">Total Requests</th>
-                <th className="p-3 text-center">Paid Count</th>
-                <th className="p-3 text-right">Money Collected (PHP)</th>
-                <th className="p-3 text-right">Share of Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+      {/* 4 Colorful Gradient KPI Overview Cards matching Admin */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* KPI 1: Gross Collections */}
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#3b5bfd] via-[#4f6ef7] to-[#60a5fa] text-white shadow-[0_14px_30px_-12px_rgba(59,91,253,0.45)] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Gross Collections
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center">
+              <DollarSign className="w-4 h-4 text-white" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tracking-tight">
+              {formatCurrency(filteredMetrics.totalRevenue)}
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+              <span>{filteredMetrics.paidCount} Paid Clearances</span>
+            </p>
+          </div>
+          {/* Subtle sparkline wave */}
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/70">
+            <span>Period: {periodLabel.split('(')[0]}</span>
+            <span className="font-bold text-white">PHP Avg</span>
+          </div>
+        </div>
+
+        {/* KPI 2: Paid Clearances */}
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#10b981] via-[#14b8a6] to-[#34d399] text-white shadow-[0_14px_30px_-12px_rgba(16,185,129,0.45)] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Paid Documents
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center">
+              <CheckSquare className="w-4 h-4 text-white" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tracking-tight">
+              {filteredMetrics.paidCount}
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 font-semibold">
+              {filteredRequests.length > 0
+                ? `${Math.round((filteredMetrics.paidCount / filteredRequests.length) * 100)}% Fulfillment Rate`
+                : '0% Fulfillment'}
+            </p>
+          </div>
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/70">
+            <span>Official Receipts Issued</span>
+            <span className="font-bold text-white">{filteredMetrics.paidCount} ORs</span>
+          </div>
+        </div>
+
+        {/* KPI 3: Free / Indigent Waived */}
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#8b5cf6] via-[#a855f7] to-[#c084fc] text-white shadow-[0_14px_30px_-12px_rgba(139,92,246,0.45)] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Free / Waived Fees
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center">
+              <Gift className="w-4 h-4 text-white" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tracking-tight">
+              {formatCurrency(filteredMetrics.waivedAmount)}
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 font-semibold">
+              {filteredMetrics.waivedCount} Indigent / Senior / PWD
+            </p>
+          </div>
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/70">
+            <span>Civic Assistance</span>
+            <span className="font-bold text-white">Waived 100%</span>
+          </div>
+        </div>
+
+        {/* KPI 4: Pending Collections */}
+        <div className="relative overflow-hidden rounded-[24px] p-5 bg-linear-to-br from-[#f59e0b] via-[#f97316] to-[#fb923c] text-white shadow-[0_14px_30px_-12px_rgba(249,115,22,0.42)] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+              Waiting for Payment
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <h3 className="text-2xl font-black tracking-tight">
+              {formatCurrency(filteredMetrics.unpaidAmount)}
+            </h3>
+            <p className="text-[11px] text-white/80 mt-1 font-semibold">
+              {filteredMetrics.unpaidCount} Pending at Cashier
+            </p>
+          </div>
+          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-white/70">
+            <span>Awaiting Pickup</span>
+            <span className="font-bold text-white">{filteredMetrics.unpaidCount} Unpaid</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Dual Breakdown Section */}
+      <div className="bg-white rounded-[24px] border border-slate-200/80 p-5 sm:p-6 shadow-[0_2px_12px_rgba(15,23,42,0.03)] space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+              Revenue & Collections Analytics
+            </h2>
+            <p className="text-xs text-slate-500">
+              Detailed breakdown of document distribution and monthly revenue flow.
+            </p>
+          </div>
+
+          {/* Breakdown Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-[#f4f7fb] rounded-full border border-slate-200/70">
+            <button
+              type="button"
+              onClick={() => setActiveBreakdownTab('documents')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeBreakdownTab === 'documents'
+                  ? 'bg-[#3b5bfd] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>By Document Type</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveBreakdownTab('monthly')}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeBreakdownTab === 'monthly'
+                  ? 'bg-[#3b5bfd] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>Monthly Trend</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab 1: By Document Type Breakdown Table & Progress Bars */}
+        {activeBreakdownTab === 'documents' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredMetrics.breakdownList && filteredMetrics.breakdownList.length > 0 ? (
                 filteredMetrics.breakdownList.map((item, idx) => {
                   const share = filteredMetrics.totalRevenue > 0
@@ -548,39 +879,143 @@ export default function TreasurerReportsView({
                     : 0;
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3 font-bold text-slate-800">{item.name}</td>
-                      <td className="p-3 text-center font-medium text-slate-600">{item.totalTransactions}</td>
-                      <td className="p-3 text-center font-bold text-emerald-700">{item.paidTransactions}</td>
-                      <td className="p-3 text-right font-black text-slate-900">{formatCurrency(item.totalRevenue)}</td>
-                      <td className="p-3 text-right">
-                        <span className="font-semibold text-blue-700">{share}%</span>
-                      </td>
-                    </tr>
+                    <div
+                      key={idx}
+                      className="p-4 rounded-2xl bg-[#f8fafc] border border-slate-200/70 hover:border-blue-200 transition-colors space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-extrabold text-slate-900 truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            {item.paidTransactions} of {item.totalTransactions} paid • {item.waivedTransactions || 0} waived
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-black text-slate-900">
+                            {formatCurrency(item.totalRevenue)}
+                          </p>
+                          <span className="text-[10px] font-bold text-[#3b5bfd]">
+                            {share}% of revenue
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-linear-to-r from-[#3b5bfd] to-[#60a5fa] h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(share, 3)}%` }}
+                        />
+                      </div>
+                    </div>
                   );
                 })
               ) : (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-slate-400">
-                    No transactions found for the selected period.
-                  </td>
-                </tr>
+                <div className="col-span-2 py-8 text-center text-slate-400 text-xs">
+                  No document collection records found for this period.
+                </div>
               )}
-            </tbody>
-            {filteredMetrics.breakdownList && filteredMetrics.breakdownList.length > 0 && (
-              <tfoot className="bg-slate-50/80 font-black border-t-2 border-slate-200">
-                <tr>
-                  <td className="p-3 uppercase">Total Money Collected:</td>
-                  <td className="p-3 text-center">{filteredRequests.length}</td>
-                  <td className="p-3 text-center text-emerald-800">{filteredMetrics.paidCount}</td>
-                  <td className="p-3 text-right text-sm text-slate-900">{formatCurrency(filteredMetrics.totalRevenue)}</td>
-                  <td className="p-3 text-right">100%</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Monthly Trend Chart */}
+        {activeBreakdownTab === 'monthly' && (
+          <div className="space-y-4">
+            <div className="h-64 w-full flex items-end gap-2 sm:gap-4 px-2 pt-8 pb-4">
+              {monthlyRevenueData.map((d, i) => {
+                const heightPct = Math.min(Math.round((d.revenue / maxMonthlyRevenue) * 100), 100);
+                const hasRevenue = d.revenue > 0;
+
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center h-full justify-end group relative">
+                    {/* Hover Floating Tooltip */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-12 z-20 pointer-events-none bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg whitespace-nowrap">
+                      {d.month}: {formatCurrency(d.revenue)} ({d.count} paid)
+                    </div>
+
+                    <div className="w-full flex justify-center items-end h-[85%]">
+                      <div
+                        className={`w-full max-w-[32px] rounded-t-xl transition-all duration-300 ${
+                          hasRevenue
+                            ? 'bg-linear-to-t from-[#3b5bfd] to-[#60a5fa] group-hover:from-blue-600 group-hover:to-blue-400 shadow-xs'
+                            : 'bg-slate-100 group-hover:bg-slate-200'
+                        }`}
+                        style={{ height: `${Math.max(heightPct, 6)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 mt-2">{d.month}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 px-2">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#3b5bfd]" />
+                <span>Monthly Gross Collections (PHP)</span>
+              </span>
+              <span className="font-semibold text-slate-700">
+                Peak: {formatCurrency(maxMonthlyRevenue)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Certified Collections Ledger Table (DataTable) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+              Collections Ledger & Audit Log
+            </h2>
+            <p className="text-xs text-slate-500">
+              Line-by-line financial transaction records for Barangay Zapatera.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-[#3b5bfd]" />
+            <span>Open Statement Modal</span>
+          </button>
+        </div>
+
+        <DataTable
+          data={filteredRequests}
+          columns={columns}
+          keyField="id"
+          searchable={true}
+          searchPlaceholder="Search tracking number, resident, document, or OR..."
+          searchKeys={['tracking_number', 'full_name', 'user_name', 'resident_name', 'email', 'document_type', 'or_number']}
+          statusTabs={statusTabs}
+          filters={filters}
+          defaultPageSize={10}
+          pageSizeOptions={[10, 25, 50]}
+          defaultSortKey="payment_date"
+          defaultSortDirection="desc"
+          loading={loading}
+          emptyTitle="No collection records found for this period"
+          emptySubtitle="Try selecting another period or clearing your search filters."
+        />
+      </div>
+
+      {/* Printable Statement Modal */}
+      {isPrintModalOpen && (
+        <PrintableFinancialModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          config={config}
+          currentUser={currentUser}
+          requests={filteredRequests}
+          metrics={filteredMetrics}
+          periodLabel={periodLabel}
+        />
+      )}
 
       {/* Hidden container on screen, rendered exclusively during window.print() */}
       <div className="print-only-container">
