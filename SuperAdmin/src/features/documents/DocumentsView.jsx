@@ -448,11 +448,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         <div className="inline-flex items-center gap-1.5 bg-white p-1.5 rounded-full border border-slate-200/80 shadow-xs self-start lg:self-auto">
           <button
             onClick={() => setSubTab('generator')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              subTab === 'generator'
-                ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
-                : 'text-slate-600 hover:bg-[#f4f7fb]'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${subTab === 'generator'
+              ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+              : 'text-slate-600 hover:bg-[#f4f7fb]'
+              }`}
           >
             <Printer size={15} />
             <span>Walk-In Generator & Print</span>
@@ -460,11 +459,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
           <button
             onClick={() => setSubTab('info')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              subTab === 'info'
-                ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
-                : 'text-slate-600 hover:bg-[#f4f7fb]'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${subTab === 'info'
+              ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+              : 'text-slate-600 hover:bg-[#f4f7fb]'
+              }`}
           >
             <Sliders size={15} />
             <span>Service Catalog ({docTypes.length})</span>
@@ -477,9 +475,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         {/* Card 1: Official A4 Templates */}
         <div
           onClick={() => setSubTab('generator')}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${
-            subTab === 'generator' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${subTab === 'generator' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -499,9 +496,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         {/* Card 2: Active Service Catalog */}
         <div
           onClick={() => setSubTab('info')}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
-            subTab === 'info' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${subTab === 'info' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -555,7 +551,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           </div>
           <div className="mt-4">
             <p className="text-lg font-extrabold tracking-tight truncate">
-              {config?.captainName || 'HON. FRANKLYN A. ONG'}
+              {config?.captainName || 'HON. DAVID M. AGRAVANTE'}
             </p>
             <p className="text-xs font-semibold text-white/90 mt-1">Punong Barangay</p>
             <p className="text-[11px] text-white/75 mt-1">Default certificate signatory</p>
@@ -582,17 +578,15 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   <button
                     key={tab.key}
                     onClick={() => setCatalogStatusFilter(tab.key)}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
-                        : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70'
-                    }`}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${isSelected
+                      ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                      : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70'
+                      }`}
                   >
                     <span>{tab.label}</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
-                      }`}
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600'
+                        }`}
                     >
                       {tab.count}
                     </span>
@@ -647,9 +641,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
               filteredDocTypes.map((doc) => (
                 <div
                   key={doc.id || doc.code}
-                  className={`bg-white rounded-[26px] border ${
-                    doc.is_active ? 'border-slate-100/80' : 'border-slate-200 bg-slate-50/60 opacity-80'
-                  } p-6 shadow-xs flex flex-col justify-between space-y-5 hover:shadow-md transition-all`}
+                  className={`bg-white rounded-[26px] border ${doc.is_active ? 'border-slate-100/80' : 'border-slate-200 bg-slate-50/60 opacity-80'
+                    } p-6 shadow-xs flex flex-col justify-between space-y-5 hover:shadow-md transition-all`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3">
@@ -974,22 +967,20 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, fee_type: 'fixed', is_variable_fee: false })}
-                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${
-                        formData.fee_type !== 'variable' && !formData.is_variable_fee
-                          ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
-                          : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
-                      }`}
+                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${formData.fee_type !== 'variable' && !formData.is_variable_fee
+                        ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
+                        : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
+                        }`}
                     >
                       Fixed Fee
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, fee_type: 'variable', is_variable_fee: true, fee: 0 })}
-                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${
-                        formData.fee_type === 'variable' || formData.is_variable_fee
-                          ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
-                          : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
-                      }`}
+                      className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${formData.fee_type === 'variable' || formData.is_variable_fee
+                        ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
+                        : 'bg-[#f4f7fb] border-transparent text-slate-600 hover:bg-slate-200/70'
+                        }`}
                     >
                       Depends on Claim
                     </button>
