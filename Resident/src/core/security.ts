@@ -223,16 +223,16 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
 
   try {
     if (isSupabaseConfigured()) {
-      // 1. Direct authoritative profiles table check
+      // 1. Direct authoritative profiles table check using case-insensitive ilike
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, email, is_locked, failed_login_attempts, failed_attempts, is_active, locked_at')
-        .eq('email', cleanEmail)
+        .ilike('email', cleanEmail)
         .maybeSingle();
 
       if (profile) {
         const dbAttempts = Math.max((profile as any).failed_login_attempts || 0, (profile as any).failed_attempts || 0);
-        const isDbLocked = profile.is_locked === true || dbAttempts >= 3 || profile.is_active === false;
+        const isDbLocked = profile.is_locked === true || (profile.is_locked !== false && dbAttempts >= 3);
         if (isDbLocked) {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
@@ -253,17 +253,20 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
       try {
         const { data: unlockReq } = await supabase
           .from('account_unlock_requests')
-          .select('id, status, used')
-          .eq('email', cleanEmail)
+          .select('id, status, used, expires_at')
+          .ilike('email', cleanEmail)
           .eq('status', 'pending')
           .eq('used', false)
           .maybeSingle();
 
         if (unlockReq?.id) {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+          const isExpired = (unlockReq as any).expires_at && new Date((unlockReq as any).expires_at).getTime() < Date.now();
+          if (!isExpired && (!profile || profile.is_locked !== false)) {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem(`zapatera_locked_${cleanEmail}`, 'true');
+            }
+            return true;
           }
-          return true;
         }
       } catch (e) {}
 
@@ -279,6 +282,12 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
               localStorage.setItem(`zapatera_failed_${cleanEmail}`, '3');
             }
             return true;
+          } else {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+              localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
+            }
+            return false;
           }
         }
       } catch (e) {}
@@ -428,7 +437,7 @@ export const resetFailedAttempts = async (email: string): Promise<void> => {
           failed_attempts: 0,
           updated_at: nowTs,
         })
-        .eq('email', cleanEmail)
+        .ilike('email', cleanEmail)
         .eq('is_locked', false);
     }
   } catch (err) {}
@@ -438,45 +447,157 @@ export const resetFailedAttempts = async (email: string): Promise<void> => {
  * Unlock a user account manually or programmatically.
  * Sets is_locked = false, resets failed attempts, records unlocked_at and unlocked_by.
  */
-export const unlockUserAccount = async (targetEmail: string, adminIdentifier: string | null = null): Promise<boolean> => {
-  const cleanEmail = String(targetEmail).toLowerCase().trim();
+export const unlockUserAccount = async (targetEmail: string, adminIdentifier: string | null = null, targetUserId: string | null = null): Promise<boolean> => {
+  const cleanEmail = String(targetEmail || '').toLowerCase().trim();
   const nowTs = new Date().toISOString();
-  let adminUuid = (adminIdentifier && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminIdentifier))
-    ? adminIdentifier
-    : null;
 
+  // 1. Clear local lockout flags for cleanEmail and targetEmail
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
       localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+      if (targetEmail) {
+        localStorage.removeItem(`zapatera_failed_${targetEmail}`);
+        localStorage.removeItem(`zapatera_locked_${targetEmail}`);
+      }
     }
   } catch (e) {}
 
+  // 2. Clear local storage database caches (zapatera_residents_db, zapatera_admins_db, zapatera_super_admins_db)
+  try {
+    if (typeof localStorage !== 'undefined') {
+      ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_super_admins_db', 'zapatera_users_archive_db'].forEach((dbKey) => {
+        const stored = localStorage.getItem(dbKey);
+        if (stored) {
+          const list = JSON.parse(stored);
+          if (Array.isArray(list)) {
+            let changed = false;
+            const updated = list.map((u: any) => {
+              const uEmail = String(u.email || '').toLowerCase().trim();
+              const uId = u.id ? String(u.id).trim() : '';
+              if ((cleanEmail && uEmail === cleanEmail) || (targetUserId && uId === String(targetUserId).trim())) {
+                changed = true;
+                return {
+                  ...u,
+                  is_locked: false,
+                  is_active: true,
+                  failed_attempts: 0,
+                  failed_login_attempts: 0,
+                  locked_at: null,
+                  unlocked_at: nowTs,
+                };
+              }
+              return u;
+            });
+            if (changed) {
+              localStorage.setItem(dbKey, JSON.stringify(updated));
+            }
+          }
+        }
+      });
+    }
+  } catch (e) {}
+
+  // 3. Update Supabase
   try {
     if (isSupabaseConfigured()) {
-      if (!adminUuid && adminIdentifier) {
-        const { data: adminProf } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', String(adminIdentifier).toLowerCase().trim())
-          .maybeSingle();
-        if (adminProf?.id) {
-          adminUuid = adminProf.id;
+      let resolvedUserId = targetUserId || null;
+
+      // Find user profile in Supabase to obtain exact ID and verify record
+      try {
+        let query = supabase.from('profiles').select('id, email, is_locked');
+        if (resolvedUserId) {
+          query = query.eq('id', resolvedUserId);
+        } else {
+          query = query.ilike('email', cleanEmail);
         }
+        const { data: matchedProfiles } = await query;
+        if (matchedProfiles && matchedProfiles.length > 0) {
+          const prof = matchedProfiles[0];
+          if (prof.id) resolvedUserId = prof.id;
+        }
+      } catch (e) {}
+
+      // Verify adminUuid exists in profiles to prevent foreign key constraint violations
+      let validAdminUuid: string | null = null;
+      if (adminIdentifier && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminIdentifier)) {
+        try {
+          const { data: adminProf } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', adminIdentifier)
+            .maybeSingle();
+          if (adminProf?.id) {
+            validAdminUuid = adminProf.id;
+          }
+        } catch (e) {}
+      } else if (adminIdentifier && typeof adminIdentifier === 'string' && adminIdentifier.includes('@')) {
+        try {
+          const { data: adminProf } = await supabase
+            .from('profiles')
+            .select('id')
+            .ilike('email', adminIdentifier.trim())
+            .maybeSingle();
+          if (adminProf?.id) {
+            validAdminUuid = adminProf.id;
+          }
+        } catch (e) {}
       }
 
+      // Try RPC unlock functions
       try {
         await supabase.rpc('admin_unlock_account', {
           target_user_email: cleanEmail,
-          admin_user_id: adminUuid,
+          admin_user_id: validAdminUuid,
         });
       } catch (e) {}
 
-      await supabase
-        .from('account_unlock_requests')
-        .delete()
-        .eq('email', cleanEmail);
+      try {
+        await supabase.rpc('unlock_account', {
+          user_email: cleanEmail,
+        });
+      } catch (e) {}
 
+      try {
+        await supabase.rpc('reset_account_lockout', {
+          user_email: cleanEmail,
+        });
+      } catch (e) {}
+
+      // Delete & resolve any account_unlock_requests using case-insensitive ilike
+      try {
+        await supabase
+          .from('account_unlock_requests')
+          .delete()
+          .ilike('email', cleanEmail);
+
+        await supabase
+          .from('account_unlock_requests')
+          .update({
+            status: 'unlocked',
+            used: true,
+            resolved_at: nowTs,
+          })
+          .ilike('email', cleanEmail);
+
+        if (resolvedUserId) {
+          await supabase
+            .from('account_unlock_requests')
+            .delete()
+            .eq('user_id', resolvedUserId);
+
+          await supabase
+            .from('account_unlock_requests')
+            .update({
+              status: 'unlocked',
+              used: true,
+              resolved_at: nowTs,
+            })
+            .eq('user_id', resolvedUserId);
+        }
+      } catch (e) {}
+
+      // Direct profiles update payload
       const updatePayload: any = {
         is_locked: false,
         is_active: true,
@@ -486,18 +607,45 @@ export const unlockUserAccount = async (targetEmail: string, adminIdentifier: st
         unlocked_at: nowTs,
         updated_at: nowTs,
       };
-      if (adminUuid) {
-        updatePayload.unlocked_by = adminUuid;
+      if (validAdminUuid) {
+        updatePayload.unlocked_by = validAdminUuid;
       }
 
-      await supabase
+      // Update by resolvedUserId if available
+      if (resolvedUserId) {
+        const { error: idErr } = await supabase
+          .from('profiles')
+          .update(updatePayload)
+          .eq('id', resolvedUserId);
+
+        if (idErr && updatePayload.unlocked_by) {
+          delete updatePayload.unlocked_by;
+          await supabase
+            .from('profiles')
+            .update(updatePayload)
+            .eq('id', resolvedUserId);
+        }
+      }
+
+      // Always also update by email using case-insensitive ilike
+      const { error: emailErr } = await supabase
         .from('profiles')
         .update(updatePayload)
-        .eq('email', cleanEmail);
+        .ilike('email', cleanEmail);
+
+      if (emailErr && updatePayload.unlocked_by) {
+        delete updatePayload.unlocked_by;
+        await supabase
+          .from('profiles')
+          .update(updatePayload)
+          .ilike('email', cleanEmail);
+      }
 
       broadcastSecurityEvent('ACCOUNT_UNLOCKED', cleanEmail);
       return true;
     }
   } catch (err) {}
+
+  broadcastSecurityEvent('ACCOUNT_UNLOCKED', cleanEmail);
   return true;
 };

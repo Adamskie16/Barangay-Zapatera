@@ -40,6 +40,14 @@ export default function App() {
   }, [activeTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [tabTransitioning, setTabTransitioning] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.removeItem('zapatera_dark_mode');
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    } catch {}
+  }, []);
   const [requests, setRequests] = useState([]);
   const [docTypes, setDocTypes] = useState([]);
   const [config, setConfig] = useState(() => StorageService.getConfig());

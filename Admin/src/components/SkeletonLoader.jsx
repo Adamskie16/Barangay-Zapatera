@@ -10,9 +10,7 @@ import EnterpriseTableSkeleton from './loaders/TableSkeleton';
 export function SkeletonBox({ className = '', isDarkMode = false }) {
   return (
     <div
-      className={`animate-pulse rounded-lg ${
-        isDarkMode ? 'bg-slate-800/80' : 'bg-slate-200/80'
-      } ${className}`}
+      className={`animate-pulse rounded-lg bg-slate-200/80 ${className}`}
     />
   );
 }
@@ -20,9 +18,7 @@ export function SkeletonBox({ className = '', isDarkMode = false }) {
 export function SkeletonCircle({ size = 'w-10 h-10', isDarkMode = false, className = '' }) {
   return (
     <div
-      className={`animate-pulse rounded-full ${size} ${
-        isDarkMode ? 'bg-slate-800/80' : 'bg-slate-200/80'
-      } ${className}`}
+      className={`animate-pulse rounded-full ${size} bg-slate-200/80 ${className}`}
     />
   );
 }
@@ -30,9 +26,7 @@ export function SkeletonCircle({ size = 'w-10 h-10', isDarkMode = false, classNa
 export function SkeletonBadge({ className = 'w-20 h-6', isDarkMode = false }) {
   return (
     <div
-      className={`animate-pulse rounded-full ${
-        isDarkMode ? 'bg-slate-800/60' : 'bg-slate-200/70'
-      } ${className}`}
+      className={`animate-pulse rounded-full bg-slate-200/70 ${className}`}
     />
   );
 }
@@ -41,7 +35,7 @@ export function TableSkeleton({ rows = 5, cols = 5, isDarkMode = false }) {
   return (
     <>
       {Array.from({ length: rows }).map((_, rIdx) => (
-        <tr key={rIdx} className="animate-pulse border-b border-slate-100 dark:border-slate-800">
+        <tr key={rIdx} className="animate-pulse border-b border-slate-100">
           <td className="px-6 py-4">
             <div className="flex items-center space-x-3">
               <SkeletonCircle size="w-9 h-9" isDarkMode={isDarkMode} />
@@ -77,9 +71,7 @@ export function TableSkeleton({ rows = 5, cols = 5, isDarkMode = false }) {
 export function StatCardSkeleton({ isDarkMode = false }) {
   return (
     <div
-      className={`p-5 sm:p-6 rounded-3xl border transition-all animate-pulse ${
-        isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]'
-      }`}
+      className="p-5 sm:p-6 rounded-3xl border transition-all animate-pulse bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]"
     >
       <div className="flex items-center justify-between">
         <div className="space-y-2.5">
@@ -88,7 +80,7 @@ export function StatCardSkeleton({ isDarkMode = false }) {
         </div>
         <SkeletonCircle size="w-12 h-12" isDarkMode={isDarkMode} />
       </div>
-      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
         <SkeletonBox className="w-28 h-3" isDarkMode={isDarkMode} />
         <SkeletonBox className="w-12 h-3" isDarkMode={isDarkMode} />
       </div>
@@ -100,7 +92,7 @@ export function StatCardSkeleton({ isDarkMode = false }) {
  * Superadmin / Admin Dashboard Skeleton
  */
 export function DashboardSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -140,15 +132,13 @@ export function DashboardSkeleton({ isDarkMode = false }) {
             </div>
           </div>
 
-          <div className="w-full h-64 rounded-2xl p-4 flex flex-col justify-end space-y-3 bg-slate-50/70 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800/80">
+          <div className="w-full h-64 rounded-2xl p-4 flex flex-col justify-end space-y-3 bg-slate-50/70 border border-slate-100">
             <div className="flex items-end justify-between gap-2 h-44 px-2">
               {[40, 65, 30, 85, 55, 95, 70, 45, 80, 60, 90, 75].map((h, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-1.5">
                   <div
                     style={{ height: `${h}%` }}
-                    className={`w-full rounded-t-lg transition-all ${
-                      isDarkMode ? 'bg-blue-600/30' : 'bg-blue-200/70'
-                    }`}
+                    className="w-full rounded-t-lg transition-all bg-blue-200/70"
                   />
                   <SkeletonBox className="w-4 h-2 opacity-40" isDarkMode={isDarkMode} />
                 </div>
@@ -156,7 +146,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
             </div>
           </div>
 
-          <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <SkeletonCircle size="w-2.5 h-2.5" isDarkMode={isDarkMode} />
@@ -183,7 +173,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
 
             <div className="grid grid-cols-7 gap-1 text-center py-1">
               {Array.from({ length: 7 }).map((_, d) => (
-                <div key={d} className="flex flex-col items-center gap-1.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                <div key={d} className="flex flex-col items-center gap-1.5 py-2 rounded-xl bg-slate-50">
                   <SkeletonBox className="w-3 h-2.5" isDarkMode={isDarkMode} />
                   <SkeletonBox className="w-4 h-4 rounded-md" isDarkMode={isDarkMode} />
                 </div>
@@ -194,7 +184,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
               {Array.from({ length: 3 }).map((_, e) => (
                 <div
                   key={e}
-                  className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-center justify-between"
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between"
                 >
                   <div className="space-y-1.5 flex-1 min-w-0 pr-2">
                     <SkeletonBox className="w-32 h-3.5" isDarkMode={isDarkMode} />
@@ -206,7 +196,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
             <SkeletonBox className="w-28 h-3" isDarkMode={isDarkMode} />
             <SkeletonCircle size="w-8 h-8" isDarkMode={isDarkMode} />
           </div>
@@ -216,7 +206,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
       {/* 4. Bottom Section: Queue Table & Bulletins */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className={`lg:col-span-8 p-6 rounded-3xl border space-y-4 ${cardBg}`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
             <div className="space-y-1">
               <SkeletonBox className="w-44 h-5" isDarkMode={isDarkMode} />
               <SkeletonBox className="w-56 h-3 opacity-60" isDarkMode={isDarkMode} />
@@ -232,7 +222,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
             {Array.from({ length: 5 }).map((_, r) => (
               <div
                 key={r}
-                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/60 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800/60"
+                className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/60 border border-slate-100"
               >
                 <div className="flex items-center space-x-3 min-w-0">
                   <SkeletonCircle size="w-9 h-9" isDarkMode={isDarkMode} />
@@ -253,7 +243,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
         </div>
 
         <div className={`lg:col-span-4 p-6 rounded-3xl border space-y-4 ${cardBg}`}>
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <SkeletonBox className="w-36 h-5" isDarkMode={isDarkMode} />
             <SkeletonBadge className="w-16 h-5" isDarkMode={isDarkMode} />
           </div>
@@ -262,7 +252,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
             {Array.from({ length: 3 }).map((_, a) => (
               <div
                 key={a}
-                className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2"
+                className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <SkeletonBadge className="w-20 h-4" isDarkMode={isDarkMode} />
@@ -280,7 +270,7 @@ export function DashboardSkeleton({ isDarkMode = false }) {
 }
 
 export function DocumentsSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -323,7 +313,7 @@ export function DocumentsSkeleton({ isDarkMode = false }) {
               <SkeletonBox className="w-4/5 h-3 opacity-60" isDarkMode={isDarkMode} />
             </div>
 
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
               <SkeletonBox className="w-24 h-3.5" isDarkMode={isDarkMode} />
               <div className="flex items-center gap-2">
                 <SkeletonBox className="w-16 h-8 rounded-xl" isDarkMode={isDarkMode} />
@@ -338,7 +328,7 @@ export function DocumentsSkeleton({ isDarkMode = false }) {
 }
 
 export function NewsSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -356,7 +346,7 @@ export function NewsSkeleton({ isDarkMode = false }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className={`rounded-3xl border overflow-hidden space-y-4 ${cardBg}`}>
-            <div className="w-full h-44 bg-slate-200/80 dark:bg-slate-800/80 animate-pulse relative">
+            <div className="w-full h-44 bg-slate-200/80 animate-pulse relative">
               <div className="absolute top-3 left-3">
                 <SkeletonBadge className="w-20 h-6" isDarkMode={isDarkMode} />
               </div>
@@ -374,7 +364,7 @@ export function NewsSkeleton({ isDarkMode = false }) {
                 <SkeletonBox className="w-3/4 h-3 opacity-50" isDarkMode={isDarkMode} />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <SkeletonCircle size="w-7 h-7" isDarkMode={isDarkMode} />
                   <SkeletonBox className="w-20 h-3" isDarkMode={isDarkMode} />
@@ -394,7 +384,7 @@ export function UsersSkeleton({ isDarkMode = false }) {
 }
 
 export function ArchiveSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -421,7 +411,7 @@ export function ArchiveSkeleton({ isDarkMode = false }) {
 }
 
 export function ConfigSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -436,7 +426,7 @@ export function ConfigSkeleton({ isDarkMode = false }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className={`p-6 rounded-3xl border space-y-5 ${cardBg}`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="space-y-1">
                 <SkeletonBox className="w-40 h-4" isDarkMode={isDarkMode} />
                 <SkeletonBox className="w-56 h-2.5 opacity-60" isDarkMode={isDarkMode} />
@@ -466,7 +456,7 @@ export function ConfigSkeleton({ isDarkMode = false }) {
 }
 
 export function ReportsSkeleton({ isDarkMode = false }) {
-  const cardBg = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
+  const cardBg = 'bg-white border-slate-200/80 shadow-[0_4px_16px_rgba(15,23,42,0.03)]';
 
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
@@ -488,11 +478,11 @@ export function ReportsSkeleton({ isDarkMode = false }) {
       </div>
 
       <div className={`p-6 rounded-3xl border space-y-4 ${cardBg}`}>
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <SkeletonBox className="w-44 h-5" isDarkMode={isDarkMode} />
           <SkeletonBox className="w-24 h-8 rounded-xl" isDarkMode={isDarkMode} />
         </div>
-        <div className="w-full h-48 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 p-4" />
+        <div className="w-full h-48 rounded-2xl bg-slate-50 border border-slate-100 p-4" />
       </div>
 
       <EnterpriseTableSkeleton rows={5} columns={6} isDarkMode={isDarkMode} />
@@ -539,9 +529,7 @@ export function CardGridSkeleton({ count = 6, isDarkMode = false }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className={`p-6 rounded-2xl border space-y-4 animate-pulse ${
-            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}
+          className="p-6 rounded-2xl border space-y-4 animate-pulse bg-white border-slate-200"
         >
           <div className="flex justify-between items-start">
             <div className="space-y-2">
@@ -551,7 +539,7 @@ export function CardGridSkeleton({ count = 6, isDarkMode = false }) {
             <SkeletonBox className="w-16 h-6 rounded-full" isDarkMode={isDarkMode} />
           </div>
           <SkeletonBox className="w-full h-16 rounded-lg opacity-60" isDarkMode={isDarkMode} />
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between">
+          <div className="pt-3 border-t border-slate-100 flex justify-between">
             <SkeletonBox className="w-24 h-4" isDarkMode={isDarkMode} />
             <SkeletonBox className="w-20 h-8 rounded-lg" isDarkMode={isDarkMode} />
           </div>

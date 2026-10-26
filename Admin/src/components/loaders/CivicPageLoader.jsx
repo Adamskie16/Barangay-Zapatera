@@ -29,7 +29,7 @@ export function CivicPageLoader({
       className={`
         ${fullScreen ? 'fixed inset-0 z-50' : 'relative min-h-[360px] w-full'}
         flex flex-col items-center justify-center p-6
-        ${isDarkMode ? 'bg-slate-950/90 text-slate-100' : 'bg-slate-900/60 text-slate-900 backdrop-blur-sm'}
+        bg-slate-900/40 text-slate-900 backdrop-blur-xs
         select-none ${className}
       `}
     >
@@ -37,18 +37,14 @@ export function CivicPageLoader({
 
       {/* Top Route Progress Bar (GitHub / NProgress Civic Style) */}
       {showProgressBar && (
-        <div className="fixed top-0 left-0 right-0 h-1 bg-slate-800 z-50 overflow-hidden">
+        <div className="fixed top-0 left-0 right-0 h-1 bg-slate-200 z-50 overflow-hidden">
           <div className="h-full bg-blue-500 animate-[pulse_1.5s_ease-in-out_infinite] w-full origin-left" />
         </div>
       )}
 
       {/* Centered Civic Card */}
       <div
-        className={`relative flex flex-col items-center p-8 sm:p-10 rounded-3xl border shadow-2xl max-w-sm w-full text-center ${
-          isDarkMode
-            ? 'bg-slate-900/95 border-slate-800 shadow-black/60'
-            : 'bg-white/95 border-slate-200/90 shadow-slate-900/20'
-        }`}
+        className="relative flex flex-col items-center p-8 sm:p-10 rounded-3xl border shadow-2xl max-w-sm w-full text-center bg-white/95 border-slate-200/90 shadow-slate-900/10"
       >
         {/* Logo Container with Dignified Spin Ring */}
         <div className="relative mb-6">
@@ -70,25 +66,21 @@ export function CivicPageLoader({
 
         {/* Civic Typography */}
         <h3
-          className={`text-base sm:text-lg font-bold tracking-tight ${
-            isDarkMode ? 'text-white' : 'text-slate-900'
-          }`}
+          className="text-base sm:text-lg font-bold tracking-tight text-slate-900"
         >
           {message}
         </h3>
 
         {submessage && (
           <p
-            className={`mt-1.5 text-xs font-medium tracking-wide ${
-              isDarkMode ? 'text-slate-400' : 'text-slate-500'
-            }`}
+            className="mt-1.5 text-xs font-medium tracking-wide text-slate-500"
           >
             {submessage}
           </p>
         )}
 
         {/* Municipal Verification Badge */}
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+        <div className="mt-6 pt-4 border-t border-slate-100 w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-blue-600 uppercase tracking-wider">
           <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping inline-block" />
           <span>Barangay Zapatera System</span>
         </div>

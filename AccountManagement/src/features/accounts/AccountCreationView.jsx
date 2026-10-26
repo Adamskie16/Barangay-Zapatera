@@ -602,8 +602,9 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
         const lockedEmailMap = new Map();
         if (unlockRequests) {
           unlockRequests.forEach((req) => {
-            if (req.email) {
-              lockedEmailMap.set(req.email.toLowerCase(), req);
+            const isExpired = req.expires_at && new Date(req.expires_at).getTime() < Date.now();
+            if (req.email && !req.used && !isExpired) {
+              lockedEmailMap.set(req.email.toLowerCase().trim(), req);
             }
           });
         }
@@ -651,15 +652,46 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
             seenEmails.add(cleanEmail);
 
             const hasPendingUnlock = lockedEmailMap.has(cleanEmail);
-            const isLocked = p.is_locked || (p.failed_attempts || 0) >= 3 || p.is_active === false || hasPendingUnlock;
+            const isExplicitlyUnlocked = p.is_locked === false && (p.failed_attempts || 0) < 3 && (p.failed_login_attempts || 0) < 3;
+            const isLocked = isExplicitlyUnlocked ? false : (p.is_locked === true || (p.failed_attempts || 0) >= 3 || (p.failed_login_attempts || 0) >= 3 || hasPendingUnlock);
+
+            if (isExplicitlyUnlocked && typeof localStorage !== 'undefined') {
+              localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+              localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
+              localStorage.removeItem(`zapatera_locked_${p.email}`);
+              localStorage.removeItem(`zapatera_failed_${p.email}`);
+
+              // Clean up local storage database caches as well
+              ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_super_admins_db'].forEach((dbKey) => {
+                try {
+                  const stored = localStorage.getItem(dbKey);
+                  if (stored) {
+                    const list = JSON.parse(stored);
+                    if (Array.isArray(list)) {
+                      let changed = false;
+                      const updated = list.map((item) => {
+                        if (item.email && item.email.toLowerCase().trim() === cleanEmail) {
+                          changed = true;
+                          return { ...item, is_locked: false, is_active: true, failed_attempts: 0, failed_login_attempts: 0, locked_at: null };
+                        }
+                        return item;
+                      });
+                      if (changed) {
+                        localStorage.setItem(dbKey, JSON.stringify(updated));
+                      }
+                    }
+                  }
+                } catch (_) {}
+              });
+            }
 
             uniqueProfiles.push({
               ...p,
               email: cleanEmail,
               is_locked: isLocked,
               is_active: !isLocked,
-              failed_attempts: isLocked ? Math.max(p.failed_attempts || 0, 3) : (p.failed_attempts || 0),
-              locked_at: p.locked_at || (hasPendingUnlock ? lockedEmailMap.get(cleanEmail)?.locked_at : null),
+              failed_attempts: isLocked ? Math.max(p.failed_attempts || 0, 3) : 0,
+              locked_at: isLocked ? (p.locked_at || (hasPendingUnlock ? lockedEmailMap.get(cleanEmail)?.locked_at : null)) : null,
             });
           }
 
@@ -1285,7 +1317,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
 
     try {
       if (securityActionType === 'unlock') {
-        await unlockUserAccount(targetEmail, adminId);
+        await unlockUserAccount(targetEmail, adminId, securityActionTargetUser?.id);
       } else {
         await lockUserAccount(targetEmail, adminId, 'SuperAdmin Manual Lockout');
       }
@@ -1320,8 +1352,27 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
     fetchUsers();
   };
 
+  const isAccountLocked = (u) => {
+    if (!u) return false;
+    const cleanEmail = String(u.email || '').toLowerCase().trim();
+    if (u.is_locked === false && (u.failed_attempts || 0) < 3 && (u.failed_login_attempts || 0) < 3) {
+      if (typeof localStorage !== 'undefined' && cleanEmail) {
+        localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
+        localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
+        localStorage.removeItem(`zapatera_locked_${u.email}`);
+        localStorage.removeItem(`zapatera_failed_${u.email}`);
+      }
+      return false;
+    }
+    return Boolean(
+      u.is_locked === true ||
+        (u.failed_login_attempts || 0) >= 3 ||
+        (u.failed_attempts || 0) >= 3
+    );
+  };
+
   const filteredUsers = usersList.filter((u) => {
-    const isLocked = u.is_locked || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
+    const isLocked = isAccountLocked(u);
     const matchesRole =
       filterRole === 'all'
         ? true
@@ -1599,7 +1650,7 @@ export default function UsersView({ onSaveUser, onDeleteUser, currentUser, isDar
                 </tr>
               ) : (
                 paginatedUsers.map((u) => {
-                  const isLocked = u.is_locked || (u.failed_login_attempts || 0) >= 3 || (u.failed_attempts || 0) >= 3 || u.is_active === false || (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true');
+                  const isLocked = isAccountLocked(u);
 
                   return (
                     <tr key={u.id || u.email} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors ${

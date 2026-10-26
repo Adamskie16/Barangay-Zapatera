@@ -852,19 +852,9 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         }
 
         const targetEmail = (data?.user?.email || forgotEmail || loginEmail || '').toLowerCase().trim();
+        const targetUserId = data?.user?.id || null;
         if (targetEmail) {
-          // STRICT: Only update lockout fields in profiles table, NEVER the password column!
-          await supabase
-            .from('profiles')
-            .update({
-              is_locked: false,
-              failed_attempts: 0,
-              locked_at: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('email', targetEmail);
-
-          await unlockUserAccount(targetEmail);
+          await unlockUserAccount(targetEmail, null, targetUserId);
         }
       }
 

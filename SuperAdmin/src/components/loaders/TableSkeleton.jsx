@@ -16,25 +16,21 @@ export function TableSkeleton({
   isDarkMode = false,
   className = '',
 }) {
-  const pulseBg = isDarkMode ? 'bg-slate-800/80' : 'bg-slate-200/80';
-  const pulseSubtle = isDarkMode ? 'bg-slate-800/50' : 'bg-slate-200/50';
+  const pulseBg = 'bg-slate-200/80';
+  const pulseSubtle = 'bg-slate-200/50';
 
   return (
     <div
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className={`w-full overflow-hidden rounded-2xl border ${
-        isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white'
-      } shadow-sm select-none ${className}`}
+      className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm select-none ${className}`}
     >
       <span className="sr-only">Loading document records...</span>
 
       {/* Optional Table Top Controls Skeleton */}
       <div
-        className={`px-6 py-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-100 bg-slate-50/50'
-        }`}
+        className="px-6 py-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-slate-100 bg-slate-50/50"
       >
         <div className="flex items-center gap-3 w-full sm:w-auto">
           {/* Search bar skeleton */}
@@ -55,9 +51,7 @@ export function TableSkeleton({
           {/* Header row with simulated column titles */}
           <thead>
             <tr
-              className={`border-b text-xs font-semibold uppercase tracking-wider ${
-                isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-slate-50'
-              }`}
+              className="border-b text-xs font-semibold uppercase tracking-wider border-slate-200 bg-slate-50"
             >
               <th className="px-6 py-3.5">
                 <div className={`h-3 w-20 rounded animate-pulse ${pulseBg}`} />
@@ -82,9 +76,7 @@ export function TableSkeleton({
 
           {/* 10 Data Rows matching exact geometry */}
           <tbody
-            className={`divide-y ${
-              isDarkMode ? 'divide-slate-800/70' : 'divide-slate-100'
-            }`}
+            className="divide-y divide-slate-100"
           >
             {Array.from({ length: rows }).map((_, rIdx) => {
               // Vary widths slightly across rows for natural skeleton aesthetic
@@ -99,9 +91,7 @@ export function TableSkeleton({
               return (
                 <tr
                   key={rIdx}
-                  className={`transition-colors ${
-                    isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/50'
-                  }`}
+                  className="transition-colors hover:bg-slate-50/50"
                 >
                   {/* Column 1: Tracking Number Pill */}
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -157,9 +147,7 @@ export function TableSkeleton({
 
       {/* Pagination Footer Skeleton */}
       <div
-        className={`px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-100 bg-slate-50/50'
-        }`}
+        className="px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4 border-slate-100 bg-slate-50/50"
       >
         <div className={`h-4 w-48 rounded animate-pulse ${pulseSubtle}`} />
         <div className="flex items-center gap-2">

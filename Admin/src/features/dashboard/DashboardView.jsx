@@ -211,13 +211,14 @@ export default function DashboardView({
               seen.add(email);
               const attempts = Math.max(p.failed_login_attempts || 0, p.failed_attempts || 0);
               const hasUnlockReq = lockedMap.has(email);
-              const isLocked = Boolean(p.is_locked) || attempts >= 3 || p.is_active === false || hasUnlockReq;
+              const isExplicitlyUnlocked = p.is_locked === false && attempts < 3;
+              const isLocked = isExplicitlyUnlocked ? false : (Boolean(p.is_locked) || attempts >= 3 || hasUnlockReq);
               normalized.push({
                 ...p,
                 email,
                 is_locked: isLocked,
-                failed_attempts: isLocked ? Math.max(attempts, 3) : attempts,
-                locked_at: p.locked_at || lockedMap.get(email)?.locked_at || null,
+                failed_attempts: isLocked ? Math.max(attempts, 3) : 0,
+                locked_at: isLocked ? (p.locked_at || lockedMap.get(email)?.locked_at || null) : null,
               });
             }
             setSecurityAccounts(normalized);
@@ -235,12 +236,13 @@ export default function DashboardView({
           const email = (u.email || '').toLowerCase().trim();
           const localLocked = localStorage.getItem(`zapatera_locked_${email}`) === 'true';
           const localFails = parseInt(localStorage.getItem(`zapatera_failed_${email}`) || '0', 10);
-          const isLocked = Boolean(u.is_locked) || localLocked || localFails >= 3;
+          const isExplicitlyUnlocked = u.is_locked === false && localFails < 3;
+          const isLocked = isExplicitlyUnlocked ? false : (Boolean(u.is_locked) || localLocked || localFails >= 3);
           return {
             ...u,
             email,
             is_locked: isLocked,
-            failed_attempts: isLocked ? Math.max(localFails, 3) : localFails,
+            failed_attempts: isLocked ? Math.max(localFails, 3) : 0,
           };
         });
         if (isMounted) setSecurityAccounts(normalized);

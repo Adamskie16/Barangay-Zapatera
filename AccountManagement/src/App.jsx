@@ -19,6 +19,8 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.removeItem('zapatera_dark_mode');
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     } catch {}
   }, []);
 
@@ -253,3 +255,4 @@ export default function App() {
     </div>
   );
 }
+

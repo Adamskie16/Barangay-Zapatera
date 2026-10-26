@@ -33,9 +33,9 @@ export function Button({
     secondary:
       'bg-slate-800 hover:bg-slate-700 text-white shadow-sm focus:ring-slate-500 active:bg-slate-900 border border-slate-700',
     outline:
-      'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 focus:ring-slate-400',
+      'bg-transparent hover:bg-slate-100 text-slate-700 border border-slate-300 focus:ring-slate-400',
     ghost:
-      'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 focus:ring-slate-400',
+      'bg-transparent hover:bg-slate-100 text-slate-600 focus:ring-slate-400',
     danger:
       'bg-rose-600 hover:bg-rose-700 text-white shadow-sm focus:ring-rose-500 active:bg-rose-800 border border-rose-700/20',
     success:

@@ -55,6 +55,14 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [tabTransitioning, setTabTransitioning] = useState(false);
 
+  useEffect(() => {
+    try {
+      localStorage.removeItem('zapatera_dark_mode');
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    } catch {}
+  }, []);
+
   const [currentUser, setCurrentUser] = useState(StorageService.getCurrentUser());
   const [accountDeletedNotice, setAccountDeletedNotice] = useState(null);
   const [requests, setRequests] = useState(StorageService.getRequests());
