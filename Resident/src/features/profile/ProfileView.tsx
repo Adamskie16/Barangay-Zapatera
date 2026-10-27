@@ -126,6 +126,7 @@ export default function ProfileView({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
@@ -136,9 +137,24 @@ export default function ProfileView({
   const pwUpperMet = /[A-Z]/.test(newPassword);
   const pwLowerMet = /[a-z]/.test(newPassword);
   const pwNumberMet = /[0-9]/.test(newPassword);
-  const pwSpecialMet = /[^A-Za-z0-9]/.test(newPassword);
+  const pwSpecialMet =
+    /[@$!%*?&!#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`^]/.test(newPassword) ||
+    /[^A-Za-z0-9\s]/.test(newPassword);
   const isStrongPassword =
     pwLengthMet && pwUpperMet && pwLowerMet && pwNumberMet && pwSpecialMet;
+  const passwordCriteriaCount = [
+    pwLengthMet,
+    pwUpperMet,
+    pwLowerMet,
+    pwNumberMet,
+    pwSpecialMet,
+  ].filter(Boolean).length;
+  const passwordsMatch = Boolean(
+    confirmPassword && newPassword && confirmPassword === newPassword
+  );
+  const passwordsMismatch = Boolean(
+    confirmPassword && newPassword && confirmPassword !== newPassword
+  );
 
   const handleChangePassword = async () => {
     setPasswordSubmittedAttempt(true);
@@ -190,6 +206,9 @@ export default function ProfileView({
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        setShowCurrentPass(false);
+        setShowNewPass(false);
+        setShowConfirmPass(false);
         setPasswordError('');
         setPasswordSuccess('');
         setPasswordSubmittedAttempt(false);
@@ -1145,7 +1164,11 @@ export default function ProfileView({
               <View
                 style={[
                   styles.passwordInputContainer,
-                  passwordSubmittedAttempt && !newPassword.trim() && styles.formInputError,
+                  newPassword && isStrongPassword
+                    ? styles.formInputSuccess
+                    : passwordSubmittedAttempt && !newPassword.trim()
+                    ? styles.formInputError
+                    : null,
                 ]}
               >
                 <TextInput
@@ -1168,67 +1191,66 @@ export default function ProfileView({
                 </TouchableOpacity>
               </View>
 
-              {/* Real-Time Strong Password Validation Checklist */}
-              {newPassword ? (
-                <View style={styles.checklistContainer}>
+              {/* Real-Time Strong Password Validation Checklist - Always Visible */}
+              <View style={styles.checklistContainer}>
+                <View style={styles.checklistHeaderRow}>
+                  <View style={styles.checklistHeaderLeft}>
+                    <ShieldCheck size={15} color="#2563eb" />
+                    <Text style={styles.checklistTitle}>Strong Password Criteria (Required):</Text>
+                  </View>
                   <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: 4,
-                    }}
+                    style={[
+                      styles.checklistBadge,
+                      isStrongPassword
+                        ? styles.checklistBadgeMet
+                        : passwordCriteriaCount > 0
+                        ? styles.checklistBadgePartial
+                        : styles.checklistBadgeUnmet,
+                    ]}
                   >
-                    <Text style={styles.checklistTitle}>Security Criteria:</Text>
                     <Text
                       style={[
-                        styles.checklistBadge,
+                        styles.checklistBadgeText,
                         isStrongPassword
-                          ? styles.checklistBadgeMet
-                          : styles.checklistBadgeUnmet,
+                          ? styles.checklistBadgeTextMet
+                          : passwordCriteriaCount > 0
+                          ? styles.checklistBadgeTextPartial
+                          : styles.checklistBadgeTextUnmet,
                       ]}
                     >
-                      {isStrongPassword ? 'Strong' : 'Incomplete'}
+                      {isStrongPassword
+                        ? 'Strong & Ready (5/5)'
+                        : passwordCriteriaCount > 0
+                        ? `${passwordCriteriaCount}/5 Requirements Met`
+                        : 'Required (0/5)'}
                     </Text>
                   </View>
+                </View>
 
-                  <View style={styles.checklistProgressBar}>
-                    <View
-                      style={[
-                        styles.checklistProgressFill,
-                        {
-                          width: `${
-                            ([
-                              pwLengthMet,
-                              pwUpperMet,
-                              pwLowerMet,
-                              pwNumberMet,
-                              pwSpecialMet,
-                            ].filter(Boolean).length /
-                              5) *
-                            100
-                          }%`,
-                          backgroundColor: isStrongPassword
-                            ? '#16a34a'
-                            : [
-                                pwLengthMet,
-                                pwUpperMet,
-                                pwLowerMet,
-                                pwNumberMet,
-                                pwSpecialMet,
-                              ].filter(Boolean).length >= 3
-                            ? '#d97706'
-                            : '#dc2626',
-                        },
-                      ]}
-                    />
-                  </View>
+                <View style={styles.checklistProgressBar}>
+                  <View
+                    style={[
+                      styles.checklistProgressFill,
+                      {
+                        width: `${(passwordCriteriaCount / 5) * 100}%`,
+                        backgroundColor: isStrongPassword
+                          ? '#16a34a'
+                          : passwordCriteriaCount >= 3
+                          ? '#d97706'
+                          : passwordCriteriaCount > 0
+                          ? '#dc2626'
+                          : '#e2e8f0',
+                      },
+                    ]}
+                  />
+                </View>
 
+                <View style={styles.checklistGrid}>
                   <View style={styles.checklistItem}>
                     {pwLengthMet ? (
-                      <Check size={14} color="#16a34a" />
+                      <CheckCircle2 size={13} color="#16a34a" />
                     ) : (
-                      <X size={14} color="#94a3b8" />
+                      <X size={13} color="#94a3b8" />
                     )}
                     <Text
                       style={
@@ -1238,64 +1260,68 @@ export default function ProfileView({
                       At least 8 characters
                     </Text>
                   </View>
+
                   <View style={styles.checklistItem}>
                     {pwUpperMet ? (
-                      <Check size={14} color="#16a34a" />
+                      <CheckCircle2 size={13} color="#16a34a" />
                     ) : (
-                      <X size={14} color="#94a3b8" />
+                      <X size={13} color="#94a3b8" />
                     )}
                     <Text
                       style={
                         pwUpperMet ? styles.checklistTextMet : styles.checklistText
                       }
                     >
-                      At least one uppercase letter (A-Z)
+                      1 Uppercase letter (A-Z)
                     </Text>
                   </View>
+
                   <View style={styles.checklistItem}>
                     {pwLowerMet ? (
-                      <Check size={14} color="#16a34a" />
+                      <CheckCircle2 size={13} color="#16a34a" />
                     ) : (
-                      <X size={14} color="#94a3b8" />
+                      <X size={13} color="#94a3b8" />
                     )}
                     <Text
                       style={
                         pwLowerMet ? styles.checklistTextMet : styles.checklistText
                       }
                     >
-                      At least one lowercase letter (a-z)
+                      1 Lowercase letter (a-z)
                     </Text>
                   </View>
+
                   <View style={styles.checklistItem}>
                     {pwNumberMet ? (
-                      <Check size={14} color="#16a34a" />
+                      <CheckCircle2 size={13} color="#16a34a" />
                     ) : (
-                      <X size={14} color="#94a3b8" />
+                      <X size={13} color="#94a3b8" />
                     )}
                     <Text
                       style={
                         pwNumberMet ? styles.checklistTextMet : styles.checklistText
                       }
                     >
-                      At least one number (0-9)
+                      1 Number digit (0-9)
                     </Text>
                   </View>
+
                   <View style={styles.checklistItem}>
                     {pwSpecialMet ? (
-                      <Check size={14} color="#16a34a" />
+                      <CheckCircle2 size={13} color="#16a34a" />
                     ) : (
-                      <X size={14} color="#94a3b8" />
+                      <X size={13} color="#94a3b8" />
                     )}
                     <Text
                       style={
                         pwSpecialMet ? styles.checklistTextMet : styles.checklistText
                       }
                     >
-                      At least one special character (!@#$%^&*)
+                      1 Special character (!@#$%^&*)
                     </Text>
                   </View>
                 </View>
-              ) : null}
+              </View>
 
               {/* Confirm Password */}
               <View style={styles.fieldLabelRow}>
@@ -1312,20 +1338,48 @@ export default function ProfileView({
               <View
                 style={[
                   styles.passwordInputContainer,
-                  passwordSubmittedAttempt &&
-                    !confirmPassword.trim() &&
-                    styles.formInputError,
+                  passwordsMatch
+                    ? styles.formInputSuccess
+                    : (passwordSubmittedAttempt && !confirmPassword.trim()) ||
+                      passwordsMismatch
+                    ? styles.formInputError
+                    : null,
                 ]}
               >
                 <TextInput
                   style={styles.passwordInputField}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  secureTextEntry={!showNewPass}
+                  secureTextEntry={!showConfirmPass}
                   placeholder="Re-type new password"
                   placeholderTextColor="#94a3b8"
                 />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPass(!showConfirmPass)}
+                  style={{ padding: 4 }}
+                >
+                  {showConfirmPass ? (
+                    <EyeOff size={16} color="#64748b" />
+                  ) : (
+                    <Eye size={16} color="#64748b" />
+                  )}
+                </TouchableOpacity>
               </View>
+
+              {/* Real-time Confirm Password Match Feedback */}
+              {confirmPassword.length > 0 ? (
+                passwordsMatch ? (
+                  <View style={styles.passwordMatchNotice}>
+                    <CheckCircle2 size={13} color="#15803d" />
+                    <Text style={styles.passwordMatchSuccessText}>Passwords match</Text>
+                  </View>
+                ) : (
+                  <View style={styles.passwordMatchNotice}>
+                    <AlertCircle size={13} color="#dc2626" />
+                    <Text style={styles.passwordMatchErrorText}>Passwords do not match</Text>
+                  </View>
+                )
+              ) : null}
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1334,6 +1388,9 @@ export default function ProfileView({
                 disabled={isUpdatingPassword}
                 onPress={() => {
                   setIsPasswordModalOpen(false);
+                  setShowConfirmPass(false);
+                  setShowCurrentPass(false);
+                  setShowNewPass(false);
                   setPasswordError('');
                   setPasswordSuccess('');
                 }}
@@ -2174,6 +2231,10 @@ const styles = StyleSheet.create({
     borderColor: '#ef4444',
     backgroundColor: '#fef2f2',
   },
+  formInputSuccess: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+  },
   civilStatusPillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2330,31 +2391,60 @@ const styles = StyleSheet.create({
   },
   checklistContainer: {
     backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 12,
+    padding: 12,
     marginTop: 8,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  checklistHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  checklistHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
   checklistTitle: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '800',
+    color: '#1e293b',
   },
   checklistBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   checklistBadgeMet: {
     backgroundColor: '#dcfce7',
-    color: '#15803d',
+    borderColor: '#bbf7d0',
+  },
+  checklistBadgePartial: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
   },
   checklistBadgeUnmet: {
-    backgroundColor: '#fee2e2',
-    color: '#b91c1c',
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  checklistBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  checklistBadgeTextMet: {
+    color: '#15803d',
+  },
+  checklistBadgeTextPartial: {
+    color: '#b45309',
+  },
+  checklistBadgeTextUnmet: {
+    color: '#64748b',
   },
   checklistProgressBar: {
     height: 4,
@@ -2367,20 +2457,41 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
+  checklistGrid: {
+    gap: 4,
+    marginTop: 3,
+  },
   checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginVertical: 2,
+    marginVertical: 1.5,
   },
   checklistText: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#64748b',
   },
   checklistTextMet: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#15803d',
     fontWeight: '700',
+  },
+  passwordMatchNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  passwordMatchSuccessText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  passwordMatchErrorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
   },
 
   /* Comment History Modal Styles */

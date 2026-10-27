@@ -648,17 +648,21 @@ export const StorageService = {
           } catch {}
         }
 
+        const isEmergencyBulletin = !!saved.is_emergency || String(saved.category || '').toLowerCase() === 'emergency';
+        const isPublishedBulletin = isEmergencyBulletin ? true : (saved.is_published !== false);
+
         const basePayload = {
           title: saved.title,
-          category: saved.category || 'Public Advisory',
+          category: isEmergencyBulletin ? 'Emergency' : (saved.category || 'Public Advisory'),
           description: saved.description,
           content: saved.content || saved.description,
           banner_url: saved.banner_url || null,
           location: saved.location || 'Barangay Zapatera, Cebu City',
           author: saved.author || adminUser?.full_name || 'Office of the Super Admin',
           is_important: !!saved.is_important,
-          is_emergency: !!saved.is_emergency,
-          is_published: saved.is_published !== false,
+          is_emergency: isEmergencyBulletin,
+          is_published: isPublishedBulletin,
+          is_archived: false,
           target_audience: saved.target_audience || 'residents',
           created_by: validProfileId,
           updated_at: new Date().toISOString(),

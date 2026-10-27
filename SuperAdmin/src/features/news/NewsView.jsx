@@ -558,8 +558,11 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
         durationVal = durationNum;
       }
 
+      const isEmergencyCat = formData.category === 'Emergency' || !!formData.is_emergency;
       const payload = {
         ...formData,
+        is_emergency: isEmergencyCat,
+        is_published: isEmergencyCat ? true : (editingItem ? (formData.is_published !== false) : true),
         duration_days: durationVal,
         expires_at: expiresAt,
         id: editingItem ? editingItem.id : undefined,

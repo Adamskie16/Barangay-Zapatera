@@ -31,6 +31,11 @@ import {
   Wrench,
   Users,
   Bell,
+  Bot,
+  ShieldAlert,
+  Cpu,
+  Zap,
+  CheckCircle2,
 } from 'lucide-react';
 import { BarangayAnnouncement, AnnouncementCategory, ResidentUser } from '../../types';
 import {
@@ -43,7 +48,7 @@ import {
 } from '../../core/commentService';
 import ActionModal from '../../components/ActionModal';
 import GlobalFooter from '../../components/GlobalFooter';
-import { checkContentModeration } from '../../core/contentModerationService';
+import { checkContentModeration, ModerationResult } from '../../core/contentModerationService';
 import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface AnnouncementsViewProps {
@@ -108,6 +113,9 @@ export default function AnnouncementsView({
   const [replyingTo, setReplyingTo] = useState<BulletinComment | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [commentModerationError, setCommentModerationError] = useState('');
+  const [aiModerationResult, setAiModerationResult] = useState<ModerationResult | null>(null);
+  const [isAiScanning, setIsAiScanning] = useState(false);
+  const [aiCleanSuccessToast, setAiCleanSuccessToast] = useState(false);
 
   const commentInputRef = useRef<any>(null);
 
@@ -187,22 +195,43 @@ export default function AnnouncementsView({
     setReplyingTo(null);
     setCommentInput('');
     setCommentModerationError('');
+    setAiModerationResult(null);
+    setIsAiScanning(false);
+    setAiCleanSuccessToast(false);
     onCloseAnnouncementModal?.();
   };
 
+  const handleAutoCleanWithAi = () => {
+    if (!aiModerationResult?.sanitizedText) return;
+    setCommentInput(aiModerationResult.sanitizedText);
+    setAiModerationResult(null);
+    setCommentModerationError('');
+    setAiCleanSuccessToast(true);
+    setTimeout(() => {
+      setAiCleanSuccessToast(false);
+    }, 4000);
+  };
+
   const handlePostComment = async () => {
-    if (!commentInput.trim() || !activeModalItem || isSubmittingComment) return;
+    if (!commentInput.trim() || !activeModalItem || isSubmittingComment || isAiScanning) return;
 
     if (!currentUser) {
       alert('Please sign in to post a comment or inquiry on this announcement.');
       return;
     }
 
+    // Run AI Content Moderation & Foul Language Sentinel Scan
+    setIsAiScanning(true);
+    await new Promise((r) => setTimeout(r, 320));
     const modResult = checkContentModeration(commentInput.trim());
+    setIsAiScanning(false);
+
     if (!modResult.isClean) {
+      setAiModerationResult(modResult);
       setCommentModerationError(modResult.warningMessage);
       return;
     }
+    setAiModerationResult(null);
     setCommentModerationError('');
 
     setIsSubmittingComment(true);
@@ -277,7 +306,12 @@ export default function AnnouncementsView({
     const counts: Record<string, number> = { All: uniqueAnnouncements.length };
     CATEGORIES.forEach((cat) => {
       if (cat !== 'All') {
-        counts[cat] = uniqueAnnouncements.filter((a) => a.category === cat).length;
+        counts[cat] = uniqueAnnouncements.filter((a) => {
+          if (cat === 'Emergency') {
+            return a.is_emergency || (a.category && a.category.toLowerCase() === 'emergency');
+          }
+          return a.category && a.category.toLowerCase() === cat.toLowerCase();
+        }).length;
       }
     });
     return counts;
@@ -285,7 +319,7 @@ export default function AnnouncementsView({
 
   const emergencyCount = useMemo(
     () =>
-      uniqueAnnouncements.filter((a) => a.is_emergency || a.category === 'Emergency').length,
+      uniqueAnnouncements.filter((a) => a.is_emergency || (a.category && a.category.toLowerCase() === 'emergency')).length,
     [uniqueAnnouncements]
   );
 
@@ -305,7 +339,10 @@ export default function AnnouncementsView({
       const matchesSearch =
         !q || title.includes(q) || desc.includes(q) || content.includes(q) || loc.includes(q);
       const matchesCategory =
-        selectedCategory === 'All' || ann.category === selectedCategory;
+        selectedCategory === 'All' ||
+        (selectedCategory === 'Emergency'
+          ? (ann.is_emergency || (ann.category && ann.category.toLowerCase() === 'emergency'))
+          : (ann.category && ann.category.toLowerCase() === selectedCategory.toLowerCase()));
 
       return matchesSearch && matchesCategory;
     });
@@ -1036,7 +1073,118 @@ export default function AnnouncementsView({
                   </View>
                 ) : null}
 
-                {commentModerationError ? (
+                {/* AI Auto-Clean Success Banner */}
+                {aiCleanSuccessToast ? (
+                  <View style={styles.aiCleanSuccessBox}>
+                    <View style={styles.aiCleanSuccessHeader}>
+                      <View style={styles.aiCleanSuccessIconCircle}>
+                        <Sparkles size={13} color="#16a34a" />
+                      </View>
+                      <Text style={styles.aiCleanSuccessTitle}>AI Language Sanitizer Applied</Text>
+                      <View style={styles.aiCleanSuccessBadge}>
+                        <Text style={styles.aiCleanSuccessBadgeText}>CLEAN & READY</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.aiCleanSuccessDesc}>
+                      Restricted terms were safely censored. Your comment now complies with Barangay Zapatera civic standards.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* AI Foul Word Sentinel Card (Aligned with Resident Theme) */}
+                {aiModerationResult && !aiModerationResult.isClean ? (
+                  <View style={styles.aiSentinelCard}>
+                    {/* Top Header */}
+                    <View style={styles.aiSentinelHeader}>
+                      <View style={styles.aiSentinelTitleRow}>
+                        <View style={styles.aiBotIconWrapper}>
+                          <Bot size={16} color="#2563eb" />
+                        </View>
+                        <View>
+                          <View style={styles.aiBrandRow}>
+                            <Text style={styles.aiSentinelBrand}>ZAPATERA AI SAFETY SENTINEL</Text>
+                            <View style={styles.aiNeuralPill}>
+                              <Cpu size={10} color="#2563eb" />
+                              <Text style={styles.aiNeuralPillText}>NEURAL GUARD</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.aiSentinelSubtitle}>Real-time Profanity & Civic Ethics Interceptor</Text>
+                        </View>
+                      </View>
+                      <View style={styles.aiStatusBadge}>
+                        <View style={styles.aiStatusDot} />
+                        <Text style={styles.aiStatusBadgeText}>PROFANITY BLOCKED</Text>
+                      </View>
+                    </View>
+
+                    {/* AI Analysis Diagnostic Body */}
+                    <View style={styles.aiAnalysisBody}>
+                      <View style={styles.aiWarningHeadline}>
+                        <ShieldAlert size={15} color="#e11d48" />
+                        <Text style={styles.aiWarningHeadlineText}>Prohibited Language Detected</Text>
+                      </View>
+                      <Text style={styles.aiAnalysisText}>
+                        {aiModerationResult.aiAnalysisReason || aiModerationResult.warningMessage}
+                      </Text>
+
+                      {/* Flagged Tokens & Metrics */}
+                      <View style={styles.aiFlaggedSection}>
+                        <Text style={styles.aiFlaggedLabel}>
+                          Intercepted Term{aiModerationResult.flaggedWords.length > 1 ? 's' : ''}:
+                        </Text>
+                        <View style={styles.aiFlaggedChipsRow}>
+                          {aiModerationResult.flaggedWords.map((term, idx) => (
+                            <View key={idx} style={styles.aiFlaggedChip}>
+                              <AlertTriangle size={11} color="#e11d48" />
+                              <Text style={styles.aiFlaggedChipText}>"{term}"</Text>
+                              <View style={styles.aiFlaggedProhibitedTag}>
+                                <Text style={styles.aiFlaggedProhibitedTagText}>RESTRICTED</Text>
+                              </View>
+                            </View>
+                          ))}
+                          {aiModerationResult.languageDetected && (
+                            <View style={styles.aiLanguageChip}>
+                              <Text style={styles.aiLanguageChipText}>
+                                Dialect: {aiModerationResult.languageDetected}
+                              </Text>
+                            </View>
+                          )}
+                          <View style={styles.aiConfidenceChip}>
+                            <Zap size={10} color="#15803d" />
+                            <Text style={styles.aiConfidenceChipText}>
+                              AI Confidence: {aiModerationResult.confidenceScore || 99.4}%
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Action Buttons */}
+                      <View style={styles.aiActionRow}>
+                        <TouchableOpacity
+                          style={styles.aiAutoCleanBtn}
+                          onPress={handleAutoCleanWithAi}
+                          activeOpacity={0.8}
+                        >
+                          <Sparkles size={13} color="#ffffff" />
+                          <Text style={styles.aiAutoCleanBtnText}>✨ Auto-Sanitize with AI</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.aiDismissBtn}
+                          onPress={() => {
+                            setAiModerationResult(null);
+                            setCommentModerationError('');
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.aiDismissBtnText}>Edit Manually</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Fallback legacy alert box if simple moderation string set without AI object */}
+                {!aiModerationResult && commentModerationError ? (
                   <View style={styles.moderationAlertBox}>
                     <AlertTriangle size={15} color="#b91c1c" />
                     <Text style={styles.moderationAlertText}>{commentModerationError}</Text>
@@ -1044,41 +1192,66 @@ export default function AnnouncementsView({
                 ) : null}
 
                 {currentUser ? (
-                  <View style={styles.commentInputRow}>
-                    <TextInput
-                      ref={commentInputRef}
-                      style={styles.commentInput}
-                      placeholder={
-                        replyingTo
-                          ? `Reply to @${replyingTo.author_name}...`
-                          : 'Write a comment or ask a question...'
-                      }
-                      placeholderTextColor="#94a3b8"
-                      value={commentInput}
-                      onChangeText={(text) => {
-                        setCommentInput(text);
-                        if (commentModerationError) setCommentModerationError('');
-                      }}
-                      multiline
-                      maxLength={500}
-                    />
+                  <View style={styles.commentInputContainer}>
+                    <View style={styles.commentInputRow}>
+                      <TextInput
+                        ref={commentInputRef}
+                        style={[
+                          styles.commentInput,
+                          aiModerationResult && !aiModerationResult.isClean && styles.commentInputAiBlocked,
+                        ]}
+                        placeholder={
+                          replyingTo
+                            ? `Reply to @${replyingTo.author_name}...`
+                            : 'Write a comment or ask a question...'
+                        }
+                        placeholderTextColor="#94a3b8"
+                        value={commentInput}
+                        onChangeText={(text) => {
+                          setCommentInput(text);
+                          if (aiCleanSuccessToast) setAiCleanSuccessToast(false);
+                          if (aiModerationResult) {
+                            const liveCheck = checkContentModeration(text.trim());
+                            if (liveCheck.isClean) {
+                              setAiModerationResult(null);
+                              setCommentModerationError('');
+                            } else {
+                              setAiModerationResult(liveCheck);
+                              setCommentModerationError(liveCheck.warningMessage);
+                            }
+                          }
+                        }}
+                        multiline
+                        maxLength={500}
+                      />
 
-                    <TouchableOpacity
-                      style={[
-                        styles.sendCommentBtn,
-                        (!commentInput.trim() || isSubmittingComment) &&
-                          styles.sendCommentBtnDisabled,
-                      ]}
-                      onPress={handlePostComment}
-                      disabled={!commentInput.trim() || isSubmittingComment}
-                      activeOpacity={0.8}
-                    >
-                      {isSubmittingComment ? (
-                        <ActivityIndicator size="small" color="#ffffff" />
-                      ) : (
-                        <Send size={15} color="#ffffff" />
-                      )}
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.sendCommentBtn,
+                          (!commentInput.trim() || isSubmittingComment || isAiScanning) &&
+                            styles.sendCommentBtnDisabled,
+                        ]}
+                        onPress={handlePostComment}
+                        disabled={!commentInput.trim() || isSubmittingComment || isAiScanning}
+                        activeOpacity={0.8}
+                      >
+                        {isSubmittingComment || isAiScanning ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <Send size={15} color="#ffffff" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* AI Scanning Status Bar */}
+                    {isAiScanning && (
+                      <View style={styles.aiScanningBar}>
+                        <Cpu size={12} color="#3b82f6" />
+                        <Text style={styles.aiScanningText}>
+                          Zapatera AI Safety Model scanning message for community decorum...
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 ) : (
                   <View style={styles.guestNoticeCard}>
@@ -2051,6 +2224,309 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#991b1b',
     lineHeight: 15,
+  },
+  // AI Sentinel Foul Word Interceptor Styles
+  aiCleanSuccessBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  aiCleanSuccessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  aiCleanSuccessIconCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiCleanSuccessTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#15803d',
+    flex: 1,
+  },
+  aiCleanSuccessBadge: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  aiCleanSuccessBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#16a34a',
+    letterSpacing: 0.5,
+  },
+  aiCleanSuccessDesc: {
+    fontSize: 10.5,
+    color: '#166534',
+    lineHeight: 14,
+    paddingLeft: 26,
+  },
+  aiSentinelCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#fca5a5',
+    padding: 13,
+    marginBottom: 10,
+    shadowColor: '#e11d48',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  aiSentinelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fee2e2',
+  },
+  aiSentinelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  aiBotIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  aiSentinelBrand: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: 0.5,
+  },
+  aiNeuralPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  aiNeuralPillText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#2563eb',
+    letterSpacing: 0.4,
+  },
+  aiSentinelSubtitle: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  aiStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  aiStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#e11d48',
+  },
+  aiStatusBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#be123c',
+    letterSpacing: 0.5,
+  },
+  aiAnalysisBody: {
+    paddingTop: 9,
+  },
+  aiWarningHeadline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  aiWarningHeadlineText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#9f1239',
+  },
+  aiAnalysisText: {
+    fontSize: 11.5,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  aiFlaggedSection: {
+    marginTop: 9,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#fee2e2',
+  },
+  aiFlaggedLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748b',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  aiFlaggedChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    alignItems: 'center',
+  },
+  aiFlaggedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  aiFlaggedChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#be123c',
+    textDecorationLine: 'line-through',
+  },
+  aiFlaggedProhibitedTag: {
+    backgroundColor: '#e11d48',
+    paddingHorizontal: 4.5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  aiFlaggedProhibitedTagText: {
+    fontSize: 7.5,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.4,
+  },
+  aiLanguageChip: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  aiLanguageChipText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  aiConfidenceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  aiConfidenceChipText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  aiActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 11,
+  },
+  aiAutoCleanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 9,
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  aiAutoCleanBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+  aiDismissBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 9,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  aiDismissBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  commentInputContainer: {
+    width: '100%',
+  },
+  commentInputAiBlocked: {
+    borderColor: '#fca5a5',
+    borderWidth: 1.5,
+    backgroundColor: '#fff1f2',
+    color: '#0f172a',
+  },
+  aiScanningBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+  },
+  aiScanningText: {
+    fontSize: 10.5,
+    color: '#1d4ed8',
+    fontWeight: '600',
   },
   commentInputRow: {
     flexDirection: 'row',

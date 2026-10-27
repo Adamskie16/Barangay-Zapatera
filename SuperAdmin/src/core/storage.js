@@ -892,17 +892,21 @@ export const StorageService = {
         const isUuid = (val) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
         const validProfileId = (await resolveValidProfileId(adminUser)) || (isUuid(saved.created_by) ? saved.created_by : null);
 
+        const isEmergencyBulletin = !!saved.is_emergency || String(saved.category || '').toLowerCase() === 'emergency';
+        const isPublishedBulletin = isEmergencyBulletin ? true : (saved.is_published !== false);
+
         const basePayload = {
           title: saved.title,
-          category: saved.category || 'Public Advisory',
+          category: isEmergencyBulletin ? 'Emergency' : (saved.category || 'Public Advisory'),
           description: saved.description,
           content: saved.content || saved.description,
           banner_url: saved.banner_url || null,
           location: saved.location || 'Barangay Zapatera, Cebu City',
           author: saved.author || adminUser?.full_name || 'Office of the Super Admin',
           is_important: !!saved.is_important,
-          is_emergency: !!saved.is_emergency,
-          is_published: saved.is_published !== false,
+          is_emergency: isEmergencyBulletin,
+          is_published: isPublishedBulletin,
+          is_archived: false,
           target_audience: saved.target_audience || 'residents',
           created_by: validProfileId,
           duration_days: saved.duration_days ? Number(saved.duration_days) : null,
@@ -914,35 +918,76 @@ export const StorageService = {
           ? { ...basePayload, event_date: new Date(saved.event_date).toISOString() }
           : basePayload;
 
+        // Clean core payload guaranteed to match base news schema without optional migration columns
+        const corePayload = {
+          title: saved.title,
+          category: isEmergencyBulletin ? 'Emergency' : (saved.category || 'Public Advisory'),
+          description: saved.description,
+          content: saved.content || saved.description,
+          banner_url: saved.banner_url || null,
+          location: saved.location || 'Barangay Zapatera, Cebu City',
+          author: saved.author || adminUser?.full_name || 'Office of the Super Admin',
+          is_important: !!saved.is_important,
+          is_emergency: isEmergencyBulletin,
+          is_published: isPublishedBulletin,
+          is_archived: false,
+          target_audience: saved.target_audience || 'residents',
+        };
+
+        let data = null;
+        let saveErr = null;
+
         if (isUuid(saved.id)) {
           payloadWithEvent.id = saved.id;
-          let { error: upsertErr } = await supabase.from('news').upsert(payloadWithEvent);
-          if (upsertErr && (upsertErr.code === '23503' || String(upsertErr.message).includes('foreign key'))) {
+          let res = await supabase.from('news').upsert(payloadWithEvent).select();
+          data = res.data;
+          saveErr = res.error;
+
+          if (saveErr) {
             payloadWithEvent.created_by = null;
-            basePayload.created_by = null;
-            const retryRes = await supabase.from('news').upsert(payloadWithEvent);
-            upsertErr = retryRes.error;
+            let retry = await supabase.from('news').upsert(payloadWithEvent).select();
+            data = retry.data;
+            saveErr = retry.error;
           }
-          if (upsertErr && (upsertErr.code === 'PGRST204' || String(upsertErr.message).includes('event_date'))) {
-            basePayload.id = saved.id;
-            await supabase.from('news').upsert(basePayload);
+
+          if (saveErr) {
+            corePayload.id = saved.id;
+            let retryCore = await supabase.from('news').upsert(corePayload).select();
+            data = retryCore.data;
+            saveErr = retryCore.error;
           }
         } else {
-          let { data, error: insertErr } = await supabase.from('news').insert([payloadWithEvent]).select();
-          if (insertErr && (insertErr.code === '23503' || String(insertErr.message).includes('foreign key'))) {
+          let res = await supabase.from('news').insert([payloadWithEvent]).select();
+          data = res.data;
+          saveErr = res.error;
+
+          if (saveErr) {
             payloadWithEvent.created_by = null;
-            basePayload.created_by = null;
-            const retryRes = await supabase.from('news').insert([payloadWithEvent]).select();
-            data = retryRes.data;
-            insertErr = retryRes.error;
+            let retry = await supabase.from('news').insert([payloadWithEvent]).select();
+            data = retry.data;
+            saveErr = retry.error;
           }
-          if (insertErr && (insertErr.code === 'PGRST204' || String(insertErr.message).includes('event_date'))) {
-            const retryRes = await supabase.from('news').insert([basePayload]).select();
-            data = retryRes.data;
+
+          if (saveErr) {
+            let retryCore = await supabase.from('news').insert([corePayload]).select();
+            data = retryCore.data;
+            saveErr = retryCore.error;
           }
-          if (data && data[0]) {
-            saved.id = data[0].id;
+        }
+
+        if (data && data[0]) {
+          saved.id = data[0].id;
+          // Synchronize the real Supabase UUID back into the localStorage news list
+          const curNews = StorageService.getNews();
+          const targetIdx = curNews.findIndex((n) => n.id === newsItem.id || (n.title === saved.title && n.created_at === saved.created_at));
+          if (targetIdx >= 0) {
+            curNews[targetIdx] = { ...curNews[targetIdx], id: saved.id, is_published: saved.is_published !== false };
+          } else {
+            curNews.unshift({ ...saved, id: saved.id });
           }
+          try {
+            localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(curNews));
+          } catch (_) {}
         }
 
         // Automatic Resident Notification in public.notifications when published

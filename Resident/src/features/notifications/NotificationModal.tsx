@@ -257,7 +257,7 @@ export default function NotificationModal({
                         unreadCount === 0 && styles.markAllBtnTextDisabled,
                       ]}
                     >
-                      Mark all read
+                      Mark all as read
                     </Text>
                   </TouchableOpacity>
 
@@ -459,9 +459,9 @@ const styles = StyleSheet.create({
     padding: 16,
     ...(Platform.OS === 'web'
       ? ({
-          backdropFilter: 'blur(4px)',
-          WebkitBackdropFilter: 'blur(4px)',
-        } as any)
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+      } as any)
       : {}),
   },
   modalContent: {

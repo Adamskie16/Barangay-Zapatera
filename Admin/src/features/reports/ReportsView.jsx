@@ -93,6 +93,8 @@ export default function ReportsView({
 }) {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatusText, setExportStatusText] = useState('');
 
   // Interactive Chart & Breakdown Controls
   const [chartType, setChartType] = useState('area'); // 'area' | 'bar' | 'table'
@@ -446,129 +448,153 @@ export default function ReportsView({
     return pages;
   };
 
+  // Safe Export Executor (Prevents UI lockup, double-clicks, and provides visual feedback)
+  const executeExport = async (statusLabel, fn) => {
+    setIsExportMenuOpen(false);
+    setIsExporting(true);
+    setExportStatusText(statusLabel);
+    try {
+      await fn();
+    } catch (e) {
+      console.error('Export failed:', e);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText('');
+    }
+  };
+
   // Export Handlers
   const handleExportFullSummaryCSV = () => {
-    const rows = buildSummaryKPIsCSV({
-      requests,
-      statusCounts,
-      totalRevenue,
-      totalResidents: 0,
-      periodLabel: `Calendar Year ${currentYear}`,
+    executeExport('Exporting Summary CSV...', () => {
+      const rows = buildSummaryKPIsCSV({
+        requests,
+        statusCounts,
+        totalRevenue,
+        totalResidents: 0,
+        periodLabel: `Calendar Year ${currentYear}`,
+      });
+      exportToCSV(`Barangay_Zapatera_Operations_Summary_${currentYear}`, rows);
     });
-    exportToCSV(`Barangay_Zapatera_Operations_Summary_${currentYear}`, rows);
-    setIsExportMenuOpen(false);
   };
 
   const handleExportApplicationsCSV = () => {
-    const rows = buildApplicationsCSV(filteredRequests);
-    exportToCSV(`Barangay_Zapatera_Document_Requests_${currentYear}`, rows);
-    setIsExportMenuOpen(false);
+    executeExport('Exporting Applications CSV...', () => {
+      const rows = buildApplicationsCSV(filteredRequests);
+      exportToCSV(`Barangay_Zapatera_Document_Requests_${currentYear}`, rows);
+    });
   };
 
   const handleExportMonthlyCSV = () => {
-    const rows = buildMonthlyCSV(monthlyData, currentYear);
-    exportToCSV(`Barangay_Zapatera_Monthly_Processing_${currentYear}`, rows);
-    setIsExportMenuOpen(false);
+    executeExport('Exporting Monthly Analytics CSV...', () => {
+      const rows = buildMonthlyCSV(monthlyData, currentYear);
+      exportToCSV(`Barangay_Zapatera_Monthly_Processing_${currentYear}`, rows);
+    });
   };
 
   const handleExportDocAuditCSV = () => {
-    const rows = buildRevenueAuditCSV(docTypeBreakdown, requests.length);
-    exportToCSV(`Barangay_Zapatera_Document_Clearances_Audit_${currentYear}`, rows);
-    setIsExportMenuOpen(false);
+    executeExport('Exporting Clearances Audit CSV...', () => {
+      const rows = buildRevenueAuditCSV(docTypeBreakdown, requests.length);
+      exportToCSV(`Barangay_Zapatera_Document_Clearances_Audit_${currentYear}`, rows);
+    });
   };
 
   const handleExportJSON = () => {
-    const payload = {
-      barangay: config.barangay_name || 'Barangay Zapatera',
-      generated_at: new Date().toISOString(),
-      generated_by: currentUser.full_name || currentUser.email || 'Admin',
-      statistics: {
-        total_received: requests.length,
-        status_breakdown: statusCounts,
-        total_revenue: totalRevenue,
-      },
-      monthly_distribution: monthlyData,
-      document_types: docTypeBreakdown,
-      applications: filteredRequests,
-    };
-    exportToJSON(`Barangay_Zapatera_Operations_Audit_${currentYear}`, payload);
-    setIsExportMenuOpen(false);
+    executeExport('Exporting JSON Backup...', () => {
+      const payload = {
+        barangay: config.barangay_name || 'Barangay Zapatera',
+        generated_at: new Date().toISOString(),
+        generated_by: currentUser.full_name || currentUser.email || 'Admin',
+        statistics: {
+          total_received: requests.length,
+          status_breakdown: statusCounts,
+          total_revenue: totalRevenue,
+        },
+        monthly_distribution: monthlyData,
+        document_types: docTypeBreakdown,
+        applications: filteredRequests,
+      };
+      exportToJSON(`Barangay_Zapatera_Operations_Audit_${currentYear}`, payload);
+    });
   };
 
   // PDF Export Handlers
   const handleExportFullReportPDF = () => {
-    const html = generatePrintableHTML({
-      title: 'Official Barangay Operations & Audit Report',
-      config,
-      currentUser,
-      requests: filteredRequests.length > 0 ? filteredRequests : requests,
-      docTypes,
-      monthlyData,
-      statusCounts,
-      totalRevenue,
-      totalResidents: 0,
-      periodLabel: `Calendar Year ${currentYear}`,
-      scope: 'all',
+    executeExport('Generating Official Report PDF...', async () => {
+      const html = generatePrintableHTML({
+        title: 'Official Barangay Operations & Audit Report',
+        config,
+        currentUser,
+        requests: filteredRequests.length > 0 ? filteredRequests : requests,
+        docTypes,
+        monthlyData,
+        statusCounts,
+        totalRevenue,
+        totalResidents: 0,
+        periodLabel: `Calendar Year ${currentYear}`,
+        scope: 'all',
+      });
+      await downloadReportAsPDF(html, `Barangay_Zapatera_Official_Report_${currentYear}`);
     });
-    downloadReportAsPDF(html, `Barangay_Zapatera_Official_Report_${currentYear}`);
-    setIsExportMenuOpen(false);
   };
 
   const handleExportSummaryPDF = () => {
-    const html = generatePrintableHTML({
-      title: 'Barangay Executive KPI Summary',
-      subtitle: 'Official Summary of Operations & Revenue Audit',
-      config,
-      currentUser,
-      requests,
-      docTypes,
-      monthlyData,
-      statusCounts,
-      totalRevenue,
-      totalResidents: 0,
-      periodLabel: `Calendar Year ${currentYear}`,
-      scope: 'summary',
+    executeExport('Generating KPI Summary PDF...', async () => {
+      const html = generatePrintableHTML({
+        title: 'Barangay Executive KPI Summary',
+        subtitle: 'Official Summary of Operations & Revenue Audit',
+        config,
+        currentUser,
+        requests,
+        docTypes,
+        monthlyData,
+        statusCounts,
+        totalRevenue,
+        totalResidents: 0,
+        periodLabel: `Calendar Year ${currentYear}`,
+        scope: 'summary',
+      });
+      await downloadReportAsPDF(html, `Barangay_Zapatera_Executive_Summary_${currentYear}`);
     });
-    downloadReportAsPDF(html, `Barangay_Zapatera_Executive_Summary_${currentYear}`);
-    setIsExportMenuOpen(false);
   };
 
   const handleExportApplicationsPDF = () => {
-    const html = generatePrintableHTML({
-      title: 'Document Requests List',
-      subtitle: `Log of Document Applications (${filteredRequests.length} Record(s))`,
-      config,
-      currentUser,
-      requests: filteredRequests,
-      docTypes,
-      monthlyData,
-      statusCounts,
-      totalRevenue,
-      totalResidents: 0,
-      periodLabel: `Calendar Year ${currentYear}`,
-      scope: 'applications',
+    executeExport('Generating Document Requests PDF...', async () => {
+      const html = generatePrintableHTML({
+        title: 'Document Requests List',
+        subtitle: `Log of Document Applications (${filteredRequests.length} Record(s))`,
+        config,
+        currentUser,
+        requests: filteredRequests,
+        docTypes,
+        monthlyData,
+        statusCounts,
+        totalRevenue,
+        totalResidents: 0,
+        periodLabel: `Calendar Year ${currentYear}`,
+        scope: 'applications',
+      });
+      await downloadReportAsPDF(html, `Barangay_Zapatera_Document_Requests_${currentYear}`);
     });
-    downloadReportAsPDF(html, `Barangay_Zapatera_Document_Requests_${currentYear}`);
-    setIsExportMenuOpen(false);
   };
 
   const handleExportMonthlyPDF = () => {
-    const html = generatePrintableHTML({
-      title: 'Monthly Document Processing Report',
-      subtitle: `Annual Issuance Quantities & Approval Rates (Year ${currentYear})`,
-      config,
-      currentUser,
-      requests,
-      docTypes,
-      monthlyData,
-      statusCounts,
-      totalRevenue,
-      totalResidents: 0,
-      periodLabel: `Calendar Year ${currentYear}`,
-      scope: 'monthly',
+    executeExport('Generating Monthly Processing PDF...', async () => {
+      const html = generatePrintableHTML({
+        title: 'Monthly Document Processing Report',
+        subtitle: `Annual Issuance Quantities & Approval Rates (Year ${currentYear})`,
+        config,
+        currentUser,
+        requests,
+        docTypes,
+        monthlyData,
+        statusCounts,
+        totalRevenue,
+        totalResidents: 0,
+        periodLabel: `Calendar Year ${currentYear}`,
+        scope: 'monthly',
+      });
+      await downloadReportAsPDF(html, `Barangay_Zapatera_Monthly_Processing_${currentYear}`);
     });
-    downloadReportAsPDF(html, `Barangay_Zapatera_Monthly_Processing_${currentYear}`);
-    setIsExportMenuOpen(false);
   };
 
   const handleDirectPrintOfficialReport = () => {
@@ -634,12 +660,13 @@ export default function ReportsView({
           <div className="relative">
             <button
               type="button"
+              disabled={isExporting}
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-sky-50 text-slate-700 hover:text-[#3b5bfd] border border-slate-200/80 rounded-full text-xs font-bold shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-sky-50 text-slate-700 hover:text-[#3b5bfd] border border-slate-200/80 rounded-full text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               title="Export report summaries directly to Downloads"
             >
-              <Download className="w-4 h-4 text-[#38bdf8]" />
-              <span>Export Reports</span>
+              <Download className={`w-4 h-4 text-[#38bdf8] ${isExporting ? 'animate-bounce' : ''}`} />
+              <span>{isExporting ? 'Exporting...' : 'Export Reports'}</span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
                   isExportMenuOpen ? 'rotate-180' : ''
@@ -1630,6 +1657,13 @@ export default function ReportsView({
         totalResidents={0}
         periodLabel={`Calendar Year ${currentYear}`}
       />
+      {/* Non-intrusive floating export progress toast */}
+      {isExporting && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-2.5 bg-slate-900/90 text-white text-xs font-semibold rounded-full shadow-2xl backdrop-blur-sm border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
+          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <span>{exportStatusText || 'Preparing download...'}</span>
+        </div>
+      )}
     </div>
   );
 }

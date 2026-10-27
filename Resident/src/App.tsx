@@ -225,9 +225,22 @@ export default function App() {
   // Set of recently notified announcement keys to prevent duplicated alerts
   const notifiedAnnouncementIdsRef = useRef<Set<string>>(new Set());
 
+  // Helper to normalize announcement category names to consistent casing
+  const normalizeAnnouncementCategory = (cat: any, isEmergency: boolean): AnnouncementCategory => {
+    const raw = String(cat || '').toLowerCase().trim();
+    if (isEmergency || raw === 'emergency') return 'Emergency';
+    if (raw === 'events' || raw === 'event') return 'Events';
+    if (raw === 'government services' || raw === 'services') return 'Government Services';
+    if (raw === 'maintenance') return 'Maintenance';
+    if (raw === 'community') return 'Community';
+    return 'Public Advisory';
+  };
+
   // Master handler: Physically vibrates phone, plays melodic chime, triggers native OS cellphone notification & heads-up banner
   const handleNotifyNewAnnouncement = (newsItem: any, source: string = 'realtime') => {
-    if (!newsItem || newsItem.is_published === false) return;
+    if (!newsItem) return;
+    const isEmergency = !!newsItem.is_emergency || String(newsItem.category || '').toLowerCase() === 'emergency';
+    const category = normalizeAnnouncementCategory(newsItem.category, isEmergency);
     const itemKey = `${newsItem.id || newsItem.title}_${newsItem.updated_at || newsItem.created_at || ''}`;
 
     if (notifiedAnnouncementIdsRef.current.has(itemKey)) {
@@ -239,7 +252,6 @@ export default function App() {
       notifiedAnnouncementIdsRef.current = new Set(arr.slice(arr.length - 50));
     }
 
-    const isEmergency = !!newsItem.is_emergency;
     const bannerTitle = isEmergency
       ? `🚨 Emergency Advisory: ${newsItem.title}`
       : `📢 New Announcement: ${newsItem.title}`;
@@ -251,7 +263,7 @@ export default function App() {
       title: newsItem.title,
       message: bannerMessage,
       isEmergency,
-      category: newsItem.category || 'Public Advisory',
+      category,
       banner_url: newsItem.banner_url,
       author: newsItem.author,
       url: '/?tab=announcements',
@@ -268,7 +280,7 @@ export default function App() {
         announcement: {
           id: newsItem.id,
           title: newsItem.title,
-          category: newsItem.category || 'Public Advisory',
+          category,
           date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
           description: newsItem.description || '',
           content: newsItem.content || newsItem.description || '',
@@ -298,6 +310,31 @@ export default function App() {
         return prev;
       }
       return [newNotifItem, ...prev];
+    });
+
+    // Immediately insert/update into local announcements state so the resident sees it with 0ms delay
+    const newAnnouncement: BarangayAnnouncement = {
+      id: String(newsItem.id || `news-${Date.now()}`),
+      title: newsItem.title || 'Barangay Announcement',
+      category,
+      date: newsItem.created_at
+        ? new Date(newsItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      description: newsItem.description || '',
+      content: newsItem.content || newsItem.description || '',
+      banner_url: newsItem.banner_url || '',
+      location: newsItem.location || 'Barangay Zapatera, Cebu City',
+      author: newsItem.author || 'Barangay Administration',
+      is_important: !!newsItem.is_important,
+      is_emergency: isEmergency,
+      created_at: newsItem.created_at || new Date().toISOString(),
+    };
+
+    setAnnouncements((prev) => {
+      const filtered = prev.filter((a) => a.id !== newAnnouncement.id && a.title !== newAnnouncement.title);
+      const updated = [newAnnouncement, ...filtered];
+      MobileStorage.setItem('zapatera_news_db', JSON.stringify(updated)).catch(() => {});
+      return updated;
     });
 
     // Also persist into current user's local notification database
@@ -487,12 +524,12 @@ export default function App() {
         const { data } = await supabase
           .from('news')
           .select('*')
-          .eq('is_published', true)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (data && data[0]) {
           const latest = data[0];
+          if (latest.is_archived === true || latest.is_published === false) return;
           const createdAt = new Date(latest.created_at).getTime();
           const now = Date.now();
           if (now - createdAt < 120000) {
@@ -994,7 +1031,6 @@ export default function App() {
           supabase
             .from('news')
             .select('*')
-            .eq('is_published', true)
             .order('created_at', { ascending: false }),
           supabase
             .from('events')
@@ -1002,38 +1038,57 @@ export default function App() {
             .order('created_at', { ascending: false }),
         ]);
 
-        // When Supabase responds without error, its result is the absolute source of truth
-        if (!newsRes.error && !eventsRes.error) {
-          const newsItems: BarangayAnnouncement[] = (newsRes.data || []).map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            category: (item.category as any) || 'Public Advisory',
-            date: new Date(item.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            description: item.description,
-            content: item.content || item.description,
-            banner_url: item.banner_url || '',
-            location: item.location || 'Barangay Zapatera, Cebu City',
-            author: item.author || 'Barangay Administration',
-            is_important: !!item.is_important,
-            is_emergency: !!item.is_emergency,
-            created_at: item.created_at,
-          }));
+        const hasNews = !newsRes.error && Array.isArray(newsRes.data);
+        const hasEvents = !eventsRes.error && Array.isArray(eventsRes.data);
 
-          const eventItems: BarangayAnnouncement[] = (eventsRes.data || []).map((evt: any) => ({
+        // When Supabase responds for either news or events, process available results
+        if (hasNews || hasEvents) {
+          const rawNews = hasNews ? (newsRes.data || []) : [];
+          const rawEvents = hasEvents ? (eventsRes.data || []) : [];
+
+          // Only keep active, non-archived announcements (and ensure emergency items or non-draft items are shown)
+          const activeNews = rawNews.filter((item: any) => {
+            if (item.is_archived === true || item.deleted_at) return false;
+            // Never hide emergency bulletins
+            if (item.is_emergency || String(item.category || '').toLowerCase() === 'emergency') return true;
+            return item.is_published !== false;
+          });
+
+          const newsItems: BarangayAnnouncement[] = activeNews.map((item: any) => {
+            const isEm = !!item.is_emergency || String(item.category || '').toLowerCase() === 'emergency';
+            return {
+              id: String(item.id),
+              title: item.title,
+              category: normalizeAnnouncementCategory(item.category, isEm),
+              date: item.created_at
+                ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              description: item.description || '',
+              content: item.content || item.description || '',
+              banner_url: item.banner_url || '',
+              location: item.location || 'Barangay Zapatera, Cebu City',
+              author: item.author || 'Barangay Administration',
+              is_important: !!item.is_important,
+              is_emergency: isEm,
+              created_at: item.created_at || new Date().toISOString(),
+            };
+          });
+
+          const eventItems: BarangayAnnouncement[] = rawEvents.map((evt: any) => ({
             id: evt.id ? (String(evt.id).startsWith('event-') ? String(evt.id) : `event-${evt.id}`) : `event-${Date.now()}-${Math.random()}`,
             title: evt.title,
             category: 'Events',
             date: evt.event_date
               ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            description: evt.description,
-            content: `${evt.description}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
+            description: evt.description || '',
+            content: `${evt.description || ''}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
             banner_url: evt.image_url || '',
             location: evt.location || 'Barangay Zapatera Multi-Purpose Gym',
             author: evt.created_by_name || 'Barangay Office',
             is_important: false,
             is_emergency: false,
-            created_at: evt.created_at || evt.event_date,
+            created_at: evt.created_at || evt.event_date || new Date().toISOString(),
           }));
 
           const combined = [...newsItems, ...eventItems].sort((a, b) => {
@@ -1066,13 +1121,28 @@ export default function App() {
     try {
       const stored = await MobileStorage.getItem('zapatera_news_db');
       if (stored) {
-        const parsed: BarangayAnnouncement[] = JSON.parse(stored);
+        const parsed: any[] = JSON.parse(stored);
         const seenIds = new Set<string>();
-        const unique = parsed.filter((a) => {
-          if (!a || !a.id || seenIds.has(a.id)) return false;
-          seenIds.add(a.id);
-          return true;
-        });
+        const unique: BarangayAnnouncement[] = [];
+        for (const raw of parsed) {
+          if (!raw || !raw.id || seenIds.has(raw.id)) continue;
+          if (raw.is_archived === true || raw.is_published === false) continue;
+          seenIds.add(raw.id);
+          unique.push({
+            id: String(raw.id),
+            title: raw.title,
+            category: (raw.category as any) || 'Public Advisory',
+            date: raw.date || (raw.created_at ? new Date(raw.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })),
+            description: raw.description || '',
+            content: raw.content || raw.description || '',
+            banner_url: raw.banner_url || '',
+            location: raw.location || 'Barangay Zapatera, Cebu City',
+            author: raw.author || 'Barangay Administration',
+            is_important: !!raw.is_important,
+            is_emergency: !!raw.is_emergency,
+            created_at: raw.created_at || new Date().toISOString(),
+          });
+        }
         setAnnouncements(unique);
       }
     } catch {

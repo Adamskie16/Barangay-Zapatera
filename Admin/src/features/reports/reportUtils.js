@@ -1,5 +1,7 @@
 // features/reports/reportUtils.js
 // Export to Downloads (CSV, JSON, HTML) & Professional Printable Report Utilities
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 /**
  * Universal CSV Export with UTF-8 BOM for 100% Microsoft Excel & Spreadsheet compatibility
@@ -70,47 +72,125 @@ export function exportToHTML(filename, htmlContent) {
 }
 
 /**
- * Triggers professional browser print/save-as-PDF dialog with official A4 document styling
+ * Automatically downloads report as a real PDF document file directly to Downloads
+ * without prompting the browser print dialog and ensuring full graphical and tabular content.
+ * Uses an isolated hidden iframe so host website DOM, styles, and UI are 100% unaffected.
  */
-export function downloadReportAsPDF(htmlContent, filename = 'Barangay_Zapatera_Report') {
+export async function downloadReportAsPDF(htmlContent, filename = 'Barangay_Zapatera_Report') {
   if (!htmlContent) {
     alert('Report content is empty.');
     return;
   }
 
+  const cleanFilename = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+
+  // Create an isolated iframe to completely isolate DOM, styles, and rendering context.
+  // This guarantees 0% layout shift, 0% style bleeding, and 0% impact on the host website UI.
   const iframe = document.createElement('iframe');
+  iframe.id = 'report-pdf-isolated-iframe';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.setAttribute('tabindex', '-1');
   iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.setAttribute('title', filename);
+  iframe.style.top = '0';
+  iframe.style.left = '0';
+  iframe.style.width = '794px'; // 210mm A4 width at 96 DPI
+  iframe.style.height = '1123px'; // 297mm A4 height at 96 DPI
+  iframe.style.border = 'none';
+  iframe.style.margin = '0';
+  iframe.style.padding = '0';
+  iframe.style.zIndex = '-99999';
+  iframe.style.pointerEvents = 'none';
+  iframe.style.visibility = 'visible';
+  iframe.style.opacity = '1';
   document.body.appendChild(iframe);
 
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(htmlContent);
-  doc.close();
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
 
-  if (iframe.contentWindow) {
-    iframe.contentWindow.document.title = filename;
-  }
+    // Adjust iframe height dynamically to fit full multi-page content
+    const fullHeight = Math.max(
+      doc.body?.scrollHeight || 0,
+      doc.documentElement?.scrollHeight || 0,
+      1123
+    );
+    iframe.style.height = `${fullHeight + 50}px`;
 
-  setTimeout(() => {
-    try {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-    } catch (e) {
-      console.warn('Print/PDF export notice:', e);
-    } finally {
-      setTimeout(() => {
-        if (iframe.parentNode) {
-          document.body.removeChild(iframe);
-        }
-      }, 2000);
+    // Wait for all images (e.g., barangay seal / logo) inside the iframe to load
+    const images = Array.from(doc.images || []);
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve; // Continue so export does not hang
+        });
+      })
+    );
+
+    // Give browser time for iframe CSS recalculation and font rendering
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Target the main report container element or the document body inside the iframe
+    const targetElement = doc.querySelector('.report-container') || doc.body;
+
+    // Render the element into a crisp canvas
+    const canvas = await html2canvas(targetElement, {
+      scale: 2, // 2x scale for sharp text and crisp layout
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: 794,
+      scrollX: 0,
+      scrollY: 0,
+    });
+
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+      throw new Error('Canvas rendering produced an empty canvas.');
     }
-  }, 350);
+
+    // Initialize real binary A4 Portrait PDF
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      compress: true,
+    });
+
+    const pageWidth = 210; // A4 width mm
+    const pageHeight = 297; // A4 height mm
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // Add first page
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    heightLeft -= pageHeight;
+
+    // Multi-page handling: add subsequent pages if content exceeds 1 A4 page
+    while (heightLeft > 2) {
+      position -= pageHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+    }
+
+    // Direct binary PDF document download
+    pdf.save(cleanFilename);
+  } catch (err) {
+    console.error('PDF Generation Error:', err);
+    alert('Failed to generate PDF. Please try again.');
+  } finally {
+    if (iframe && iframe.parentNode) {
+      document.body.removeChild(iframe);
+    }
+  }
 }
 
 /**
@@ -298,23 +378,22 @@ export function generatePrintableHTML({
       size: A4 portrait;
       margin: 14mm 16mm;
     }
-    * {
+    .report-container, .report-container * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    body {
+    .report-container {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       color: #0f172a;
       background: #ffffff;
       font-size: 11px;
       line-height: 1.4;
-      padding: 0;
-    }
-    .report-container {
       width: 100%;
       max-width: 800px;
       margin: 0 auto;
+      padding: 24px 28px;
+      box-sizing: border-box;
     }
     /* Official Government Header */
     .gov-header {
