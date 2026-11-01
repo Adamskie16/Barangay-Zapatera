@@ -1,5 +1,5 @@
 // Admin/src/features/documents/DocumentsView.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import {
@@ -23,6 +23,13 @@ import {
   X,
   Layers,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  Table as TableIcon,
 } from 'lucide-react';
 import { formatCurrency, sanitizeInput } from '../../core/security';
 import { StorageService } from '../../core/storage';
@@ -38,6 +45,23 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogStatusFilter, setCatalogStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+
+  // Service Catalog Table Sorting & Pagination State
+  const [catalogSortKey, setCatalogSortKey] = useState('code'); // 'code' | 'title' | 'fee' | 'processing_time' | 'requirements' | 'is_active'
+  const [catalogSortDir, setCatalogSortDir] = useState('asc'); // 'asc' | 'desc'
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogItemsPerPage, setCatalogItemsPerPage] = useState(10);
+  const [catalogViewMode, setCatalogViewMode] = useState('table'); // 'table' | 'grid'
+
+  const handleCatalogSort = (key) => {
+    if (catalogSortKey === key) {
+      setCatalogSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setCatalogSortKey(key);
+      setCatalogSortDir('asc');
+    }
+    setCatalogPage(1);
+  };
 
   // Reusable ActionModal State
   const [actionModal, setActionModal] = useState({
@@ -428,6 +452,57 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     return matchesStatus && matchesSearch;
   });
 
+  // Sort document services
+  const sortedDocTypes = useMemo(() => {
+    const list = [...filteredDocTypes];
+    list.sort((a, b) => {
+      let valA = a[catalogSortKey];
+      let valB = b[catalogSortKey];
+
+      if (catalogSortKey === 'code' || catalogSortKey === 'title') {
+        const strA = (valA || '').toString().toLowerCase();
+        const strB = (valB || '').toString().toLowerCase();
+        return catalogSortDir === 'asc' ? strA.localeCompare(strB) : strB.localeCompare(strA);
+      }
+
+      if (catalogSortKey === 'fee') {
+        const numA = (a.fee_type === 'variable' || a.is_variable_fee) ? -1 : Number(a.fee || 0);
+        const numB = (b.fee_type === 'variable' || b.is_variable_fee) ? -1 : Number(b.fee || 0);
+        return catalogSortDir === 'asc' ? numA - numB : numB - numA;
+      }
+
+      if (catalogSortKey === 'processing_time') {
+        const daysA = Number(a.processing_days || 1);
+        const daysB = Number(b.processing_days || 1);
+        return catalogSortDir === 'asc' ? daysA - daysB : daysB - daysA;
+      }
+
+      if (catalogSortKey === 'requirements') {
+        const countA = Array.isArray(a.requirements) ? a.requirements.length : 0;
+        const countB = Array.isArray(b.requirements) ? b.requirements.length : 0;
+        return catalogSortDir === 'asc' ? countA - countB : countB - countA;
+      }
+
+      if (catalogSortKey === 'is_active') {
+        const actA = a.is_active ? 1 : 0;
+        const actB = b.is_active ? 1 : 0;
+        return catalogSortDir === 'asc' ? actA - actB : actB - actA;
+      }
+
+      const defA = (valA ?? '').toString().toLowerCase();
+      const defB = (valB ?? '').toString().toLowerCase();
+      return catalogSortDir === 'asc' ? defA.localeCompare(defB) : defB.localeCompare(defA);
+    });
+    return list;
+  }, [filteredDocTypes, catalogSortKey, catalogSortDir]);
+
+  // Pagination calculations
+  const totalCatalogItems = sortedDocTypes.length;
+  const totalCatalogPages = Math.max(1, Math.ceil(totalCatalogItems / catalogItemsPerPage));
+  const validCatalogPage = Math.min(catalogPage, totalCatalogPages);
+  const catalogStartIndex = (validCatalogPage - 1) * catalogItemsPerPage;
+  const paginatedCatalogDocs = sortedDocTypes.slice(catalogStartIndex, catalogStartIndex + catalogItemsPerPage);
+
   return (
     <div className="min-h-full bg-[#f4f7fb] rounded-3xl px-1 sm:px-2 py-1 space-y-6 text-slate-800 font-sans">
       {/* Full-Screen Processing Loading Overlay Modal */}
@@ -622,7 +697,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 return (
                   <button
                     key={tab.key}
-                    onClick={() => setCatalogStatusFilter(tab.key)}
+                    onClick={() => {
+                      setCatalogStatusFilter(tab.key);
+                      setCatalogPage(1);
+                    }}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
@@ -643,23 +721,57 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              <div className="relative min-w-[230px]">
+              <div className="relative min-w-[220px]">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  onChange={(e) => {
+                    setCatalogSearch(e.target.value);
+                    setCatalogPage(1);
+                  }}
                   placeholder="Search service title or code..."
                   className="w-full pl-9 pr-8 py-2 bg-[#f4f7fb] border border-transparent focus:border-blue-200 focus:bg-white rounded-full text-xs font-medium text-slate-700 placeholder-slate-400 focus:outline-none transition-all"
                 />
                 {catalogSearch && (
                   <button
-                    onClick={() => setCatalogSearch('')}
+                    onClick={() => {
+                      setCatalogSearch('');
+                      setCatalogPage(1);
+                    }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
+              </div>
+
+              {/* View Switcher: Table vs Cards */}
+              <div className="inline-flex items-center bg-[#f4f7fb] p-1 rounded-full border border-slate-200/60 self-center">
+                <button
+                  type="button"
+                  onClick={() => setCatalogViewMode('table')}
+                  className={`p-1.5 rounded-full transition-all cursor-pointer ${
+                    catalogViewMode === 'table'
+                      ? 'bg-white text-[#3b5bfd] shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Table View"
+                >
+                  <TableIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogViewMode('grid')}
+                  className={`p-1.5 rounded-full transition-all cursor-pointer ${
+                    catalogViewMode === 'grid'
+                      ? 'bg-white text-[#3b5bfd] shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Card View"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               <button
@@ -672,143 +784,478 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </div>
           </div>
 
-          {/* Document Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredDocTypes.length === 0 ? (
-              <div className="md:col-span-2 bg-white rounded-[26px] border border-slate-100/80 p-14 text-center text-slate-400 shadow-xs">
-                <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <h3 className="text-sm font-bold text-slate-700">No Matching Document Services</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Try clearing your search filter or click &ldquo;Add Document Service&rdquo; to create a new entry.
-                </p>
-              </div>
-            ) : (
-              filteredDocTypes.map((doc) => (
-                <div
-                  key={doc.id || doc.code}
-                  className={`bg-white rounded-[26px] border ${
-                    doc.is_active ? 'border-slate-100/80' : 'border-slate-200 bg-slate-50/60 opacity-80'
-                  } p-6 shadow-xs flex flex-col justify-between space-y-5 hover:shadow-md transition-all`}
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0 border border-blue-100">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className="font-mono text-[10px] font-extrabold text-[#3b5bfd] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
-                            {doc.code}
-                          </span>
-                          <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mt-1">{doc.title}</h3>
-                        </div>
-                      </div>
-                      <Badge variant={doc.is_active ? 'active' : 'inactive'}>
-                        {doc.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs text-slate-500 font-medium mt-3 leading-relaxed">{doc.description}</p>
-
-                    {/* Issuance Fee & Processing Time Info */}
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-xl bg-white text-emerald-600 flex items-center justify-center shadow-2xs shrink-0">
-                          <DollarSign className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Processing Fee</p>
-                          <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
-                            {doc.fee_type === 'variable' || doc.is_variable_fee ? (
-                              <span className="text-[#3b5bfd]">Depends upon claim</span>
-                            ) : doc.fee > 0 ? (
-                              formatCurrency(doc.fee)
+          {/* VIEW MODE 1: SORTABLE SERVICE CATALOG TABLE WITH PAGINATION */}
+          {catalogViewMode === 'table' && (
+            <div className="bg-white rounded-[26px] border border-slate-100/80 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#f8fafd] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100 text-[10px]">
+                    <tr>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('code')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'code' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Code</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'code' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'code' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
                             ) : (
-                              <span className="text-emerald-600">FREE / Exempt</span>
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
                             )}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs shrink-0">
-                          <Clock className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Est. Turnaround</p>
-                          <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
-                            {doc.processing_time || '15–30 Minutes'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Requirements List */}
-                    <div className="mt-4">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                        Required Attachments ({doc.requirements?.length || 0})
-                      </p>
-                      {(!doc.requirements ||
-                        doc.requirements.length === 0 ||
-                        (doc.requirements.length === 1 &&
-                          (doc.requirements[0].toLowerCase().includes('no required document') ||
-                            doc.requirements[0].toLowerCase() === 'none' ||
-                            doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
-                        <div className="flex items-center text-xs text-slate-500 font-medium bg-[#f4f7fb] py-2.5 px-3.5 rounded-2xl border border-slate-200/60">
-                          <CheckCircle className="w-3.5 h-3.5 text-[#3b5bfd] mr-2 shrink-0" />
-                          <span>No required documents / No attachments needed</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {doc.requirements?.map((req, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f7fb] border border-slate-200/60 text-xs text-slate-700 font-semibold"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                              <span>{req}</span>
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('title')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'title' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Document Service Title</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'title' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'title' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
+                            )}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('fee')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'fee' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Processing Fee</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'fee' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'fee' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
+                            )}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('processing_time')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'processing_time' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Turnaround Time</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'processing_time' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'processing_time' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
+                            )}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('requirements')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'requirements' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Requirements</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'requirements' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'requirements' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
+                            )}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => handleCatalogSort('is_active')}
+                          className={`inline-flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider cursor-pointer group select-none ${
+                            catalogSortKey === 'is_active' ? 'text-[#3b5bfd]' : 'hover:text-[#3b5bfd] text-slate-400'
+                          }`}
+                        >
+                          <span>Status</span>
+                          <span className={`p-0.5 rounded ${catalogSortKey === 'is_active' ? 'bg-blue-50 text-[#3b5bfd]' : ''}`}>
+                            {catalogSortKey === 'is_active' ? (
+                              catalogSortDir === 'asc' ? <ArrowUp className="w-3.5 h-3.5 text-[#3b5bfd]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#3b5bfd]" />
+                            ) : (
+                              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-60 group-hover:opacity-100 group-hover:text-[#3b5bfd]" />
+                            )}
+                          </span>
+                        </button>
+                      </th>
+                      <th className="py-3.5 px-5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100/80 font-medium">
+                    {paginatedCatalogDocs.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-14 text-center text-slate-400">
+                          <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                            <FileText className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-bold text-slate-700">No matching document services</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Try clearing your search query or status filter.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedCatalogDocs.map((doc) => (
+                        <tr
+                          key={doc.id || doc.code}
+                          className="hover:bg-slate-50/70 transition-colors group"
+                        >
+                          <td className="p-4 whitespace-nowrap">
+                            <span className="font-mono text-xs font-extrabold text-[#3b5bfd] bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                              {doc.code}
                             </span>
-                          ))}
-                        </div>
-                      )}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0 border border-blue-100">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 max-w-xs sm:max-w-md">
+                                <p className="font-bold text-slate-900 text-xs sm:text-sm truncate">{doc.title}</p>
+                                <p className="text-[11px] text-slate-500 font-medium truncate mt-0.5" title={doc.description}>{doc.description}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            {doc.fee_type === 'variable' || doc.is_variable_fee ? (
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-[#3b5bfd] border border-blue-100">
+                                Depends upon claim
+                              </span>
+                            ) : Number(doc.fee) > 0 ? (
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-800 border border-slate-200">
+                                {formatCurrency(doc.fee)}
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                FREE / Exempt
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{doc.processing_time || `${doc.processing_days || 1} day(s)`}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            {doc.requirements && doc.requirements.length > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#f4f7fb] text-slate-700 border border-slate-200/60" title={doc.requirements.join(', ')}>
+                                <CheckCircle className="w-3 h-3 text-emerald-500" />
+                                <span>{doc.requirements.length} item(s)</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400">None</span>
+                            )}
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <Badge variant={doc.is_active ? 'active' : 'inactive'}>
+                              {doc.is_active ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(doc)}
+                                className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full flex items-center space-x-1 transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit</span>
+                              </button>
+                              {onDeleteDocType && (
+                                <button
+                                  type="button"
+                                  onClick={() => openDeleteModal(doc)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full flex items-center space-x-1 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Remove</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalCatalogItems > 0 && (
+                <div className="p-4 bg-white border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      Showing <strong className="text-slate-800 font-bold">{catalogStartIndex + 1}</strong> to{' '}
+                      <strong className="text-slate-800 font-bold">{Math.min(catalogStartIndex + catalogItemsPerPage, totalCatalogItems)}</strong> of{' '}
+                      <strong className="text-slate-800 font-bold">{totalCatalogItems}</strong> services
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <div className="flex items-center gap-1">
+                      <span>Show</span>
+                      <select
+                        value={catalogItemsPerPage}
+                        onChange={(e) => {
+                          setCatalogItemsPerPage(Number(e.target.value));
+                          setCatalogPage(1);
+                        }}
+                        className="bg-[#f4f7fb] border border-slate-200/80 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-700 focus:outline-none"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
                     </div>
                   </div>
 
-                  {/* Card Actions */}
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => setSubTab('generator')}
-                      className="px-3.5 py-2 text-xs font-bold text-[#3b5bfd] bg-blue-50 hover:bg-blue-100 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
+                      type="button"
+                      disabled={validCatalogPage <= 1}
+                      onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer inline-flex items-center gap-1"
                     >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Open in Generator</span>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
                     </button>
 
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => openEditModal(doc)}
-                        className="px-4 py-2 text-xs font-bold text-slate-700 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit Info</span>
-                      </button>
-                      {onDeleteDocType && (
+                    {Array.from({ length: totalCatalogPages }, (_, i) => i + 1).map((pg) => {
+                      const isCurrent = pg === validCatalogPage;
+                      return (
                         <button
-                          onClick={() => openDeleteModal(doc)}
-                          className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
+                          key={pg}
+                          type="button"
+                          onClick={() => setCatalogPage(pg)}
+                          className={`min-w-[28px] h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-[#3b5bfd] text-white shadow-xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Remove</span>
+                          {pg}
                         </button>
-                      )}
-                    </div>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={validCatalogPage >= totalCatalogPages}
+                      onClick={() => setCatalogPage((p) => Math.min(totalCatalogPages, p + 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              )}
+            </div>
+          )}
+
+          {/* VIEW MODE 2: CARD GRID (Without Open in Generator Button) */}
+          {catalogViewMode === 'grid' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {paginatedCatalogDocs.length === 0 ? (
+                  <div className="md:col-span-2 bg-white rounded-[26px] border border-slate-100/80 p-14 text-center text-slate-400 shadow-xs">
+                    <div className="w-12 h-12 rounded-2xl bg-[#f4f7fb] flex items-center justify-center mx-auto mb-3 text-slate-300">
+                      <FileText className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-700">No Matching Document Services</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Try clearing your search filter or click &ldquo;Add Document Service&rdquo; to create a new entry.
+                    </p>
+                  </div>
+                ) : (
+                  paginatedCatalogDocs.map((doc) => (
+                    <div
+                      key={doc.id || doc.code}
+                      className={`bg-white rounded-[26px] border ${
+                        doc.is_active ? 'border-slate-100/80' : 'border-slate-200 bg-slate-50/60 opacity-80'
+                      } p-6 shadow-xs flex flex-col justify-between space-y-5 hover:shadow-md transition-all`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0 border border-blue-100">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <span className="font-mono text-[10px] font-extrabold text-[#3b5bfd] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                                {doc.code}
+                              </span>
+                              <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mt-1">{doc.title}</h3>
+                            </div>
+                          </div>
+                          <Badge variant={doc.is_active ? 'active' : 'inactive'}>
+                            {doc.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </div>
+
+                        <p className="text-xs text-slate-500 font-medium mt-3 leading-relaxed">{doc.description}</p>
+
+                        {/* Issuance Fee & Processing Time Info */}
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-xl bg-white text-emerald-600 flex items-center justify-center shadow-2xs shrink-0">
+                              <DollarSign className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Processing Fee</p>
+                              <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
+                                {doc.fee_type === 'variable' || doc.is_variable_fee ? (
+                                  <span className="text-[#3b5bfd]">Depends upon claim</span>
+                                ) : doc.fee > 0 ? (
+                                  formatCurrency(doc.fee)
+                                ) : (
+                                  <span className="text-emerald-600">FREE / Exempt</span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-xl bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs shrink-0">
+                              <Clock className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Est. Turnaround</p>
+                              <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
+                                {doc.processing_time || '15–30 Minutes'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Requirements List */}
+                        <div className="mt-4">
+                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                            Required Attachments ({doc.requirements?.length || 0})
+                          </p>
+                          {(!doc.requirements ||
+                            doc.requirements.length === 0 ||
+                            (doc.requirements.length === 1 &&
+                              (doc.requirements[0].toLowerCase().includes('no required document') ||
+                                doc.requirements[0].toLowerCase() === 'none' ||
+                                doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
+                            <div className="flex items-center text-xs text-slate-500 font-medium bg-[#f4f7fb] py-2.5 px-3.5 rounded-2xl border border-slate-200/60">
+                              <CheckCircle className="w-3.5 h-3.5 text-[#3b5bfd] mr-2 shrink-0" />
+                              <span>No required documents / No attachments needed</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {doc.requirements?.map((req, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f7fb] border border-slate-200/60 text-xs text-slate-700 font-semibold"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                  <span>{req}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Actions (Open in Generator Removed) */}
+                      <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditModal(doc)}
+                          className="px-4 py-2 text-xs font-bold text-slate-700 bg-[#f4f7fb] hover:bg-slate-200/70 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Edit Info</span>
+                        </button>
+                        {onDeleteDocType && (
+                          <button
+                            onClick={() => openDeleteModal(doc)}
+                            className="px-3.5 py-2 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full flex items-center space-x-1.5 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Grid Pagination Controls */}
+              {totalCatalogItems > 0 && (
+                <div className="p-4 bg-white rounded-2xl border border-slate-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      Showing <strong className="text-slate-800 font-bold">{catalogStartIndex + 1}</strong> to{' '}
+                      <strong className="text-slate-800 font-bold">{Math.min(catalogStartIndex + catalogItemsPerPage, totalCatalogItems)}</strong> of{' '}
+                      <strong className="text-slate-800 font-bold">{totalCatalogItems}</strong> services
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={validCatalogPage <= 1}
+                      onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
+
+                    {Array.from({ length: totalCatalogPages }, (_, i) => i + 1).map((pg) => {
+                      const isCurrent = pg === validCatalogPage;
+                      return (
+                        <button
+                          key={pg}
+                          type="button"
+                          onClick={() => setCatalogPage(pg)}
+                          className={`min-w-[28px] h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-[#3b5bfd] text-white shadow-xs'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                          }`}
+                        >
+                          {pg}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={validCatalogPage >= totalCatalogPages}
+                      onClick={() => setCatalogPage((p) => Math.min(totalCatalogPages, p + 1))}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Security Verification - Save/Create Document Info Modal */}
           <Modal

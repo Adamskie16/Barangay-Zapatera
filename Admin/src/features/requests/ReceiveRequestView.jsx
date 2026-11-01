@@ -1012,16 +1012,16 @@ export default function ReceiveRequestView({
         {/* Card 4: Declined / Returned */}
         <div
           onClick={() => setStatusFilter('declined')}
-          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#a855f7] via-[#c084fc] to-[#e879f9] text-white shadow-lg shadow-purple-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
-            statusFilter === 'declined' ? 'ring-4 ring-purple-500/30' : ''
+          className={`relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#ef4444] via-[#f87171] to-[#dc2626] text-white shadow-lg shadow-red-500/20 flex flex-col justify-between min-h-[148px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+            statusFilter === 'declined' ? 'ring-4 ring-red-500/30' : ''
           }`}
         >
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-2xl bg-white text-purple-600 flex items-center justify-center shadow-md">
+            <div className="w-11 h-11 rounded-2xl bg-white text-red-600 flex items-center justify-center shadow-md">
               <AlertCircle className="w-5 h-5" />
             </div>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
-              Returned
+              Action Needed
             </span>
           </div>
           <div className="mt-4 flex items-end justify-between">
@@ -1045,7 +1045,7 @@ export default function ReceiveRequestView({
             { id: 'all', label: 'All Requests', count: operationalRequests.length },
             { id: 'pending', label: 'Pending', count: pendingCount },
             { id: 'processing', label: 'Processing', count: processingCount },
-            { id: 'declined', label: 'Declined', count: declinedCount },
+            { id: 'declined', label: 'Declined / Action Needed', count: declinedCount },
           ].map((tab) => {
             const isActive = statusFilter === tab.id;
             return (
@@ -1054,7 +1054,9 @@ export default function ReceiveRequestView({
                 onClick={() => setStatusFilter(tab.id)}
                 className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-2 ${
                   isActive
-                    ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                    ? tab.id === 'declined'
+                      ? 'bg-red-600 text-white shadow-sm shadow-red-500/25'
+                      : 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
                     : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70 border border-slate-200/60'
                 }`}
               >

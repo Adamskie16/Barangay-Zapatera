@@ -745,10 +745,10 @@ export default function ApprovedDocumentsView({
           </div>
         </div>
 
-        {/* Card 4: Claimed Fee Collections */}
-        <div className="relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#a855f7] via-[#c084fc] to-[#e879f9] text-white shadow-lg shadow-purple-500/20 flex flex-col justify-between min-h-[148px]">
+        {/* Card 4: Claimed Fee Collections (Green) */}
+        <div className="relative overflow-hidden rounded-[26px] p-5 bg-gradient-to-br from-[#10b981] via-[#059669] to-[#047857] text-white shadow-lg shadow-emerald-500/20 flex flex-col justify-between min-h-[148px]">
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-2xl bg-white text-purple-600 flex items-center justify-center shadow-md">
+            <div className="w-11 h-11 rounded-2xl bg-white text-emerald-600 flex items-center justify-center shadow-md">
               <DollarSign className="w-5 h-5" />
             </div>
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-xs text-[10px] font-bold">
