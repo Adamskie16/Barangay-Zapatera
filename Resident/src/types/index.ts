@@ -140,6 +140,16 @@ export interface DocumentRequest {
   resident_address?: string;
   resident_birth_date?: string;
   years_in_barangay?: number | string;
+  // Business Clearance Variables
+  business_name?: string;
+  permittee_name?: string;
+  business_address?: string;
+  nature_of_business?: string;
+  contact_number?: string;
+  capital_invested?: string | number;
+  gross_sales?: string | number;
+  doc_stamps?: number;
+  or_number?: string;
   document_type_id: string;
   document_title: string;
   fee: number;

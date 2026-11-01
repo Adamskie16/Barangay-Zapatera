@@ -36,6 +36,9 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Building2,
+  DollarSign,
+  Briefcase,
 } from 'lucide-react';
 import {
   DocumentType,
@@ -72,6 +75,15 @@ const COMMON_PURPOSES = [
   'Senior Citizen / Solo Parent Benefit',
   'Postal ID / Passport Application',
   'Business Registration Renewal',
+  'Other Official Purpose',
+];
+
+const BUSINESS_PURPOSES = [
+  "Renewal of Mayor's Business Permit",
+  'New Business Permit Application',
+  'Barangay Business Clearance',
+  'Change of Business Location',
+  'Retirement / Closure of Business',
   'Other Official Purpose',
 ];
 
@@ -138,6 +150,19 @@ export default function RequestFlowModal({
     currentUser.years_in_barangay ? String(currentUser.years_in_barangay) : ''
   );
 
+  // Business Clearance / Permit Specific Variables (Official Document Reference)
+  const [businessName, setBusinessName] = useState<string>('');
+  const [permitteeName, setPermitteeName] = useState<string>(
+    currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
+  );
+  const [businessAddress, setBusinessAddress] = useState<string>(
+    currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City'
+  );
+  const [natureOfBusiness, setNatureOfBusiness] = useState<string>('');
+  const [businessContact, setBusinessContact] = useState<string>(currentUser.phone || '');
+  const [capitalInvested, setCapitalInvested] = useState<string>('');
+  const [grossSales, setGrossSales] = useState<string>('');
+
   // Step 3 Uploads State
   const [uploadedFiles, setUploadedFiles] = useState<{
     [reqKey: string]: UploadedRequirementFile;
@@ -191,6 +216,39 @@ export default function RequestFlowModal({
     availableDocTypes.find((d) => d.id === selectedDocId) ||
     initialDoc ||
     docTypes[0];
+
+  const isBusinessDoc = useMemo(() => {
+    const t = (selectedDoc?.title || '').toLowerCase();
+    const c = (selectedDoc?.code || '').toLowerCase();
+    const tmpl = (selectedDoc as any)?.template_type || '';
+    return (
+      tmpl === 'business' ||
+      t.includes('business') ||
+      t.includes('commercial') ||
+      c.includes('bus')
+    );
+  }, [selectedDoc]);
+
+  // When switching to/from business document, align default purpose if user hasn't typed custom
+  useEffect(() => {
+    if (isBusinessDoc) {
+      if (!customPurpose || customPurpose === COMMON_PURPOSES[0]) {
+        setPurpose(BUSINESS_PURPOSES[0]);
+        setCustomPurpose(BUSINESS_PURPOSES[0]);
+      }
+      if (!permitteeName) {
+        setPermitteeName(
+          currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
+        );
+      }
+      if (!businessAddress) {
+        setBusinessAddress(currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City');
+      }
+      if (!businessContact) {
+        setBusinessContact(currentUser.phone || '');
+      }
+    }
+  }, [isBusinessDoc, currentUser]);
 
   // Requirements list normalized from selectedDoc
   const requirementsToUpload =
@@ -375,6 +433,40 @@ export default function RequestFlowModal({
         bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
       }
+
+      if (isBusinessDoc) {
+        if (!businessName.trim()) {
+          setShowStepValidation(true);
+          setUploadError('Required Field Missing: Please enter the official Business Name.');
+          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+        if (!permitteeName.trim()) {
+          setShowStepValidation(true);
+          setUploadError('Required Field Missing: Please enter the Permittee Name.');
+          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+        if (!businessAddress.trim()) {
+          setShowStepValidation(true);
+          setUploadError('Required Field Missing: Please enter the complete Business Address.');
+          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+        if (!natureOfBusiness.trim()) {
+          setShowStepValidation(true);
+          setUploadError('Required Field Missing: Please specify the Nature of Business.');
+          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+        if (!businessContact.trim()) {
+          setShowStepValidation(true);
+          setUploadError('Required Field Missing: Please provide a valid Contact Number.');
+          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
+          return;
+        }
+      }
+
       setShowStepValidation(false);
       setUploadError('');
       setCurrentStep(3);
@@ -434,6 +526,14 @@ export default function RequestFlowModal({
           currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City',
         resident_birth_date: currentUser.birth_date || currentUser.birthdate,
         years_in_barangay: yearsInBarangay.trim(),
+        // Business Clearance entity variables (if business permit)
+        business_name: isBusinessDoc ? businessName.trim() : undefined,
+        permittee_name: isBusinessDoc ? (permitteeName.trim() || currentUser.full_name) : undefined,
+        business_address: isBusinessDoc ? businessAddress.trim() : undefined,
+        nature_of_business: isBusinessDoc ? natureOfBusiness.trim() : undefined,
+        contact_number: isBusinessDoc ? (businessContact.trim() || currentUser.phone || '') : undefined,
+        capital_invested: isBusinessDoc && capitalInvested.trim() ? capitalInvested.trim() : undefined,
+        gross_sales: isBusinessDoc && grossSales.trim() ? grossSales.trim() : undefined,
         document_type_id: selectedDoc.id,
         document_title: selectedDoc.title,
         fee: selectedDoc.fee,
@@ -532,6 +632,10 @@ export default function RequestFlowModal({
     setSubmittedReq(null);
     setCopiedTracking(false);
     setIsSubmitting(false);
+    setBusinessName('');
+    setNatureOfBusiness('');
+    setCapitalInvested('');
+    setGrossSales('');
     onClose();
   };
 
@@ -901,9 +1005,11 @@ export default function RequestFlowModal({
                   )}
 
                   {/* Quick Selection Presets */}
-                  <Text style={styles.presetsHeading}>Quick Purpose Presets:</Text>
+                  <Text style={styles.presetsHeading}>
+                    {isBusinessDoc ? 'Business Purpose Presets:' : 'Quick Purpose Presets:'}
+                  </Text>
                   <View style={styles.presetsWrap}>
-                    {COMMON_PURPOSES.filter((p) => p !== 'Other Official Purpose').map(
+                    {(isBusinessDoc ? BUSINESS_PURPOSES : COMMON_PURPOSES).filter((p) => p !== 'Other Official Purpose').map(
                       (p) => {
                         const isSelected = customPurpose.trim() === p;
                         return (
@@ -1000,6 +1106,249 @@ export default function RequestFlowModal({
                     </View>
                   )}
                 </View>
+
+                {/* Commercial & Business Entity Details Card (When Requesting Business Clearance) */}
+                {isBusinessDoc && (
+                  <View style={styles.residentInfoCard}>
+                    <View style={styles.residentInfoCardHeader}>
+                      <Building2 size={16} color="#2563eb" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.residentInfoCardTitle}>
+                          COMMERCIAL & BUSINESS ENTITY DETAILS
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                          Official variables required for the Barangay Business Clearance
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Business Name */}
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.inputLabel}>
+                          Business Name <Text style={styles.reqAsterisk}>*</Text>
+                        </Text>
+                        {!businessName.trim() ? (
+                          <View style={styles.statusIndicatorRequired}>
+                            <AlertCircle size={10} color="#dc2626" />
+                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusIndicatorDone}>
+                            <CheckCircle2 size={10} color="#059669" />
+                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.inputBoxRow,
+                          !businessName.trim() && showStepValidation
+                            ? styles.inputBoxRowMissing
+                            : styles.inputBoxRowValid,
+                        ]}
+                      >
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                          placeholderTextColor="#94a3b8"
+                          value={businessName}
+                          onChangeText={(txt) => {
+                            setBusinessName(txt);
+                            if (txt.trim()) setUploadError('');
+                          }}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Permittee Name */}
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.inputLabel}>
+                          Permittee (Owner / Permittee Name) <Text style={styles.reqAsterisk}>*</Text>
+                        </Text>
+                        {!permitteeName.trim() ? (
+                          <View style={styles.statusIndicatorRequired}>
+                            <AlertCircle size={10} color="#dc2626" />
+                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusIndicatorDone}>
+                            <CheckCircle2 size={10} color="#059669" />
+                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.inputBoxRow,
+                          !permitteeName.trim() && showStepValidation
+                            ? styles.inputBoxRowMissing
+                            : styles.inputBoxRowValid,
+                        ]}
+                      >
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="e.g. Homer G. Cang"
+                          placeholderTextColor="#94a3b8"
+                          value={permitteeName}
+                          onChangeText={(txt) => {
+                            setPermitteeName(txt);
+                            if (txt.trim()) setUploadError('');
+                          }}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Business Address */}
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.inputLabel}>
+                          Business Address <Text style={styles.reqAsterisk}>*</Text>
+                        </Text>
+                        {!businessAddress.trim() ? (
+                          <View style={styles.statusIndicatorRequired}>
+                            <AlertCircle size={10} color="#dc2626" />
+                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusIndicatorDone}>
+                            <CheckCircle2 size={10} color="#059669" />
+                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.inputBoxRow,
+                          !businessAddress.trim() && showStepValidation
+                            ? styles.inputBoxRowMissing
+                            : styles.inputBoxRowValid,
+                        ]}
+                      >
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="e.g. Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera"
+                          placeholderTextColor="#94a3b8"
+                          value={businessAddress}
+                          onChangeText={(txt) => {
+                            setBusinessAddress(txt);
+                            if (txt.trim()) setUploadError('');
+                          }}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Nature of Business */}
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.inputLabel}>
+                          Nature of Business <Text style={styles.reqAsterisk}>*</Text>
+                        </Text>
+                        {!natureOfBusiness.trim() ? (
+                          <View style={styles.statusIndicatorRequired}>
+                            <AlertCircle size={10} color="#dc2626" />
+                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusIndicatorDone}>
+                            <CheckCircle2 size={10} color="#059669" />
+                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.inputBoxRow,
+                          !natureOfBusiness.trim() && showStepValidation
+                            ? styles.inputBoxRowMissing
+                            : styles.inputBoxRowValid,
+                        ]}
+                      >
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="e.g. Music Entertainment Services, Retail Store, Eatery..."
+                          placeholderTextColor="#94a3b8"
+                          value={natureOfBusiness}
+                          onChangeText={(txt) => {
+                            setNatureOfBusiness(txt);
+                            if (txt.trim()) setUploadError('');
+                          }}
+                        />
+                      </View>
+                      {/* Nature presets */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                        {['Music Entertainment Services', 'Retail / Sari-Sari Store', 'Food & Beverage Services', 'Professional Services', 'Rental / Real Estate'].map((preset) => (
+                          <TouchableOpacity
+                            key={preset}
+                            onPress={() => {
+                              setNatureOfBusiness(preset);
+                              setUploadError('');
+                            }}
+                            style={{
+                              backgroundColor: natureOfBusiness === preset ? '#eff6ff' : '#f8fafc',
+                              borderColor: natureOfBusiness === preset ? '#2563eb' : '#e2e8f0',
+                              borderWidth: 1,
+                              borderRadius: 6,
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, color: natureOfBusiness === preset ? '#1d4ed8' : '#475569', fontWeight: '500' }}>
+                              {preset}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Contact Number */}
+                    <View style={{ marginTop: 12 }}>
+                      <View style={styles.fieldLabelRow}>
+                        <Text style={styles.inputLabel}>
+                          Contact Number <Text style={styles.reqAsterisk}>*</Text>
+                        </Text>
+                      </View>
+                      <View style={styles.inputBoxRowValid}>
+                        <TextInput
+                          style={styles.textInputFlex}
+                          placeholder="09173226058"
+                          placeholderTextColor="#94a3b8"
+                          value={businessContact}
+                          onChangeText={setBusinessContact}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Financial Fields: Capital Invested & Gross Sales */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>Capital Invested (₱)</Text>
+                        <View style={[styles.inputBoxRowValid, { marginTop: 4 }]}>
+                          <TextInput
+                            style={styles.textInputFlex}
+                            placeholder="1,290,000.00"
+                            placeholderTextColor="#94a3b8"
+                            value={capitalInvested}
+                            onChangeText={setCapitalInvested}
+                          />
+                        </View>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>Gross Sales (₱)</Text>
+                        <View style={[styles.inputBoxRowValid, { marginTop: 4 }]}>
+                          <TextInput
+                            style={styles.textInputFlex}
+                            placeholder="300,000.00"
+                            placeholderTextColor="#94a3b8"
+                            value={grossSales}
+                            onChangeText={setGrossSales}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                )}
 
                 {/* Auto-Filled Resident Profile Summary Card */}
                 <View style={styles.residentInfoCard}>
@@ -1544,6 +1893,26 @@ export default function RequestFlowModal({
                       Years in Barangay: {yearsInBarangay} year(s)
                     </Text>
                   </View>
+
+                  {isBusinessDoc && (
+                    <>
+                      <View style={styles.summaryDivider} />
+                      <View style={styles.summarySection}>
+                        <Text style={styles.summaryHeader}>COMMERCIAL & BUSINESS DETAILS</Text>
+                        <Text style={styles.summaryMainText}>{businessName || 'Business Name'}</Text>
+                        <Text style={styles.summarySubText}>Permittee: {permitteeName || currentUser.full_name}</Text>
+                        <Text style={styles.summarySubText}>Address: {businessAddress}</Text>
+                        <Text style={styles.summarySubText}>Nature of Business: {natureOfBusiness}</Text>
+                        <Text style={styles.summarySubText}>Contact: {businessContact || currentUser.phone}</Text>
+                        {capitalInvested ? (
+                          <Text style={styles.summarySubText}>Capital Invested: ₱{capitalInvested}</Text>
+                        ) : null}
+                        {grossSales ? (
+                          <Text style={styles.summarySubText}>Gross Sales: ₱{grossSales}</Text>
+                        ) : null}
+                      </View>
+                    </>
+                  )}
 
                   <View style={styles.summaryDivider} />
 

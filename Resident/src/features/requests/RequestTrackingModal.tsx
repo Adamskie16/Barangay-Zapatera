@@ -657,6 +657,43 @@ export default function RequestTrackingModal({
                   </Text>
                 </View>
 
+                {request.business_name && (
+                  <>
+                    <View style={styles.detailDivider} />
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Business Name</Text>
+                      <Text style={styles.detailValueBold}>{request.business_name}</Text>
+                    </View>
+                    {request.permittee_name ? (
+                      <>
+                        <View style={styles.detailDivider} />
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Permittee</Text>
+                          <Text style={styles.detailValue}>{request.permittee_name}</Text>
+                        </View>
+                      </>
+                    ) : null}
+                    {request.nature_of_business ? (
+                      <>
+                        <View style={styles.detailDivider} />
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Nature of Business</Text>
+                          <Text style={styles.detailValue}>{request.nature_of_business}</Text>
+                        </View>
+                      </>
+                    ) : null}
+                    {request.business_address ? (
+                      <>
+                        <View style={styles.detailDivider} />
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Business Address</Text>
+                          <Text style={styles.detailValue}>{request.business_address}</Text>
+                        </View>
+                      </>
+                    ) : null}
+                  </>
+                )}
+
                 <View style={styles.detailDivider} />
 
                 <View style={styles.detailRow}>

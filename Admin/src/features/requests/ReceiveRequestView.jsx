@@ -45,6 +45,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Building2,
+  DollarSign,
 } from 'lucide-react';
 import ActionModal from '../../components/ActionModal';
 import SecurityVerificationModal from '../../components/SecurityVerificationModal';
@@ -195,6 +197,18 @@ export default function ReceiveRequestView({
   const [genBodyText, setGenBodyText] = useState(documentTemplates.barangayCertification.defaultBody);
   const [genSignatoryName, setGenSignatoryName] = useState(config?.punong_barangay || config?.signatory_name || 'HON. DAVID M. AGRAVANTE');
   const [genSignatoryTitle, setGenSignatoryTitle] = useState(config?.signatory_title || 'Punong Barangay');
+
+  // Business Clearance & Financial Assessment State
+  const [genTemplateType, setGenTemplateType] = useState('standard'); // 'standard' | 'business'
+  const [genBusinessName, setGenBusinessName] = useState('');
+  const [genPermittee, setGenPermittee] = useState('');
+  const [genBusinessAddress, setGenBusinessAddress] = useState('');
+  const [genNatureOfBusiness, setGenNatureOfBusiness] = useState('');
+  const [genCapitalInvested, setGenCapitalInvested] = useState('');
+  const [genGrossSales, setGenGrossSales] = useState('');
+  const [genFee, setGenFee] = useState(0);
+  const [genDocStamps, setGenDocStamps] = useState(30);
+  const [genOrNumber, setGenOrNumber] = useState('');
 
   useEffect(() => {
     if (config?.punong_barangay || config?.signatory_name) {
@@ -438,6 +452,11 @@ export default function ReceiveRequestView({
 
     // Auto-select matching template based on document title
     const titleLower = (req.document_title || '').toLowerCase();
+    const isBusiness =
+      titleLower.includes('business') ||
+      Boolean(req.business_name) ||
+      (req.document_type || '').toLowerCase().includes('bus');
+
     let matchedKey = 'barangayCertification';
     if (titleLower.includes('clearance')) matchedKey = 'barangayClearance';
     else if (titleLower.includes('residency')) matchedKey = 'certificateOfResidency';
@@ -446,6 +465,65 @@ export default function ReceiveRequestView({
     else if (titleLower.includes('jobseeker')) matchedKey = 'firstTimeJobseeker';
 
     setSelectedTemplateKey(matchedKey);
+    setGenTemplateType(isBusiness ? 'business' : 'standard');
+
+    // Extract and populate commercial & business variables
+    let bName = req.business_name || '';
+    let pName = req.permittee_name || resName || '';
+    let bAddr = req.business_address || resAddress || '';
+    let nBus = req.nature_of_business || '';
+    let cNum = req.contact_number || resContact || '';
+    let cInv = req.capital_invested || '';
+    let gSale = req.gross_sales || '';
+
+    // Check bracketed tokens in notes as fallback
+    if (req.notes && typeof req.notes === 'string') {
+      if (!bName) {
+        const m = req.notes.match(/\[Business:\s*([^\]]+)\]/i);
+        if (m) bName = m[1].trim();
+      }
+      if (!pName) {
+        const m = req.notes.match(/\[Permittee:\s*([^\]]+)\]/i);
+        if (m) pName = m[1].trim();
+      }
+      if (!bAddr) {
+        const m = req.notes.match(/\[Business Address:\s*([^\]]+)\]/i);
+        if (m) bAddr = m[1].trim();
+      }
+      if (!nBus) {
+        const m = req.notes.match(/\[Nature:\s*([^\]]+)\]/i);
+        if (m) nBus = m[1].trim();
+      }
+      if (!cNum) {
+        const m = req.notes.match(/\[Contact:\s*([^\]]+)\]/i);
+        if (m) cNum = m[1].trim();
+      }
+      if (!cInv) {
+        const m = req.notes.match(/\[Capital:\s*₱?([^\]]+)\]/i);
+        if (m) cInv = m[1].trim();
+      }
+      if (!gSale) {
+        const m = req.notes.match(/\[Gross:\s*₱?([^\]]+)\]/i);
+        if (m) gSale = m[1].trim();
+      }
+    }
+
+    setGenBusinessName(bName);
+    setGenPermittee(pName || resName);
+    setGenBusinessAddress(bAddr || resAddress);
+    setGenNatureOfBusiness(nBus);
+    setGenCapitalInvested(cInv);
+    setGenGrossSales(gSale);
+
+    // Fee setup (prefill fee assessed or default)
+    const initialFee = req.claimed_fee !== undefined && req.claimed_fee !== null
+      ? Number(req.claimed_fee)
+      : (req.fee !== undefined && req.fee !== null ? Number(req.fee) : 0);
+    setGenFee(initialFee);
+    setGenDocStamps(req.doc_stamps !== undefined ? Number(req.doc_stamps) : 30);
+    const initialOr = req.or_number || `OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    setGenOrNumber(initialOr);
+
     const tmpl = documentTemplates[matchedKey] || documentTemplates.barangayCertification;
     setGenDocTitle(req.document_title ? req.document_title.toUpperCase() : tmpl.title);
     setGenBodyText(tmpl.defaultBody);
@@ -594,6 +672,8 @@ export default function ReceiveRequestView({
         setActionModal((prev) => ({ ...prev, isProcessing: true }));
         try {
           const adminName = currentUser?.full_name || currentUser?.email || 'Barangay Administrator';
+          const assessedFee = Number(genFee) || 0;
+          const assessedDocStamps = Number(genDocStamps) || 30;
           const updatedPayload = {
             ...selectedReq,
             status: 'approved',
@@ -604,6 +684,22 @@ export default function ReceiveRequestView({
             rejection_reason: '',
             declined_reason: '',
             declined_details: '',
+            // Assessed fee and receipt info configured during processing
+            fee: assessedFee,
+            claimed_fee: assessedFee,
+            amount_paid: assessedFee,
+            doc_stamps: assessedDocStamps,
+            or_number: genOrNumber,
+            fee_assessed: true,
+            is_variable_fee: false,
+            // Commercial entity variables
+            business_name: genBusinessName,
+            permittee_name: genPermittee,
+            business_address: genBusinessAddress,
+            nature_of_business: genNatureOfBusiness,
+            contact_number: genContact,
+            capital_invested: genCapitalInvested,
+            gross_sales: genGrossSales,
             updated_at: new Date().toISOString(),
           };
 
@@ -2068,6 +2164,181 @@ export default function ReceiveRequestView({
                       />
                     </div>
 
+                    {/* Commercial & Business Entity Details (If Business Clearance) */}
+                    {(genTemplateType === 'business' || genDocTitle.toUpperCase().includes('BUSINESS')) && (
+                      <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-2.5">
+                        <div className="flex items-center justify-between pb-1 border-b border-blue-100">
+                          <span className="font-bold text-blue-900 text-[11px] flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Commercial & Business Entity Details</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded">
+                            Official Clearance Format
+                          </span>
+                        </div>
+
+                        {/* Business Name */}
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                            Business Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={genBusinessName}
+                            onChange={(e) => setGenBusinessName(e.target.value)}
+                            placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold"
+                          />
+                        </div>
+
+                        {/* Permittee & Nature */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                              Permittee <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={genPermittee}
+                              onChange={(e) => setGenPermittee(e.target.value)}
+                              placeholder="e.g. Homer G. Cang"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                              Nature of Business <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={genNatureOfBusiness}
+                              onChange={(e) => setGenNatureOfBusiness(e.target.value)}
+                              placeholder="e.g. Music Entertainment Services"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Business Address */}
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                            Business Address <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={genBusinessAddress}
+                            onChange={(e) => setGenBusinessAddress(e.target.value)}
+                            placeholder="e.g. Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900"
+                          />
+                        </div>
+
+                        {/* Capital & Gross Sales */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">Capital Invested (₱)</label>
+                            <input
+                              type="text"
+                              value={genCapitalInvested}
+                              onChange={(e) => setGenCapitalInvested(e.target.value)}
+                              placeholder="1,290,000.00"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">Gross Sales (₱)</label>
+                            <input
+                              type="text"
+                              value={genGrossSales}
+                              onChange={(e) => setGenGrossSales(e.target.value)}
+                              placeholder="300,000.00"
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Official Assessment & Fee Collection Setup (Depends on Claim / Fixed Fee) */}
+                    <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between pb-1 border-b border-emerald-100">
+                        <span className="font-bold text-emerald-900 text-[11px] flex items-center gap-1.5">
+                          <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Official Fee & Payment Assessment</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                          {Number(genFee) > 0 ? `₱${(Number(genFee) + (Number(genDocStamps) || 0)).toFixed(2)} Total` : 'Free / Exempt'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* Processing Fee Input */}
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                            Processing Fee (₱)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={genFee}
+                            onChange={(e) => setGenFee(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-bold font-mono"
+                            placeholder="0.00"
+                          />
+                        </div>
+
+                        {/* Doc Stamps Input */}
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                            Doc Stamps (₱)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={genDocStamps}
+                            onChange={(e) => setGenDocStamps(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono"
+                            placeholder="30.00"
+                          />
+                        </div>
+
+                        {/* O.R. Number Input */}
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-0.5 text-[10px]">
+                            O.R. Number
+                          </label>
+                          <input
+                            type="text"
+                            value={genOrNumber}
+                            onChange={(e) => setGenOrNumber(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-xs"
+                            placeholder="OR-2026-0000"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Quick Fee Presets */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] text-slate-500 font-medium">Quick fee presets:</span>
+                        {[0, 50, 100, 500].map((presetVal) => (
+                          <button
+                            key={presetVal}
+                            type="button"
+                            onClick={() => setGenFee(presetVal)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                              Number(genFee) === presetVal
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {presetVal === 0 ? 'Free (₱0)' : `₱${presetVal}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Signatory Names */}
                     <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100">
                       <div>
@@ -2128,8 +2399,8 @@ export default function ReceiveRequestView({
                       <div className="transform scale-[0.62] sm:scale-[0.70] origin-top transition-transform duration-200 mb-[-410px] sm:mb-[-330px]">
                         <DocumentTemplate
                           documentTitle={genDocTitle}
-                          name={genName}
-                          address={genAddress}
+                          name={genPermittee || genName}
+                          address={genBusinessAddress || genAddress}
                           dateOfBirth={genDob}
                           contactNo={genContact}
                           yearsInBarangay={genYearsInBarangay}
@@ -2140,6 +2411,15 @@ export default function ReceiveRequestView({
                           signatoryName={genSignatoryName}
                           signatoryTitle={genSignatoryTitle}
                           config={config}
+                          fee={Number(genFee) || 0}
+                          docStamps={Number(genDocStamps) || 30}
+                          orNumber={genOrNumber}
+                          templateType={genTemplateType}
+                          businessName={genBusinessName}
+                          permittee={genPermittee || genName}
+                          natureOfBusiness={genNatureOfBusiness}
+                          capitalInvested={genCapitalInvested}
+                          grossSales={genGrossSales}
                         />
                       </div>
                     </div>
@@ -2362,8 +2642,8 @@ export default function ReceiveRequestView({
       <div id="printable-document-root" className="hidden print:block">
         <DocumentTemplate
           documentTitle={genDocTitle}
-          name={genName}
-          address={genAddress}
+          name={genPermittee || genName}
+          address={genBusinessAddress || genAddress}
           dateOfBirth={genDob}
           contactNo={genContact}
           yearsInBarangay={genYearsInBarangay}
@@ -2374,6 +2654,15 @@ export default function ReceiveRequestView({
           signatoryName={genSignatoryName}
           signatoryTitle={genSignatoryTitle}
           config={config}
+          fee={Number(genFee) || 0}
+          docStamps={Number(genDocStamps) || 30}
+          orNumber={genOrNumber}
+          templateType={genTemplateType}
+          businessName={genBusinessName}
+          permittee={genPermittee || genName}
+          natureOfBusiness={genNatureOfBusiness}
+          capitalInvested={genCapitalInvested}
+          grossSales={genGrossSales}
         />
       </div>
     </div>

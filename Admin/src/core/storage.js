@@ -385,6 +385,53 @@ export const StorageService = {
             const formattedPhone = req.resident_phone || profile.phone || req.phone || '';
             const formattedCivilStatus = req.civil_status || profile.civil_status || 'Single';
 
+            // Extract business fields if present in columns or notes
+            let bName = req.business_name || '';
+            let pName = req.permittee_name || '';
+            let bAddr = req.business_address || '';
+            let nBus = req.nature_of_business || '';
+            let cNum = req.contact_number || '';
+            let cInv = req.capital_invested || '';
+            let gSale = req.gross_sales || '';
+
+            if (req.notes && typeof req.notes === 'string') {
+              if (!bName) {
+                const m = req.notes.match(/\[Business:\s*([^\]]+)\]/i);
+                if (m) bName = m[1].trim();
+              }
+              if (!pName) {
+                const m = req.notes.match(/\[Permittee:\s*([^\]]+)\]/i);
+                if (m) pName = m[1].trim();
+              }
+              if (!bAddr) {
+                const m = req.notes.match(/\[Business Address:\s*([^\]]+)\]/i);
+                if (m) bAddr = m[1].trim();
+              }
+              if (!nBus) {
+                const m = req.notes.match(/\[Nature:\s*([^\]]+)\]/i);
+                if (m) nBus = m[1].trim();
+              }
+              if (!cNum) {
+                const m = req.notes.match(/\[Contact:\s*([^\]]+)\]/i);
+                if (m) cNum = m[1].trim();
+              }
+              if (!cInv) {
+                const m = req.notes.match(/\[Capital:\s*₱?([^\]]+)\]/i);
+                if (m) cInv = m[1].trim();
+              }
+              if (!gSale) {
+                const m = req.notes.match(/\[Gross:\s*₱?([^\]]+)\]/i);
+                if (m) gSale = m[1].trim();
+              }
+            }
+
+            // Fee priority: assessed claimed_fee -> assessed fee on request -> catalog fee
+            const resolvedFee = req.claimed_fee !== undefined && req.claimed_fee !== null && req.claimed_fee !== ''
+              ? Number(req.claimed_fee)
+              : (req.fee !== undefined && req.fee !== null && req.fee !== ''
+                ? Number(req.fee)
+                : (docType.fee !== undefined ? Number(docType.fee) : 0));
+
             return {
               ...req,
               profiles: profile,
@@ -397,7 +444,15 @@ export const StorageService = {
               years_in_barangay: formattedYears,
               civil_status: formattedCivilStatus,
               document_title: docType.title || req.document_title || 'Barangay Document',
-              fee: docType.fee !== undefined ? docType.fee : (req.fee || 0),
+              fee: resolvedFee,
+              claimed_fee: req.claimed_fee !== undefined ? Number(req.claimed_fee) : resolvedFee,
+              business_name: bName,
+              permittee_name: pName,
+              business_address: bAddr,
+              nature_of_business: nBus,
+              contact_number: cNum || formattedPhone,
+              capital_invested: cInv,
+              gross_sales: gSale,
               pickup_date: req.pickup_date || 'To be scheduled',
               pickup_time_slot: req.pickup_time_slot || 'Regular Office Hours',
             };
@@ -506,6 +561,32 @@ export const StorageService = {
         if (req.previous_decline_reason) {
           payload.previous_decline_reason = req.previous_decline_reason;
         }
+
+        // Assessed fee and official receipt fields
+        if (req.fee !== undefined && req.fee !== null) {
+          payload.fee = Number(req.fee);
+        }
+        if (req.doc_stamps !== undefined && req.doc_stamps !== null) {
+          payload.doc_stamps = Number(req.doc_stamps);
+        }
+        if (req.or_number) {
+          payload.or_number = req.or_number;
+        }
+        if (req.is_variable_fee !== undefined) {
+          payload.is_variable_fee = Boolean(req.is_variable_fee);
+        }
+        if (req.fee_assessed !== undefined) {
+          payload.fee_assessed = Boolean(req.fee_assessed);
+        }
+
+        // Business clearance entity fields
+        if (req.business_name) payload.business_name = req.business_name;
+        if (req.permittee_name) payload.permittee_name = req.permittee_name;
+        if (req.business_address) payload.business_address = req.business_address;
+        if (req.nature_of_business) payload.nature_of_business = req.nature_of_business;
+        if (req.contact_number) payload.contact_number = req.contact_number;
+        if (req.capital_invested) payload.capital_invested = String(req.capital_invested);
+        if (req.gross_sales) payload.gross_sales = String(req.gross_sales);
 
         let updateRes;
         if (isUuid) {

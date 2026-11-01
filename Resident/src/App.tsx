@@ -1755,12 +1755,19 @@ export default function App() {
           birthDateVal = rawDob.trim();
         }
 
-        const notesDetails = [
+        let notesDetails = [
           newReq.document_title ? `Document: ${newReq.document_title}` : '',
           newReq.fee !== undefined ? `Fee: ₱${newReq.fee}` : '',
           currentUser?.civil_status ? `Civil Status: ${currentUser.civil_status}` : '',
           newReq.pickup_location ? `Pickup Window: ${newReq.pickup_location}` : '',
           newReq.pickup_instructions ? `Instructions: ${newReq.pickup_instructions}` : '',
+          newReq.business_name ? `[Business: ${newReq.business_name}]` : '',
+          newReq.permittee_name ? `[Permittee: ${newReq.permittee_name}]` : '',
+          newReq.business_address ? `[Business Address: ${newReq.business_address}]` : '',
+          newReq.nature_of_business ? `[Nature: ${newReq.nature_of_business}]` : '',
+          newReq.contact_number ? `[Contact: ${newReq.contact_number}]` : '',
+          newReq.capital_invested ? `[Capital: ₱${newReq.capital_invested}]` : '',
+          newReq.gross_sales ? `[Gross: ₱${newReq.gross_sales}]` : '',
           newReq.notes || '',
         ].filter(Boolean).join(' | ');
 
@@ -1787,7 +1794,29 @@ export default function App() {
           payload.resident_birth_date = birthDateVal;
         }
 
-        const { error: insertErr } = await supabase.from('document_requests').insert([payload]);
+        if (newReq.business_name) payload.business_name = newReq.business_name;
+        if (newReq.permittee_name) payload.permittee_name = newReq.permittee_name;
+        if (newReq.business_address) payload.business_address = newReq.business_address;
+        if (newReq.nature_of_business) payload.nature_of_business = newReq.nature_of_business;
+        if (newReq.contact_number) payload.contact_number = newReq.contact_number;
+        if (newReq.capital_invested) payload.capital_invested = String(newReq.capital_invested);
+        if (newReq.gross_sales) payload.gross_sales = String(newReq.gross_sales);
+
+        let { error: insertErr } = await supabase.from('document_requests').insert([payload]);
+        if (insertErr && (insertErr.message?.includes('column') || (insertErr as any).code === '42703')) {
+          console.warn('Retrying insert without direct business columns (preserved in notes)...');
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.business_name;
+          delete fallbackPayload.permittee_name;
+          delete fallbackPayload.business_address;
+          delete fallbackPayload.nature_of_business;
+          delete fallbackPayload.contact_number;
+          delete fallbackPayload.capital_invested;
+          delete fallbackPayload.gross_sales;
+          const retryRes = await supabase.from('document_requests').insert([fallbackPayload]);
+          insertErr = retryRes.error;
+        }
+
         if (insertErr) {
           console.error('Error inserting document_request:', insertErr.message);
         }

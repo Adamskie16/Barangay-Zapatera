@@ -141,31 +141,42 @@ export default function ApprovedDocumentsView({
       const matchingDoc = allDocTypes.find(
         (d) => d.id === req.document_type_id || d.title === req.document_title || d.code === req.document_type
       );
-      const isVar = Boolean(req.is_variable_fee || matchingDoc?.is_variable_fee || matchingDoc?.fee_type === 'variable');
-      const defaultFee = matchingDoc?.fee !== undefined ? Number(matchingDoc.fee) : Number(req.fee || 0);
+      
+      // Determine if fee was already assessed manually by staff during processing
+      const wasAssessedDuringProcessing = req.fee_assessed || (req.claimed_fee !== undefined && req.claimed_fee !== null) || (req.fee !== undefined && req.fee !== null && req.is_variable_fee === false);
+      const isVar = !wasAssessedDuringProcessing && Boolean(req.is_variable_fee || matchingDoc?.is_variable_fee || matchingDoc?.fee_type === 'variable');
+      
+      const assessedFee = req.claimed_fee !== undefined && req.claimed_fee !== null
+        ? Number(req.claimed_fee)
+        : (req.fee !== undefined && req.fee !== null
+          ? Number(req.fee)
+          : (matchingDoc?.fee !== undefined ? Number(matchingDoc.fee) : 0));
 
-      // ONLY if the processing fee option is "Depends on Claim" (variable fee), open the "Confirm Claim & Fee Collection" modal
+      // ONLY if fee is variable AND was not already inputted during processing, open manual fee collection modal
       if (isVar) {
         setClaimFeeModal({
           isOpen: true,
           req,
-          feeAmount: '',
+          feeAmount: assessedFee > 0 ? String(assessedFee) : '',
           isVariable: true,
-          defaultFee,
+          defaultFee: assessedFee,
           error: '',
           isLoading: false,
         });
         return;
       }
 
-      // FIXED FEE OPTION:
-      // Directly confirm document claim without opening fee collection modal
-      const fixedFee = req.fee !== undefined && req.fee !== null ? Number(req.fee) : defaultFee;
+      // ASSESSED / FIXED FEE OPTION:
+      // Directly confirm document claim using fee assessed during processing
+      const fixedFee = assessedFee;
+      const docStampsFee = req.doc_stamps !== undefined ? Number(req.doc_stamps) : (fixedFee > 0 ? 30 : 0);
+      const totalCollected = fixedFee > 0 ? fixedFee + docStampsFee : 0;
+
       setActionModal({
         isOpen: true,
         type: 'confirmation',
-        title: 'Confirm Document Claim',
-        message: `Mark document ${req.tracking_number} (${req.document_title}) as claimed by resident? Processing fee is fixed at ${fixedFee > 0 ? formatCurrency(fixedFee) : 'FREE'}.`,
+        title: 'Confirm Document Claim & Fee',
+        message: `Mark document ${req.tracking_number} (${req.document_title}) as claimed by resident? Processing fee set during processing is ${fixedFee > 0 ? formatCurrency(fixedFee) : 'FREE'}${fixedFee > 0 && docStampsFee > 0 ? ` + ₱${docStampsFee} Doc Stamps (Total: ${formatCurrency(totalCollected)})` : ''}.`,
         confirmText: 'Confirm Claim',
         cancelText: 'Cancel',
         isDestructive: false,
@@ -183,6 +194,7 @@ export default function ApprovedDocumentsView({
               claimed_fee: fixedFee,
               fee: fixedFee,
               amount_paid: fixedFee,
+              doc_stamps: docStampsFee,
               is_paid: true,
               payment_status: fixedFee > 0 ? 'paid' : (req.payment_status || 'free'),
               updated_at: new Date().toISOString(),
