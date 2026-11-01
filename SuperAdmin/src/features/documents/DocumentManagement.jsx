@@ -64,8 +64,8 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
   const [businessName, setBusinessName] = useState('');
   const [permittee, setPermittee] = useState('');
   const [natureOfBusiness, setNatureOfBusiness] = useState('');
-  const [capitalInvested, setCapitalInvested] = useState('1,290,000.00');
-  const [grossSales, setGrossSales] = useState('300,000.00');
+  const [capitalInvested, setCapitalInvested] = useState('');
+  const [grossSales, setGrossSales] = useState('');
   const [showBusinessPermitModal, setShowBusinessPermitModal] = useState(false);
 
   useEffect(() => {
@@ -608,7 +608,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                     type="text"
                     value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                    placeholder="Enter business name..."
                     className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold uppercase transition-all"
                   />
                 </div>
@@ -620,7 +620,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       type="text"
                       value={permittee}
                       onChange={(e) => setPermittee(e.target.value)}
-                      placeholder="e.g. Homer G. Cang"
+                      placeholder="Enter permittee / owner name..."
                       className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
                     />
                   </div>
@@ -630,7 +630,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       type="text"
                       value={natureOfBusiness}
                       onChange={(e) => setNatureOfBusiness(e.target.value)}
-                      placeholder="e.g. Music Entertainment Services"
+                      placeholder="e.g. Retail / Services"
                       className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
                     />
                   </div>
@@ -643,7 +643,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       type="text"
                       value={capitalInvested}
                       onChange={(e) => setCapitalInvested(e.target.value)}
-                      placeholder="1,290,000.00"
+                      placeholder="0.00"
                       className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-mono font-semibold transition-all"
                     />
                   </div>
@@ -653,7 +653,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       type="text"
                       value={grossSales}
                       onChange={(e) => setGrossSales(e.target.value)}
-                      placeholder="300,000.00"
+                      placeholder="0.00"
                       className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-mono font-semibold transition-all"
                     />
                   </div>
@@ -963,21 +963,23 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
         isOpen={showBusinessPermitModal}
         onClose={() => setShowBusinessPermitModal(false)}
         initialData={{
-          business_name: businessName || 'HAGIAZO AUDIO PRODUCTIONS CO.',
-          permittee_name: permittee || name || 'Homer G. Cang',
-          business_address: address || 'Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City',
-          nature_of_business: natureOfBusiness || 'Music Entertainment Services',
-          contact_number: contactNo || '09173226058',
-          capital_invested: capitalInvested || '1,290,000.00',
-          gross_sales: grossSales || '300,000.00',
-          purpose: purpose || "the renewal of Mayor's Business Permit.",
+          business_name: businessName || '',
+          permittee_name: permittee || name || '',
+          business_address: address || '',
+          nature_of_business: natureOfBusiness || '',
+          contact_number: contactNo || '',
+          capital_invested: capitalInvested || '',
+          gross_sales: grossSales || '',
+          purpose: purpose || '',
           issued_date: issuedDate || new Date().toISOString().split('T')[0],
           punong_barangay_name: signatoryName,
           punong_barangay_title: signatoryTitle,
+          document_title: documentTitle,
+          body_text: bodyText,
           payment: {
             has_fee: fee > 0,
-            or_number: orNumber || 'OR-2026-8842',
-            fee_amount: Number(fee) || 500,
+            or_number: orNumber || '',
+            fee_amount: Number(fee) || 0,
             doc_stamps_amount: Number(docStamps) || 30,
             total_amount: (Number(fee) || 0) + (Number(docStamps) || 0),
             payment_date: issuedDate || new Date().toISOString().split('T')[0],

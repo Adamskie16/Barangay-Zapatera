@@ -22,6 +22,8 @@ export interface BusinessPermitData {
   punong_barangay_name?: string;
   punong_barangay_title?: string;
   payment?: BusinessPermitPayment;
+  document_title?: string;
+  body_text?: string;
 }
 
 export interface BarangayBusinessClearanceProps {
@@ -39,6 +41,8 @@ export interface BarangayBusinessClearanceProps {
   punong_barangay_name?: string;
   punong_barangay_title?: string;
   payment?: BusinessPermitPayment;
+  document_title?: string;
+  body_text?: string;
   logoUrl?: string;
   className?: string;
 }
@@ -121,6 +125,8 @@ export const BarangayBusinessClearance: React.FC<BarangayBusinessClearanceProps>
   const cInvested = data?.capital_invested ?? capital_invested ?? '';
   const gSales = data?.gross_sales ?? gross_sales ?? '';
   const bPurpose = data?.purpose ?? purpose ?? '';
+  const docTitle = data?.document_title ?? document_title ?? 'BARANGAY BUSINESS CLEARANCE';
+  const customBody = data?.body_text ?? body_text ?? '';
   const iDate = data?.issued_date ?? issued_date ?? new Date().toISOString().split('T')[0];
   const pSignatory = data?.punong_barangay_name ?? punong_barangay_name ?? 'HON. DAVID M. AGRAVANTE';
   const pTitle = data?.punong_barangay_title ?? punong_barangay_title ?? 'Punong Barangay';
@@ -240,9 +246,9 @@ export const BarangayBusinessClearance: React.FC<BarangayBusinessClearanceProps>
               OFFICE OF THE PUNONG BARANGAY
             </h3>
 
-            {/* Main Document Title: Exact Font Size 16pt */}
+            {/* Main Document Title: Exact Font Size 16pt (dynamically editable from Step 3) */}
             <h1 className="text-[16pt] leading-tight font-black uppercase tracking-wider text-slate-950 font-serif pt-1">
-              BARANGAY BUSINESS CLEARANCE
+              {docTitle}
             </h1>
           </div>
 
@@ -271,16 +277,16 @@ export const BarangayBusinessClearance: React.FC<BarangayBusinessClearanceProps>
               <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">ADDRESS</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-normal text-slate-900">
-                {bAddress || 'Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera,'}
+                {bAddress || '________________________________________'}
               </span>
             </div>
 
             {/* NATURE OF BUSINESS */}
             <div className="flex items-baseline">
-              <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">NATURE OF BUSINESS:</span>
+              <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">NATURE OF BUSINESS</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-normal text-slate-900">
-                {nBusiness || 'Music Entertainment Services'}
+                {nBusiness || '____________________'}
               </span>
             </div>
 
@@ -298,7 +304,7 @@ export const BarangayBusinessClearance: React.FC<BarangayBusinessClearanceProps>
               <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">CAPITAL INVESTED</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-bold text-slate-950 font-mono">
-                {cInvested ? (String(cInvested).startsWith('₱') ? cInvested : formatCurrency(cInvested)) : '₱1,290,000.00'}
+                {cInvested ? (String(cInvested).startsWith('₱') ? cInvested : formatCurrency(cInvested)) : '____________________'}
               </span>
             </div>
 
@@ -307,15 +313,34 @@ export const BarangayBusinessClearance: React.FC<BarangayBusinessClearanceProps>
               <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">GROSS SALES</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-bold text-slate-950 font-mono">
-                {gSales ? (String(gSales).startsWith('₱') ? gSales : formatCurrency(gSales)) : '₱300,000.00'}
+                {gSales ? (String(gSales).startsWith('₱') ? gSales : formatCurrency(gSales)) : '____________________'}
               </span>
             </div>
           </div>
 
-          {/* Dynamic paragraph text below the grid: Exact Font Size 12pt */}
+          {/* Dynamic paragraph text below the grid: Exact Font Size 12pt (dynamically editable from Step 3) */}
           <div className="space-y-5 text-justify text-[12pt] font-serif pt-4 leading-relaxed">
             <p className="indent-10">
-              This certification is issued to <span className="font-bold text-slate-950 uppercase">{bName || '____________________'}</span> for {bPurpose ? bPurpose : '____________________'}
+              {customBody ? (
+                bName && customBody.includes('the permittee') ? (
+                  (() => {
+                    const parts = customBody.split('the permittee');
+                    return (
+                      <>
+                        {parts[0]}
+                        <span className="font-bold text-slate-950 uppercase">{bName}</span>
+                        {parts.slice(1).join('the permittee')}
+                      </>
+                    );
+                  })()
+                ) : (
+                  customBody
+                )
+              ) : (
+                <>
+                  This certification is issued to <span className="font-bold text-slate-950 uppercase">{bName || '____________________'}</span> for {bPurpose ? bPurpose : '____________________'}
+                </>
+              )}
             </p>
 
             <p className="text-center font-serif pt-2">

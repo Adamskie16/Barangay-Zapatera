@@ -1307,25 +1307,25 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                       <div style={{ transform: 'scale(0.55)', transformOrigin: 'top center' }}>
                         <DocumentTemplate
                           documentTitle={formData.template_title || (formData.title ? formData.title.toUpperCase() : 'BARANGAY CLEARANCE')}
-                          name="Homer G. Cang"
-                          address="Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City"
-                          dateOfBirth="1990-05-15"
-                          contactNo="09173226058"
-                          yearsInBarangay="10 years"
-                          purpose={formData.description || "Renewal of Mayor's Business Permit"}
+                          name="Sample Resident / Applicant"
+                          address="Barangay Zapatera, Cebu City"
+                          dateOfBirth="1995-01-01"
+                          contactNo="0917-000-0000"
+                          yearsInBarangay="5 years"
+                          purpose={formData.description || ""}
                           issuedDate={new Date().toISOString().split('T')[0]}
                           issuedLocation="Barangay Zapatera, Cebu City"
-                          bodyText={formData.template_body || 'This is to certify that the above named person / permittee has complied with all community requirements.'}
+                          bodyText={formData.template_body || 'This is to certify that the above named person has complied with all community requirements.'}
                           config={config}
                           fee={Number(formData.fee) || 0}
                           docStamps={30}
-                          orNumber="OR-2026-8492"
+                          orNumber="OR-2026-0001"
                           templateType={formData.template_type || 'standard'}
-                          businessName="HAGIAZO AUDIO PRODUCTIONS CO."
-                          permittee="Homer G. Cang"
-                          natureOfBusiness="Music Entertainment Services"
-                          capitalInvested="1,290,000.00"
-                          grossSales="300,000.00"
+                          businessName=""
+                          permittee=""
+                          natureOfBusiness=""
+                          capitalInvested=""
+                          grossSales=""
                         />
                       </div>
                     </div>

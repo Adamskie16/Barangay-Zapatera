@@ -80,17 +80,19 @@ export default function DocumentTemplate({
     return (
       <BarangayBusinessClearance
         data={{
-          business_name: businessName || name,
-          permittee_name: permittee || (typeof name === 'string' ? name : formatResidentName(name)) || '________________________________________',
-          business_address: address || 'Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City',
-          nature_of_business: natureOfBusiness || purpose || 'General Merchandise & Services',
+          business_name: businessName,
+          permittee_name: permittee || (typeof name === 'string' ? name : formatResidentName(name)) || '',
+          business_address: address || '',
+          nature_of_business: natureOfBusiness || '',
           contact_number: contactNo || '',
-          capital_invested: capitalInvested || '1,290,000.00',
-          gross_sales: grossSales || '300,000.00',
-          purpose: purpose || "the renewal of Mayor's Business Permit.",
+          capital_invested: capitalInvested || '',
+          gross_sales: grossSales || '',
+          purpose: purpose || '',
           issued_date: issuedDate || new Date().toISOString().split('T')[0],
           punong_barangay_name: finalSignatoryName,
           punong_barangay_title: finalSignatoryTitle,
+          document_title: documentTitle,
+          body_text: bodyText,
           payment: {
             has_fee: hasFee,
             or_number: orNumber,
@@ -223,7 +225,7 @@ export default function DocumentTemplate({
               <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">ADDRESS</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-normal text-slate-900">
-                {address || '195 D. Jakosalem St., Brgy. Zapatera, Cebu City'}
+                {address || '________________________________________'}
               </span>
             </div>
 

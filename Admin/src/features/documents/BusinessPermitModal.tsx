@@ -38,15 +38,13 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   // Form Fields State
-  const [businessName, setBusinessName] = useState('HAGIAZO AUDIO PRODUCTIONS CO.');
-  const [permitteeName, setPermitteeName] = useState('Homer G. Cang');
-  const [businessAddress, setBusinessAddress] = useState(
-    'Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City'
-  );
-  const [natureOfBusiness, setNatureOfBusiness] = useState('Music Entertainment Services');
-  const [contactNumber, setContactNumber] = useState('09173226058');
-  const [capitalInvested, setCapitalInvested] = useState('1,290,000.00');
-  const [grossSales, setGrossSales] = useState('300,000.00');
+  const [businessName, setBusinessName] = useState('');
+  const [permitteeName, setPermitteeName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [natureOfBusiness, setNatureOfBusiness] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
+  const [capitalInvested, setCapitalInvested] = useState('');
+  const [grossSales, setGrossSales] = useState('');
   const [purpose, setPurpose] = useState('');
   const [issuedDate, setIssuedDate] = useState(todayStr);
 
@@ -254,7 +252,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                       type="text"
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                      placeholder="Enter business name..."
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-900 uppercase focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                     />
                   </div>
@@ -276,7 +274,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                         type="text"
                         value={permitteeName}
                         onChange={(e) => setPermitteeName(e.target.value)}
-                        placeholder="e.g. Homer G. Cang"
+                        placeholder="Enter permittee / owner name..."
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                       />
                     </div>
@@ -291,7 +289,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                       type="text"
                       value={businessAddress}
                       onChange={(e) => setBusinessAddress(e.target.value)}
-                      placeholder="e.g. Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City"
+                      placeholder="Enter business address..."
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                     />
                   </div>
@@ -306,7 +304,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                         type="text"
                         value={natureOfBusiness}
                         onChange={(e) => setNatureOfBusiness(e.target.value)}
-                        placeholder="e.g. Music Entertainment Services"
+                        placeholder="e.g. Retail / Services"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                       />
                     </div>
@@ -319,7 +317,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                         type="text"
                         value={contactNumber}
                         onChange={(e) => setContactNumber(e.target.value)}
-                        placeholder="e.g. 09173226058"
+                        placeholder="0917-000-0000"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                       />
                     </div>
@@ -337,7 +335,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                           type="text"
                           value={capitalInvested}
                           onChange={(e) => setCapitalInvested(e.target.value)}
-                          placeholder="1,290,000.00"
+                          placeholder="0.00"
                           className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                         />
                       </div>
@@ -353,7 +351,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                           type="text"
                           value={grossSales}
                           onChange={(e) => setGrossSales(e.target.value)}
-                          placeholder="300,000.00"
+                          placeholder="0.00"
                           className="w-full pl-7 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                         />
                       </div>
