@@ -47,7 +47,7 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
   const [contactNumber, setContactNumber] = useState('09173226058');
   const [capitalInvested, setCapitalInvested] = useState('1,290,000.00');
   const [grossSales, setGrossSales] = useState('300,000.00');
-  const [purpose, setPurpose] = useState("the renewal of Mayor's Business Permit.");
+  const [purpose, setPurpose] = useState('');
   const [issuedDate, setIssuedDate] = useState(todayStr);
 
   // Signatory State
@@ -363,16 +363,40 @@ export const BusinessPermitModal: React.FC<BusinessPermitModalProps> = ({
                   {/* PURPOSE & ISSUANCE DATE */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Issuance Purpose
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Issuance Purpose
+                        </label>
+                        <span className="text-[10px] text-slate-400">Wait for user input/selection</span>
+                      </div>
                       <input
                         type="text"
                         value={purpose}
                         onChange={(e) => setPurpose(e.target.value)}
-                        placeholder="the renewal of Mayor's Business Permit."
+                        placeholder="e.g. the renewal of Mayor's Business Permit."
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
                       />
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[
+                          "the renewal of Mayor's Business Permit.",
+                          "new Mayor's Business Permit.",
+                          "business license application.",
+                          "bank account opening.",
+                        ].map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setPurpose(p)}
+                            className={`text-[10px] px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                              purpose === p
+                                ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-600'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div>

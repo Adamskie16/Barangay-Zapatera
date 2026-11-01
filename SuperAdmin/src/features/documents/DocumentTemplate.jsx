@@ -255,7 +255,7 @@ export default function DocumentTemplate({
               <span className="w-[210px] shrink-0 font-bold text-slate-900 uppercase">PURPOSE</span>
               <span className="w-[24px] shrink-0 font-bold text-slate-900 text-center">:</span>
               <span className="flex-1 font-bold text-slate-950 uppercase">
-                {purpose || 'ANY LEGAL PURPOSE'}
+                {purpose ? purpose.toUpperCase() : '____________________'}
               </span>
             </div>
           </div>
@@ -270,66 +270,63 @@ export default function DocumentTemplate({
               This certification is issued upon the request of the above-named person for whatever legal purpose it may serve.
             </p>
 
-            <p className="text-center font-serif">
+            <p className="text-center font-serif pt-2">
               Issued on this <span className="font-bold text-slate-950">{formattedDate}</span> at{' '}
               <span className="font-bold text-slate-950">{issuedLocation}</span>.
             </p>
           </div>
+
+          {/* O.R. FINANCIAL BLOCK: Positioned on the left in the blank space below / next to the issuance line */}
+          {hasFee && (
+            <div className="w-[300px] font-sans text-[11pt] sm:text-[12pt] text-slate-900 space-y-1 select-text mt-5 mb-2">
+              <div className="flex items-baseline">
+                <span className="w-[115px] shrink-0 font-semibold text-slate-800">O.R. No.</span>
+                <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
+                <span className="font-bold text-slate-950 font-mono whitespace-nowrap">{orNumber || ''}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="w-[115px] shrink-0 font-semibold text-slate-800">Fee</span>
+                <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
+                <span className="font-bold text-slate-950 font-mono whitespace-nowrap">₱{numFee.toFixed(2)}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="w-[115px] shrink-0 font-semibold text-slate-800">Doc. Stamps</span>
+                <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
+                <span className="font-bold text-slate-950 font-mono whitespace-nowrap">₱{numDocStamps.toFixed(2)}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="w-[115px] shrink-0 font-bold text-slate-900">Total Amount</span>
+                <span className="w-[16px] shrink-0 font-bold text-slate-900 text-center">:</span>
+                <span className="font-black text-slate-950 font-mono whitespace-nowrap">₱{totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="flex items-baseline">
+                <span className="w-[115px] shrink-0 font-semibold text-slate-800">Date</span>
+                <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
+                <span className="font-medium text-slate-900 whitespace-nowrap">{formattedDateOnly}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* BOTTOM SECTION: Two-Column Layout (O.R. & Seal on Left, Signature on Right) */}
-        <div className="mt-auto pt-6 flex items-end justify-between min-h-[145px]">
-          {/* Left Column: O.R. Financial Box + NOT VALID WITHOUT OFFICIAL SEAL */}
-          <div className="flex flex-col justify-end min-w-[270px]">
-            {/* O.R. Details Block (Only rendered when hasFee is true) */}
-            {hasFee ? (
-              <div className="font-sans text-[11pt] sm:text-[12pt] text-slate-900 space-y-1 mb-5 select-text">
-                <div className="flex items-baseline">
-                  <span className="w-[115px] shrink-0 font-semibold text-slate-800">O.R. No.</span>
-                  <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
-                  <span className="font-bold text-slate-950 font-mono whitespace-nowrap">{orNumber || ''}</span>
-                </div>
-                <div className="flex items-baseline">
-                  <span className="w-[115px] shrink-0 font-semibold text-slate-800">Fee</span>
-                  <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
-                  <span className="font-bold text-slate-950 font-mono whitespace-nowrap">₱{numFee.toFixed(2)}</span>
-                </div>
-                <div className="flex items-baseline">
-                  <span className="w-[115px] shrink-0 font-semibold text-slate-800">Doc. Stamps</span>
-                  <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
-                  <span className="font-bold text-slate-950 font-mono whitespace-nowrap">₱{numDocStamps.toFixed(2)}</span>
-                </div>
-                <div className="flex items-baseline">
-                  <span className="w-[115px] shrink-0 font-bold text-slate-900">Total Amount</span>
-                  <span className="w-[16px] shrink-0 font-bold text-slate-900 text-center">:</span>
-                  <span className="font-black text-slate-950 font-mono whitespace-nowrap">₱{totalAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex items-baseline">
-                  <span className="w-[115px] shrink-0 font-semibold text-slate-800">Date</span>
-                  <span className="w-[16px] shrink-0 font-bold text-slate-800 text-center">:</span>
-                  <span className="font-medium text-slate-900 whitespace-nowrap">{formattedDateOnly}</span>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Absolute Lowest Left: NOT VALID WITHOUT OFFICIAL SEAL */}
-            <div className="select-none text-slate-600">
-              <p className="text-[9.5pt] font-sans font-bold uppercase tracking-wider text-slate-600 leading-tight">
-                NOT VALID WITHOUT
-              </p>
-              <p className="text-[9.5pt] font-sans font-bold uppercase tracking-wider text-slate-600 leading-tight">
-                OFFICIAL SEAL
-              </p>
-            </div>
-          </div>
-
-          {/* Right Column: Punong Barangay Signature (Right Aligned, Zero Overlap) */}
-          <div className="text-center min-w-[260px] pb-5">
+        {/* BOTTOM SECTION: Punong Barangay to the Center, Official Seal at Lowest Left */}
+        <div className="mt-auto pt-4 flex flex-col justify-end">
+          {/* Punong Barangay Signature Centered Horizontally */}
+          <div className="text-center mx-auto min-w-[280px] pb-4">
             <p className="text-[14pt] font-bold text-slate-950 uppercase font-serif tracking-wide leading-tight">
               {finalSignatoryName}
             </p>
             <p className="text-[12pt] font-normal text-slate-800 font-serif mt-1 leading-tight">
               {finalSignatoryTitle}
+            </p>
+          </div>
+
+          {/* Absolute Lowest Left: NOT VALID WITHOUT OFFICIAL SEAL */}
+          <div className="select-none text-slate-600">
+            <p className="text-[9.5pt] font-sans font-bold uppercase tracking-wider text-slate-600 leading-tight">
+              NOT VALID WITHOUT
+            </p>
+            <p className="text-[9.5pt] font-sans font-bold uppercase tracking-wider text-slate-600 leading-tight">
+              OFFICIAL SEAL
             </p>
           </div>
         </div>

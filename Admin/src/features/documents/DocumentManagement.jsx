@@ -41,7 +41,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [contactNo, setContactNo] = useState('');
   const [yearsInBarangay, setYearsInBarangay] = useState('5 years');
-  const [purpose, setPurpose] = useState(documentTemplates.barangayCertification.defaultPurpose);
+  const [purpose, setPurpose] = useState('');
   const [issuedDate, setIssuedDate] = useState(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -208,7 +208,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
     if (tmpl) {
       setDocumentTitle(tmpl.title);
       setBodyText(tmpl.defaultBody);
-      setPurpose(tmpl.defaultPurpose);
+      // Purpose stays empty, wait for user to input or click it
       const isBiz = tmpl.templateType === 'business' || key === 'businessClearance';
       setTemplateType(isBiz ? 'business' : 'standard');
       const tmplFee = Number(tmpl.defaultFee) || 0;
@@ -224,8 +224,20 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
   const handleSelectFromCatalog = (e) => {
     const val = e.target.value;
     setSelectedCatalogCode(val);
+
+    if (val.startsWith('preset:')) {
+      const presetKey = val.replace('preset:', '');
+      handleSelectTemplate(presetKey);
+      return;
+    }
+
     const found = docTypes.find((d) => (d.code || d.id) === val);
-    if (!found) return;
+    if (!found) {
+      if (documentTemplates[val]) {
+        handleSelectTemplate(val);
+      }
+      return;
+    }
 
     const docTitle = (found.template_title || found.title || found.name || '').toUpperCase();
     setDocumentTitle(docTitle);
@@ -251,9 +263,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
       setBodyText(found.description);
     }
 
-    if (found.description) {
-      setPurpose(found.description);
-    }
+    // Purpose stays empty, wait for user to input or click it
 
     // Match preset key if applicable
     const matchingKey = Object.keys(documentTemplates).find((k) => {
@@ -305,7 +315,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
     if (tmpl) {
       setDocumentTitle(tmpl.title);
       setBodyText(tmpl.defaultBody);
-      setPurpose(tmpl.defaultPurpose);
+      setPurpose('');
     }
   };
 
