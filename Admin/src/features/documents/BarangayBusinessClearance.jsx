@@ -85,7 +85,12 @@ export function BarangayBusinessClearance({
   const pTitle = data?.punong_barangay_title ?? punong_barangay_title ?? 'Punong Barangay';
 
   const paymentData = data?.payment ?? payment;
-  const hasFee = Boolean(paymentData?.has_fee && (paymentData?.fee_amount ?? 0) > 0);
+  const hasFee = Boolean(
+    paymentData?.has_fee ||
+    (paymentData?.fee_amount !== undefined && Number(paymentData?.fee_amount) > 0) ||
+    paymentData?.is_variable_fee ||
+    paymentData?.isDependsOnClaim
+  );
   const feeAmount = paymentData?.fee_amount ?? 500;
   const docStampsAmount = paymentData?.doc_stamps_amount ?? 30;
   const totalAmount = paymentData?.total_amount ?? (feeAmount + docStampsAmount);
@@ -364,3 +369,4 @@ export function BarangayBusinessClearance({
 }
 
 export default BarangayBusinessClearance;
+

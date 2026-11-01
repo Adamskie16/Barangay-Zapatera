@@ -28,6 +28,7 @@ export default function DocumentTemplate({
   fee = 0,
   docStamps = 30,
   orNumber = '',
+  isDependsOnClaim = false,
   // Business clearance props
   templateType = 'standard', // 'standard' | 'business'
   businessName = '',
@@ -59,7 +60,7 @@ export default function DocumentTemplate({
   const numFee = Number(fee) || 0;
   const numDocStamps = Number(docStamps) || 30;
   const totalAmount = numFee + numDocStamps;
-  const hasFee = numFee > 0;
+  const hasFee = numFee > 0 || isDependsOnClaim;
 
   const isBusiness =
     templateType === 'business' ||
@@ -100,6 +101,8 @@ export default function DocumentTemplate({
             doc_stamps_amount: numDocStamps,
             total_amount: totalAmount,
             payment_date: issuedDate,
+            is_variable_fee: isDependsOnClaim,
+            isDependsOnClaim: isDependsOnClaim,
           },
         }}
         logoUrl={finalLogoUrl}

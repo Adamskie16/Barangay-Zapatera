@@ -58,6 +58,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
   const [fee, setFee] = useState(0);
   const [docStamps, setDocStamps] = useState(30);
   const [orNumber, setOrNumber] = useState('');
+  const [isDependsOnClaim, setIsDependsOnClaim] = useState(false);
 
   // Business Clearance Template State
   const [templateType, setTemplateType] = useState('standard'); // 'standard' | 'business'
@@ -211,10 +212,12 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
       // Purpose stays empty, wait for user to input or click it
       const isBiz = tmpl.templateType === 'business' || key === 'businessClearance';
       setTemplateType(isBiz ? 'business' : 'standard');
-      const tmplFee = Number(tmpl.defaultFee) || 0;
+      const isVar = Boolean(tmpl.is_variable_fee || tmpl.isVariableFee || isBiz);
+      setIsDependsOnClaim(isVar);
+      const tmplFee = Number(tmpl.defaultFee) || (isBiz ? 500 : 0);
       setFee(tmplFee);
       setDocStamps(Number(tmpl.docStamps) || 30);
-      if (tmplFee > 0 && !orNumber) {
+      if ((tmplFee > 0 || isVar) && !orNumber) {
         setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
       }
     }
@@ -242,20 +245,29 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
     const docTitle = (found.template_title || found.title || found.name || '').toUpperCase();
     setDocumentTitle(docTitle);
 
-    const isVar = Boolean(found.is_variable_fee || found.fee_type === 'variable');
-    const catalogFee = isVar ? 0 : (Number(found.fee) || 0);
-    setFee(catalogFee);
-    setDocStamps(Number(found.doc_stamps) || 30);
-    if (catalogFee > 0 && !orNumber) {
-      setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
-    }
-
     const isBiz =
       found.template_type === 'business' ||
       found.code?.toLowerCase().includes('bus') ||
       docTitle?.toLowerCase().includes('business') ||
       found.title?.toLowerCase().includes('business');
     setTemplateType(isBiz ? 'business' : 'standard');
+
+    // Check if template is depends on claim / variable fee
+    const isVar = Boolean(
+      found.is_variable_fee ||
+      found.fee_type === 'variable' ||
+      isBiz
+    );
+    setIsDependsOnClaim(isVar);
+
+    const catalogFee = isVar
+      ? (Number(found.fee) > 0 ? Number(found.fee) : (isBiz ? 500 : 0))
+      : (Number(found.fee) || 0);
+    setFee(catalogFee);
+    setDocStamps(Number(found.doc_stamps) || 30);
+    if ((catalogFee > 0 || isVar) && !orNumber) {
+      setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    }
 
     if (found.template_body) {
       setBodyText(found.template_body);
@@ -386,7 +398,9 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
               </span>
             </label>
             <span className="text-[11px] font-medium text-slate-500 hidden sm:inline-block">
-              {fee > 0 ? (
+              {isDependsOnClaim ? (
+                <span className="text-amber-700 font-bold">● Depends on Claim (O.R. Breakdown enabled in Live A4)</span>
+              ) : fee > 0 ? (
                 <span className="text-emerald-700 font-bold">● Paid Service (O.R. Breakdown enabled in Live A4)</span>
               ) : (
                 <span className="text-slate-600 font-bold">● Free Service (Clean Live A4 layout)</span>
@@ -662,8 +676,8 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
             </div>
           )}
 
-          {/* CARD C: Fee Assessment & Official Receipt (O.R.) Settings (Only shown when template has a fee) */}
-          {Number(fee) > 0 && (
+          {/* CARD C: Fee Assessment & Official Receipt (O.R.) Settings (Shown when template has a fee OR depends on claim) */}
+          {(Number(fee) > 0 || isDependsOnClaim) && (
             <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs animate-in fade-in duration-200">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -679,9 +693,15 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Paid (₱{Number(fee).toFixed(2)})
-                </span>
+                {isDependsOnClaim ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                    Depends on Claim (₱{Number(fee).toFixed(2)})
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Paid (₱{Number(fee).toFixed(2)})
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -939,6 +959,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                 fee={fee}
                 docStamps={docStamps}
                 orNumber={orNumber}
+                isDependsOnClaim={isDependsOnClaim}
                 templateType={templateType}
                 businessName={businessName}
                 permittee={permittee}
