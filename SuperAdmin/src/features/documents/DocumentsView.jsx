@@ -584,9 +584,13 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </span>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-extrabold tracking-tight">6 Templates</p>
+            <p className="text-3xl font-extrabold tracking-tight">
+              {Object.keys(documentTemplates).length} Templates
+            </p>
             <p className="text-xs font-semibold text-white/90 mt-1">Official A4 Layouts</p>
-            <p className="text-[11px] text-white/75 mt-1">Clearance, Certification, Residency, Indigency, Jobseeker</p>
+            <p className="text-[11px] text-white/75 mt-1">
+              Clearance, Certification, Residency, Indigency, Jobseeker, Business
+            </p>
           </div>
         </div>
 
