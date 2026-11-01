@@ -37,6 +37,7 @@ import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import DocumentManagement from './DocumentManagement';
 import ActionModal from '../../components/ActionModal';
 import DocumentTemplate from './DocumentTemplate';
+import { documentTemplates } from './documentTemplates';
 
 export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode, config = {} }) {
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'info'
