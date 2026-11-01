@@ -300,16 +300,6 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
 
   const currentTemplateConfig = documentTemplates[selectedTemplateKey] || documentTemplates.barangayCertification;
 
-  const templateMeta = {
-    barangayCertification: { badge: 'General Cert', subtitle: 'Residency & general legal purposes' },
-    barangayClearance: { badge: 'Clearance', subtitle: 'Good moral & derogatory record check' },
-    certificateOfResidency: { badge: 'Residency', subtitle: 'Proof of barangay residence' },
-    certificateOfGoodMoralCharacter: { badge: 'Good Moral', subtitle: 'Character & community standing' },
-    certificateOfIndigency: { badge: 'Indigency', subtitle: 'Medical, scholarship & financial aid' },
-    firstTimeJobseeker: { badge: 'Jobseeker', subtitle: 'RA 11261 First Time Jobseekers Act' },
-    businessClearance: { badge: 'Business', subtitle: 'Commercial & permit operations' },
-  };
-
   const handleResetCurrentTemplate = () => {
     const tmpl = documentTemplates[selectedTemplateKey];
     if (tmpl) {
@@ -333,7 +323,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                 Step 1 — Choose Official Certificate Template
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
-                Select from the Service Catalog dropbox or click a standard preset template below
+                Select an official certificate or clearance template from the dropbox to generate
               </p>
             </div>
           </div>
@@ -375,14 +365,14 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
           </div>
         </div>
 
-        {/* PRIMARY SERVICE CATALOG TEMPLATE DROPBOX (Prominent Dropdown) */}
-        <div className="bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/50 border-2 border-blue-200/80 rounded-2xl p-3.5 sm:p-4 space-y-2 shadow-xs">
+        {/* PRIMARY SERVICE CATALOG TEMPLATE DROPBOX ONLY */}
+        <div className="bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/50 border-2 border-blue-200/80 rounded-2xl p-4 space-y-2 shadow-xs">
           <div className="flex items-center justify-between">
             <label className="text-xs font-extrabold uppercase tracking-wide text-slate-900 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-[#3b5bfd] animate-pulse"></span>
-              <span>Available Templates from Service Catalog</span>
+              <span>Select Certificate / Clearance Template</span>
               <span className="px-2 py-0.5 rounded-full bg-blue-100 text-[#3b5bfd] text-[10px] font-mono">
-                {docTypes.length} Available
+                {docTypes.length > 0 ? `${docTypes.length} Available` : 'Standard Templates'}
               </span>
             </label>
             <span className="text-[11px] font-medium text-slate-500 hidden sm:inline-block">
@@ -398,70 +388,36 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
             <select
               value={selectedCatalogCode}
               onChange={handleSelectFromCatalog}
-              className="w-full px-4 py-2.5 text-xs sm:text-sm font-bold bg-white border border-slate-300 rounded-xl text-slate-800 shadow-sm focus:ring-2 focus:ring-[#3b5bfd]/30 focus:border-[#3b5bfd] outline-none cursor-pointer"
+              className="w-full px-4 py-3 text-xs sm:text-sm font-bold bg-white border border-slate-300 rounded-xl text-slate-800 shadow-sm focus:ring-2 focus:ring-[#3b5bfd]/30 focus:border-[#3b5bfd] outline-none cursor-pointer"
             >
-              <option value="" disabled>-- Select a Template from Service Catalog Dropbox --</option>
-              {docTypes.map((dt) => {
-                const code = dt.code || dt.id;
-                const feeLabel = (dt.is_variable_fee || dt.fee_type === 'variable')
-                  ? 'Depends on Claim'
-                  : dt.fee > 0
-                  ? `₱${Number(dt.fee).toFixed(2)}`
-                  : 'FREE / Exempt';
-                return (
-                  <option key={code} value={code}>
-                    {dt.code ? `[${dt.code}] ` : ''}{dt.title || dt.name} • {feeLabel}
-                  </option>
-                );
-              })}
+              <option value="" disabled>-- Select a Template from Dropbox --</option>
+              {docTypes && docTypes.length > 0 ? (
+                docTypes.map((dt) => {
+                  const code = dt.code || dt.id;
+                  const feeLabel = (dt.is_variable_fee || dt.fee_type === 'variable')
+                    ? 'Depends on Claim'
+                    : dt.fee > 0
+                    ? `₱${Number(dt.fee).toFixed(2)}`
+                    : 'FREE / Exempt';
+                  return (
+                    <option key={code} value={code}>
+                      {dt.code ? `[${dt.code}] ` : ''}{dt.title || dt.name} • {feeLabel}
+                    </option>
+                  );
+                })
+              ) : (
+                templateKeys.map((k) => {
+                  const tmpl = documentTemplates[k];
+                  const feeLabel = tmpl.defaultFee ? `₱${Number(tmpl.defaultFee).toFixed(2)}` : 'FREE / Exempt';
+                  return (
+                    <option key={k} value={`preset:${k}`}>
+                      [{tmpl.code}] {tmpl.title} • {feeLabel}
+                    </option>
+                  );
+                })
+              )}
             </select>
           </div>
-        </div>
-
-        {/* Quick Presets Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-1">
-          {templateKeys.map((k) => {
-            const tmpl = documentTemplates[k];
-            const meta = templateMeta[k] || { badge: 'Official', subtitle: 'Standard barangay certificate' };
-            const isActive = selectedTemplateKey === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => handleSelectTemplate(k)}
-                className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
-                  isActive
-                    ? 'border-[#3b5bfd] bg-gradient-to-br from-[#3b5bfd] to-[#2563eb] text-white shadow-md shadow-blue-500/20'
-                    : 'border-slate-200/70 bg-[#f4f7fb] hover:bg-white hover:border-blue-200 text-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-white text-[#3b5bfd] border border-blue-100'
-                    }`}
-                  >
-                    {meta.badge}
-                  </span>
-                  {isActive ? (
-                    <span className="w-4 h-4 rounded-full bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs">
-                      <Check size={10} className="stroke-[3]" />
-                    </span>
-                  ) : (
-                    <FileText size={12} className="text-slate-400" />
-                  )}
-                </div>
-                <div>
-                  <p className={`text-[11px] font-extrabold truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
-                    {tmpl.title}
-                  </p>
-                  <p className={`text-[9px] truncate ${isActive ? 'text-white/80' : 'text-slate-400 font-medium'}`}>
-                    {meta.subtitle}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
         </div>
       </div>
 
