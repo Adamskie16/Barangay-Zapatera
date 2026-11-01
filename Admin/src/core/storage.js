@@ -167,8 +167,30 @@ export const StorageService = {
           .order('title', { ascending: true });
 
         if (!error && data && data.length > 0) {
-          localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(data));
-          return data;
+          const formatted = data.map((d) => ({
+            id: d.id,
+            code: d.code,
+            title: d.title,
+            description: d.description || '',
+            fee: Number(d.fee) || 0,
+            fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
+            is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
+            processing_days: Number(d.processing_days) || 1,
+            requirements: Array.isArray(d.requirements)
+              ? d.requirements
+              : typeof d.requirements === 'string'
+              ? JSON.parse(d.requirements || '[]')
+              : [],
+            is_active: d.is_active !== false,
+            template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+            template_title: d.template_title || d.title || '',
+            template_body: d.template_body || '',
+            doc_stamps: Number(d.doc_stamps) || 30,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+          }));
+          localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(formatted));
+          return formatted;
         }
       }
     } catch {
@@ -177,15 +199,32 @@ export const StorageService = {
     return StorageService.getDocTypes();
   },
 
-  saveDocType: async (docType) => {
+  saveDocType: async (docType, adminActor) => {
     const docTypes = StorageService.getDocTypes();
-    const existingIndex = docTypes.findIndex((d) => d.id === docType.id || d.code === docType.code);
-    let saved = { ...docType };
+    const existingIndex = docTypes.findIndex((d) => 
+      (docType.id && d.id === docType.id) || 
+      (d.code && docType.code && d.code.toLowerCase().trim() === docType.code.toLowerCase().trim())
+    );
+    let saved = {
+      ...docType,
+      fee: Number(docType.fee) || 0,
+      fee_type: docType.fee_type || (docType.is_variable_fee ? 'variable' : 'fixed'),
+      is_variable_fee: Boolean(docType.is_variable_fee || docType.fee_type === 'variable'),
+      processing_days: Number(docType.processing_days) || 1,
+      requirements: Array.isArray(docType.requirements) ? docType.requirements : [],
+      is_active: docType.is_active !== false,
+      template_type: docType.template_type || (docType.code?.toLowerCase().includes('bus') || docType.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+      template_title: docType.template_title || docType.title || '',
+      template_body: docType.template_body || '',
+      doc_stamps: Number(docType.doc_stamps) || 30,
+      updated_at: new Date().toISOString(),
+    };
 
     if (existingIndex >= 0) {
-      docTypes[existingIndex] = { ...docTypes[existingIndex], ...docType };
+      docTypes[existingIndex] = { ...docTypes[existingIndex], ...saved };
       saved = docTypes[existingIndex];
     } else {
+      saved.id = saved.id || `dt-${Date.now()}`;
       saved.created_at = new Date().toISOString();
       docTypes.push(saved);
     }
@@ -204,29 +243,66 @@ export const StorageService = {
           processing_days: parseInt(saved.processing_days) || 1,
           requirements: Array.isArray(saved.requirements) ? saved.requirements : [],
           is_active: saved.is_active !== false,
+          template_type: saved.template_type || 'standard',
+          template_title: saved.template_title || saved.title || '',
+          template_body: saved.template_body || '',
+          doc_stamps: parseFloat(saved.doc_stamps) || 30.00,
           updated_at: new Date().toISOString(),
         };
         if (isUuid) {
           payload.id = saved.id;
         }
-        const { error } = await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+        const { data: upsertedData, error } = await supabase
+          .from('document_types')
+          .upsert(payload, { onConflict: 'code' })
+          .select();
+
         if (error) {
-          // Retry without fee_type and is_variable_fee in case table migration is pending
           delete payload.fee_type;
           delete payload.is_variable_fee;
-          await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+          delete payload.template_type;
+          delete payload.template_title;
+          delete payload.template_body;
+          delete payload.doc_stamps;
+          const { data: retryData } = await supabase
+            .from('document_types')
+            .upsert(payload, { onConflict: 'code' })
+            .select();
+          if (retryData && retryData[0]) {
+            saved = { ...saved, ...retryData[0] };
+          }
+        } else if (upsertedData && upsertedData[0]) {
+          saved = { ...saved, ...upsertedData[0] };
         }
       }
-    } catch {
-      // handled
+    } catch (err) {
+      console.warn('Error saving document type:', err);
+    }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({ type: 'DOCUMENT_TYPES_UPDATED', docType: saved });
+        bc.close();
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_doctypes_updated', { detail: saved }));
     }
 
     return saved;
   },
 
-  deleteDocType: async (docTypeId) => {
+  deleteDocType: async (docTypeId, adminActor) => {
     let docTypes = StorageService.getDocTypes();
-    docTypes = docTypes.filter((d) => d.id !== docTypeId);
+    const target = docTypes.find((d) => 
+      d.id === docTypeId || 
+      (d.code && String(docTypeId) && d.code.toLowerCase().trim() === String(docTypeId).toLowerCase().trim())
+    );
+    docTypes = docTypes.filter((d) => 
+      d.id !== docTypeId && 
+      (!target || d.code !== target.code)
+    );
     localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
 
     try {
@@ -234,10 +310,25 @@ export const StorageService = {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docTypeId);
         if (isUuid) {
           await supabase.from('document_types').delete().eq('id', docTypeId);
+        } else if (target && target.code) {
+          await supabase.from('document_types').delete().eq('code', target.code);
+        } else {
+          await supabase.from('document_types').delete().eq('code', docTypeId);
         }
       }
-    } catch {
-      // handled
+    } catch (err) {
+      console.warn('Error deleting document type:', err);
+    }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({ type: 'DOCUMENT_TYPES_UPDATED', deletedId: docTypeId });
+        bc.close();
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_doctypes_updated', { detail: { deletedId: docTypeId } }));
     }
   },
 

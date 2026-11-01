@@ -235,7 +235,7 @@ export interface ResidentNotification {
   user_id: string;
   title: string;
   message: string;
-  type: 'status_update' | 'ready_pickup' | 'rejected' | 'announcement' | 'security' | 'system';
+  type: 'status_update' | 'ready_pickup' | 'rejected' | 'announcement' | 'warning' | 'emergency' | 'security' | 'system' | (string & {});
   is_read: boolean;
   link_tab?: 'home' | 'documents' | 'requests' | 'announcements' | 'profile';
   link_id?: string;

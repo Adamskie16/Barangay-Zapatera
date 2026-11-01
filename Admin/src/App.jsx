@@ -185,8 +185,23 @@ export default function App() {
       });
     };
 
-    window.addEventListener('storage', handleConfigUpdate);
+    const handleDocTypesUpdate = () => {
+      StorageService.getDocTypesAsync().then((newDocs) => {
+        if (newDocs) setDocTypes(newDocs);
+      });
+    };
+
     window.addEventListener('zapatera_config_updated', handleConfigUpdate);
+    window.addEventListener('zapatera_doctypes_updated', handleDocTypesUpdate);
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'zapatera_config_db') {
+        handleConfigUpdate();
+      } else if (e.key === 'zapatera_doc_types_db') {
+        handleDocTypesUpdate();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
 
     // Live update when avatar/profile changes
     const handleUserUpdated = (e) => {
@@ -216,6 +231,8 @@ export default function App() {
           refreshState();
         } else if (event.data?.type === 'DOCUMENT_REQUEST_UPDATED') {
           refreshState();
+        } else if (event.data?.type === 'DOCUMENT_TYPES_UPDATED') {
+          handleDocTypesUpdate();
         }
       };
     }
@@ -238,8 +255,9 @@ export default function App() {
     window.addEventListener('storage', handleStorageDeleted);
 
     return () => {
-      window.removeEventListener('storage', handleConfigUpdate);
       window.removeEventListener('zapatera_config_updated', handleConfigUpdate);
+      window.removeEventListener('zapatera_doctypes_updated', handleDocTypesUpdate);
+      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('zapatera_user_updated', handleUserUpdated);
       window.removeEventListener('storage', handleStorageDeleted);
       if (bc) bc.close();

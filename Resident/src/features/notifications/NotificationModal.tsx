@@ -64,7 +64,7 @@ export default function NotificationModal({
   const isBulletinNotif = (n: ResidentNotification) =>
     n.type === 'announcement' ||
     n.type === 'warning' ||
-    (n.type as string) === 'emergency' ||
+    n.type === 'emergency' ||
     n.link_tab === 'announcements';
 
   const requestsCount = useMemo(

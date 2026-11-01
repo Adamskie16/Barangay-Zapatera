@@ -218,7 +218,7 @@ export const StorageService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.DOC_TYPES) || '[]');
     } catch {
-      return INITIAL_DOC_TYPES;
+      return [];
     }
   },
 
@@ -235,16 +235,23 @@ export const StorageService = {
             id: d.id,
             code: d.code,
             title: d.title,
-            description: d.description,
+            description: d.description || '',
             fee: Number(d.fee) || 0,
+            fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
+            is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
             processing_days: Number(d.processing_days) || 1,
             requirements: Array.isArray(d.requirements)
               ? d.requirements
               : typeof d.requirements === 'string'
-              ? JSON.parse(d.requirements)
+              ? JSON.parse(d.requirements || '[]')
               : [],
             is_active: d.is_active !== false,
+            template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+            template_title: d.template_title || d.title || '',
+            template_body: d.template_body || '',
+            doc_stamps: Number(d.doc_stamps) || 30,
             created_at: d.created_at,
+            updated_at: d.updated_at,
           }));
           localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(formatted));
           return formatted;
@@ -258,11 +265,27 @@ export const StorageService = {
 
   saveDocType: async (docType, adminActor) => {
     const docTypes = StorageService.getDocTypes();
-    const existingIndex = docTypes.findIndex((d) => d.id === docType.id || d.code === docType.code);
-    let updatedDoc = { ...docType };
+    const existingIndex = docTypes.findIndex((d) => 
+      (docType.id && d.id === docType.id) || 
+      (d.code && docType.code && d.code.toLowerCase().trim() === docType.code.toLowerCase().trim())
+    );
+    let updatedDoc = {
+      ...docType,
+      fee: Number(docType.fee) || 0,
+      fee_type: docType.fee_type || (docType.is_variable_fee ? 'variable' : 'fixed'),
+      is_variable_fee: Boolean(docType.is_variable_fee || docType.fee_type === 'variable'),
+      processing_days: Number(docType.processing_days) || 1,
+      requirements: Array.isArray(docType.requirements) ? docType.requirements : [],
+      is_active: docType.is_active !== false,
+      template_type: docType.template_type || (docType.code?.toLowerCase().includes('bus') || docType.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+      template_title: docType.template_title || docType.title || '',
+      template_body: docType.template_body || '',
+      doc_stamps: Number(docType.doc_stamps) || 30,
+      updated_at: new Date().toISOString(),
+    };
 
     if (existingIndex >= 0) {
-      docTypes[existingIndex] = { ...docTypes[existingIndex], ...docType };
+      docTypes[existingIndex] = { ...docTypes[existingIndex], ...updatedDoc };
       updatedDoc = docTypes[existingIndex];
     } else {
       updatedDoc.id = updatedDoc.id || `dt-${Date.now()}`;
@@ -284,21 +307,52 @@ export const StorageService = {
           processing_days: parseInt(updatedDoc.processing_days) || 1,
           requirements: Array.isArray(updatedDoc.requirements) ? updatedDoc.requirements : [],
           is_active: updatedDoc.is_active !== false,
+          template_type: updatedDoc.template_type || 'standard',
+          template_title: updatedDoc.template_title || updatedDoc.title || '',
+          template_body: updatedDoc.template_body || '',
+          doc_stamps: parseFloat(updatedDoc.doc_stamps) || 30.00,
           updated_at: new Date().toISOString(),
         };
 
         if (isUuid) {
           payload.id = updatedDoc.id;
         }
-        const { error } = await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+        const { data: upsertedData, error } = await supabase
+          .from('document_types')
+          .upsert(payload, { onConflict: 'code' })
+          .select();
+
         if (error) {
           delete payload.fee_type;
           delete payload.is_variable_fee;
-          await supabase.from('document_types').upsert(payload, { onConflict: 'code' });
+          delete payload.template_type;
+          delete payload.template_title;
+          delete payload.template_body;
+          delete payload.doc_stamps;
+          const { data: retryData } = await supabase
+            .from('document_types')
+            .upsert(payload, { onConflict: 'code' })
+            .select();
+          if (retryData && retryData[0]) {
+            updatedDoc = { ...updatedDoc, ...retryData[0] };
+          }
+        } else if (upsertedData && upsertedData[0]) {
+          updatedDoc = { ...updatedDoc, ...upsertedData[0] };
         }
       }
-    } catch {
-      // Handled
+    } catch (err) {
+      console.warn('Error saving document type in SuperAdmin:', err);
+    }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({ type: 'DOCUMENT_TYPES_UPDATED', docType: updatedDoc });
+        bc.close();
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_doctypes_updated', { detail: updatedDoc }));
     }
 
     StorageService.addLog({
@@ -314,8 +368,14 @@ export const StorageService = {
 
   deleteDocType: async (docTypeId, adminActor) => {
     let docTypes = StorageService.getDocTypes();
-    const target = docTypes.find((d) => d.id === docTypeId);
-    docTypes = docTypes.filter((d) => d.id !== docTypeId);
+    const target = docTypes.find((d) => 
+      d.id === docTypeId || 
+      (d.code && String(docTypeId) && d.code.toLowerCase().trim() === String(docTypeId).toLowerCase().trim())
+    );
+    docTypes = docTypes.filter((d) => 
+      d.id !== docTypeId && 
+      (!target || d.code !== target.code)
+    );
     localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
 
     try {
@@ -325,10 +385,23 @@ export const StorageService = {
           await supabase.from('document_types').delete().eq('id', docTypeId);
         } else if (target && target.code) {
           await supabase.from('document_types').delete().eq('code', target.code);
+        } else {
+          await supabase.from('document_types').delete().eq('code', docTypeId);
         }
       }
-    } catch {
-      // Handled
+    } catch (err) {
+      console.warn('Error deleting document type in SuperAdmin:', err);
+    }
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({ type: 'DOCUMENT_TYPES_UPDATED', deletedId: docTypeId });
+        bc.close();
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('zapatera_doctypes_updated', { detail: { deletedId: docTypeId } }));
     }
 
     StorageService.addLog({

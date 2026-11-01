@@ -9,24 +9,30 @@ import {
   RefreshCw,
   Calendar,
   MapPin,
-  HelpCircle,
   RotateCcw,
   Sparkles,
   Phone,
   Clock,
   Cake,
+  Sliders,
+  DollarSign,
+  Building,
+  Building2,
+  Hash,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { documentTemplates, formatIssuedDateOrdinal, formatResidentName } from './documentTemplates';
 import DocumentTemplate from './DocumentTemplate';
+import BusinessPermitModal from './BusinessPermitModal';
 
-export default function DocumentManagement({ docTypes = [], config = {} }) {
+export default function DocumentManagement({ docTypes = [], config = {}, onNavigateToCatalog }) {
   const currentConfig = config && Object.keys(config).length > 0 ? config : StorageService.getConfig();
 
   // 1. Template selection state
   const templateKeys = Object.keys(documentTemplates);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('barangayCertification');
+  const [selectedCatalogCode, setSelectedCatalogCode] = useState('');
   
   // 2. Certificate Template
   const [documentTitle, setDocumentTitle] = useState(documentTemplates.barangayCertification.title);
@@ -43,19 +49,56 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
     const dd = String(today.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   });
-  const [issuedLocation, setIssuedLocation] = useState('Barangay Zapatera, Cebu City, Philippines');
+  const [issuedLocation, setIssuedLocation] = useState('Barangay Zapatera, Cebu City');
   const [bodyText, setBodyText] = useState(documentTemplates.barangayCertification.defaultBody);
-  const [signatoryName, setSignatoryName] = useState(currentConfig?.punong_barangay || currentConfig?.signatory_name || 'HON. DAVID M. AGRAVANTE');
+  const [signatoryName, setSignatoryName] = useState(currentConfig?.punong_barangay || currentConfig?.captainName || currentConfig?.signatory_name || 'HON. DAVID M. AGRAVANTE');
   const [signatoryTitle, setSignatoryTitle] = useState(currentConfig?.signatory_title || 'Punong Barangay');
 
+  // Fee & Payment Breakdown State (matches user reference photo)
+  const [fee, setFee] = useState(0);
+  const [docStamps, setDocStamps] = useState(30);
+  const [orNumber, setOrNumber] = useState('');
+
+  // Business Clearance Template State
+  const [templateType, setTemplateType] = useState('standard'); // 'standard' | 'business'
+  const [businessName, setBusinessName] = useState('');
+  const [permittee, setPermittee] = useState('');
+  const [natureOfBusiness, setNatureOfBusiness] = useState('');
+  const [capitalInvested, setCapitalInvested] = useState('1,290,000.00');
+  const [grossSales, setGrossSales] = useState('300,000.00');
+  const [showBusinessPermitModal, setShowBusinessPermitModal] = useState(false);
+
   useEffect(() => {
-    if (currentConfig?.punong_barangay || currentConfig?.signatory_name) {
-      setSignatoryName(currentConfig.punong_barangay || currentConfig.signatory_name);
+    if (currentConfig?.punong_barangay || currentConfig?.captainName || currentConfig?.signatory_name) {
+      setSignatoryName(currentConfig.punong_barangay || currentConfig.captainName || currentConfig.signatory_name);
     }
     if (currentConfig?.signatory_title) {
       setSignatoryTitle(currentConfig.signatory_title);
     }
   }, [currentConfig]);
+
+  // Fetch dynamic signatory from system configuration in Supabase
+  useEffect(() => {
+    StorageService.getConfigAsync().then((cfg) => {
+      if (cfg) {
+        const fetchedName = cfg.punong_barangay || cfg.captainName || cfg.signatory_name;
+        if (fetchedName) setSignatoryName(fetchedName);
+        if (cfg.signatory_title) setSignatoryTitle(cfg.signatory_title);
+      }
+    });
+
+    const handleConfigChange = () => {
+      const cfg = StorageService.getConfig();
+      if (cfg) {
+        const updatedName = cfg.punong_barangay || cfg.captainName || cfg.signatory_name;
+        if (updatedName) setSignatoryName(updatedName);
+        if (cfg.signatory_title) setSignatoryTitle(cfg.signatory_title);
+      }
+    };
+
+    window.addEventListener('zapatera_config_updated', handleConfigChange);
+    return () => window.removeEventListener('zapatera_config_updated', handleConfigChange);
+  }, []);
 
   // 3. Supabase Residents State
   const [residents, setResidents] = useState([]);
@@ -71,7 +114,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
 
     try {
       if (isSupabaseConfigured()) {
-        const { data: profileData, error: profileErr } = await supabase
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .order('full_name', { ascending: true });
@@ -88,13 +131,38 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                 `${p.first_name || ''} ${p.last_name || ''}`.trim() ||
                 p.email ||
                 '';
+              const rawDob =
+                p.birth_date ||
+                p.birthdate ||
+                p.date_of_birth ||
+                p.dob ||
+                p.birthday ||
+                p.resident_birth_date ||
+                '';
+              let formattedDob = '';
+              if (rawDob) {
+                const s = String(rawDob).trim();
+                if (s.includes('T')) {
+                  formattedDob = s.split('T')[0];
+                } else if (s.includes('/')) {
+                  const parts = s.split('/');
+                  if (parts.length === 3 && parts[2].length === 4) {
+                    formattedDob = `${parts[2]}-${String(parts[0]).padStart(2, '0')}-${String(parts[1]).padStart(2, '0')}`;
+                  } else {
+                    formattedDob = s;
+                  }
+                } else {
+                  formattedDob = s;
+                }
+              }
+
               if (fullName) {
                 fetched.push({
                   id: p.id,
                   fullName,
                   email: p.email || '',
                   address: p.address || p.purok || 'Barangay Zapatera, Cebu City',
-                  dateOfBirth: p.date_of_birth || p.birthdate || p.dob || p.birthday || '',
+                  dateOfBirth: formattedDob,
                   contactNo: p.phone || p.contact_no || p.contact_number || p.mobile || '',
                   yearsInBarangay:
                     p.years_in_barangay ||
@@ -133,7 +201,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle template selection
+  // Handle template selection from preset ribbon
   const handleSelectTemplate = (key) => {
     setSelectedTemplateKey(key);
     const tmpl = documentTemplates[key];
@@ -141,6 +209,62 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
       setDocumentTitle(tmpl.title);
       setBodyText(tmpl.defaultBody);
       setPurpose(tmpl.defaultPurpose);
+      const isBiz = tmpl.templateType === 'business' || key === 'businessClearance';
+      setTemplateType(isBiz ? 'business' : 'standard');
+      const tmplFee = Number(tmpl.defaultFee) || 0;
+      setFee(tmplFee);
+      setDocStamps(Number(tmpl.docStamps) || 30);
+      if (tmplFee > 0 && !orNumber) {
+        setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+      }
+    }
+  };
+
+  // Handle template selection from Service Catalog DROPBOX (Requested Feature)
+  const handleSelectFromCatalog = (e) => {
+    const val = e.target.value;
+    setSelectedCatalogCode(val);
+    const found = docTypes.find((d) => (d.code || d.id) === val);
+    if (!found) return;
+
+    const docTitle = (found.template_title || found.title || found.name || '').toUpperCase();
+    setDocumentTitle(docTitle);
+
+    const isVar = Boolean(found.is_variable_fee || found.fee_type === 'variable');
+    const catalogFee = isVar ? 0 : (Number(found.fee) || 0);
+    setFee(catalogFee);
+    setDocStamps(Number(found.doc_stamps) || 30);
+    if (catalogFee > 0 && !orNumber) {
+      setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+    }
+
+    const isBiz =
+      found.template_type === 'business' ||
+      found.code?.toLowerCase().includes('bus') ||
+      docTitle?.toLowerCase().includes('business') ||
+      found.title?.toLowerCase().includes('business');
+    setTemplateType(isBiz ? 'business' : 'standard');
+
+    if (found.template_body) {
+      setBodyText(found.template_body);
+    } else if (found.description) {
+      setBodyText(found.description);
+    }
+
+    if (found.description) {
+      setPurpose(found.description);
+    }
+
+    // Match preset key if applicable
+    const matchingKey = Object.keys(documentTemplates).find((k) => {
+      const tmpl = documentTemplates[k];
+      return (
+        tmpl.code?.toLowerCase() === found.code?.toLowerCase() ||
+        tmpl.title?.toLowerCase() === docTitle?.toLowerCase()
+      );
+    });
+    if (matchingKey) {
+      setSelectedTemplateKey(matchingKey);
     }
   };
 
@@ -150,7 +274,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
     setName(formattedName);
     setResidentSearchInput(formattedName);
     if (res.address) setAddress(res.address);
-    if (res.dateOfBirth) setDateOfBirth(res.dateOfBirth);
+    setDateOfBirth(res.dateOfBirth || '');
     if (res.contactNo) setContactNo(res.contactNo);
     if (res.yearsInBarangay) setYearsInBarangay(res.yearsInBarangay);
     setShowResidentDropdown(false);
@@ -179,7 +303,10 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
   const templateMeta = {
     barangayCertification: { badge: 'General Cert', subtitle: 'Residency & general legal purposes' },
     barangayClearance: { badge: 'Clearance', subtitle: 'Good moral & derogatory record check' },
+    certificateOfResidency: { badge: 'Residency', subtitle: 'Proof of barangay residence' },
+    certificateOfGoodMoralCharacter: { badge: 'Good Moral', subtitle: 'Character & community standing' },
     certificateOfIndigency: { badge: 'Indigency', subtitle: 'Medical, scholarship & financial aid' },
+    firstTimeJobseeker: { badge: 'Jobseeker', subtitle: 'RA 11261 First Time Jobseekers Act' },
     businessClearance: { badge: 'Business', subtitle: 'Commercial & permit operations' },
   };
 
@@ -194,8 +321,8 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
 
   return (
     <div className="space-y-5 font-sans text-slate-800">
-      {/* 1. Horizontal 4-Card Official Template Selector Ribbon */}
-      <div className="bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100/80 shadow-xs space-y-3.5">
+      {/* 1. Official Template Selector Ribbon with Service Catalog Dropbox */}
+      <div className="bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
@@ -206,12 +333,36 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                 Step 1 — Choose Official Certificate Template
               </h3>
               <p className="text-[11px] text-slate-400 font-medium">
-                Select a preset A4 template below to auto-populate standard barangay legal wording
+                Select from the Service Catalog dropbox or click a standard preset template below
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setTemplateType('business');
+                setSelectedTemplateKey('businessClearance');
+                setShowBusinessPermitModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-full transition-all shadow-sm cursor-pointer active:scale-95"
+              title="Open Official Business Clearance Form Drawer / Quick Modal"
+            >
+              <Building2 size={13} />
+              <span>Business Clearance Drawer</span>
+            </button>
+            {onNavigateToCatalog && (
+              <button
+                type="button"
+                onClick={onNavigateToCatalog}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold text-[#3b5bfd] bg-blue-50 hover:bg-blue-100 rounded-full border border-blue-200/80 transition-colors cursor-pointer shadow-2xs"
+                title="View Document Service Catalog"
+              >
+                <Sliders size={12} />
+                <span>Service Catalog ({docTypes.length})</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleResetCurrentTemplate}
@@ -224,7 +375,51 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* PRIMARY SERVICE CATALOG TEMPLATE DROPBOX (Prominent Dropdown) */}
+        <div className="bg-gradient-to-r from-blue-50/70 via-slate-50 to-indigo-50/50 border-2 border-blue-200/80 rounded-2xl p-3.5 sm:p-4 space-y-2 shadow-xs">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-extrabold uppercase tracking-wide text-slate-900 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#3b5bfd] animate-pulse"></span>
+              <span>Available Templates from Service Catalog</span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-100 text-[#3b5bfd] text-[10px] font-mono">
+                {docTypes.length} Available
+              </span>
+            </label>
+            <span className="text-[11px] font-medium text-slate-500 hidden sm:inline-block">
+              {fee > 0 ? (
+                <span className="text-emerald-700 font-bold">● Paid Service (O.R. Breakdown enabled in Live A4)</span>
+              ) : (
+                <span className="text-slate-600 font-bold">● Free Service (Clean Live A4 layout)</span>
+              )}
+            </span>
+          </div>
+
+          <div className="relative">
+            <select
+              value={selectedCatalogCode}
+              onChange={handleSelectFromCatalog}
+              className="w-full px-4 py-2.5 text-xs sm:text-sm font-bold bg-white border border-slate-300 rounded-xl text-slate-800 shadow-sm focus:ring-2 focus:ring-[#3b5bfd]/30 focus:border-[#3b5bfd] outline-none cursor-pointer"
+            >
+              <option value="" disabled>-- Select a Template from Service Catalog Dropbox --</option>
+              {docTypes.map((dt) => {
+                const code = dt.code || dt.id;
+                const feeLabel = (dt.is_variable_fee || dt.fee_type === 'variable')
+                  ? 'Depends on Claim'
+                  : dt.fee > 0
+                  ? `₱${Number(dt.fee).toFixed(2)}`
+                  : 'FREE / Exempt';
+                return (
+                  <option key={code} value={code}>
+                    {dt.code ? `[${dt.code}] ` : ''}{dt.title || dt.name} • {feeLabel}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+
+        {/* Quick Presets Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-1">
           {templateKeys.map((k) => {
             const tmpl = documentTemplates[k];
             const meta = templateMeta[k] || { badge: 'Official', subtitle: 'Standard barangay certificate' };
@@ -234,7 +429,7 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                 key={k}
                 type="button"
                 onClick={() => handleSelectTemplate(k)}
-                className={`p-3.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                className={`p-3 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                   isActive
                     ? 'border-[#3b5bfd] bg-gradient-to-br from-[#3b5bfd] to-[#2563eb] text-white shadow-md shadow-blue-500/20'
                     : 'border-slate-200/70 bg-[#f4f7fb] hover:bg-white hover:border-blue-200 text-slate-800'
@@ -242,25 +437,25 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               >
                 <div className="flex items-center justify-between w-full">
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                       isActive ? 'bg-white/20 text-white' : 'bg-white text-[#3b5bfd] border border-blue-100'
                     }`}
                   >
                     {meta.badge}
                   </span>
                   {isActive ? (
-                    <span className="w-5 h-5 rounded-full bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs">
-                      <Check size={12} className="stroke-[3]" />
+                    <span className="w-4 h-4 rounded-full bg-white text-[#3b5bfd] flex items-center justify-center shadow-2xs">
+                      <Check size={10} className="stroke-[3]" />
                     </span>
                   ) : (
-                    <FileText size={14} className="text-slate-400" />
+                    <FileText size={12} className="text-slate-400" />
                   )}
                 </div>
                 <div>
-                  <p className={`text-xs font-extrabold truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                  <p className={`text-[11px] font-extrabold truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>
                     {tmpl.title}
                   </p>
-                  <p className={`text-[10px] truncate mt-0.5 ${isActive ? 'text-white/80' : 'text-slate-400 font-medium'}`}>
+                  <p className={`text-[9px] truncate ${isActive ? 'text-white/80' : 'text-slate-400 font-medium'}`}>
                     {meta.subtitle}
                   </p>
                 </div>
@@ -321,71 +516,61 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                     setResidentSearchInput(e.target.value);
                     setShowResidentDropdown(true);
                   }}
-                  onBlur={() => {
-                    if (name && name.includes(',')) {
-                      const formatted = formatResidentName(name);
-                      if (formatted) {
-                        setName(formatted);
-                        setResidentSearchInput(formatted);
-                      }
-                    }
-                  }}
                   onFocus={() => setShowResidentDropdown(true)}
-                  placeholder="Search registered resident or type full name..."
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-bold text-slate-900 transition-all"
+                  placeholder="Type name or select from directory..."
+                  className="w-full px-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
                 />
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <Search size={14} className="absolute right-3.5 top-3.5 text-slate-400" />
               </div>
 
-              {/* Resident Dropdown Selection */}
-              {showResidentDropdown && (
-                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100">
-                  {filteredResidents.length > 0 ? (
-                    filteredResidents.map((r) => (
-                      <div
-                        key={r.id || r.email || r.fullName}
-                        onClick={() => handleSelectResident(r)}
-                        className="p-2.5 text-xs hover:bg-blue-50/70 cursor-pointer flex items-center justify-between transition-colors"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900 truncate">{r.fullName}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{r.address}</p>
-                        </div>
-                        {r.fullName.toLowerCase() === name.toLowerCase() && (
-                          <Check size={14} className="text-[#3b5bfd] shrink-0 ml-2" />
-                        )}
+              {/* Autocomplete Resident Dropdown */}
+              {showResidentDropdown && filteredResidents.length > 0 && (
+                <div className="absolute z-30 left-0 right-0 mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100">
+                  {filteredResidents.slice(0, 8).map((res) => (
+                    <button
+                      key={res.id}
+                      type="button"
+                      onClick={() => handleSelectResident(res)}
+                      className="w-full px-4 py-2.5 text-left hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between group"
+                    >
+                      <div>
+                        <p className="font-extrabold text-xs text-slate-800 group-hover:text-[#3b5bfd]">
+                          {res.fullName}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[280px]">
+                          {res.address}
+                        </p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-3 text-[11px] text-slate-400 text-center">
-                      No matching registered resident found. You can type manually above.
-                    </div>
-                  )}
+                      <span className="text-[10px] font-bold text-[#3b5bfd] opacity-0 group-hover:opacity-100 transition-opacity">
+                        Select →
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Residential Address */}
+            {/* Address */}
             <div>
-              <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                <MapPin size={12} className="text-[#3b5bfd]" />
-                <span>Complete Residential Address</span>
+              <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <MapPin size={12} className="text-slate-400" />
+                <span>Sitio / Full Address</span>
               </label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g. 197 D. Jakosalem St., Zapatera, Cebu City"
-                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-medium transition-all"
+                placeholder="e.g. Sitio Zapatera Proper, Cebu City"
+                className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
               />
             </div>
 
-            {/* Date of Birth, Contact No, and Years in Barangay */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Date of Birth & Contact No (Auto-fetched & editable) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Cake size={12} className="text-[#3b5bfd]" />
-                  <span>Birthdate</span>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Cake size={12} className="text-slate-400" />
+                  <span>Date of Birth</span>
                 </label>
                 <input
                   type="date"
@@ -396,36 +581,212 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Phone size={12} className="text-[#3b5bfd]" />
-                  <span>Contact No.</span>
+                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Phone size={12} className="text-slate-400" />
+                  <span>Contact Number</span>
                 </label>
                 <input
                   type="text"
                   value={contactNo}
                   onChange={(e) => setContactNo(e.target.value)}
-                  placeholder="09171234567"
-                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-mono text-slate-900 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Clock size={12} className="text-[#3b5bfd]" />
-                  <span>Residency</span>
-                </label>
-                <input
-                  type="text"
-                  value={yearsInBarangay}
-                  onChange={(e) => setYearsInBarangay(e.target.value)}
-                  placeholder="e.g. 5 years"
-                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                  placeholder="0917-000-0000"
+                  className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-mono transition-all"
                 />
               </div>
             </div>
+
+            {/* Years in Barangay */}
+            <div>
+              <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Clock size={12} className="text-slate-400" />
+                <span>Years of Residency</span>
+              </label>
+              <input
+                type="text"
+                value={yearsInBarangay}
+                onChange={(e) => setYearsInBarangay(e.target.value)}
+                placeholder="e.g. 10 years / Since birth"
+                className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+              />
+            </div>
           </div>
 
-          {/* CARD B: Certificate Content & Signatory Settings */}
+          {/* CARD B: Business Entity Profile (Conditional for Business Clearance) */}
+          {templateType === 'business' && (
+            <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-blue-200/80 shadow-xs space-y-4 text-xs animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
+                    <Building size={14} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 uppercase tracking-wider text-xs">
+                      Business Entity Details
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      Commercial establishment data printed on Business Clearance
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#3b5bfd] border border-blue-100">
+                  Business Clearance
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Business Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                    className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold uppercase transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Permittee / Owner</label>
+                    <input
+                      type="text"
+                      value={permittee}
+                      onChange={(e) => setPermittee(e.target.value)}
+                      placeholder="e.g. Homer G. Cang"
+                      className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Nature of Business</label>
+                    <input
+                      type="text"
+                      value={natureOfBusiness}
+                      onChange={(e) => setNatureOfBusiness(e.target.value)}
+                      placeholder="e.g. Music Entertainment Services"
+                      className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Capital Invested (₱)</label>
+                    <input
+                      type="text"
+                      value={capitalInvested}
+                      onChange={(e) => setCapitalInvested(e.target.value)}
+                      placeholder="1,290,000.00"
+                      className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-mono font-semibold transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Gross Sales (₱)</label>
+                    <input
+                      type="text"
+                      value={grossSales}
+                      onChange={(e) => setGrossSales(e.target.value)}
+                      placeholder="300,000.00"
+                      className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-mono font-semibold transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CARD C: Fee Assessment & Official Receipt (O.R.) Settings */}
+          <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <DollarSign size={14} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 uppercase tracking-wider text-xs">
+                    Official Fee &amp; Payment Breakdown
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Controls the Official Receipt box printed on the Live A4 preview
+                  </p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                fee > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {fee > 0 ? `Paid (₱${Number(fee).toFixed(2)})` : 'FREE / Exempt'}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Processing Fee (₱) <span className="text-slate-400 font-normal">(0 = Free)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={fee}
+                    onChange={(e) => setFee(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Doc. Stamps (₱)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={docStamps}
+                    onChange={(e) => setDocStamps(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
+                  />
+                </div>
+              </div>
+
+              {fee > 0 ? (
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-emerald-950 text-[11px] flex items-center gap-1">
+                      <Hash size={12} className="text-emerald-700" />
+                      <span>Official Receipt (O.R.) No.</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`)}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Generate New O.R.
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={orNumber}
+                    onChange={(e) => setOrNumber(e.target.value)}
+                    placeholder="e.g. OR-2026-8492"
+                    className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl focus:outline-none text-slate-900 font-mono font-bold"
+                  />
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-900 pt-1 border-t border-emerald-200">
+                    <span>Total Assessed Amount:</span>
+                    <span className="font-black text-sm">₱{(Number(fee) + Number(docStamps)).toFixed(2)}</span>
+                  </div>
+                  <p className="text-[10px] text-emerald-700 italic">
+                    ✓ This fee breakdown is printed on the lower-left of the Live A4 document.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-500">
+                  <span className="font-bold text-slate-700">Free / Exempt Service:</span> The Live A4 preview will display cleanly without an Official Receipt (O.R.) payment box.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CARD D: Certificate Content & Legal Purpose */}
           <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -434,41 +795,40 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 uppercase tracking-wider text-xs">
-                    Step 3 — Certificate Details & Signatory
+                    Step 3 — Certificate Content
                   </h3>
                   <p className="text-[10px] text-slate-400 font-medium">
-                    Customize purpose, issuance date, body text, and official signatory
+                    Customize printed document title, purpose, and legal body
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Document Header Title */}
+            {/* Document Title Header */}
             <div>
               <label className="block font-bold text-slate-700 mb-1.5">
-                Certificate Heading Title
+                Printed Document Title
               </label>
               <input
                 type="text"
-                required
                 value={documentTitle}
                 onChange={(e) => setDocumentTitle(e.target.value.toUpperCase())}
-                placeholder="e.g. BARANGAY CERTIFICATION"
-                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-bold tracking-wide uppercase text-slate-900 transition-all"
+                placeholder="e.g. BARANGAY CLEARANCE"
+                className="w-full px-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-extrabold tracking-wide uppercase transition-all"
               />
             </div>
 
-            {/* Purpose + Quick Suggestion Pills */}
+            {/* Purpose */}
             <div>
               <label className="block font-bold text-slate-700 mb-1.5">
-                Issuance Purpose
+                Purpose of Clearance / Request
               </label>
               <input
                 type="text"
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
-                placeholder="e.g. Local Employment, Scholarship, Bank Requirement"
-                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] font-semibold text-slate-900 transition-all"
+                placeholder="e.g. Local Employment / Mayor's Business Permit"
+                className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all font-semibold"
               />
 
               {currentTemplateConfig.suggestedPurposes && (
@@ -480,8 +840,8 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                       onClick={() => setPurpose(p)}
                       className={`text-[10px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
                         purpose === p
-                          ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] font-bold shadow-2xs'
-                          : 'bg-[#f4f7fb] text-slate-600 border-slate-200/70 hover:bg-slate-200/70 font-medium'
+                          ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] font-bold'
+                          : 'bg-[#f4f7fb] text-slate-600 border-slate-200 hover:bg-slate-200/70'
                       }`}
                     >
                       {p}
@@ -491,122 +851,96 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
               )}
             </div>
 
-            {/* Issued Date & Location */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5 flex items-center gap-1">
-                  <Calendar size={12} className="text-[#3b5bfd]" />
-                  <span>Date Issued</span>
-                </label>
-                <input
-                  type="date"
-                  value={issuedDate}
-                  onChange={(e) => setIssuedDate(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">
-                  Place Issued
-                </label>
-                <input
-                  type="text"
-                  value={issuedLocation}
-                  onChange={(e) => setIssuedLocation(e.target.value)}
-                  placeholder="Barangay Zapatera, Cebu City"
-                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Ordinal Date Preview Pill */}
-            <div className="px-3.5 py-2.5 bg-blue-50/70 border border-blue-100 rounded-2xl text-[11px] text-blue-900 flex items-center justify-between">
-              <span className="font-bold text-[#3b5bfd]">Formatted Date on Certificate:</span>
-              <span className="font-serif italic font-semibold">{formatIssuedDateOrdinal(issuedDate)}</span>
-            </div>
-
-            {/* Certification Body Text */}
+            {/* Custom Body Text */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="font-bold text-slate-700">Certification Body Paragraph</label>
+                <label className="font-bold text-slate-700">
+                  Custom Legal Certification Body
+                </label>
                 <button
                   type="button"
                   onClick={() => setBodyText(currentTemplateConfig.defaultBody)}
-                  className="text-[10px] font-bold text-[#3b5bfd] hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                  className="text-[10px] font-bold text-[#3b5bfd] hover:underline cursor-pointer"
                 >
-                  <RotateCcw size={10} />
-                  <span>Restore Default Wording</span>
+                  Reset Default
                 </button>
               </div>
               <textarea
                 rows={3}
                 value={bodyText}
                 onChange={(e) => setBodyText(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 leading-relaxed text-xs transition-all"
+                placeholder="Standard certification clause..."
+                className="w-full p-3 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-800 leading-relaxed font-serif transition-all"
               />
             </div>
 
-            {/* Signatory Settings */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Signatory Name</label>
+            {/* Signatory Full Name & Title */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Official Document Signatory (From System Configuration)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   value={signatoryName}
                   onChange={(e) => setSignatoryName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
+                  placeholder="e.g. HON. DAVID M. AGRAVANTE"
+                  className="w-full px-3 py-2 text-xs bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none font-bold text-slate-900"
                 />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Signatory Title</label>
                 <input
                   type="text"
                   value={signatoryTitle}
                   onChange={(e) => setSignatoryTitle(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 transition-all"
+                  placeholder="e.g. Punong Barangay"
+                  className="w-full px-3 py-2 text-xs bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none font-medium text-slate-700"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Sticky Live A4 Print Studio (7 Cols) */}
-        <div className="xl:col-span-7 xl:sticky xl:top-4 bg-white rounded-[26px] p-4 sm:p-6 border border-slate-100/80 shadow-xs flex flex-col items-center justify-start overflow-hidden">
-          
-          {/* Studio Action Header Bar */}
-          <div className="w-full flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <div>
-                <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+        {/* RIGHT COLUMN: Sticky Real-Time Live A4 Print Preview Studio (7 Cols) */}
+        <div className="xl:col-span-7 bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 xl:sticky xl:top-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
                   Live A4 Print Preview
-                </h4>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  {documentTitle} • {name || 'Resident Applicant'}
-                </p>
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#3b5bfd] text-[10px] font-mono font-bold">
+                  210mm × 297mm (A4)
+                </span>
+                {fee > 0 ? (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                    Paid • O.R. Enabled
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                    Free / Exempt
+                  </span>
+                )}
               </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                Exact pixel &amp; print matching what will be printed at the Barangay Hall
+              </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Zoom Scale Pills */}
-              <div className="hidden sm:inline-flex items-center bg-[#f4f7fb] p-1 rounded-full border border-slate-200/70">
-                {[
-                  { label: '75%', value: 0.75 },
-                  { label: '85%', value: 0.85 },
-                  { label: '95%', value: 0.95 },
-                ].map((z) => (
+            <div className="flex items-center gap-3">
+              {/* Zoom Controls */}
+              <div className="flex items-center bg-[#f4f7fb] p-1 rounded-full border border-slate-200/80">
+                {[0.7, 0.85, 1.0].map((z) => (
                   <button
-                    key={z.label}
+                    key={z}
                     type="button"
-                    onClick={() => setPreviewZoom(z.value)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                      previewZoom === z.value
+                    onClick={() => setPreviewZoom(z)}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer ${
+                      previewZoom === z
                         ? 'bg-white text-[#3b5bfd] shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800'
+                        : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
-                    {z.label}
+                    {Math.round(z * 100)}%
                   </button>
                 ))}
               </div>
@@ -642,12 +976,75 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
                 signatoryName={signatoryName}
                 signatoryTitle={signatoryTitle}
                 config={currentConfig}
+                fee={fee}
+                docStamps={docStamps}
+                orNumber={orNumber}
+                templateType={templateType}
+                businessName={businessName}
+                permittee={permittee}
+                natureOfBusiness={natureOfBusiness}
+                capitalInvested={capitalInvested}
+                grossSales={grossSales}
               />
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* Business Clearance Quick Form Input Modal / Drawer */}
+      <BusinessPermitModal
+        isOpen={showBusinessPermitModal}
+        onClose={() => setShowBusinessPermitModal(false)}
+        initialData={{
+          business_name: businessName || 'HAGIAZO AUDIO PRODUCTIONS CO.',
+          permittee_name: permittee || name || 'Homer G. Cang',
+          business_address: address || 'Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City',
+          nature_of_business: natureOfBusiness || 'Music Entertainment Services',
+          contact_number: contactNo || '09173226058',
+          capital_invested: capitalInvested || '1,290,000.00',
+          gross_sales: grossSales || '300,000.00',
+          purpose: purpose || "the renewal of Mayor's Business Permit.",
+          issued_date: issuedDate || new Date().toISOString().split('T')[0],
+          punong_barangay_name: signatoryName,
+          punong_barangay_title: signatoryTitle,
+          payment: {
+            has_fee: fee > 0,
+            or_number: orNumber || 'OR-2026-8842',
+            fee_amount: Number(fee) || 500,
+            doc_stamps_amount: Number(docStamps) || 30,
+            total_amount: (Number(fee) || 0) + (Number(docStamps) || 0),
+            payment_date: issuedDate || new Date().toISOString().split('T')[0],
+          },
+        }}
+        onPrint={(permitData) => {
+          setBusinessName(permitData.business_name);
+          setPermittee(permitData.permittee_name);
+          setAddress(permitData.business_address);
+          setNatureOfBusiness(permitData.nature_of_business);
+          setContactNo(permitData.contact_number);
+          setCapitalInvested(String(permitData.capital_invested || ''));
+          setGrossSales(String(permitData.gross_sales || ''));
+          setPurpose(permitData.purpose || '');
+          setIssuedDate(permitData.issued_date);
+          if (permitData.punong_barangay_name) setSignatoryName(permitData.punong_barangay_name);
+          if (permitData.punong_barangay_title) setSignatoryTitle(permitData.punong_barangay_title);
+          if (permitData.payment) {
+            setFee(permitData.payment.has_fee ? (permitData.payment.fee_amount || 0) : 0);
+            setDocStamps(permitData.payment.doc_stamps_amount || 30);
+            setOrNumber(permitData.payment.or_number || '');
+          }
+          setTemplateType('business');
+          setSelectedTemplateKey('businessClearance');
+          setShowBusinessPermitModal(false);
+          setTimeout(() => {
+            window.print();
+          }, 150);
+        }}
+        residents={residents}
+        defaultSignatoryName={signatoryName}
+        defaultSignatoryTitle={signatoryTitle}
+      />
 
       {/* HIDDEN PRINT ROOT: Rendered ONLY when window.print() is executed */}
       <div id="printable-document-root" className="hidden print:block">
@@ -665,6 +1062,15 @@ export default function DocumentManagement({ docTypes = [], config = {} }) {
           signatoryName={signatoryName}
           signatoryTitle={signatoryTitle}
           config={currentConfig}
+          fee={fee}
+          docStamps={docStamps}
+          orNumber={orNumber}
+          templateType={templateType}
+          businessName={businessName}
+          permittee={permittee}
+          natureOfBusiness={natureOfBusiness}
+          capitalInvested={capitalInvested}
+          grossSales={grossSales}
         />
       </div>
     </div>

@@ -215,6 +215,10 @@ export default function App() {
             event.data?.type === 'ACCOUNT_UNLOCKED'
           ) {
             refreshState();
+          } else if (event.data?.type === 'DOCUMENT_TYPES_UPDATED') {
+            StorageService.getDocTypesAsync().then((docs) => {
+              if (docs) setDocTypes(docs);
+            });
           }
         };
       } catch (e) {}
@@ -226,7 +230,8 @@ export default function App() {
         e.key === 'zapatera_requests_db' ||
         e.key === 'zapatera_deleted_requests' ||
         e.key === 'zapatera_deleted_accounts' ||
-        e.key === 'zapatera_config_db'
+        e.key === 'zapatera_config_db' ||
+        e.key === 'zapatera_doc_types_db'
       ) {
         refreshState();
       }
@@ -242,6 +247,13 @@ export default function App() {
       refreshState();
     };
     window.addEventListener('zapatera_request_deleted_local', handleCustomDeleted);
+
+    const handleDocTypesUpdatedLocal = () => {
+      StorageService.getDocTypesAsync().then((docs) => {
+        if (docs) setDocTypes(docs);
+      });
+    };
+    window.addEventListener('zapatera_doctypes_updated', handleDocTypesUpdatedLocal);
 
     // 4. Listen for cross-tab user account updates
     const handleUserUpdated = (e) => {
@@ -276,6 +288,7 @@ export default function App() {
       if (bc) bc.close();
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('zapatera_request_deleted_local', handleCustomDeleted);
+      window.removeEventListener('zapatera_doctypes_updated', handleDocTypesUpdatedLocal);
       window.removeEventListener('zapatera_user_updated', handleUserUpdated);
       window.removeEventListener('storage', handleStorageDeleted);
     };

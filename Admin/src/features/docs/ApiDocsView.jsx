@@ -180,10 +180,10 @@ export default function ApiDocsView() {
               {/* Group Header Banner (matching reference image) */}
               <div
                 onClick={() => toggleGroup(group.id)}
-                className="flex items-center justify-between pb-2 border-b border-slate-200/90 cursor-pointer select-none group"
+                className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-md cursor-pointer select-none transition-colors group"
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 font-sans tracking-tight group-hover:text-blue-600 transition-colors">
+                <div className="flex flex-wrap items-baseline gap-2.5">
+                  <h2 className="text-sm font-extrabold text-slate-900 font-mono tracking-tight group-hover:text-blue-600 transition-colors">
                     {group.name}
                   </h2>
                   <span className="text-xs text-slate-500 font-normal">
@@ -197,7 +197,7 @@ export default function ApiDocsView() {
                   </span>
                   <ChevronDown
                     className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${
-                      isGroupOpen ? 'rotate-0' : '-rotate-90'
+                      isGroupOpen ? 'rotate-180' : 'rotate-0'
                     }`}
                   />
                 </div>

@@ -94,6 +94,23 @@ export const documentTemplates = {
       'NBI / Police Clearance Waiver',
     ],
   },
+  businessClearance: {
+    id: 'businessClearance',
+    code: 'BC-07',
+    title: 'BARANGAY BUSINESS CLEARANCE',
+    templateType: 'business',
+    defaultFee: 500,
+    docStamps: 30,
+    defaultBody:
+      'This certification is issued to the permittee for the renewal / application of Mayor\'s Business Permit.',
+    defaultPurpose: 'Renewal / Application of Mayor\'s Business Permit',
+    suggestedPurposes: [
+      'Renewal / Application of Mayor\'s Business Permit',
+      'New Business Entity Registration (DTI / SEC)',
+      'Commercial Lease / Permittee Verification',
+      'BIR / Bureau of Internal Revenue Filing',
+    ],
+  },
 };
 
 /**

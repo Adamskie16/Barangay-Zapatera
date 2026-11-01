@@ -29,13 +29,15 @@ import { StorageService } from '../../core/storage';
 import { supabase, isSupabaseConfigured } from '../../core/supabase';
 import DocumentManagement from './DocumentManagement';
 import ActionModal from '../../components/ActionModal';
+import DocumentTemplate from './DocumentTemplate';
 
 export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDocType, currentUser, isDarkMode, config = {} }) {
   const [subTab, setSubTab] = useState('generator'); // 'generator' | 'info'
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState(null);
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [catalogStatusFilter, setCatalogStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+  const [catalogStatusFilter, setCatalogStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false);
 
   // Reusable ActionModal State
   const [actionModal, setActionModal] = useState({
@@ -219,6 +221,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
   const openCreateModal = () => {
     setEditingDoc(null);
+    setShowTemplatePreview(false);
     setFormData({
       code: `BC-0${docTypes.length + 1}`,
       title: '',
@@ -231,12 +234,17 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
         { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
       ],
       is_active: true,
+      template_type: 'standard',
+      template_title: '',
+      template_body: 'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.',
+      doc_stamps: 30,
     });
     setIsModalOpen(true);
   };
 
   const openEditModal = (doc) => {
     setEditingDoc(doc);
+    setShowTemplatePreview(false);
     const isVar = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
     setFormData({
       code: doc.code || '',
@@ -248,6 +256,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       processing_days: doc.processing_days || 1,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
+      template_type: doc.template_type || (doc.code?.toLowerCase().includes('bus') || doc.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+      template_title: doc.template_title || doc.title || '',
+      template_body: doc.template_body || doc.description || 'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.',
+      doc_stamps: doc.doc_stamps || 30,
     });
     setIsModalOpen(true);
   };
@@ -286,6 +298,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       processing_days: Number(formData.processing_days) || 1,
       requirements: requirementsList,
       is_active: formData.is_active,
+      template_type: formData.template_type || 'standard',
+      template_title: sanitizeInput(formData.template_title || formData.title || ''),
+      template_body: sanitizeInput(formData.template_body || ''),
+      doc_stamps: Number(formData.doc_stamps) || 30,
     };
 
     setPendingDocPayload(docPayload);
@@ -462,7 +478,11 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           </button>
 
           <button
-            onClick={() => setSubTab('info')}
+            onClick={() => {
+              setSubTab('info');
+              setCatalogStatusFilter('ALL');
+              setCatalogSearch('');
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
               subTab === 'info'
                 ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
@@ -493,15 +513,19 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
             </span>
           </div>
           <div className="mt-4">
-            <p className="text-3xl font-extrabold tracking-tight">4 Templates</p>
+            <p className="text-3xl font-extrabold tracking-tight">6 Templates</p>
             <p className="text-xs font-semibold text-white/90 mt-1">Official A4 Layouts</p>
-            <p className="text-[11px] text-white/75 mt-1">Clearance, Certification, Indigency, Business</p>
+            <p className="text-[11px] text-white/75 mt-1">Clearance, Certification, Residency, Indigency, Jobseeker</p>
           </div>
         </div>
 
         {/* Card 2: Active Service Catalog */}
         <div
-          onClick={() => setSubTab('info')}
+          onClick={() => {
+            setSubTab('info');
+            setCatalogStatusFilter('ALL');
+            setCatalogSearch('');
+          }}
           className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
             subTab === 'info' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
           }`}
@@ -523,7 +547,11 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
         {/* Card 3: Fee Policy Breakdown */}
         <div
-          onClick={() => setSubTab('info')}
+          onClick={() => {
+            setSubTab('info');
+            setCatalogStatusFilter('ALL');
+            setCatalogSearch('');
+          }}
           className="relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01]"
         >
           <div className="flex items-start justify-between">
@@ -558,7 +586,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
           </div>
           <div className="mt-4">
             <p className="text-lg font-extrabold tracking-tight truncate">
-              {config?.captainName || 'HON. FRANKLYN A. ONG'}
+              {config?.punong_barangay || config?.captainName || config?.signatory_name || 'HON. DAVID M. AGRAVANTE'}
             </p>
             <p className="text-xs font-semibold text-white/90 mt-1">Punong Barangay</p>
             <p className="text-[11px] text-white/75 mt-1">Default certificate signatory</p>
@@ -567,7 +595,17 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       </div>
 
       {/* SUB-TAB 1: DOCUMENT GENERATOR & PRINT */}
-      {subTab === 'generator' && <DocumentManagement docTypes={docTypes} config={config} />}
+      {subTab === 'generator' && (
+        <DocumentManagement
+          docTypes={docTypes}
+          config={config}
+          onNavigateToCatalog={() => {
+            setSubTab('info');
+            setCatalogStatusFilter('ALL');
+            setCatalogSearch('');
+          }}
+        />
+      )}
 
       {/* SUB-TAB 2: DOCUMENT INFORMATION MANAGEMENT */}
       {subTab === 'info' && (
@@ -1166,6 +1204,142 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     </span>
                   </button>
                 </div>
+              </div>
+
+              {/* Certificate Template Designer & Live A4 Print Output (Requested Feature) */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">
+                      Certificate Template &amp; Live A4 Print Output
+                    </label>
+                    <p className="text-[10px] text-slate-400">
+                      Configure the printable A4 certificate wording and template layout for this service
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePreview(!showTemplatePreview)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold text-[#3b5bfd] bg-blue-50 hover:bg-blue-100 border border-blue-200/80 transition-colors cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>{showTemplatePreview ? 'Hide Live A4 Preview' : 'Show Live A4 Preview'}</span>
+                  </button>
+                </div>
+
+                {/* Template Layout Selection */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, template_type: 'standard' })}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      formData.template_type !== 'business'
+                        ? 'border-[#3b5bfd] bg-blue-50/70 text-slate-900 shadow-2xs'
+                        : 'border-slate-200 bg-[#f4f7fb] text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <p className="font-extrabold text-xs text-slate-900">Standard Certificate</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Resident key-value table &amp; certification body</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, template_type: 'business' })}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      formData.template_type === 'business'
+                        ? 'border-[#3b5bfd] bg-blue-50/70 text-slate-900 shadow-2xs'
+                        : 'border-slate-200 bg-[#f4f7fb] text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <p className="font-extrabold text-xs text-slate-900">Business / Commercial Clearance</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Business Name, Permittee, Capital &amp; Gross Sales</p>
+                  </button>
+                </div>
+
+                {/* Printed Certificate Title on A4 */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Printed Certificate Title (A4 Header)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.template_title !== undefined ? formData.template_title : (formData.title || '')}
+                    onChange={(e) => setFormData({ ...formData, template_title: e.target.value })}
+                    placeholder={formData.title ? formData.title.toUpperCase() : 'e.g. BARANGAY CLEARANCE'}
+                    className="w-full px-3.5 py-2 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold uppercase transition-all"
+                  />
+                </div>
+
+                {/* Template Legal Body */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Certificate Legal Body Statement
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={formData.template_body}
+                    onChange={(e) => setFormData({ ...formData, template_body: e.target.value })}
+                    placeholder="This is to certify that the above named person is a bona fide resident..."
+                    className="w-full px-3.5 py-2 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-serif transition-all"
+                  />
+                </div>
+
+                {/* Live A4 Print Output Rule Notice */}
+                <div className={`p-3 rounded-2xl border text-xs ${
+                  Number(formData.fee) > 0
+                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                }`}>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <span className={`w-2 h-2 rounded-full ${Number(formData.fee) > 0 ? 'bg-emerald-600' : 'bg-slate-400'}`}></span>
+                    <span>
+                      {Number(formData.fee) > 0
+                        ? `Paid Service (Fee: ₱${Number(formData.fee).toFixed(2)})`
+                        : 'Free Service (₱0.00 / Exempt)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] mt-1 text-slate-600">
+                    {Number(formData.fee) > 0
+                      ? '✓ Live A4 Print Preview will display the Official Receipt breakdown (O.R. No., Fee, Doc. Stamps ₱30.00, Total Amount, Date) in the lower-left area (matching official barangay clearance format).'
+                      : '✓ Live A4 Print Preview will display cleanly without an Official Receipt breakdown box.'}
+                  </p>
+                </div>
+
+                {/* Embedded Live A4 Template Preview (when toggled) */}
+                {showTemplatePreview && (
+                  <div className="p-3 bg-slate-100 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[11px] font-bold text-slate-700">Live A4 Print Preview Simulation:</span>
+                      <span className="text-[10px] text-slate-500 font-medium">Sample Preview (Scaled)</span>
+                    </div>
+                    <div className="overflow-x-auto flex justify-center py-3 bg-white rounded-xl border border-slate-200 max-h-[480px] overflow-y-auto">
+                      <div style={{ transform: 'scale(0.55)', transformOrigin: 'top center' }}>
+                        <DocumentTemplate
+                          documentTitle={formData.template_title || (formData.title ? formData.title.toUpperCase() : 'BARANGAY CLEARANCE')}
+                          name="Homer G. Cang"
+                          address="Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera, Cebu City"
+                          dateOfBirth="1990-05-15"
+                          contactNo="09173226058"
+                          yearsInBarangay="10 years"
+                          purpose={formData.description || "Renewal of Mayor's Business Permit"}
+                          issuedDate={new Date().toISOString().split('T')[0]}
+                          issuedLocation="Barangay Zapatera, Cebu City"
+                          bodyText={formData.template_body || 'This is to certify that the above named person / permittee has complied with all community requirements.'}
+                          config={config}
+                          fee={Number(formData.fee) || 0}
+                          docStamps={30}
+                          orNumber="OR-2026-8492"
+                          templateType={formData.template_type || 'standard'}
+                          businessName="HAGIAZO AUDIO PRODUCTIONS CO."
+                          permittee="Homer G. Cang"
+                          natureOfBusiness="Music Entertainment Services"
+                          capitalInvested="1,290,000.00"
+                          grossSales="300,000.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-2.5">
