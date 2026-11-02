@@ -1278,7 +1278,7 @@ export default function ResidentDashboard({
                       source={{ uri: item.banner_url }}
                       style={styles.bulletinCoverImage}
                       resizeMode="cover"
-                      draggable={false as any}
+                      {...({ draggable: false } as any)}
                     />
                   ) : (
                     <View style={styles.bulletinFallbackCover}>

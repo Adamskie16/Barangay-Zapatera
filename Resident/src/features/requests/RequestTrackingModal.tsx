@@ -90,17 +90,17 @@ export default function RequestTrackingModal({
   const dateDeclinedFormatted =
     request.declined_at || request.rejected_at || request.updated_at
       ? new Date(
-          request.declined_at || request.rejected_at || request.updated_at || ''
-        ).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })
+        request.declined_at || request.rejected_at || request.updated_at || ''
+      ).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
       : new Date().toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        });
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
   const processedByAdmin = request.processed_by || 'Barangay Administrator';
 
   const handleCopyTracking = () => {
@@ -122,12 +122,12 @@ export default function RequestTrackingModal({
         'Application received online and registered in the Barangay Zapatera records queue.',
       timestamp: request.created_at
         ? new Date(request.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
         : 'Submitted',
       is_completed: true,
       is_current: normStatus === 'pending',
@@ -141,9 +141,9 @@ export default function RequestTrackingModal({
         isUnderReview || isReady || isCompleted || isRejected || isCancelled
           ? request.updated_at
             ? new Date(request.updated_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })
+              month: 'short',
+              day: 'numeric',
+            })
             : 'In Review'
           : 'Pending Staff Review',
       is_completed: isUnderReview || isReady || isCompleted || isRejected,
@@ -154,28 +154,27 @@ export default function RequestTrackingModal({
       label: isCancelled
         ? 'Request Cancelled'
         : isRejected
-        ? 'Request Declined'
-        : 'Ready for Pick Up',
+          ? 'Request Declined'
+          : 'Ready for Pick Up',
       description: isCancelled
         ? 'Document request was cancelled by the resident.'
         : isRejected
-        ? request.declined_reason ||
+          ? request.declined_reason ||
           'Application declined due to incomplete or invalid requirements.'
-        : `Document printed, sealed, and ready for pickup at 2nd Floor, Barangay Hall Lobby (${
-            request.pickup_time_slot || 'Regular Office Hours'
+          : `Document printed, sealed, and ready for pickup at 2nd Floor, Barangay Hall Lobby (${request.pickup_time_slot || 'Regular Office Hours'
           }).`,
       timestamp: isCancelled
         ? 'Cancelled'
         : isReady || isCompleted || isRejected
-        ? isRejected
-          ? 'Declined'
-          : request.approved_at
-          ? new Date(request.approved_at).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            })
-          : request.pickup_date || 'Approved'
-        : `Scheduled for ${request.pickup_date || 'Pickup'}`,
+          ? isRejected
+            ? 'Declined'
+            : request.approved_at
+              ? new Date(request.approved_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })
+              : request.pickup_date || 'Approved'
+          : `Scheduled for ${request.pickup_date || 'Pickup'}`,
       is_completed: isReady || isCompleted || isRejected || isCancelled,
       is_current: isReady || isRejected || isCancelled,
     },
@@ -188,8 +187,8 @@ export default function RequestTrackingModal({
       timestamp: isCompleted
         ? request.claimed_at || request.issued_at
           ? new Date(
-              request.claimed_at || request.issued_at || ''
-            ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            request.claimed_at || request.issued_at || ''
+          ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           : 'Claimed & Released'
         : 'Pending Release',
       is_completed: isCompleted,
@@ -204,24 +203,24 @@ export default function RequestTrackingModal({
       d.id === request.document_type_id ||
       (d.code && d.code === request.document_type_id) ||
       (d.title || '').toLowerCase().trim() ===
-        (request.document_title || '').toLowerCase().trim()
+      (request.document_title || '').toLowerCase().trim()
   );
   const isBusinessDoc = `${request.document_title || ''} ${matchedDoc?.title || ''}`
     .toLowerCase()
     .includes('business');
   const resolvedFee =
     isClaimed &&
-    request.claimed_fee !== undefined &&
-    request.claimed_fee !== null &&
-    Number(request.claimed_fee) > 0
+      request.claimed_fee !== undefined &&
+      request.claimed_fee !== null &&
+      Number(request.claimed_fee) > 0
       ? Number(request.claimed_fee)
       : Number(request.fee) > 0
-      ? Number(request.fee)
-      : matchedDoc && Number(matchedDoc.fee) > 0
-      ? Number(matchedDoc.fee)
-      : isBusinessDoc
-      ? 500
-      : 0;
+        ? Number(request.fee)
+        : matchedDoc && Number(matchedDoc.fee) > 0
+          ? Number(matchedDoc.fee)
+          : isBusinessDoc
+            ? 500
+            : 0;
 
   const feeFormatted =
     resolvedFee === 0 ? 'FREE (₱0.00)' : formatCurrency(resolvedFee);
@@ -457,12 +456,12 @@ export default function RequestTrackingModal({
                     <Text style={{ fontWeight: '800' }}>
                       {request.claimed_at || request.issued_at
                         ? new Date(
-                            request.claimed_at || request.issued_at || ''
-                          ).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })
+                          request.claimed_at || request.issued_at || ''
+                        ).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
                         : 'Released'}
                     </Text>
                   </Text>
@@ -520,7 +519,7 @@ export default function RequestTrackingModal({
                   <MapPin size={13} color="#15803d" />
                   <Text style={styles.passLocationText}>
                     {request.pickup_location &&
-                    !request.pickup_location.toLowerCase().includes('express window')
+                      !request.pickup_location.toLowerCase().includes('express window')
                       ? request.pickup_location
                       : '2nd Floor, Barangay Hall Lobby, Rahmann St.'}
                   </Text>
@@ -667,8 +666,8 @@ export default function RequestTrackingModal({
                   <Text style={[styles.detailValueBold, { color: '#2563eb' }]}>
                     {request.years_in_barangay
                       ? String(request.years_in_barangay)
-                          .toLowerCase()
-                          .includes('year')
+                        .toLowerCase()
+                        .includes('year')
                         ? String(request.years_in_barangay)
                         : `${request.years_in_barangay} years`
                       : '5 years'}
@@ -719,13 +718,13 @@ export default function RequestTrackingModal({
                   <Text style={styles.detailValue}>
                     {request.created_at
                       ? new Date(request.created_at).toLocaleDateString(
-                          'en-US',
-                          {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          }
-                        )
+                        'en-US',
+                        {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        }
+                      )
                       : 'Filed Online'}
                   </Text>
                 </View>
@@ -764,7 +763,7 @@ export default function RequestTrackingModal({
 
       {/* Confirmation Modal for Request Cancellation */}
       {showCancelConfirm && (
-        <View style={[StyleSheet.absoluteFillObject, styles.confirmOverlay, { zIndex: 9999 }]}>
+        <View style={[StyleSheet.absoluteFill, styles.confirmOverlay, { zIndex: 9999 }]}>
           <View style={styles.confirmBox}>
             <View style={styles.confirmIconCircle}>
               <AlertTriangle size={24} color="#dc2626" />

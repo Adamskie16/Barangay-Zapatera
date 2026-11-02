@@ -217,7 +217,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }).then(({ data, error }) => {
+        }).then(({ data, error }: any) => {
           if (!error && data?.session) {
             if (isRecovery) {
               setAuthStep('reset_password');
@@ -234,7 +234,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         const searchParams = new URLSearchParams(rawSearch);
         const code = searchParams.get('code');
         if (code) {
-          supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+          supabase.auth.exchangeCodeForSession(code).then(({ data, error }: any) => {
             if (!error && data?.session) {
               if (isRecovery) {
                 setAuthStep('reset_password');
@@ -249,7 +249,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         }
       }
 
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data: authListener } = supabase.auth.onAuthStateChange((event: any, session: any) => {
         if (event === 'PASSWORD_RECOVERY') {
           setAuthStep('reset_password');
           setInfoBanner('Password Recovery Active: Please enter and confirm your new account password.');
@@ -257,6 +257,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       });
       return () => authListener?.subscription?.unsubscribe();
     }
+    return undefined;
   }, []);
 
   // Live BroadcastChannel synchronization for instant account unlocking across tabs/portals
@@ -272,6 +273,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       };
       return () => channel.close();
     }
+    return undefined;
   }, [loginEmail]);
 
   // Auto-dismiss error & banner messages after 20 seconds
@@ -283,6 +285,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }, 20000); // 20 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [errorMessage, authError]);
 
   useEffect(() => {
@@ -292,6 +295,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }, 20000); // 20 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [successBanner]);
 
   useEffect(() => {
@@ -301,6 +305,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
       }, 20000); // 20 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [infoBanner]);
 
   // Live password strength indicator for register
@@ -2371,6 +2376,18 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: 'Inter',
     color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  outlineBtn: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outlineBtnText: {
+    fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: 'bold',
   },

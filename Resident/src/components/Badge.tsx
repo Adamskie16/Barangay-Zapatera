@@ -5,14 +5,17 @@ import { RequestStatus } from '../types';
 import { Clock, RefreshCw, CheckCircle2, PackageCheck, XCircle, AlertCircle } from 'lucide-react';
 
 interface BadgeProps {
-  status: RequestStatus | string;
+  status?: RequestStatus | string;
+  variant?: RequestStatus | string;
+  children?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
   showIcon?: boolean;
 }
 
-export default function Badge({ status, size = 'md', showIcon = false }: BadgeProps) {
+export default function Badge({ status, variant, children, size = 'md', showIcon = false }: BadgeProps) {
+  const effectiveStatus = status || variant || (typeof children === 'string' ? children : 'pending');
   const getStatusConfig = () => {
-    switch (status) {
+    switch (effectiveStatus) {
       case 'pending':
         return {
           label: 'Pending',

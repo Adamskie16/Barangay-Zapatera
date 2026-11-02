@@ -19,6 +19,7 @@ import {
   BarangayAnnouncement,
   BarangayConfig,
   ResidentNotification,
+  AnnouncementCategory,
 } from './types';
 import { MobileStorage } from './core/storage';
 import { supabase, isSupabaseConfigured, waitForSupabaseReachable } from './core/supabase';
@@ -369,6 +370,7 @@ export default function App() {
       }, 8000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [activeAnnouncementBanner]);
 
   useEffect(() => {

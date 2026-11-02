@@ -305,7 +305,7 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
 export const recordFailedAttempt = async (
   email: string,
   userRole: string = 'resident'
-): Promise<{ attempts: number; isLockedOut: boolean; remaining: number }> => {
+): Promise<{ attempts: number; isLockedOut: boolean; remaining: number; accountExists?: boolean }> => {
   const cleanEmail = String(email).toLowerCase().trim();
   const nowTs = new Date().toISOString();
 

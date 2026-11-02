@@ -82,6 +82,7 @@ export default function UnlockAccountModal({
       }, 20000); // 20 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [errorMessage]);
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function UnlockAccountModal({
       }, 20000); // 20 seconds
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [successMessage]);
 
   const formatCountdown = (seconds: number) => {

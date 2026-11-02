@@ -1,6 +1,6 @@
 // Resident/src/types/index.ts
 
-export type UserRole = 'resident' | 'admin' | 'superadmin';
+export type UserRole = 'resident' | 'admin' | 'superadmin' | 'super_admin';
 
 export interface ResidentNotificationPreferences {
   push: boolean;
@@ -79,6 +79,7 @@ export interface DocumentType {
   fee_type?: 'fixed' | 'variable';
   is_variable_fee?: boolean;
   processing_days: number;
+  processing_time?: string | number;
   validity_months?: number;
   validity?: string;
   requirements: string[];
@@ -92,6 +93,7 @@ export type RequestStatus =
   | 'pending'
   | 'under_review'
   | 'processing'
+  | 'approved'
   | 'ready_for_pickup'
   | 'completed'
   | 'rejected'
@@ -139,8 +141,10 @@ export interface DocumentRequest {
   resident_email: string;
   resident_phone?: string;
   resident_address?: string;
+  sitio?: string;
   resident_birth_date?: string;
   years_in_barangay?: number | string;
+  request_date?: string;
   // Business Clearance Variables
   business_name?: string;
   permittee_name?: string;
@@ -177,6 +181,8 @@ export interface DocumentRequest {
   is_claimed?: boolean;
   claimed_at?: string;
   claimed_fee?: number;
+  claimed_by_admin?: string;
+  issued_at?: string;
   is_variable_fee?: boolean;
   is_resubmitted?: boolean;
   resubmitted_at?: string;
@@ -244,7 +250,7 @@ export interface BarangayConfig {
 
 export interface ResidentNotification {
   id: string;
-  user_id: string;
+  user_id?: string;
   title: string;
   message: string;
   type: 'status_update' | 'ready_pickup' | 'rejected' | 'announcement' | 'warning' | 'emergency' | 'security' | 'system' | (string & {});

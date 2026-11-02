@@ -255,8 +255,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        } as any)
+      : {}),
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(226, 232, 240, 0.85)',
     elevation: 4,
@@ -403,8 +407,12 @@ const styles = StyleSheet.create({
   dropdownBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.35)',
-    backdropFilter: 'blur(4px)',
-    WebkitBackdropFilter: 'blur(4px)',
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+        } as any)
+      : {}),
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
     paddingTop: 66,

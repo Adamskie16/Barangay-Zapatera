@@ -57,6 +57,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
 
   const [error, setError] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     // Detect password recovery redirect vs signup confirmation
@@ -94,7 +95,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
-        }).then(({ data, error }) => {
+        }).then(({ data, error }: any) => {
           if (!error && data?.session) {
             if (isRecovery) {
               setStep(4);
@@ -110,7 +111,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         const searchParams = new URLSearchParams(rawSearch);
         const code = searchParams.get('code');
         if (code) {
-          supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+          supabase.auth.exchangeCodeForSession(code).then(({ data, error }: any) => {
             if (!error && data?.session) {
               if (isRecovery) {
                 setStep(4);
@@ -124,7 +125,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
         }
       }
 
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data: authListener } = supabase.auth.onAuthStateChange((event: any, session: any) => {
         if (event === 'PASSWORD_RECOVERY') {
           setStep(4);
           setInfoMsg('Password Recovery Active: Please enter and confirm your new resident password.');
@@ -132,6 +133,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       });
       return () => authListener?.subscription?.unsubscribe();
     }
+    return undefined;
   }, []);
 
   // BroadcastChannel for live cross-tab unlock synchronization
@@ -147,6 +149,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginMod
       };
       return () => channel.close();
     }
+    return undefined;
   }, [email]);
 
   const [showResendConfirmation, setShowResendConfirmation] = useState(false);
