@@ -23,7 +23,7 @@ import {
   ClipboardCheck,
   XCircle,
 } from 'lucide-react';
-import { DocumentRequest } from '../../types';
+import { DocumentRequest, DocumentType } from '../../types';
 import Badge from '../../components/Badge';
 import EmptyState from '../../components/EmptyState';
 import GlobalFooter from '../../components/GlobalFooter';
@@ -32,6 +32,7 @@ import { ensureInterFontLoaded } from '../../core/fontSetup';
 
 interface MyRequestsViewProps {
   requests: DocumentRequest[];
+  docTypes?: DocumentType[];
   onViewRequestDetails: (req: DocumentRequest) => void;
   onRequestNew: () => void;
   onOpenResubmit?: (req: DocumentRequest) => void;
@@ -53,6 +54,7 @@ const HISTORY_STATUS_FILTERS: { label: string; value: string }[] = [
 
 export default function MyRequestsView({
   requests,
+  docTypes = [],
   onViewRequestDetails,
   onRequestNew,
   onOpenResubmit,
@@ -445,14 +447,32 @@ export default function MyRequestsView({
                 });
           const adminProcessor = req.processed_by || 'Barangay Administrator';
 
+          const matchedDoc = docTypes.find(
+            (d) =>
+              d.id === req.document_type_id ||
+              (d.code && d.code === req.document_type_id) ||
+              (d.title || '').toLowerCase().trim() ===
+                (req.document_title || '').toLowerCase().trim()
+          );
+          const isBusinessDoc = `${req.document_title || ''} ${matchedDoc?.title || ''}`
+            .toLowerCase()
+            .includes('business');
+          const resolvedFee =
+            claimed &&
+            req.claimed_fee !== undefined &&
+            req.claimed_fee !== null &&
+            Number(req.claimed_fee) > 0
+              ? Number(req.claimed_fee)
+              : Number(req.fee) > 0
+              ? Number(req.fee)
+              : matchedDoc && Number(matchedDoc.fee) > 0
+              ? Number(matchedDoc.fee)
+              : isBusinessDoc
+              ? 500
+              : 0;
+
           const feeDisplay =
-            claimed && req.claimed_fee !== undefined && req.claimed_fee !== null
-              ? formatCurrency(req.claimed_fee)
-              : (req.is_variable_fee || req.fee_type === 'variable') && !claimed
-              ? 'Variable Fee'
-              : Number(req.fee) === 0
-              ? 'FREE'
-              : formatCurrency(req.fee);
+            resolvedFee === 0 ? 'FREE' : formatCurrency(resolvedFee);
 
           return (
             <TouchableOpacity

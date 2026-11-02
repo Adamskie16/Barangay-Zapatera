@@ -516,9 +516,22 @@ export default function ReceiveRequestView({
     setGenGrossSales(gSale);
 
     // Fee setup (prefill fee assessed or default)
-    const initialFee = req.claimed_fee !== undefined && req.claimed_fee !== null
-      ? Number(req.claimed_fee)
-      : (req.fee !== undefined && req.fee !== null ? Number(req.fee) : 0);
+    const matchedDocForFee = docTypes.find(
+      (d) =>
+        d.id === req.document_type_id ||
+        (d.code && d.code === req.document_type_id) ||
+        (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
+    );
+    const initialFee =
+      req.claimed_fee !== undefined && req.claimed_fee !== null && Number(req.claimed_fee) > 0
+        ? Number(req.claimed_fee)
+        : req.fee !== undefined && req.fee !== null && Number(req.fee) > 0
+        ? Number(req.fee)
+        : matchedDocForFee && Number(matchedDocForFee.fee) > 0
+        ? Number(matchedDocForFee.fee)
+        : isBusiness
+        ? 500
+        : 0;
     setGenFee(initialFee);
     setGenDocStamps(req.doc_stamps !== undefined ? Number(req.doc_stamps) : 30);
     const initialOr = req.or_number || `OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1331,7 +1344,26 @@ export default function ReceiveRequestView({
                       <td className="p-4">
                         <p className="font-bold text-slate-800">{req.document_title}</p>
                         <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
-                          {req.fee > 0 ? formatCurrency(req.fee) : 'Free'}
+                          {(() => {
+                            const matchedDoc = docTypes.find(
+                              (d) =>
+                                d.id === req.document_type_id ||
+                                (d.code && d.code === req.document_type_id) ||
+                                (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
+                            );
+                            const isBiz = (req.document_title || matchedDoc?.title || '').toLowerCase().includes('business');
+                            const rowFee =
+                              Number(req.claimed_fee) > 0
+                                ? Number(req.claimed_fee)
+                                : Number(req.fee) > 0
+                                ? Number(req.fee)
+                                : matchedDoc && Number(matchedDoc.fee) > 0
+                                ? Number(matchedDoc.fee)
+                                : isBiz
+                                ? 500
+                                : 0;
+                            return rowFee > 0 ? formatCurrency(rowFee) : 'Free';
+                          })()}
                         </span>
                       </td>
 
@@ -1644,7 +1676,7 @@ export default function ReceiveRequestView({
                     </div>
 
                     <span className="text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Fee: {selectedReq.fee > 0 ? formatCurrency(selectedReq.fee) : 'Free of Charge'}
+                      Fee: {Number(genFee) > 0 ? formatCurrency(genFee) : 'Free of Charge'}
                     </span>
                   </div>
 

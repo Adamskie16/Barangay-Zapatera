@@ -498,6 +498,13 @@ export default function RequestFlowModal({
       const trackingNo = generateTrackingNumber(config.doc_prefix || 'BRGY-2026');
       const finalPurpose = activePurposeValue || 'Local Employment Application';
 
+      const resolvedDocFee =
+        Number(selectedDoc.fee) > 0
+          ? Number(selectedDoc.fee)
+          : isBusinessDoc
+          ? 500
+          : 0;
+
       const newRequest: DocumentRequest = {
         id: `req-${Date.now()}`,
         tracking_number: trackingNo,
@@ -521,7 +528,7 @@ export default function RequestFlowModal({
         gross_sales: isBusinessDoc && grossSales.trim() ? grossSales.trim() : undefined,
         document_type_id: selectedDoc.id,
         document_title: selectedDoc.title,
-        fee: selectedDoc.fee,
+        fee: resolvedDocFee,
         purpose: finalPurpose,
         requirements_attached: Object.keys(uploadedFiles),
         uploaded_files: Object.values(uploadedFiles),
@@ -532,14 +539,11 @@ export default function RequestFlowModal({
         is_variable_fee: Boolean(
           selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
         ),
-        pickup_instructions:
-          selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
-            ? `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID; the processing fee will be assessed and collected upon claiming at counter.`
-            : `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the exact fee of ${
-                selectedDoc.fee === 0
-                  ? '₱0.00 (FREE)'
-                  : formatCurrency(selectedDoc.fee)
-              }.`,
+        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the processing fee of ${
+          resolvedDocFee === 0
+            ? '₱0.00 (FREE)'
+            : formatCurrency(resolvedDocFee)
+        }.`,
         timeline: [
           {
             status: 'pending',
@@ -630,9 +634,13 @@ export default function RequestFlowModal({
   if (!visible) return null;
 
   const activeStepMeta = STEP_META.find((s) => s.num === currentStep);
-  const isSelectedDocVariable =
-    selectedDoc?.fee_type === 'variable' || selectedDoc?.is_variable_fee;
-  const isSelectedDocFree = !isSelectedDocVariable && Number(selectedDoc?.fee) === 0;
+  const selectedDocFee =
+    Number(selectedDoc?.fee) > 0
+      ? Number(selectedDoc?.fee)
+      : isBusinessDoc
+      ? 500
+      : 0;
+  const isSelectedDocFree = selectedDocFee === 0;
 
   return (
     <Modal
@@ -804,11 +812,9 @@ export default function RequestFlowModal({
                           {selectedDoc?.title}
                         </Text>
                         <Text style={styles.dropdownSelectedSub}>
-                          {isSelectedDocVariable
-                            ? 'Variable Fee'
-                            : isSelectedDocFree
+                          {isSelectedDocFree
                             ? 'FREE'
-                            : formatCurrency(selectedDoc?.fee)}{' '}
+                            : formatCurrency(selectedDocFee)}{' '}
                           • {selectedDoc?.processing_days || 1}{' '}
                           {Number(selectedDoc?.processing_days || 1) === 1
                             ? 'Working Day'
@@ -827,8 +833,9 @@ export default function RequestFlowModal({
                     <View style={styles.dropdownMenuCard}>
                       {availableDocTypes.map((dt) => {
                         const isSelected = dt.id === selectedDoc?.id;
-                        const dtVar = dt.fee_type === 'variable' || dt.is_variable_fee;
-                        const dtFree = !dtVar && Number(dt.fee) === 0;
+                        const dtIsBiz = (dt.title || '').toLowerCase().includes('business');
+                        const dtFee = Number(dt.fee) > 0 ? Number(dt.fee) : dtIsBiz ? 500 : 0;
+                        const dtFree = dtFee === 0;
                         return (
                           <TouchableOpacity
                             key={dt.id}
@@ -871,11 +878,9 @@ export default function RequestFlowModal({
                                       : styles.miniFeePillTextPaid,
                                   ]}
                                 >
-                                  {dtVar
-                                    ? 'Variable'
-                                    : dtFree
+                                  {dtFree
                                     ? 'FREE'
-                                    : formatCurrency(dt.fee)}
+                                    : formatCurrency(dtFee)}
                                 </Text>
                               </View>
                               {isSelected && <CheckCircle2 size={15} color="#2563eb" />}
@@ -910,11 +915,9 @@ export default function RequestFlowModal({
                             : styles.selectedDocFeeTextPaid,
                         ]}
                       >
-                        {isSelectedDocVariable
-                          ? 'Variable Fee'
-                          : isSelectedDocFree
+                        {isSelectedDocFree
                           ? 'FREE'
-                          : formatCurrency(selectedDoc?.fee)}
+                          : formatCurrency(selectedDocFee)}
                       </Text>
                     </View>
                   </View>
@@ -1852,11 +1855,9 @@ export default function RequestFlowModal({
                     <Text style={styles.summaryFeeText}>
                       Document Fee:{' '}
                       <Text style={{ color: '#2563eb', fontWeight: '800' }}>
-                        {isSelectedDocVariable
-                          ? 'Depends upon claim'
-                          : isSelectedDocFree
+                        {isSelectedDocFree
                           ? 'FREE'
-                          : formatCurrency(selectedDoc?.fee)}
+                          : formatCurrency(selectedDocFee)}
                       </Text>
                     </Text>
                   </View>

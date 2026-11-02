@@ -264,6 +264,9 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
       ? (Number(found.fee) > 0 ? Number(found.fee) : (isBiz ? 500 : 0))
       : (Number(found.fee) || 0);
     setFee(catalogFee);
+    if (catalogFee > 0 && Number(found.fee) !== catalogFee) {
+      StorageService.saveDocType({ ...found, fee: catalogFee }).catch(() => {});
+    }
     setDocStamps(Number(found.doc_stamps) || 30);
     if ((catalogFee > 0 || isVar) && !orNumber) {
       setOrNumber(`OR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -715,7 +718,16 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       min="0"
                       step="1"
                       value={fee}
-                      onChange={(e) => setFee(Number(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const nextFee = Number(e.target.value) || 0;
+                        setFee(nextFee);
+                        if (selectedCatalogCode && !selectedCatalogCode.startsWith('preset:')) {
+                          const matched = docTypes.find((d) => (d.code || d.id) === selectedCatalogCode);
+                          if (matched) {
+                            StorageService.saveDocType({ ...matched, fee: nextFee }).catch(() => {});
+                          }
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-[#f4f7fb] border border-slate-200/80 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#3b5bfd]/20 focus:border-[#3b5bfd] text-slate-900 font-bold transition-all"
                     />
                   </div>

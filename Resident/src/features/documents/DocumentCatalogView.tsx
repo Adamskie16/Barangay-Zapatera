@@ -412,8 +412,10 @@ export default function DocumentCatalogView({
       {paginatedDocs.map((doc) => {
         const docCategory = getDocumentCategory(doc);
         const visual = getDocVisual(doc);
-        const isVariable = doc.fee_type === 'variable' || doc.is_variable_fee;
-        const isFree = !isVariable && Number(doc.fee) === 0;
+        const isBusinessDoc = (doc.title || '').toLowerCase().includes('business');
+        const resolvedFee =
+          Number(doc.fee) > 0 ? Number(doc.fee) : isBusinessDoc ? 500 : 0;
+        const isFree = resolvedFee === 0;
         const reqList = Array.isArray(doc.requirements) ? doc.requirements : [];
 
         return (
@@ -446,11 +448,7 @@ export default function DocumentCatalogView({
                         isFree ? styles.feePillTextFree : styles.feePillTextPaid,
                       ]}
                     >
-                      {isVariable
-                        ? 'Variable Fee'
-                        : isFree
-                        ? 'FREE'
-                        : formatCurrency(doc.fee)}
+                      {isFree ? 'FREE' : formatCurrency(resolvedFee)}
                     </Text>
                   </View>
                 </View>

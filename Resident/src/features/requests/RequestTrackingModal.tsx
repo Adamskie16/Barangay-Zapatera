@@ -25,7 +25,7 @@ import {
   Check,
   PackageCheck,
 } from 'lucide-react';
-import { DocumentRequest, BarangayConfig } from '../../types';
+import { DocumentRequest, DocumentType, BarangayConfig } from '../../types';
 import Badge from '../../components/Badge';
 import { formatCurrency } from '../../core/security';
 import { ensureInterFontLoaded } from '../../core/fontSetup';
@@ -33,6 +33,7 @@ import { ensureInterFontLoaded } from '../../core/fontSetup';
 interface RequestTrackingModalProps {
   visible: boolean;
   request: DocumentRequest | null;
+  docTypes?: DocumentType[];
   config: BarangayConfig;
   onClose: () => void;
   onReRequest?: (req: DocumentRequest) => void;
@@ -43,6 +44,7 @@ interface RequestTrackingModalProps {
 export default function RequestTrackingModal({
   visible,
   request,
+  docTypes = [],
   onClose,
   onReRequest,
   onOpenResubmit,
@@ -197,16 +199,32 @@ export default function RequestTrackingModal({
 
   const completedStagesCount = timelineSteps.filter((s) => s.is_completed).length;
 
-  const feeFormatted =
+  const matchedDoc = docTypes.find(
+    (d) =>
+      d.id === request.document_type_id ||
+      (d.code && d.code === request.document_type_id) ||
+      (d.title || '').toLowerCase().trim() ===
+        (request.document_title || '').toLowerCase().trim()
+  );
+  const isBusinessDoc = `${request.document_title || ''} ${matchedDoc?.title || ''}`
+    .toLowerCase()
+    .includes('business');
+  const resolvedFee =
     isClaimed &&
     request.claimed_fee !== undefined &&
-    request.claimed_fee !== null
-      ? formatCurrency(request.claimed_fee)
-      : (request.is_variable_fee || request.fee_type === 'variable') && !isClaimed
-      ? 'Assessed at Counter'
-      : Number(request.fee) === 0
-      ? 'FREE (₱0.00)'
-      : formatCurrency(request.fee);
+    request.claimed_fee !== null &&
+    Number(request.claimed_fee) > 0
+      ? Number(request.claimed_fee)
+      : Number(request.fee) > 0
+      ? Number(request.fee)
+      : matchedDoc && Number(matchedDoc.fee) > 0
+      ? Number(matchedDoc.fee)
+      : isBusinessDoc
+      ? 500
+      : 0;
+
+  const feeFormatted =
+    resolvedFee === 0 ? 'FREE (₱0.00)' : formatCurrency(resolvedFee);
 
   return (
     <Modal

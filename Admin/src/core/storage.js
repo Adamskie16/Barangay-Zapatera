@@ -316,24 +316,37 @@ export const StorageService = {
           .select();
 
         if (error) {
-          delete payload.fee_type;
-          delete payload.is_variable_fee;
-          delete payload.validity_months;
-          delete payload.validity;
           delete payload.template_type;
           delete payload.template_title;
           delete payload.template_body;
           delete payload.doc_stamps;
-          const { data: retryData } = await supabase
+          const { data: retryData, error: retryErr } = await supabase
             .from('document_types')
             .upsert(payload, { onConflict: 'code' })
             .select();
-          if (retryData && retryData[0]) {
+          if (retryErr) {
+            delete payload.fee_type;
+            delete payload.is_variable_fee;
+            delete payload.validity_months;
+            delete payload.validity;
+            const { data: fallbackData } = await supabase
+              .from('document_types')
+              .upsert(payload, { onConflict: 'code' })
+              .select();
+            if (fallbackData && fallbackData[0]) {
+              saved = {
+                ...saved,
+                ...fallbackData[0],
+                validity_months: parsedValidityMonths,
+                validity: formattedValidity,
+              };
+            }
+          } else if (retryData && retryData[0]) {
             saved = {
               ...saved,
               ...retryData[0],
-              validity_months: parsedValidityMonths,
-              validity: formattedValidity,
+              validity_months: retryData[0].validity_months || parsedValidityMonths,
+              validity: retryData[0].validity || formattedValidity,
             };
           }
         } else if (upsertedData && upsertedData[0]) {

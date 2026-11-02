@@ -1148,6 +1148,8 @@ export default function ResidentDashboard({
           >
             {availableDocTypes.map((doc) => {
               const { Icon: DocIcon, color: iconColor, bg: iconBg } = getDocVisual(doc);
+              const isBusinessDoc = (doc.title || '').toLowerCase().includes('business');
+              const resolvedFee = Number(doc.fee) > 0 ? Number(doc.fee) : isBusinessDoc ? 500 : 0;
               return (
                 <View key={doc.id} style={styles.docTypeCard}>
                   <View>
@@ -1158,9 +1160,7 @@ export default function ResidentDashboard({
                       <View
                         style={[
                           styles.feeTag,
-                          doc.fee_type === 'variable' || doc.is_variable_fee
-                            ? styles.feeTagPaid
-                            : doc.fee === 0
+                          resolvedFee === 0
                             ? styles.feeTagFree
                             : styles.feeTagPaid,
                         ]}
@@ -1168,18 +1168,14 @@ export default function ResidentDashboard({
                         <Text
                           style={[
                             styles.feeTagText,
-                            doc.fee_type === 'variable' || doc.is_variable_fee
-                              ? styles.feeTagTextPaid
-                              : doc.fee === 0
+                            resolvedFee === 0
                               ? styles.feeTagTextFree
                               : styles.feeTagTextPaid,
                           ]}
                         >
-                          {doc.fee_type === 'variable' || doc.is_variable_fee
-                            ? 'Depends upon claim'
-                            : doc.fee === 0
+                          {resolvedFee === 0
                             ? 'FREE'
-                            : formatCurrency(doc.fee)}
+                            : formatCurrency(resolvedFee)}
                         </Text>
                       </View>
                     </View>

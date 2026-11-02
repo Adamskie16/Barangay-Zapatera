@@ -273,6 +273,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     setEditingDoc(doc);
     setShowTemplatePreview(false);
     const isVar = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
+    const isBiz = Boolean(doc.code?.toLowerCase().includes('bus') || doc.title?.toLowerCase().includes('business'));
     const parsedValidityMonths = Math.max(
       1,
       parseInt(doc.validity_months, 10) ||
@@ -283,14 +284,14 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       code: doc.code || '',
       title: doc.title || '',
       description: doc.description || '',
-      fee: isVar ? 0 : (doc.fee || 0),
+      fee: Number(doc.fee) > 0 ? Number(doc.fee) : (isVar && isBiz ? 500 : 0),
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: doc.processing_days || 1,
       validity_months: parsedValidityMonths,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
-      template_type: doc.template_type || (doc.code?.toLowerCase().includes('bus') || doc.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+      template_type: doc.template_type || (isBiz ? 'business' : 'standard'),
       template_title: doc.template_title || doc.title || '',
       template_body: doc.template_body || doc.description || 'This is to certify that the above named person is a resident of the barangay and known to be of good moral standing.',
       doc_stamps: doc.doc_stamps || 30,
@@ -328,7 +329,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       code: sanitizeInput(formData.code).toUpperCase(),
       title: sanitizeInput(formData.title),
       description: sanitizeInput(formData.description),
-      fee: isVar ? 0 : (Number(formData.fee) || 0),
+      fee: Number(formData.fee) || 0,
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: Number(formData.processing_days) || 1,
@@ -954,13 +955,13 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                             </div>
                           </td>
                           <td className="p-4 whitespace-nowrap">
-                            {doc.fee_type === 'variable' || doc.is_variable_fee ? (
-                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-[#3b5bfd] border border-blue-100">
-                                Depends upon claim
-                              </span>
-                            ) : Number(doc.fee) > 0 ? (
+                            {Number(doc.fee) > 0 ? (
                               <span className="px-2.5 py-1 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-800 border border-slate-200">
                                 {formatCurrency(doc.fee)}
+                              </span>
+                            ) : (doc.title || '').toLowerCase().includes('business') ? (
+                              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold font-mono bg-slate-100 text-slate-800 border border-slate-200">
+                                {formatCurrency(500)}
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1150,10 +1151,10 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                             <div className="min-w-0">
                               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Processing Fee</p>
                               <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
-                                {doc.fee_type === 'variable' || doc.is_variable_fee ? (
-                                  <span className="text-[#3b5bfd]">Depends upon claim</span>
-                                ) : doc.fee > 0 ? (
+                                {Number(doc.fee) > 0 ? (
                                   formatCurrency(doc.fee)
+                                ) : (doc.title || '').toLowerCase().includes('business') ? (
+                                  formatCurrency(500)
                                 ) : (
                                   <span className="text-emerald-600">FREE / Exempt</span>
                                 )}
@@ -1512,7 +1513,19 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, fee_type: 'variable', is_variable_fee: true, fee: 0 })}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          fee_type: 'variable',
+                          is_variable_fee: true,
+                          fee:
+                            Number(formData.fee) > 0
+                              ? formData.fee
+                              : (formData.title || '').toLowerCase().includes('business')
+                              ? 500
+                              : formData.fee,
+                        })
+                      }
                       className={`px-3 py-2.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer text-center ${
                         formData.fee_type === 'variable' || formData.is_variable_fee
                           ? 'bg-[#3b5bfd] border-[#3b5bfd] text-white shadow-xs shadow-blue-500/20'
@@ -1525,33 +1538,33 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 </div>
               </div>
 
-              {formData.fee_type === 'variable' || formData.is_variable_fee ? (
+              {(formData.fee_type === 'variable' || formData.is_variable_fee) && (
                 <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl text-slate-700 flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 text-[#3b5bfd] shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-extrabold text-xs text-slate-900">Fee Depends on Claim (Variable)</p>
+                    <p className="font-extrabold text-xs text-slate-900">Fee Depends on Claim</p>
                     <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                      The processing fee will be assessed when the document is marked as claimed.
+                      Set the base Processing Fee below so it matches the resident portal and certificate generator. It can still be adjusted upon claiming.
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
-                    Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={formData.fee}
-                    onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
-                    placeholder="0.00"
-                  />
-                </div>
               )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
+                  Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={formData.fee}
+                  onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
+                  className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
+                  placeholder="0.00"
+                />
+              </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Document Title</label>

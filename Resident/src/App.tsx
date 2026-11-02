@@ -1039,11 +1039,18 @@ export default function App() {
                 if (!existing) {
                   map.set(key, d);
                 } else {
+                  const resolvedMergedFee =
+                    Number(existing.fee) > 0
+                      ? Number(existing.fee)
+                      : Number(d.fee) > 0
+                      ? Number(d.fee)
+                      : 0;
                   map.set(key, {
-                    ...existing,
                     ...d,
-                    validity_months: d.validity_months ?? existing.validity_months,
-                    validity: d.validity || existing.validity,
+                    ...existing,
+                    fee: resolvedMergedFee,
+                    validity_months: existing.validity_months ?? d.validity_months,
+                    validity: existing.validity || d.validity,
                   });
                 }
               });
@@ -1084,6 +1091,9 @@ export default function App() {
           }
 
           const isVar = Boolean(d.is_variable_fee || d.fee_type === 'variable');
+          const isBusinessDoc = text.includes('business');
+          const rawFee = Number(d.fee) || 0;
+          const resolvedFee = rawFee > 0 ? rawFee : (isVar && isBusinessDoc ? 500 : 0);
           const parsedValidityMonths = Math.max(
             1,
             parseInt(d.validity_months, 10) ||
@@ -1098,7 +1108,7 @@ export default function App() {
             title: d.title,
             category: inferredCategory,
             description: d.description,
-            fee: isVar ? 0 : (Number(d.fee) || 0),
+            fee: resolvedFee,
             fee_type: isVar ? 'variable' : 'fixed',
             is_variable_fee: isVar,
             processing_days: Number(d.processing_days) || 1,
@@ -1607,7 +1617,25 @@ export default function App() {
 
           if (!error && Array.isArray(data)) {
             const formatted: DocumentRequest[] = data.map((req: any) => {
-              const matchedDoc = docTypes.find((d) => d.id === req.document_type_id) || {};
+              const matchedDoc =
+                docTypes.find(
+                  (d) =>
+                    d.id === req.document_type_id ||
+                    (d.code && d.code === req.document_type_id) ||
+                    (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
+                ) || ({} as Partial<DocumentType>);
+              const resolvedTitle = matchedDoc.title || req.document_title || 'Barangay Clearance';
+              const isBizReq = resolvedTitle.toLowerCase().includes('business');
+              const resolvedFee =
+                Number(req.claimed_fee) > 0
+                  ? Number(req.claimed_fee)
+                  : Number(req.fee) > 0
+                  ? Number(req.fee)
+                  : Number(matchedDoc.fee) > 0
+                  ? Number(matchedDoc.fee)
+                  : isBizReq
+                  ? 500
+                  : 0;
               const rawYears = req.years_in_barangay !== undefined && req.years_in_barangay !== null && req.years_in_barangay !== ''
                 ? req.years_in_barangay
                 : (user.years_in_barangay || 5);
@@ -1630,8 +1658,8 @@ export default function App() {
                 civil_status: user.civil_status || req.civil_status || 'Single',
                 years_in_barangay: formattedYears,
                 document_type_id: req.document_type_id,
-                document_title: matchedDoc.title || req.document_title || 'Barangay Clearance',
-                fee: matchedDoc.fee !== undefined ? Number(matchedDoc.fee) : (Number(req.fee) || 0),
+                document_title: resolvedTitle,
+                fee: resolvedFee,
                 purpose: req.purpose,
                 requirements_attached: Array.isArray(req.requirements_attached) ? req.requirements_attached : [],
                 uploaded_files: Array.isArray(req.uploaded_files) ? req.uploaded_files : [],
@@ -2520,6 +2548,7 @@ export default function App() {
           {activeTab === 'requests' && (
             <MyRequestsView
               requests={requests}
+              docTypes={docTypes}
               onViewRequestDetails={handleViewRequestDetails}
               onRequestNew={() => handleOpenRequestFlow(undefined, true)}
               onOpenResubmit={handleOpenResubmit}
@@ -2593,6 +2622,7 @@ export default function App() {
       <RequestTrackingModal
         visible={isTrackingModalOpen}
         request={selectedRequestForTracking}
+        docTypes={docTypes}
         config={config}
         onClose={() => setIsTrackingModalOpen(false)}
         onOpenResubmit={handleOpenResubmit}

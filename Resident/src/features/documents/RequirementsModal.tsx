@@ -158,13 +158,19 @@ export default function RequirementsModal({
     if (!activeDoc) return;
 
     try {
+      const activeDocFee =
+        Number(activeDoc.fee) > 0
+          ? Number(activeDoc.fee)
+          : (activeDoc.title || '').toLowerCase().includes('business')
+          ? 500
+          : 0;
       const checklistText = `=====================================================
 BARANGAY ZAPATERA, CEBU CITY
 DOCUMENT REQUIREMENTS & APPLICATION GUIDE
 =====================================================
 
 Document: ${activeDoc.title} (${activeDoc.code || 'Official Document'})
-Issuance Fee: ${activeDoc.fee_type === 'variable' || activeDoc.is_variable_fee ? 'Depends upon claim (Assessed at barangay hall)' : activeDoc.fee === 0 ? 'FREE / No Charge' : formatCurrency(activeDoc.fee)}
+Issuance Fee: ${activeDocFee === 0 ? 'FREE / No Charge' : formatCurrency(activeDocFee)}
 Estimated Processing Time: ${activeDoc.processing_days} Business Day(s)
 Validity: ${activeDoc.validity || '6 Months from date of issuance'}
 
@@ -379,11 +385,15 @@ Generated on: ${new Date().toLocaleString('en-US')}
                     <View style={styles.metaBadge}>
                       <Text style={styles.metaLabel}>Processing Fee:</Text>
                       <Text style={styles.metaValue}>
-                        {activeDoc.fee_type === 'variable' || activeDoc.is_variable_fee
-                          ? 'Depends upon claim'
-                          : activeDoc.fee === 0
-                          ? 'FREE / No Charge'
-                          : formatCurrency(activeDoc.fee)}
+                        {(() => {
+                          const resolvedFee =
+                            Number(activeDoc.fee) > 0
+                              ? Number(activeDoc.fee)
+                              : (activeDoc.title || '').toLowerCase().includes('business')
+                              ? 500
+                              : 0;
+                          return resolvedFee === 0 ? 'FREE / No Charge' : formatCurrency(resolvedFee);
+                        })()}
                       </Text>
                     </View>
                     <View style={styles.metaBadge}>
