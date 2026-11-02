@@ -1,4 +1,4 @@
-import React from 'react';
+/*  */import React from 'react';
 
 /**
  * Format helper for currency values (e.g. 1290000 -> ₱1,290,000.00)

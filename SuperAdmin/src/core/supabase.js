@@ -19,14 +19,18 @@ export const waitForSupabaseReachable = async () => {
     hostReachable = false;
     return false;
   }
+  if (hostReachable) return true;
   if (reachabilityCheckPromise) return reachabilityCheckPromise;
   reachabilityCheckPromise = (async () => {
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
-      const res = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        headers: { apikey: supabaseAnonKey },
+      const res = await fetch(`${supabaseUrl}/rest/v1/system_config?select=id&limit=1`, {
+        method: 'GET',
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
         signal: controller?.signal,
       });
       if (timer) clearTimeout(timer);

@@ -152,14 +152,10 @@ export default function RequestFlowModal({
 
   // Business Clearance / Permit Specific Variables (Official Document Reference)
   const [businessName, setBusinessName] = useState<string>('');
-  const [permitteeName, setPermitteeName] = useState<string>(
-    currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-  );
-  const [businessAddress, setBusinessAddress] = useState<string>(
-    currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City'
-  );
+  const [permitteeName, setPermitteeName] = useState<string>('');
+  const [businessAddress, setBusinessAddress] = useState<string>('');
   const [natureOfBusiness, setNatureOfBusiness] = useState<string>('');
-  const [businessContact, setBusinessContact] = useState<string>(currentUser.phone || '');
+  const [businessContact, setBusinessContact] = useState<string>('');
   const [capitalInvested, setCapitalInvested] = useState<string>('');
   const [grossSales, setGrossSales] = useState<string>('');
 
@@ -236,19 +232,8 @@ export default function RequestFlowModal({
         setPurpose(BUSINESS_PURPOSES[0]);
         setCustomPurpose(BUSINESS_PURPOSES[0]);
       }
-      if (!permitteeName) {
-        setPermitteeName(
-          currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-        );
-      }
-      if (!businessAddress) {
-        setBusinessAddress(currentUser.address || currentUser.sitio || 'Barangay Zapatera, Cebu City');
-      }
-      if (!businessContact) {
-        setBusinessContact(currentUser.phone || '');
-      }
     }
-  }, [isBusinessDoc, currentUser]);
+  }, [isBusinessDoc]);
 
   // Requirements list normalized from selectedDoc
   const requirementsToUpload =
@@ -633,7 +618,10 @@ export default function RequestFlowModal({
     setCopiedTracking(false);
     setIsSubmitting(false);
     setBusinessName('');
+    setPermitteeName('');
+    setBusinessAddress('');
     setNatureOfBusiness('');
+    setBusinessContact('');
     setCapitalInvested('');
     setGrossSales('');
     onClose();
@@ -1150,7 +1138,7 @@ export default function RequestFlowModal({
                       >
                         <TextInput
                           style={styles.textInputFlex}
-                          placeholder="e.g. HAGIAZO AUDIO PRODUCTIONS CO."
+                          placeholder=""
                           placeholderTextColor="#94a3b8"
                           value={businessName}
                           onChangeText={(txt) => {
@@ -1189,7 +1177,7 @@ export default function RequestFlowModal({
                       >
                         <TextInput
                           style={styles.textInputFlex}
-                          placeholder="e.g. Homer G. Cang"
+                          placeholder=""
                           placeholderTextColor="#94a3b8"
                           value={permitteeName}
                           onChangeText={(txt) => {
@@ -1228,7 +1216,7 @@ export default function RequestFlowModal({
                       >
                         <TextInput
                           style={styles.textInputFlex}
-                          placeholder="e.g. Cherry Court Bldg., Gen. Maxilom Ave., Brgy. Zapatera"
+                          placeholder=""
                           placeholderTextColor="#94a3b8"
                           value={businessAddress}
                           onChangeText={(txt) => {
@@ -1267,7 +1255,7 @@ export default function RequestFlowModal({
                       >
                         <TextInput
                           style={styles.textInputFlex}
-                          placeholder="e.g. Music Entertainment Services, Retail Store, Eatery..."
+                          placeholder=""
                           placeholderTextColor="#94a3b8"
                           value={natureOfBusiness}
                           onChangeText={(txt) => {
@@ -1275,30 +1263,6 @@ export default function RequestFlowModal({
                             if (txt.trim()) setUploadError('');
                           }}
                         />
-                      </View>
-                      {/* Nature presets */}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                        {['Music Entertainment Services', 'Retail / Sari-Sari Store', 'Food & Beverage Services', 'Professional Services', 'Rental / Real Estate'].map((preset) => (
-                          <TouchableOpacity
-                            key={preset}
-                            onPress={() => {
-                              setNatureOfBusiness(preset);
-                              setUploadError('');
-                            }}
-                            style={{
-                              backgroundColor: natureOfBusiness === preset ? '#eff6ff' : '#f8fafc',
-                              borderColor: natureOfBusiness === preset ? '#2563eb' : '#e2e8f0',
-                              borderWidth: 1,
-                              borderRadius: 6,
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                            }}
-                          >
-                            <Text style={{ fontSize: 11, color: natureOfBusiness === preset ? '#1d4ed8' : '#475569', fontWeight: '500' }}>
-                              {preset}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
                       </View>
                     </View>
 
@@ -1308,14 +1272,35 @@ export default function RequestFlowModal({
                         <Text style={styles.inputLabel}>
                           Contact Number <Text style={styles.reqAsterisk}>*</Text>
                         </Text>
+                        {!businessContact.trim() ? (
+                          <View style={styles.statusIndicatorRequired}>
+                            <AlertCircle size={10} color="#dc2626" />
+                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusIndicatorDone}>
+                            <CheckCircle2 size={10} color="#059669" />
+                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
+                          </View>
+                        )}
                       </View>
-                      <View style={styles.inputBoxRowValid}>
+                      <View
+                        style={[
+                          styles.inputBoxRow,
+                          !businessContact.trim() && showStepValidation
+                            ? styles.inputBoxRowMissing
+                            : styles.inputBoxRowValid,
+                        ]}
+                      >
                         <TextInput
                           style={styles.textInputFlex}
-                          placeholder="09173226058"
+                          placeholder=""
                           placeholderTextColor="#94a3b8"
                           value={businessContact}
-                          onChangeText={setBusinessContact}
+                          onChangeText={(txt) => {
+                            setBusinessContact(txt);
+                            if (txt.trim()) setUploadError('');
+                          }}
                         />
                       </View>
                     </View>
@@ -1327,7 +1312,7 @@ export default function RequestFlowModal({
                         <View style={[styles.inputBoxRowValid, { marginTop: 4 }]}>
                           <TextInput
                             style={styles.textInputFlex}
-                            placeholder="1,290,000.00"
+                            placeholder=""
                             placeholderTextColor="#94a3b8"
                             value={capitalInvested}
                             onChangeText={setCapitalInvested}
@@ -1339,7 +1324,7 @@ export default function RequestFlowModal({
                         <View style={[styles.inputBoxRowValid, { marginTop: 4 }]}>
                           <TextInput
                             style={styles.textInputFlex}
-                            placeholder="300,000.00"
+                            placeholder=""
                             placeholderTextColor="#94a3b8"
                             value={grossSales}
                             onChangeText={setGrossSales}
