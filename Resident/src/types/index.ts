@@ -79,6 +79,7 @@ export interface DocumentType {
   fee_type?: 'fixed' | 'variable';
   is_variable_fee?: boolean;
   processing_days: number;
+  validity_months?: number;
   validity?: string;
   requirements: string[];
   requirement_items?: DocumentRequirementItem[];

@@ -471,12 +471,13 @@ export default function DocumentCatalogView({
                     </Text>
                   </View>
 
-                  {doc.validity ? (
-                    <View style={styles.metaChip}>
-                      <ShieldCheck size={11} color="#64748b" />
-                      <Text style={styles.metaChipText}>{doc.validity}</Text>
-                    </View>
-                  ) : null}
+                  <View style={styles.metaChip}>
+                    <ShieldCheck size={11} color="#64748b" />
+                    <Text style={styles.metaChipText}>
+                      {doc.validity ||
+                        `${doc.validity_months || 6} ${Number(doc.validity_months || 6) === 1 ? 'Month' : 'Months'} from issuance`}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>

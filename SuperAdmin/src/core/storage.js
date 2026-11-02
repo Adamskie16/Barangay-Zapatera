@@ -253,29 +253,40 @@ export const StorageService = {
                 !deletedSet.has(String(d.id || '').toLowerCase().trim()) &&
                 !deletedSet.has(String(d.code || '').toLowerCase().trim())
             )
-            .map((d) => ({
-              id: d.id,
-              code: d.code,
-              title: d.title,
-              description: d.description || '',
-              fee: Number(d.fee) || 0,
-              fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
-              is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
-              processing_days: Number(d.processing_days) || 1,
-              requirements: Array.isArray(d.requirements)
-                ? d.requirements
-                : typeof d.requirements === 'string'
-                ? JSON.parse(d.requirements || '[]')
-                : [],
-              is_active: d.is_active !== false,
-              template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
-              template_title: d.template_title || d.title || '',
-              template_body: d.template_body || '',
-              doc_stamps: Number(d.doc_stamps) || 30,
-              created_at: d.created_at,
-              updated_at: d.updated_at,
-            }));
+            .map((d) => {
+              const parsedValidityMonths = Math.max(
+                1,
+                parseInt(d.validity_months, 10) ||
+                  (d.validity ? parseInt(String(d.validity).replace(/[^0-9]/g, ''), 10) : 6) ||
+                  6
+              );
+              return {
+                id: d.id,
+                code: d.code,
+                title: d.title,
+                description: d.description || '',
+                fee: Number(d.fee) || 0,
+                fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
+                is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
+                processing_days: Number(d.processing_days) || 1,
+                validity_months: parsedValidityMonths,
+                validity: `${parsedValidityMonths} ${parsedValidityMonths === 1 ? 'Month' : 'Months'} from issuance`,
+                requirements: Array.isArray(d.requirements)
+                  ? d.requirements
+                  : typeof d.requirements === 'string'
+                  ? JSON.parse(d.requirements || '[]')
+                  : [],
+                is_active: d.is_active !== false,
+                template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+                template_title: d.template_title || d.title || '',
+                template_body: d.template_body || '',
+                doc_stamps: Number(d.doc_stamps) || 30,
+                created_at: d.created_at,
+                updated_at: d.updated_at,
+              };
+            });
           localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(formatted));
+          localStorage.setItem('zapatera_doctypes_db', JSON.stringify(formatted));
           return formatted;
         }
       }
@@ -303,12 +314,22 @@ export const StorageService = {
       (docType.id && d.id === docType.id) || 
       (d.code && docType.code && d.code.toLowerCase().trim() === docType.code.toLowerCase().trim())
     );
+    const parsedValidityMonths = Math.max(
+      1,
+      parseInt(docType.validity_months, 10) ||
+        (docType.validity ? parseInt(String(docType.validity).replace(/[^0-9]/g, ''), 10) : 6) ||
+        6
+    );
+    const formattedValidity = `${parsedValidityMonths} ${parsedValidityMonths === 1 ? 'Month' : 'Months'} from issuance`;
+
     let updatedDoc = {
       ...docType,
       fee: Number(docType.fee) || 0,
       fee_type: docType.fee_type || (docType.is_variable_fee ? 'variable' : 'fixed'),
       is_variable_fee: Boolean(docType.is_variable_fee || docType.fee_type === 'variable'),
       processing_days: Number(docType.processing_days) || 1,
+      validity_months: parsedValidityMonths,
+      validity: formattedValidity,
       requirements: Array.isArray(docType.requirements) ? docType.requirements : [],
       is_active: docType.is_active !== false,
       template_type: docType.template_type || (docType.code?.toLowerCase().includes('bus') || docType.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
@@ -327,6 +348,7 @@ export const StorageService = {
       docTypes.push(updatedDoc);
     }
     localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
+    localStorage.setItem('zapatera_doctypes_db', JSON.stringify(docTypes));
 
     try {
       if (isSupabaseConfigured()) {
@@ -339,6 +361,8 @@ export const StorageService = {
           fee_type: updatedDoc.fee_type || (updatedDoc.is_variable_fee ? 'variable' : 'fixed'),
           is_variable_fee: Boolean(updatedDoc.is_variable_fee || updatedDoc.fee_type === 'variable'),
           processing_days: parseInt(updatedDoc.processing_days) || 1,
+          validity_months: parsedValidityMonths,
+          validity: formattedValidity,
           requirements: Array.isArray(updatedDoc.requirements) ? updatedDoc.requirements : [],
           is_active: updatedDoc.is_active !== false,
           template_type: updatedDoc.template_type || 'standard',
@@ -359,6 +383,8 @@ export const StorageService = {
         if (error) {
           delete payload.fee_type;
           delete payload.is_variable_fee;
+          delete payload.validity_months;
+          delete payload.validity;
           delete payload.template_type;
           delete payload.template_title;
           delete payload.template_body;
@@ -368,10 +394,20 @@ export const StorageService = {
             .upsert(payload, { onConflict: 'code' })
             .select();
           if (retryData && retryData[0]) {
-            updatedDoc = { ...updatedDoc, ...retryData[0] };
+            updatedDoc = {
+              ...updatedDoc,
+              ...retryData[0],
+              validity_months: parsedValidityMonths,
+              validity: formattedValidity,
+            };
           }
         } else if (upsertedData && upsertedData[0]) {
-          updatedDoc = { ...updatedDoc, ...upsertedData[0] };
+          updatedDoc = {
+            ...updatedDoc,
+            ...upsertedData[0],
+            validity_months: upsertedData[0].validity_months || parsedValidityMonths,
+            validity: upsertedData[0].validity || formattedValidity,
+          };
         }
       }
     } catch (err) {

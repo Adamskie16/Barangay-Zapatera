@@ -102,6 +102,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
     fee_type: 'fixed',
     is_variable_fee: false,
     processing_days: 1,
+    validity_months: 6,
     requirementsList: [
       { id: 'req-init-1', selectedOption: 'No Required Documents (None)', customText: '' },
     ],
@@ -180,6 +181,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       fee_type: 'fixed',
       is_variable_fee: false,
       processing_days: 1,
+      validity_months: 6,
       requirementsList: [
         { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
       ],
@@ -192,6 +194,12 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
   const openEditModal = (doc) => {
     setEditingDoc(doc);
     const isVar = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
+    const parsedValidityMonths = Math.max(
+      1,
+      parseInt(doc.validity_months, 10) ||
+        (doc.validity ? parseInt(String(doc.validity).replace(/[^0-9]/g, ''), 10) : 6) ||
+        6
+    );
     setFormData({
       code: doc.code || '',
       title: doc.title || '',
@@ -200,6 +208,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: doc.processing_days || 1,
+      validity_months: parsedValidityMonths,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
     });
@@ -223,6 +232,8 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       .filter(Boolean);
 
     const isVar = Boolean(formData.fee_type === 'variable' || formData.is_variable_fee);
+    const validityMonths = Math.max(1, parseInt(formData.validity_months, 10) || 6);
+    const validityText = `${validityMonths} ${validityMonths === 1 ? 'Month' : 'Months'} from issuance`;
     const docPayload = {
       id: editingDoc ? editingDoc.id : undefined,
       code: sanitizeInput(formData.code).toUpperCase(),
@@ -232,6 +243,8 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: Number(formData.processing_days) || 1,
+      validity_months: validityMonths,
+      validity: validityText,
       requirements: requirementsList,
       is_active: formData.is_active,
     };
@@ -385,10 +398,17 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                           )}
                         </td>
                         <td className="px-6 py-4 font-medium text-slate-700">
-                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg">
-                            <Clock className="w-3.5 h-3.5 text-blue-600" />
-                            {doc.processing_days} Day(s)
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg">
+                              <Clock className="w-3.5 h-3.5 text-blue-600" />
+                              {doc.processing_days} Day(s)
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
+                              <ShieldCheck className="w-3 h-3 text-blue-600" />
+                              {doc.validity ||
+                                `${doc.validity_months || 6} ${Number(doc.validity_months || 6) === 1 ? 'Month' : 'Months'} from issuance`}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           {(!doc.requirements || doc.requirements.length === 0 || (doc.requirements.length === 1 && (doc.requirements[0].toLowerCase().includes('no required document') || doc.requirements[0].toLowerCase() === 'none' || doc.requirements[0].toLowerCase().startsWith('none (')))) ? (
@@ -561,7 +581,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Processing Time (Days)</label>
               <input
@@ -572,6 +592,26 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
                 onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Validity Period (Months)</label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                required
+                value={formData.validity_months}
+                onChange={(e) => setFormData({ ...formData, validity_months: e.target.value })}
+                placeholder="e.g. 6"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                Resident view:{' '}
+                <span className="text-blue-600">
+                  {Math.max(1, parseInt(formData.validity_months, 10) || 1)}{' '}
+                  {Math.max(1, parseInt(formData.validity_months, 10) || 1) === 1 ? 'Month' : 'Months'} from issuance
+                </span>
+              </p>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>

@@ -170,6 +170,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     fee_type: 'fixed',
     is_variable_fee: false,
     processing_days: 1,
+    validity_months: 6,
     requirementsList: [
       { id: 'req-init-1', selectedOption: 'No Required Documents (None)', customText: '' },
     ],
@@ -252,6 +253,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       fee_type: 'fixed',
       is_variable_fee: false,
       processing_days: 1,
+      validity_months: 6,
       requirementsList: [
         { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
       ],
@@ -268,6 +270,12 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     setEditingDoc(doc);
     setShowTemplatePreview(false);
     const isVar = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
+    const parsedValidityMonths = Math.max(
+      1,
+      parseInt(doc.validity_months, 10) ||
+        (doc.validity ? parseInt(String(doc.validity).replace(/[^0-9]/g, ''), 10) : 6) ||
+        6
+    );
     setFormData({
       code: doc.code || '',
       title: doc.title || '',
@@ -276,6 +284,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: doc.processing_days || 1,
+      validity_months: parsedValidityMonths,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
       template_type: doc.template_type || (doc.code?.toLowerCase().includes('bus') || doc.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
@@ -309,6 +318,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       .filter(Boolean);
 
     const isVar = Boolean(formData.fee_type === 'variable' || formData.is_variable_fee);
+    const validityMonths = Math.max(1, parseInt(formData.validity_months, 10) || 6);
+    const validityText = `${validityMonths} ${validityMonths === 1 ? 'Month' : 'Months'} from issuance`;
     const docPayload = {
       id: editingDoc ? editingDoc.id : undefined,
       code: sanitizeInput(formData.code).toUpperCase(),
@@ -318,6 +329,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
       fee_type: isVar ? 'variable' : 'fixed',
       is_variable_fee: isVar,
       processing_days: Number(formData.processing_days) || 1,
+      validity_months: validityMonths,
+      validity: validityText,
       requirements: requirementsList,
       is_active: formData.is_active,
       template_type: formData.template_type || 'standard',
@@ -950,9 +963,18 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                             )}
                           </td>
                           <td className="p-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{doc.processing_time || `${doc.processing_days || 1} day(s)`}</span>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{doc.processing_time || `${doc.processing_days || 1} day(s)`}</span>
+                              </div>
+                              <div className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-semibold">
+                                <ShieldCheck className="w-3 h-3 text-[#3b5bfd]" />
+                                <span>
+                                  {doc.validity ||
+                                    `${doc.validity_months || 6} ${Number(doc.validity_months || 6) === 1 ? 'Month' : 'Months'} from issuance`}
+                                </span>
+                              </div>
                             </div>
                           </td>
                           <td className="p-4 whitespace-nowrap">
@@ -1113,8 +1135,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
 
                         <p className="text-xs text-slate-500 font-medium mt-3 leading-relaxed">{doc.description}</p>
 
-                        {/* Issuance Fee & Processing Time Info */}
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Issuance Fee, Processing Time & Validity Info */}
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
                             <div className="w-9 h-9 rounded-xl bg-white text-emerald-600 flex items-center justify-center shadow-2xs shrink-0">
                               <DollarSign className="w-4 h-4" />
@@ -1140,7 +1162,20 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                             <div className="min-w-0">
                               <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Est. Turnaround</p>
                               <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
-                                {doc.processing_time || '15–30 Minutes'}
+                                {doc.processing_time || `${doc.processing_days || 1} ${Number(doc.processing_days || 1) === 1 ? 'Day' : 'Days'}`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-[#f4f7fb] rounded-2xl border border-slate-200/60 flex items-center space-x-3">
+                            <div className="w-9 h-9 rounded-xl bg-white text-indigo-600 flex items-center justify-center shadow-2xs shrink-0">
+                              <ShieldCheck className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Validity Period</p>
+                              <p className="text-xs font-extrabold text-slate-800 mt-0.5 truncate">
+                                {doc.validity ||
+                                  `${doc.validity_months || 6} ${Number(doc.validity_months || 6) === 1 ? 'Month' : 'Months'} from issuance`}
                               </p>
                             </div>
                           </div>
@@ -1534,7 +1569,7 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Processing Time (Days)</label>
                   <input
@@ -1545,6 +1580,31 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                     onChange={(e) => setFormData({ ...formData, processing_days: e.target.value })}
                     className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
                   />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
+                    Validity Period (Months)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    required
+                    value={formData.validity_months}
+                    onChange={(e) => setFormData({ ...formData, validity_months: e.target.value })}
+                    placeholder="e.g. 6"
+                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
+                  />
+                  <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                    Resident view:{' '}
+                    <span className="text-[#3b5bfd]">
+                      {Math.max(1, parseInt(formData.validity_months, 10) || 1)}{' '}
+                      {Math.max(1, parseInt(formData.validity_months, 10) || 1) === 1
+                        ? 'Month'
+                        : 'Months'}{' '}
+                      from issuance
+                    </span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600 mb-1.5">Status</label>

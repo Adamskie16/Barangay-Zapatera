@@ -1196,7 +1196,9 @@ export default function ResidentDashboard({
                     <View style={styles.docTypeMeta}>
                       <Clock size={11} color="#64748b" />
                       <Text style={styles.docTypeMetaText}>
-                        {doc.processing_days} {doc.processing_days === 1 ? 'day' : 'days'} processing
+                        {doc.processing_days} {doc.processing_days === 1 ? 'day' : 'days'} •{' '}
+                        {doc.validity ||
+                          `${doc.validity_months || 6} ${Number(doc.validity_months || 6) === 1 ? 'Month' : 'Months'} from issuance`}
                       </Text>
                     </View>
 

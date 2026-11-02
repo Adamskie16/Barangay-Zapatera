@@ -436,6 +436,13 @@ export default function App() {
               }
             }
           )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'document_types' },
+            () => {
+              fetchDocTypes();
+            }
+          )
           .subscribe();
       } catch (err) {
         console.warn('Realtime subscription notice:', err);
@@ -498,6 +505,11 @@ export default function App() {
             }
           } else if (event.data?.type === 'NEWS_DELETED') {
             fetchAnnouncements();
+          } else if (
+            event.data?.type === 'DOCUMENT_TYPES_UPDATED' ||
+            event.data?.type === 'DOCUMENT_TYPE_DELETED'
+          ) {
+            fetchDocTypes();
           }
         };
       } catch (e) {}
@@ -514,6 +526,12 @@ export default function App() {
         if (currentUserRef.current) {
           fetchResidentNotifications(currentUserRef.current);
         }
+      } else if (
+        e.key === 'zapatera_doc_types_db' ||
+        e.key === 'zapatera_doctypes_db' ||
+        e.key === 'zapatera_deleted_doc_types'
+      ) {
+        fetchDocTypes();
       }
     };
 
@@ -985,17 +1003,57 @@ export default function App() {
         }
       }
 
-      // Seamlessly merge templates from localStorage database so newly added templates are immediately available
+      // Seamlessly merge templates from localStorage database so newly added/edited templates are immediately available
       try {
-        const localRaw = typeof window !== 'undefined' ? localStorage.getItem('zapatera_doctypes_db') : null;
-        if (localRaw) {
-          const parsed = JSON.parse(localRaw);
-          if (Array.isArray(parsed)) {
-            const activeLocal = parsed.filter((d: any) => d.is_active !== false);
-            const map = new Map<string, any>();
-            activeLocal.forEach((d: any) => map.set(d.code || d.id, d));
-            rawDocs.forEach((d: any) => map.set(d.code || d.id, d));
-            rawDocs = Array.from(map.values());
+        if (typeof window !== 'undefined') {
+          let deletedSet = new Set<string>();
+          try {
+            const deletedRaw = localStorage.getItem('zapatera_deleted_doc_types');
+            if (deletedRaw) {
+              const parsedDeleted = JSON.parse(deletedRaw);
+              if (Array.isArray(parsedDeleted)) {
+                deletedSet = new Set(parsedDeleted.map((v: any) => String(v).toLowerCase().trim()));
+              }
+            }
+          } catch {}
+
+          const localRaw =
+            localStorage.getItem('zapatera_doc_types_db') ||
+            localStorage.getItem('zapatera_doctypes_db');
+          if (localRaw) {
+            const parsed = JSON.parse(localRaw);
+            if (Array.isArray(parsed)) {
+              const map = new Map<string, any>();
+              rawDocs.forEach((d: any) => {
+                const key = String(d.code || d.id || '').toLowerCase().trim();
+                if (key) map.set(key, d);
+              });
+              parsed.forEach((d: any) => {
+                const key = String(d.code || d.id || '').toLowerCase().trim();
+                if (!key) return;
+                if (d.is_active === false) {
+                  map.delete(key);
+                  return;
+                }
+                const existing = map.get(key);
+                if (!existing) {
+                  map.set(key, d);
+                } else {
+                  map.set(key, {
+                    ...existing,
+                    ...d,
+                    validity_months: d.validity_months ?? existing.validity_months,
+                    validity: d.validity || existing.validity,
+                  });
+                }
+              });
+              rawDocs = Array.from(map.values()).filter(
+                (d: any) =>
+                  d.is_active !== false &&
+                  !deletedSet.has(String(d.id || '').toLowerCase().trim()) &&
+                  !deletedSet.has(String(d.code || '').toLowerCase().trim())
+              );
+            }
           }
         }
       } catch {}
@@ -1026,6 +1084,14 @@ export default function App() {
           }
 
           const isVar = Boolean(d.is_variable_fee || d.fee_type === 'variable');
+          const parsedValidityMonths = Math.max(
+            1,
+            parseInt(d.validity_months, 10) ||
+              (d.validity ? parseInt(String(d.validity).replace(/[^0-9]/g, ''), 10) : 6) ||
+              6
+          );
+          const formattedValidity = `${parsedValidityMonths} ${parsedValidityMonths === 1 ? 'Month' : 'Months'} from issuance`;
+
           return {
             id: d.id,
             code: d.code,
@@ -1036,7 +1102,8 @@ export default function App() {
             fee_type: isVar ? 'variable' : 'fixed',
             is_variable_fee: isVar,
             processing_days: Number(d.processing_days) || 1,
-            validity: d.validity || (Number(d.fee) === 0 ? '3-6 Months' : '6 Months from issuance'),
+            validity_months: parsedValidityMonths,
+            validity: formattedValidity,
             requirements: parsedReqs,
             is_active: d.is_active !== false,
           };
