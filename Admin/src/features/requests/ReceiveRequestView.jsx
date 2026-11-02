@@ -232,7 +232,10 @@ export default function ReceiveRequestView({
 
   const pendingCount = operationalRequests.filter((r) => (r.status || 'pending').toLowerCase() === 'pending').length;
   const processingCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'processing' || (r.status || '').toLowerCase() === 'under_review').length;
-  const declinedCount = operationalRequests.filter((r) => (r.status || '').toLowerCase() === 'declined' || (r.status || '').toLowerCase() === 'rejected').length;
+  const declinedCount = operationalRequests.filter((r) => {
+    const s = (r.status || '').toLowerCase();
+    return s === 'declined' || s === 'rejected' || s === 'cancelled';
+  }).length;
 
   const filteredRequests = operationalRequests.filter((r) => {
     const normStatus = (r.status || 'pending').toLowerCase();
@@ -241,7 +244,7 @@ export default function ReceiveRequestView({
       normStatus === statusFilter ||
       (statusFilter === 'pending' && normStatus === 'pending') ||
       (statusFilter === 'processing' && (normStatus === 'under_review' || normStatus === 'processing')) ||
-      (statusFilter === 'declined' && (normStatus === 'rejected' || normStatus === 'declined'));
+      (statusFilter === 'declined' && (normStatus === 'rejected' || normStatus === 'declined' || normStatus === 'cancelled'));
 
     const matchesSearch =
       r.tracking_number?.toLowerCase().includes(search.toLowerCase()) ||
@@ -1383,7 +1386,40 @@ export default function ReceiveRequestView({
                       {/* Status Badges */}
                       <td className="p-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <Badge variant={normalizedStatus}>{normalizedStatus.replace('_', ' ')}</Badge>
+                          {(() => {
+                            const isRowDeclined =
+                              normalizedStatus === 'declined' ||
+                              normalizedStatus === 'rejected' ||
+                              normalizedStatus === 'cancelled';
+                            const isCancelledByResident =
+                              normalizedStatus === 'cancelled' ||
+                              `${req.rejection_reason || ''} ${req.declined_reason || ''} ${req.notes || ''}`
+                                .toLowerCase()
+                                .includes('cancelled by resident');
+                            const rowDeclineReason =
+                              req.rejection_reason || req.declined_reason || '';
+
+                            return (
+                              <>
+                                <Badge variant={isRowDeclined ? 'declined' : normalizedStatus}>
+                                  {isRowDeclined ? 'Declined' : normalizedStatus.replace('_', ' ')}
+                                </Badge>
+                                {isRowDeclined && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 max-w-[180px] truncate"
+                                    title={isCancelledByResident ? 'Cancelled by Resident' : rowDeclineReason}
+                                  >
+                                    <XCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                    <span className="truncate">
+                                      {isCancelledByResident
+                                        ? 'Cancelled by Resident'
+                                        : rowDeclineReason || 'Declined Request'}
+                                    </span>
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                           {req.is_resubmitted && normalizedStatus === 'pending' && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
@@ -1611,6 +1647,57 @@ export default function ReceiveRequestView({
                   </div>
                   <span className="text-[11px] font-medium text-blue-700">Resident Details & Requirements</span>
                 </div>
+
+                {/* Declined / Resident Cancelled Alert Banner */}
+                {(() => {
+                  const selStatus = (selectedReq.status || '').toLowerCase();
+                  const isSelDeclined =
+                    selStatus === 'declined' || selStatus === 'rejected' || selStatus === 'cancelled';
+                  if (!isSelDeclined) return null;
+                  const isSelCancelledByResident =
+                    selStatus === 'cancelled' ||
+                    `${selectedReq.rejection_reason || ''} ${selectedReq.declined_reason || ''} ${selectedReq.notes || ''}`
+                      .toLowerCase()
+                      .includes('cancelled by resident');
+                  const reasonText =
+                    selectedReq.rejection_reason ||
+                    selectedReq.declined_reason ||
+                    (isSelCancelledByResident ? 'Request Cancelled by Resident' : 'Declined due to incomplete requirements');
+                  return (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="p-1.5 bg-rose-100 text-rose-700 rounded-lg">
+                            <XCircle className="w-4 h-4 text-rose-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-xs text-rose-900">
+                              {isSelCancelledByResident
+                                ? 'Request Declined — Cancelled by Resident'
+                                : 'Request Declined — Action Required'}
+                            </h4>
+                            <p className="text-[11px] text-rose-700">
+                              {isSelCancelledByResident
+                                ? 'The resident cancelled this document application online. It is marked as Declined.'
+                                : 'This document request has been marked as Declined.'}
+                            </p>
+                          </div>
+                        </div>
+                        {selectedReq.updated_at && (
+                          <span className="text-[10px] font-semibold text-rose-800 bg-rose-100/70 px-2 py-0.5 rounded border border-rose-200">
+                            {formatDate(selectedReq.updated_at)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="bg-white/90 p-2.5 rounded-xl border border-rose-200/70 text-xs">
+                        <span className="font-bold text-rose-900 uppercase text-[10px] block mb-0.5">
+                          Reason / Status Note:
+                        </span>
+                        <span className="text-rose-800 font-semibold">{reasonText}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Resident Resubmission Compliance Alert Banner */}
                 {selectedReq.is_resubmitted && (

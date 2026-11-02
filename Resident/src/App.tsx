@@ -2000,18 +2000,26 @@ export default function App() {
     const authUserId = currentUser.id;
     const userScope = authUserId || currentUser.email || 'resident';
     const userRequestsKey = `zapatera_requests_db_${userScope}`;
+    const nowIso = new Date().toISOString();
+    const cancelReason = 'Request Cancelled by Resident';
+    const updatedNotes = (req.notes ? `${req.notes} | ` : '') + '[Cancelled by Resident]';
 
     const updatedReq: DocumentRequest = {
       ...req,
-      status: 'cancelled',
-      updated_at: new Date().toISOString(),
-      notes: (req.notes ? `${req.notes} | ` : '') + 'Request cancelled by resident',
+      status: 'declined',
+      rejection_reason: cancelReason,
+      declined_reason: cancelReason,
+      declined_details: 'The resident cancelled this document request online.',
+      declined_at: nowIso,
+      processed_by: 'Resident Applicant (Cancelled)',
+      updated_at: nowIso,
+      notes: updatedNotes,
       timeline: [
         ...(req.timeline || []).map((t) => ({ ...t, is_current: false })),
         {
-          status: 'cancelled',
-          label: 'Request Cancelled',
-          description: 'Document request cancelled by resident.',
+          status: 'declined',
+          label: 'Request Declined (Cancelled)',
+          description: 'Document request was cancelled by the resident.',
           timestamp: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
           is_completed: true,
           is_current: true,
@@ -2025,7 +2033,7 @@ export default function App() {
     );
     setSelectedRequestForTracking(updatedReq);
 
-    // 2. Persist update in account-scoped local storage
+    // 2. Persist update in account-scoped local storage and shared admin storage
     try {
       const stored = await MobileStorage.getItem(userRequestsKey);
       if (stored) {
@@ -2035,26 +2043,55 @@ export default function App() {
         );
         await MobileStorage.setItem(userRequestsKey, JSON.stringify(updatedList));
       }
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const sharedRaw = window.localStorage.getItem('zapatera_requests_db');
+        if (sharedRaw) {
+          const sharedList = JSON.parse(sharedRaw);
+          if (Array.isArray(sharedList)) {
+            const updatedShared = sharedList.map((r: any) =>
+              r.id === req.id || r.tracking_number === req.tracking_number ? { ...r, ...updatedReq } : r
+            );
+            window.localStorage.setItem('zapatera_requests_db', JSON.stringify(updatedShared));
+          }
+        }
+      }
     } catch {}
 
-    // 3. Update status in Supabase document_requests table
+    // 3. Update status to 'declined' in Supabase document_requests table so Admin sees it as Declined
     try {
       if (isSupabaseConfigured()) {
         const payload: any = {
-          status: 'cancelled',
-          updated_at: new Date().toISOString(),
+          status: 'declined',
+          rejection_reason: cancelReason,
+          notes: updatedNotes,
+          updated_at: nowIso,
         };
-        if (req.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id)) {
-          await supabase.from('document_requests').update(payload).eq('id', req.id);
+        const isValidUuid = Boolean(req.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.id));
+        let updateRes;
+        if (isValidUuid) {
+          updateRes = await supabase.from('document_requests').update(payload).eq('id', req.id);
         } else if (req.tracking_number) {
-          await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+          updateRes = await supabase.from('document_requests').update(payload).eq('tracking_number', req.tracking_number);
+        }
+
+        if (updateRes?.error) {
+          const minimalPayload = {
+            status: 'declined',
+            notes: updatedNotes,
+            updated_at: nowIso,
+          };
+          if (isValidUuid) {
+            await supabase.from('document_requests').update(minimalPayload).eq('id', req.id);
+          } else if (req.tracking_number) {
+            await supabase.from('document_requests').update(minimalPayload).eq('tracking_number', req.tracking_number);
+          }
         }
       }
     } catch (err) {
       console.warn('Error updating cancelled request in Supabase:', err);
     }
 
-    // 4. Broadcast live update across tabs
+    // 4. Broadcast live update across tabs so Admin queue refreshes immediately
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         const bc = new BroadcastChannel('zapatera_security_channel');
@@ -2552,6 +2589,7 @@ export default function App() {
               onViewRequestDetails={handleViewRequestDetails}
               onRequestNew={() => handleOpenRequestFlow(undefined, true)}
               onOpenResubmit={handleOpenResubmit}
+              onCancelRequest={handleCancelRequest}
             />
           )}
 

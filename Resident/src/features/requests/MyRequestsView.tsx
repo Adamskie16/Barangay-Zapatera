@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Modal,
 } from 'react-native';
 import {
   Search,
@@ -36,6 +37,7 @@ interface MyRequestsViewProps {
   onViewRequestDetails: (req: DocumentRequest) => void;
   onRequestNew: () => void;
   onOpenResubmit?: (req: DocumentRequest) => void;
+  onCancelRequest?: (req: DocumentRequest) => void;
 }
 
 const ACTIVE_STATUS_FILTERS: { label: string; value: string }[] = [
@@ -58,7 +60,9 @@ export default function MyRequestsView({
   onViewRequestDetails,
   onRequestNew,
   onOpenResubmit,
+  onCancelRequest,
 }: MyRequestsViewProps) {
+  const [reqToCancel, setReqToCancel] = useState<DocumentRequest | null>(null);
   const [activeTab, setActiveTabState] = useState<'active' | 'history'>(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -155,9 +159,14 @@ export default function MyRequestsView({
     if (filterVal === 'all') return true;
     const claimed = isClaimed(r);
     const normStatus = (r.status || 'pending').toLowerCase();
+    const isResidentCancelled =
+      normStatus === 'cancelled' ||
+      `${r.rejection_reason || ''} ${r.declined_reason || ''} ${r.notes || ''}`
+        .toLowerCase()
+        .includes('cancelled by resident');
     if (filterVal === 'claimed') return claimed;
     if (filterVal === 'declined') return normStatus === 'declined' || normStatus === 'rejected';
-    if (filterVal === 'cancelled') return normStatus === 'cancelled';
+    if (filterVal === 'cancelled') return isResidentCancelled;
     if (filterVal === 'pending')
       return (normStatus === 'pending' || normStatus === 'under_review') && !claimed;
     if (filterVal === 'processing') return normStatus === 'processing' && !claimed;
@@ -422,8 +431,15 @@ export default function MyRequestsView({
           const claimed = isClaimed(req);
           const isDeclined = req.status === 'declined' || req.status === 'rejected';
           const isCancelled = req.status === 'cancelled';
+          const isCancelledByResident =
+            isCancelled ||
+            `${req.rejection_reason || ''} ${req.declined_reason || ''} ${req.notes || ''}`
+              .toLowerCase()
+              .includes('cancelled by resident');
           const isApproved =
             (req.status === 'approved' || req.status === 'ready_for_pickup') && !claimed;
+          const canCancel =
+            !claimed && !isDeclined && !isCancelled && Boolean(onCancelRequest);
           const visual = getStatusVisual(req);
 
           const declineReasonText =
@@ -445,7 +461,9 @@ export default function MyRequestsView({
                   day: 'numeric',
                   year: 'numeric',
                 });
-          const adminProcessor = req.processed_by || 'Barangay Administrator';
+          const adminProcessor = isCancelledByResident
+            ? 'Resident Applicant (Cancelled)'
+            : req.processed_by || 'Barangay Administrator';
 
           const matchedDoc = docTypes.find(
             (d) =>
@@ -595,7 +613,11 @@ export default function MyRequestsView({
                   <View style={styles.declinedTopRow}>
                     <View style={styles.declinedTitleWrap}>
                       <XCircle size={14} color="#dc2626" />
-                      <Text style={styles.declinedTitle}>Requires Compliance</Text>
+                      <Text style={styles.declinedTitle}>
+                        {isCancelledByResident
+                          ? 'Request Cancelled (Declined)'
+                          : 'Requires Compliance'}
+                      </Text>
                     </View>
                     <Text style={styles.declinedDateText}>{dateDeclinedFormatted}</Text>
                   </View>
@@ -603,10 +625,10 @@ export default function MyRequestsView({
                   <Text style={styles.declinedReasonText}>{declineReasonText}</Text>
 
                   <Text style={styles.declinedProcessorText}>
-                    Reviewed by: <Text style={styles.declinedProcessorBold}>{adminProcessor}</Text>
+                    Status Update: <Text style={styles.declinedProcessorBold}>{adminProcessor}</Text>
                   </Text>
 
-                  {onOpenResubmit && (
+                  {onOpenResubmit && !isCancelledByResident && (
                     <TouchableOpacity
                       style={styles.resubmitBtn}
                       onPress={(e) => {
@@ -624,7 +646,7 @@ export default function MyRequestsView({
                 </View>
               )}
 
-              {/* Card Footer: Fee Pill & Track Action */}
+              {/* Card Footer: Fee Pill & Track / Cancel Actions */}
               <View style={styles.cardFooter}>
                 <View style={styles.feeRow}>
                   <Text style={styles.feeLabel}>
@@ -649,19 +671,35 @@ export default function MyRequestsView({
                   </View>
                 </View>
 
-                <View style={styles.trackActionBtn}>
-                  <Text style={styles.trackActionText}>
-                    {claimed
-                      ? 'Release Details'
-                      : isDeclined
-                      ? 'Decline Details'
-                      : isCancelled
-                      ? 'View Details'
-                      : isApproved
-                      ? 'View Claim Pass'
-                      : 'Track Progress'}
-                  </Text>
-                  <ArrowRight size={14} color="#2563eb" />
+                <View style={styles.footerActionsRow}>
+                  {canCancel && (
+                    <TouchableOpacity
+                      style={styles.cancelCardBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setReqToCancel(req);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <XCircle size={13} color="#dc2626" />
+                      <Text style={styles.cancelCardBtnText}>Cancel Request</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <View style={styles.trackActionBtn}>
+                    <Text style={styles.trackActionText}>
+                      {claimed
+                        ? 'Release Details'
+                        : isDeclined
+                        ? 'Decline Details'
+                        : isCancelled
+                        ? 'View Details'
+                        : isApproved
+                        ? 'View Claim Pass'
+                        : 'Track Progress'}
+                    </Text>
+                    <ArrowRight size={14} color="#2563eb" />
+                  </View>
                 </View>
               </View>
             </TouchableOpacity>
@@ -683,6 +721,49 @@ export default function MyRequestsView({
           actionLabel={activeTab === 'active' ? 'File Document Request' : undefined}
           onAction={activeTab === 'active' ? onRequestNew : undefined}
         />
+      )}
+
+      {/* Confirmation Modal for Cancelling a Request */}
+      {reqToCancel && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setReqToCancel(null)}
+        >
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmBox}>
+              <View style={styles.confirmIconCircle}>
+                <AlertTriangle size={24} color="#dc2626" />
+              </View>
+              <Text style={styles.confirmTitle}>Cancel Document Request?</Text>
+              <Text style={styles.confirmMessage}>
+                Are you sure you want to cancel your request for "
+                {reqToCancel.document_title}" (Ref: {reqToCancel.tracking_number})? This will mark the request as Declined in the Barangay Admin queue.
+              </Text>
+              <View style={styles.confirmBtnRow}>
+                <TouchableOpacity
+                  style={styles.confirmKeepBtn}
+                  onPress={() => setReqToCancel(null)}
+                >
+                  <Text style={styles.confirmKeepBtnText}>Keep Request</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmCancelProceedBtn}
+                  onPress={() => {
+                    const target = reqToCancel;
+                    setReqToCancel(null);
+                    onCancelRequest?.(target);
+                  }}
+                >
+                  <Text style={styles.confirmCancelProceedBtnText}>
+                    Yes, Cancel Request
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
 
       {/* Global Developer & Institution Footer */}
@@ -1288,6 +1369,28 @@ const styles = StyleSheet.create({
   feeBadgeTextPaid: {
     color: '#1d4ed8',
   },
+  footerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cancelCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  cancelCardBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#dc2626',
+  },
   trackActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1304,5 +1407,78 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '800',
     color: '#2563eb',
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  confirmBox: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  confirmIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  confirmMessage: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+  },
+  confirmBtnRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+  },
+  confirmKeepBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 11,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  confirmKeepBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  confirmCancelProceedBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 11,
+    backgroundColor: '#dc2626',
+    alignItems: 'center',
+  },
+  confirmCancelProceedBtnText: {
+    fontFamily: 'Inter',
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });
