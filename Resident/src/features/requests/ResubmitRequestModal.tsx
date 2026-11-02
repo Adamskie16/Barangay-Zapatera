@@ -27,6 +27,8 @@ import {
   Trash2,
   Eye,
   Check,
+  Building2,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DocumentRequest,
@@ -36,6 +38,7 @@ import {
 } from '../../types';
 import { uploadResidentRequirementFile, deleteStoredFile } from '../../core/storageService';
 import { analyzeDocumentImage } from '../../core/documentAiService';
+import { APPOINTMENT_TIME_SLOTS } from '../../core/portalData';
 import ActionModal from '../../components/ActionModal';
 
 interface ResubmitRequestModalProps {
@@ -56,6 +59,16 @@ export default function ResubmitRequestModal({
   onResubmitSuccess,
 }: ResubmitRequestModalProps) {
   const [purpose, setPurpose] = useState<string>('');
+  const [yearsInBarangay, setYearsInBarangay] = useState<string>('');
+  const [businessName, setBusinessName] = useState<string>('');
+  const [permitteeName, setPermitteeName] = useState<string>('');
+  const [businessAddress, setBusinessAddress] = useState<string>('');
+  const [natureOfBusiness, setNatureOfBusiness] = useState<string>('');
+  const [businessContact, setBusinessContact] = useState<string>('');
+  const [capitalInvested, setCapitalInvested] = useState<string>('');
+  const [grossSales, setGrossSales] = useState<string>('');
+  const [pickupDate, setPickupDate] = useState<string>('');
+  const [pickupTimeSlot, setPickupTimeSlot] = useState<string>('');
   const [uploadedFiles, setUploadedFiles] = useState<{ [reqName: string]: UploadedRequirementFile }>({});
   const [complianceNotes, setComplianceNotes] = useState<string>('');
   const [uploadingMap, setUploadingMap] = useState<{ [reqName: string]: boolean }>({});
@@ -78,10 +91,52 @@ export default function ResubmitRequestModal({
     title: '',
   });
 
+  // Helper to extract bracketed tokens from notes if needed
+  const extractNoteToken = (notesStr: string | undefined, label: string): string => {
+    if (!notesStr) return '';
+    const regex = new RegExp(`\\[${label}:\\s*([^\\]]+)\\]`, 'i');
+    const match = notesStr.match(regex);
+    return match && match[1] ? match[1].replace(/^₱/, '').trim() : '';
+  };
+
   // Populate data whenever modal opens or request changes
   useEffect(() => {
     if (visible && request) {
       setPurpose(request.purpose || '');
+      const rawYears =
+        request.years_in_barangay ||
+        currentUser?.years_in_barangay ||
+        '';
+      setYearsInBarangay(String(rawYears).replace(/[^0-9]/g, ''));
+
+      setBusinessName(
+        request.business_name || extractNoteToken(request.notes, 'Business') || ''
+      );
+      setPermitteeName(
+        request.permittee_name || extractNoteToken(request.notes, 'Permittee') || ''
+      );
+      setBusinessAddress(
+        request.business_address || extractNoteToken(request.notes, 'Business Address') || ''
+      );
+      setNatureOfBusiness(
+        request.nature_of_business || extractNoteToken(request.notes, 'Nature') || ''
+      );
+      setBusinessContact(
+        request.contact_number || extractNoteToken(request.notes, 'Contact') || ''
+      );
+      setCapitalInvested(
+        request.capital_invested !== undefined && request.capital_invested !== null
+          ? String(request.capital_invested)
+          : extractNoteToken(request.notes, 'Capital') || ''
+      );
+      setGrossSales(
+        request.gross_sales !== undefined && request.gross_sales !== null
+          ? String(request.gross_sales)
+          : extractNoteToken(request.notes, 'Gross') || ''
+      );
+
+      setPickupDate(request.pickup_date || '');
+      setPickupTimeSlot(request.pickup_time_slot || APPOINTMENT_TIME_SLOTS[2] || '9:00 AM - 9:30 AM');
       setComplianceNotes('');
       setUploadError('');
 
@@ -96,29 +151,63 @@ export default function ResubmitRequestModal({
       }
       setUploadedFiles(fileMap);
     }
-  }, [visible, request]);
+  }, [visible, request, currentUser]);
 
   if (!visible || !request) return null;
 
-  // Find document type requirements
+  // Match document template from docTypes by id, code, or case-insensitive title
   const matchedDocType = docTypes.find(
-    (dt) => dt.id === request.document_type_id || dt.title === request.document_title
+    (dt) =>
+      dt.id === request.document_type_id ||
+      (dt.code && dt.code === request.document_type_id) ||
+      (dt.title || '').toLowerCase().trim() === (request.document_title || '').toLowerCase().trim()
   );
 
-  // Requirements list: from matchedDocType or fallback to request's requirements_attached or existing uploaded file names
+  // Check if this document template is a Business Permit / Business Clearance
+  const docTitleLower = (matchedDocType?.title || request.document_title || '').toLowerCase();
+  const docCodeLower = (matchedDocType?.code || request.document_type_id || '').toLowerCase();
+  const docTmpl = (matchedDocType as any)?.template_type || '';
+  const isBusinessDoc =
+    docTmpl === 'business' ||
+    docTitleLower.includes('business') ||
+    docTitleLower.includes('commercial') ||
+    docCodeLower.includes('bus');
+
+  // Strictly normalize requirements from the document template (matching RequestFlowModal)
+  const filterValidRequirements = (rawList: any[]): string[] => {
+    if (!Array.isArray(rawList)) return [];
+    return rawList
+      .map((r) => (typeof r === 'string' ? r : r?.name || r?.title || ''))
+      .map((s) => String(s || '').trim())
+      .filter((s) => {
+        const lower = s.toLowerCase();
+        return (
+          lower.length > 0 &&
+          lower !== 'none' &&
+          !lower.includes('no required document') &&
+          !lower.startsWith('none (')
+        );
+      });
+  };
+
   let requirementsList: string[] = [];
-  if (matchedDocType && Array.isArray(matchedDocType.requirements) && matchedDocType.requirements.length > 0) {
-    requirementsList = matchedDocType.requirements;
+  if (matchedDocType) {
+    if (Array.isArray(matchedDocType.requirements)) {
+      requirementsList = filterValidRequirements(matchedDocType.requirements);
+    } else if (Array.isArray((matchedDocType as any).requirement_items)) {
+      requirementsList = filterValidRequirements((matchedDocType as any).requirement_items);
+    }
   } else if (Array.isArray(request.requirements_attached) && request.requirements_attached.length > 0) {
-    requirementsList = request.requirements_attached;
+    requirementsList = filterValidRequirements(request.requirements_attached);
   } else if (Object.keys(uploadedFiles).length > 0) {
-    requirementsList = Object.keys(uploadedFiles);
-  } else {
-    requirementsList = [
-      'Valid Government-Issued ID (Front & Back)',
-      'Proof of Residency (Utility Bill or Barangay Certificate)',
-    ];
+    requirementsList = filterValidRequirements(Object.keys(uploadedFiles));
   }
+
+  const resolvedDocFee = Number(matchedDocType?.fee ?? request.fee ?? 0);
+  const resolvedValidity = matchedDocType?.validity || '6 Months from issuance';
+  const resolvedProcessingTime =
+    matchedDocType?.processing_time ||
+    (matchedDocType?.processing_days ? `${matchedDocType.processing_days} Day(s)` : '1 Day');
 
   // Handle uploading or replacing a requirement file
   const handleUploadFile = (reqName: string) => {
@@ -198,10 +287,43 @@ export default function ResubmitRequestModal({
       return;
     }
 
-    const filesArray = Object.values(uploadedFiles);
-    if (filesArray.length === 0) {
-      setUploadError('Please attach at least one valid requirement document before resubmitting.');
+    if (!yearsInBarangay.trim()) {
+      setUploadError('Please enter your Length of Residency (Years in Barangay Zapatera).');
       return;
+    }
+
+    if (isBusinessDoc) {
+      if (!businessName.trim()) {
+        setUploadError('Required Field Missing: Please enter the Business Name.');
+        return;
+      }
+      if (!permitteeName.trim()) {
+        setUploadError('Required Field Missing: Please enter the Permittee Name.');
+        return;
+      }
+      if (!businessAddress.trim()) {
+        setUploadError('Required Field Missing: Please enter the complete Business Address.');
+        return;
+      }
+      if (!natureOfBusiness.trim()) {
+        setUploadError('Required Field Missing: Please specify the Nature of Business.');
+        return;
+      }
+      if (!businessContact.trim()) {
+        setUploadError('Required Field Missing: Please provide a valid Contact Number.');
+        return;
+      }
+    }
+
+    const filesArray = Object.values(uploadedFiles);
+    if (requirementsList.length > 0) {
+      const missingReq = requirementsList.find((reqName) => !uploadedFiles[reqName]);
+      if (missingReq) {
+        setUploadError(
+          `Required Attachment Missing: Please upload "${missingReq}" before resubmitting.`
+        );
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -211,6 +333,21 @@ export default function ResubmitRequestModal({
       const resubmissionCount = (request.resubmission_count || 0) + 1;
       const resubmitTimestamp = new Date().toISOString();
       const prevDeclineReason = request.declined_reason || request.rejection_reason || 'Incomplete requirements';
+
+      const notesParts = [
+        `Document: ${matchedDocType?.title || request.document_title}`,
+        `Fee: ₱${resolvedDocFee}`,
+        currentUser?.civil_status ? `Civil Status: ${currentUser.civil_status}` : '',
+        request.pickup_location ? `Pickup Window: ${request.pickup_location}` : '',
+        isBusinessDoc && businessName.trim() ? `[Business: ${businessName.trim()}]` : '',
+        isBusinessDoc && permitteeName.trim() ? `[Permittee: ${permitteeName.trim()}]` : '',
+        isBusinessDoc && businessAddress.trim() ? `[Business Address: ${businessAddress.trim()}]` : '',
+        isBusinessDoc && natureOfBusiness.trim() ? `[Nature: ${natureOfBusiness.trim()}]` : '',
+        isBusinessDoc && businessContact.trim() ? `[Contact: ${businessContact.trim()}]` : '',
+        isBusinessDoc && capitalInvested.trim() ? `[Capital: ₱${capitalInvested.trim()}]` : '',
+        isBusinessDoc && grossSales.trim() ? `[Gross: ₱${grossSales.trim()}]` : '',
+        complianceNotes.trim() ? `[Resubmission Note: ${complianceNotes.trim()}]` : '',
+      ].filter(Boolean);
 
       // Build updated request object with status reset to pending
       const updatedReq: DocumentRequest = {
@@ -222,8 +359,21 @@ export default function ResubmitRequestModal({
         resubmission_notes: complianceNotes.trim(),
         previous_decline_reason: prevDeclineReason,
         purpose: purpose.trim(),
-        uploaded_files: filesArray,
-        requirements_attached: filesArray.map((f) => f.requirement_name),
+        years_in_barangay: yearsInBarangay.trim(),
+        pickup_date: pickupDate || request.pickup_date,
+        pickup_time_slot: pickupTimeSlot || request.pickup_time_slot,
+        fee: resolvedDocFee,
+        business_name: isBusinessDoc ? businessName.trim() : request.business_name,
+        permittee_name: isBusinessDoc ? permitteeName.trim() : request.permittee_name,
+        business_address: isBusinessDoc ? businessAddress.trim() : request.business_address,
+        nature_of_business: isBusinessDoc ? natureOfBusiness.trim() : request.nature_of_business,
+        contact_number: isBusinessDoc ? businessContact.trim() : request.contact_number,
+        capital_invested: isBusinessDoc && capitalInvested.trim() ? capitalInvested.trim() : request.capital_invested,
+        gross_sales: isBusinessDoc && grossSales.trim() ? grossSales.trim() : request.gross_sales,
+        notes: notesParts.join(' | '),
+        uploaded_files: requirementsList.length > 0 ? filesArray : [],
+        requirements_attached:
+          requirementsList.length > 0 ? filesArray.map((f) => f.requirement_name) : [],
         updated_at: resubmitTimestamp,
         // Append timeline event for transparency
         timeline: [
@@ -233,7 +383,9 @@ export default function ResubmitRequestModal({
             label: `Resubmitted (Attempt #${resubmissionCount})`,
             description: complianceNotes.trim()
               ? `Application resubmitted by resident with compliance notes: "${complianceNotes.trim()}"`
-              : 'Application resubmitted by resident with updated requirement attachments.',
+              : requirementsList.length > 0
+              ? 'Application resubmitted by resident with updated details and requirement attachments.'
+              : 'Application resubmitted by resident with updated application details.',
             timestamp: resubmitTimestamp,
             is_completed: true,
             is_current: true,
@@ -311,177 +463,325 @@ export default function ResubmitRequestModal({
               </View>
             </View>
 
-            {/* 2. Document & Application Info Card */}
+            {/* 2. Document Template & Application Info Card */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <FileText size={15} color="#2563eb" />
-                <Text style={styles.sectionTitle}>Document Details</Text>
+                <Text style={styles.sectionTitle}>Document Template Details</Text>
               </View>
               <View style={styles.docInfoGrid}>
                 <View style={styles.docInfoItem}>
                   <Text style={styles.docInfoLabel}>Document</Text>
-                  <Text style={styles.docInfoVal}>{request.document_title}</Text>
+                  <Text style={styles.docInfoVal}>{matchedDocType?.title || request.document_title}</Text>
                 </View>
                 <View style={styles.docInfoItem}>
                   <Text style={styles.docInfoLabel}>Tracking Code</Text>
                   <Text style={styles.docInfoValCode}>{request.tracking_number}</Text>
                 </View>
                 <View style={styles.docInfoItem}>
+                  <Text style={styles.docInfoLabel}>Processing Fee</Text>
+                  <Text style={styles.docInfoVal}>
+                    {resolvedDocFee > 0 ? `₱${resolvedDocFee.toFixed(2)}` : '₱0.00 (Free)'}
+                  </Text>
+                </View>
+                <View style={styles.docInfoItem}>
+                  <Text style={styles.docInfoLabel}>Processing Time</Text>
+                  <Text style={styles.docInfoVal}>{resolvedProcessingTime}</Text>
+                </View>
+                <View style={styles.docInfoItem}>
+                  <Text style={styles.docInfoLabel}>Validity Period</Text>
+                  <Text style={styles.docInfoVal}>{resolvedValidity}</Text>
+                </View>
+                <View style={styles.docInfoItem}>
                   <Text style={styles.docInfoLabel}>Pickup Slot</Text>
-                  <Text style={styles.docInfoVal}>{request.pickup_time_slot || 'Regular Office Hours'}</Text>
+                  <Text style={styles.docInfoVal}>{pickupTimeSlot || request.pickup_time_slot || 'Regular Office Hours'}</Text>
                 </View>
               </View>
             </View>
 
-            {/* 3. Purpose of Request (Editable) */}
+            {/* 3. Purpose of Request & Residency Details (Editable, matching Document Template) */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <Info size={15} color="#2563eb" />
-                <Text style={styles.sectionTitle}>Purpose of Request</Text>
+                <Text style={styles.sectionTitle}>Application Details & Residency</Text>
               </View>
               <Text style={styles.inputHelperText}>
-                You may edit or clarify your purpose to comply with administrative verification guidelines.
+                Review and update your official purpose and residency duration as required by the {matchedDocType?.title || request.document_title} template.
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                Purpose of Request <Text style={{ color: '#dc2626' }}>*</Text>
               </Text>
               <TextInput
                 style={styles.textInput}
                 value={purpose}
-                onChangeText={setPurpose}
+                onChangeText={(txt) => {
+                  setPurpose(txt);
+                  if (txt.trim()) setUploadError('');
+                }}
                 placeholder="Enter official purpose (e.g., Local Employment, Scholarship)"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
+                Length of Residency (Years in Barangay Zapatera) <Text style={{ color: '#dc2626' }}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.textInput}
+                value={yearsInBarangay}
+                keyboardType="numeric"
+                onChangeText={(txt) => {
+                  setYearsInBarangay(txt.replace(/[^0-9]/g, ''));
+                  if (txt.trim()) setUploadError('');
+                }}
+                placeholder="Enter number of years living in Barangay Zapatera (e.g., 5)"
                 placeholderTextColor="#94a3b8"
               />
             </View>
 
-            {/* 4. Requirements & Attachments Compliance Checklist */}
+            {/* 3B. Commercial & Business Entity Details (Only when Document Template is Business Permit/Clearance) */}
+            {isBusinessDoc && (
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionTitleRow}>
+                  <Building2 size={15} color="#2563eb" />
+                  <Text style={styles.sectionTitle}>Commercial & Business Entity Details</Text>
+                </View>
+                <Text style={styles.inputHelperText}>
+                  Update the official commercial entity details required for the Barangay Business Clearance template.
+                </Text>
+
+                <Text style={styles.fieldLabel}>
+                  Business Name <Text style={{ color: '#dc2626' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={businessName}
+                  onChangeText={setBusinessName}
+                  placeholder=""
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
+                  Permittee (Owner / Permittee Name) <Text style={{ color: '#dc2626' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={permitteeName}
+                  onChangeText={setPermitteeName}
+                  placeholder=""
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
+                  Business Address <Text style={{ color: '#dc2626' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={businessAddress}
+                  onChangeText={setBusinessAddress}
+                  placeholder=""
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
+                  Nature of Business <Text style={{ color: '#dc2626' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={natureOfBusiness}
+                  onChangeText={setNatureOfBusiness}
+                  placeholder=""
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
+                  Contact Number <Text style={{ color: '#dc2626' }}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={businessContact}
+                  onChangeText={setBusinessContact}
+                  placeholder=""
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Capital Invested (₱)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={capitalInvested}
+                      onChangeText={setCapitalInvested}
+                      placeholder=""
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>Gross Sales (₱)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={grossSales}
+                      onChangeText={setGrossSales}
+                      placeholder=""
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* 4. Requirements & Attachments Compliance Checklist (Driven by Document Template) */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
                 <Upload size={15} color="#2563eb" />
                 <Text style={styles.sectionTitle}>Required Documents & Attachments</Text>
               </View>
-              <Text style={styles.inputHelperText}>
-                Upload or replace the required documents that were incomplete, blurred, or missing.
-              </Text>
 
-              <View style={styles.requirementsList}>
-                {requirementsList.map((reqName, idx) => {
-                  const uploaded = uploadedFiles[reqName];
-                  const isUploading = uploadingMap[reqName];
-                  const aiQuality = uploaded?.ai_quality;
-                  const hasWarning = aiQuality?.status === 'warning' || aiQuality?.status === 'needs_attention';
+              {requirementsList.length === 0 ? (
+                <View style={styles.noRequirementsBox}>
+                  <ShieldCheck size={18} color="#059669" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.noRequirementsTitle}>
+                      No Documentary Requirements Needed
+                    </Text>
+                    <Text style={styles.noRequirementsDesc}>
+                      No supporting documents or file attachments are required for{' '}
+                      <Text style={{ fontWeight: '700' }}>
+                        {matchedDocType?.title || request.document_title}
+                      </Text>
+                      . You may review your application details above and proceed directly with resubmission.
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.inputHelperText}>
+                    Upload or replace the required documents defined by the {matchedDocType?.title || request.document_title} template.
+                  </Text>
 
-                  return (
-                    <View key={idx} style={[styles.reqItemCard, uploaded && styles.reqItemCardUploaded]}>
-                      <View style={styles.reqItemTopRow}>
-                        <View style={styles.reqItemTitleBox}>
-                          <View style={[styles.reqNumberBadge, uploaded && styles.reqNumberBadgeUploaded]}>
+                  <View style={styles.requirementsList}>
+                    {requirementsList.map((reqName, idx) => {
+                      const uploaded = uploadedFiles[reqName];
+                      const isUploading = uploadingMap[reqName];
+                      const aiQuality = uploaded?.ai_quality;
+                      const hasWarning = aiQuality?.status === 'warning' || aiQuality?.status === 'needs_attention';
+
+                      return (
+                        <View key={idx} style={[styles.reqItemCard, uploaded && styles.reqItemCardUploaded]}>
+                          <View style={styles.reqItemTopRow}>
+                            <View style={styles.reqItemTitleBox}>
+                              <View style={[styles.reqNumberBadge, uploaded && styles.reqNumberBadgeUploaded]}>
+                                {uploaded ? (
+                                  <Check size={12} color="#ffffff" />
+                                ) : (
+                                  <Text style={styles.reqNumberBadgeText}>{idx + 1}</Text>
+                                )}
+                              </View>
+                              <Text style={styles.reqItemName}>{reqName}</Text>
+                            </View>
+
+                            {/* Status Chip */}
                             {uploaded ? (
-                              <Check size={12} color="#ffffff" />
+                              <View style={styles.uploadedChip}>
+                                <CheckCircle2 size={11} color="#15803d" />
+                                <Text style={styles.uploadedChipText}>Ready</Text>
+                              </View>
                             ) : (
-                              <Text style={styles.reqNumberBadgeText}>{idx + 1}</Text>
+                              <View style={styles.missingChip}>
+                                <AlertCircle size={11} color="#b45309" />
+                                <Text style={styles.missingChipText}>Required</Text>
+                              </View>
                             )}
                           </View>
-                          <Text style={styles.reqItemName}>{reqName}</Text>
-                        </View>
 
-                        {/* Status Chip */}
-                        {uploaded ? (
-                          <View style={styles.uploadedChip}>
-                            <CheckCircle2 size={11} color="#15803d" />
-                            <Text style={styles.uploadedChipText}>Ready</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.missingChip}>
-                            <AlertCircle size={11} color="#b45309" />
-                            <Text style={styles.missingChipText}>Required</Text>
-                          </View>
-                        )}
-                      </View>
+                          {/* Uploaded File Details (if uploaded) */}
+                          {uploaded ? (
+                            <View style={styles.fileDetailBox}>
+                              <View style={styles.fileDetailInfo}>
+                                <FileText size={16} color="#3b82f6" />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.fileDetailName} numberOfLines={1}>
+                                    {uploaded.file_name}
+                                  </Text>
+                                  <Text style={styles.fileDetailMeta}>
+                                    {uploaded.file_size || 'Attached'} • {uploaded.file_type || 'Document'}
+                                  </Text>
+                                </View>
+                              </View>
 
-                      {/* Uploaded File Details (if uploaded) */}
-                      {uploaded ? (
-                        <View style={styles.fileDetailBox}>
-                          <View style={styles.fileDetailInfo}>
-                            <FileText size={16} color="#3b82f6" />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.fileDetailName} numberOfLines={1}>
-                                {uploaded.file_name}
-                              </Text>
-                              <Text style={styles.fileDetailMeta}>
-                                {uploaded.file_size || 'Attached'} • {uploaded.file_type || 'Document'}
-                              </Text>
+                              {/* AI Quality Chip */}
+                              {aiQuality && (
+                                <View
+                                  style={[
+                                    styles.aiInspectionChip,
+                                    hasWarning ? styles.aiInspectionWarning : styles.aiInspectionPassed,
+                                  ]}
+                                >
+                                  <Sparkles size={11} color={hasWarning ? '#b45309' : '#15803d'} />
+                                  <Text
+                                    style={[
+                                      styles.aiInspectionText,
+                                      hasWarning ? styles.aiInspectionTextWarning : styles.aiInspectionTextPassed,
+                                    ]}
+                                  >
+                                    {aiQuality.summary || `Quality: ${aiQuality.qualityScore}%`}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Actions: Replace or Remove */}
+                              <View style={styles.fileActionsRow}>
+                                <TouchableOpacity
+                                  style={styles.replaceBtn}
+                                  onPress={() => handleUploadFile(reqName)}
+                                  disabled={isUploading}
+                                >
+                                  {isUploading ? (
+                                    <ActivityIndicator size="small" color="#2563eb" />
+                                  ) : (
+                                    <>
+                                      <RotateCcw size={12} color="#2563eb" />
+                                      <Text style={styles.replaceBtnText}>Replace File</Text>
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={styles.removeBtn}
+                                  onPress={() => handleRemoveFile(reqName)}
+                                  disabled={isUploading}
+                                >
+                                  <Trash2 size={12} color="#ef4444" />
+                                  <Text style={styles.removeBtnText}>Remove</Text>
+                                </TouchableOpacity>
+                              </View>
                             </View>
-                          </View>
-
-                          {/* AI Quality Chip */}
-                          {aiQuality && (
-                            <View
-                              style={[
-                                styles.aiInspectionChip,
-                                hasWarning ? styles.aiInspectionWarning : styles.aiInspectionPassed,
-                              ]}
-                            >
-                              <Sparkles size={11} color={hasWarning ? '#b45309' : '#15803d'} />
-                              <Text
-                                style={[
-                                  styles.aiInspectionText,
-                                  hasWarning ? styles.aiInspectionTextWarning : styles.aiInspectionTextPassed,
-                                ]}
-                              >
-                                {aiQuality.summary || `Quality: ${aiQuality.qualityScore}%`}
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Actions: Replace or Remove */}
-                          <View style={styles.fileActionsRow}>
+                          ) : (
+                            /* Empty Upload Trigger */
                             <TouchableOpacity
-                              style={styles.replaceBtn}
+                              style={styles.uploadTriggerBox}
                               onPress={() => handleUploadFile(reqName)}
                               disabled={isUploading}
                             >
                               {isUploading ? (
-                                <ActivityIndicator size="small" color="#2563eb" />
+                                <View style={styles.uploadingState}>
+                                  <ActivityIndicator size="small" color="#2563eb" />
+                                  <Text style={styles.uploadingText}>Uploading document...</Text>
+                                </View>
                               ) : (
-                                <>
-                                  <RotateCcw size={12} color="#2563eb" />
-                                  <Text style={styles.replaceBtnText}>Replace File</Text>
-                                </>
+                                <View style={styles.uploadIdleState}>
+                                  <Upload size={16} color="#2563eb" />
+                                  <Text style={styles.uploadIdleText}>Click to upload clear photo or PDF</Text>
+                                </View>
                               )}
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={styles.removeBtn}
-                              onPress={() => handleRemoveFile(reqName)}
-                              disabled={isUploading}
-                            >
-                              <Trash2 size={12} color="#ef4444" />
-                              <Text style={styles.removeBtnText}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ) : (
-                        /* Empty Upload Trigger */
-                        <TouchableOpacity
-                          style={styles.uploadTriggerBox}
-                          onPress={() => handleUploadFile(reqName)}
-                          disabled={isUploading}
-                        >
-                          {isUploading ? (
-                            <View style={styles.uploadingState}>
-                              <ActivityIndicator size="small" color="#2563eb" />
-                              <Text style={styles.uploadingText}>Uploading document...</Text>
-                            </View>
-                          ) : (
-                            <View style={styles.uploadIdleState}>
-                              <Upload size={16} color="#2563eb" />
-                              <Text style={styles.uploadIdleText}>Click to upload clear photo or PDF</Text>
-                            </View>
                           )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </View>
 
             {/* 5. Resident Compliance Notes to Staff (Optional / Helpful) */}
@@ -763,6 +1063,34 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 12,
     color: '#0f172a',
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  noRequirementsBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  noRequirementsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065f46',
+    marginBottom: 2,
+  },
+  noRequirementsDesc: {
+    fontSize: 11,
+    color: '#047857',
+    lineHeight: 16,
   },
   textArea: {
     minHeight: 68,

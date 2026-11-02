@@ -2123,7 +2123,7 @@ export default function App() {
     setSelectedRequestForTracking(updatedReq);
     setSelectedRequestForResubmit(null);
 
-    // 2. Persist update in account-scoped local storage
+    // 2. Persist update in account-scoped local storage and shared local storage
     try {
       const stored = await MobileStorage.getItem(userRequestsKey);
       if (stored) {
@@ -2133,11 +2133,28 @@ export default function App() {
         );
         await MobileStorage.setItem(userRequestsKey, JSON.stringify(updatedList));
       }
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const sharedRaw = window.localStorage.getItem('zapatera_requests_db');
+        if (sharedRaw) {
+          const sharedList = JSON.parse(sharedRaw);
+          if (Array.isArray(sharedList)) {
+            const updatedShared = sharedList.map((r: any) =>
+              r.id === updatedReq.id || r.tracking_number === updatedReq.tracking_number ? updatedReq : r
+            );
+            window.localStorage.setItem('zapatera_requests_db', JSON.stringify(updatedShared));
+          }
+        }
+      }
     } catch {}
 
     // 3. Update in Supabase document_requests table
     try {
       if (isSupabaseConfigured()) {
+        const parsedYears = updatedReq.years_in_barangay
+          ? parseInt(String(updatedReq.years_in_barangay).replace(/[^0-9]/g, ''), 10) || 5
+          : undefined;
+
         const payload: any = {
           status: 'pending',
           is_resubmitted: true,
@@ -2146,10 +2163,22 @@ export default function App() {
           resubmission_notes: updatedReq.resubmission_notes || null,
           previous_decline_reason: updatedReq.previous_decline_reason || null,
           purpose: updatedReq.purpose,
+          years_in_barangay: parsedYears,
+          pickup_date: updatedReq.pickup_date || null,
+          pickup_time_slot: updatedReq.pickup_time_slot || null,
+          notes: updatedReq.notes || null,
           requirements_attached: updatedReq.requirements_attached || [],
           uploaded_files: updatedReq.uploaded_files || [],
           updated_at: new Date().toISOString(),
         };
+
+        if (updatedReq.business_name) payload.business_name = updatedReq.business_name;
+        if (updatedReq.permittee_name) payload.permittee_name = updatedReq.permittee_name;
+        if (updatedReq.business_address) payload.business_address = updatedReq.business_address;
+        if (updatedReq.nature_of_business) payload.nature_of_business = updatedReq.nature_of_business;
+        if (updatedReq.contact_number) payload.contact_number = updatedReq.contact_number;
+        if (updatedReq.capital_invested) payload.capital_invested = String(updatedReq.capital_invested);
+        if (updatedReq.gross_sales) payload.gross_sales = String(updatedReq.gross_sales);
 
         let updateRes;
         if (updatedReq.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updatedReq.id)) {
@@ -2163,6 +2192,10 @@ export default function App() {
           const fallbackPayload: any = {
             status: 'pending',
             purpose: updatedReq.purpose,
+            years_in_barangay: parsedYears,
+            pickup_date: updatedReq.pickup_date || null,
+            pickup_time_slot: updatedReq.pickup_time_slot || null,
+            notes: updatedReq.notes || null,
             requirements_attached: updatedReq.requirements_attached || [],
             uploaded_files: updatedReq.uploaded_files || [],
             updated_at: new Date().toISOString(),

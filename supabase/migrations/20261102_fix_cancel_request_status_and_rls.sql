@@ -53,3 +53,4 @@ CREATE POLICY "Residents can update own requests"
 
 -- Notify PostgREST to reload schema cache
 NOTIFY pgrst, 'reload schema';
+
