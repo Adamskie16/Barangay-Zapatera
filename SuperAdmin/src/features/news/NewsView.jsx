@@ -33,7 +33,6 @@ import {
   ChevronsRight,
   LayoutGrid,
   Table as TableIcon,
-  Sparkles,
 } from 'lucide-react';
 import {
   getBulletinComments,
@@ -366,7 +365,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               banner_url: evt.image_url || '',
               location: evt.location || 'Barangay Zapatera Gymnasium',
               event_date: evt.event_date || evt.date || '',
-              created_at: evt.created_at || evt.event_date || new Date().toISOString(),
+              created_at: evt.created_at || new Date().toISOString(),
               author: evt.created_by_name || 'Barangay Administration',
               is_important: false,
               is_emergency: false,
@@ -419,7 +418,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       content: '',
       banner_url: '',
       location: 'Barangay Zapatera, Cebu City',
-      event_date: isEventCat ? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16) : '',
+      event_date: '',
       author: currentUser?.full_name || 'Barangay Administration',
       is_important: false,
       is_emergency: false,
@@ -579,7 +578,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
             id: payload.id,
             title: payload.title,
             description: payload.description,
-            event_date: payload.event_date || new Date().toISOString(),
+            event_date: payload.event_date || null,
             location: payload.location,
             image_url: payload.banner_url,
             status: payload.is_published ? 'upcoming' : 'archived',
@@ -781,7 +780,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200/70 text-[10px] font-extrabold uppercase tracking-wider text-[#3b5bfd] shadow-2xs mb-2">
-            <Sparkles className="w-3 h-3" />
+            <Radio className="w-3 h-3" />
             <span>Civic Broadcast &amp; Community Feed</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">
@@ -1711,9 +1710,9 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           <div className="p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50 border border-blue-200 rounded-2xl space-y-2.5">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-[#3b5bfd]" />
+                <FileText className="w-4 h-4 text-[#3b5bfd]" />
                 <span className="font-bold text-slate-900 text-xs">
-                  AI Assistant: LGU Bulletin Templates &amp; Localization
+                  Administrative Assistant: Bulletin Templates &amp; Localization
                 </span>
               </div>
 

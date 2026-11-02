@@ -1,5 +1,5 @@
 // SuperAdmin/src/features/users/UsersView.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from '../../components/Modal';
 import Badge from '../../components/Badge';
 import UserAvatar from '../../components/UserAvatar';
@@ -55,36 +55,6 @@ import { validateEmail, sanitizeInput, unlockUserAccount, lockUserAccount, forma
 import { supabase, supabaseAdmin, signUpUserWithoutPersistSession, isSupabaseConfigured } from '../../core/supabase';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton } from '../../components/SkeletonLoader';
-
-export const purgeStaleLocalUser = (emailToClean) => {
-  if (!emailToClean || typeof localStorage === 'undefined') return;
-  const targetEmail = emailToClean.toLowerCase().trim();
-
-  const keys = [
-    'zapatera_residents_db',
-    'zapatera_admins_db',
-    'zapatera_super_admins_db',
-    'zapatera_users',
-    'zapatera_users_archive_db',
-    'zapatera_deleted_accounts',
-  ];
-
-  keys.forEach((key) => {
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const filtered = parsed.filter((item) => {
-            const itemEmail = (typeof item === 'string' ? item : item?.email || '').toLowerCase().trim();
-            return itemEmail !== targetEmail;
-          });
-          localStorage.setItem(key, JSON.stringify(filtered));
-        }
-      }
-    } catch (_) {}
-  });
-};
 
 const SAMPLE_SITIOS = [
   'Caimito',
@@ -391,7 +361,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         enriched.voter_status = null;
         enriched.sitio = null;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Fallback name parsing
     const nameParts = getResidentNameParts(enriched);
@@ -501,7 +471,6 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     setSaveAuthError('');
   };
 
-  const saveCompletedRef = useRef(false);
   const [formData, setFormData] = useState(INITIAL_USER_FORM);
 
   const [fieldErrors, setFieldErrors] = useState({});
@@ -630,9 +599,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         const lockedEmailMap = new Map();
         if (unlockRequests) {
           unlockRequests.forEach((req) => {
-            const isExpired = req.expires_at && new Date(req.expires_at).getTime() < Date.now();
-            if (req.email && !req.used && !isExpired) {
-              lockedEmailMap.set(req.email.toLowerCase().trim(), req);
+            if (req.email) {
+              lockedEmailMap.set(req.email.toLowerCase(), req);
             }
           });
         }
@@ -645,7 +613,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           if (Array.isArray(storedRes)) localAccounts.push(...storedRes);
           if (Array.isArray(storedAdm)) localAccounts.push(...storedAdm);
           if (Array.isArray(storedSA)) localAccounts.push(...storedSA);
-        } catch (e) {}
+        } catch (e) { }
 
         const deletedAccountsSet = new Set();
         try {
@@ -663,7 +631,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               if (d.id) deletedAccountsSet.add(String(d.id).trim());
             });
           }
-        } catch (_) {}
+        } catch (_) { }
 
         if (!error && supaProfiles) {
           const seenEmails = new Set();
@@ -688,7 +656,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   const cleaned = delList.filter((d) => (d.email || d).toLowerCase() !== cleanEmail && String(d.id || '') !== pId);
                   localStorage.setItem('zapatera_deleted_accounts', JSON.stringify(cleaned));
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
 
             const localMatch = localAccounts.find(
@@ -718,62 +686,17 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             seenEmails.add(cleanEmail);
 
             const hasPendingUnlock = lockedEmailMap.has(cleanEmail);
-            const isExplicitlyUnlocked = p.is_locked === false && (p.failed_attempts || 0) < 3 && (p.failed_login_attempts || 0) < 3;
-            const isLocked = isExplicitlyUnlocked ? false : (p.is_locked === true || (p.failed_attempts || 0) >= 3 || (p.failed_login_attempts || 0) >= 3 || hasPendingUnlock);
-
-            if (isExplicitlyUnlocked && typeof localStorage !== 'undefined') {
-              localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
-              localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
-              localStorage.removeItem(`zapatera_locked_${p.email}`);
-              localStorage.removeItem(`zapatera_failed_${p.email}`);
-
-              // Clean up local storage database caches as well
-              ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_super_admins_db'].forEach((dbKey) => {
-                try {
-                  const stored = localStorage.getItem(dbKey);
-                  if (stored) {
-                    const list = JSON.parse(stored);
-                    if (Array.isArray(list)) {
-                      let changed = false;
-                      const updated = list.map((item) => {
-                        if (item.email && item.email.toLowerCase().trim() === cleanEmail) {
-                          changed = true;
-                          return { ...item, is_locked: false, is_active: true, failed_attempts: 0, failed_login_attempts: 0, locked_at: null };
-                        }
-                        return item;
-                      });
-                      if (changed) {
-                        localStorage.setItem(dbKey, JSON.stringify(updated));
-                      }
-                    }
-                  }
-                } catch (_) {}
-              });
-            }
+            const isLocked = p.is_locked || (p.failed_attempts || 0) >= 3 || hasPendingUnlock;
 
             uniqueProfiles.push({
               ...p,
               email: cleanEmail,
               is_locked: isLocked,
               is_active: !isLocked,
-              failed_attempts: isLocked ? Math.max(p.failed_attempts || 0, 3) : 0,
-              locked_at: isLocked ? (p.locked_at || (hasPendingUnlock ? lockedEmailMap.get(cleanEmail)?.locked_at : null)) : null,
+              failed_attempts: isLocked ? Math.max(p.failed_attempts || 0, 3) : (p.failed_attempts || 0),
+              locked_at: p.locked_at || (hasPendingUnlock ? lockedEmailMap.get(cleanEmail)?.locked_at : null),
             });
           }
-
-          // Synchronize and prune deleted Supabase accounts from local caches
-          try {
-            ['zapatera_residents_db', 'zapatera_admins_db', 'zapatera_super_admins_db'].forEach((key) => {
-              const stored = localStorage.getItem(key);
-              if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                  const cleaned = parsed.filter((u) => u?.email && seenEmails.has(u.email.toLowerCase().trim()));
-                  localStorage.setItem(key, JSON.stringify(cleaned));
-                }
-              }
-            });
-          } catch (_) {}
 
           setUsersList(uniqueProfiles);
           setLoadingUsers(false);
@@ -900,23 +823,53 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     if (!isValid) {
       return;
     }
-    saveCompletedRef.current = false;
 
     const cleanEmail = sanitizeInput((formData.email || '').toLowerCase().trim());
     const isNew = !editingId && !editingUser;
 
     // Check if Gmail / Email is already in use
     if (isNew) {
+      const emailInUseInState = users.some(
+        (u) => u.email && u.email.toLowerCase().trim() === cleanEmail
+      );
+
+      const emailInUseInLocalDbs = (() => {
+        try {
+          const residents = JSON.parse(localStorage.getItem('zapatera_residents_db') || '[]');
+          const admins = JSON.parse(localStorage.getItem('zapatera_admins_db') || '[]');
+          const superAdmins = JSON.parse(localStorage.getItem('zapatera_super_admins_db') || '[]');
+          return (
+            (Array.isArray(residents) && residents.some((r) => r.email && r.email.toLowerCase().trim() === cleanEmail)) ||
+            (Array.isArray(admins) && admins.some((a) => a.email && a.email.toLowerCase().trim() === cleanEmail)) ||
+            (Array.isArray(superAdmins) && superAdmins.some((s) => s.email && s.email.toLowerCase().trim() === cleanEmail))
+          );
+        } catch {
+          return false;
+        }
+      })();
+
+      if (emailInUseInState || emailInUseInLocalDbs) {
+        setActionModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Gmail / Email Already in Use',
+          message: `The email address "${formData.email.trim()}" has already been used for an existing account. Please enter a different Gmail or email address to create this account.`,
+          buttonText: 'OK',
+          onClose: () => setActionModal({ isOpen: false }),
+        });
+        return;
+      }
+
+      // Check against Supabase profiles table
       if (isSupabaseConfigured()) {
         try {
-          // Query live Supabase profiles table (single source of truth)
           const { data: existingProfile } = await supabase
             .from('profiles')
-            .select('id, email, full_name, is_archived, deleted_at')
-            .ilike('email', cleanEmail)
+            .select('id, email, full_name')
+            .eq('email', cleanEmail)
             .maybeSingle();
 
-          if (existingProfile && existingProfile.is_archived !== true && !existingProfile.deleted_at) {
+          if (existingProfile) {
             setActionModal({
               isOpen: true,
               type: 'error',
@@ -926,71 +879,26 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               onClose: () => setActionModal({ isOpen: false }),
             });
             return;
-          } else {
-            // Not in Supabase or deleted in Supabase: purge stale localStorage caches for this email immediately
-            purgeStaleLocalUser(cleanEmail);
-            setUsersList((prev) => prev.filter((u) => (u.email || '').toLowerCase().trim() !== cleanEmail));
           }
         } catch (chkErr) {
           console.warn('Supabase email uniqueness check notice:', chkErr);
         }
-      } else {
-        // Fallback for purely offline / demo mode
-        const emailInUseInState = usersList.some(
-          (u) => u.email && u.email.toLowerCase().trim() === cleanEmail && u.is_archived !== true && !u.deleted_at
-        );
-        if (emailInUseInState) {
-          setActionModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Gmail / Email Already in Use',
-            message: `The email address "${formData.email.trim()}" has already been used for an existing account. Please enter a different Gmail or email address to create this account.`,
-            buttonText: 'OK',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-          return;
-        }
       }
     } else {
       const targetId = editingId || editingUser?.id;
-      if (isSupabaseConfigured()) {
-        try {
-          const { data: conflictProfile } = await supabase
-            .from('profiles')
-            .select('id, email')
-            .ilike('email', cleanEmail)
-            .neq('id', targetId)
-            .maybeSingle();
-
-          if (conflictProfile) {
-            setActionModal({
-              isOpen: true,
-              type: 'error',
-              title: 'Gmail / Email Already in Use',
-              message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
-              buttonText: 'OK',
-              onClose: () => setActionModal({ isOpen: false }),
-            });
-            return;
-          }
-        } catch (cErr) {
-          console.warn('Supabase edit email conflict check notice:', cErr);
-        }
-      } else {
-        const emailConflict = usersList.some(
-          (u) => u.id !== targetId && u.email && u.email.toLowerCase().trim() === cleanEmail
-        );
-        if (emailConflict) {
-          setActionModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Gmail / Email Already in Use',
-            message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
-            buttonText: 'OK',
-            onClose: () => setActionModal({ isOpen: false }),
-          });
-          return;
-        }
+      const emailConflict = users.some(
+        (u) => u.id !== targetId && u.email && u.email.toLowerCase().trim() === cleanEmail
+      );
+      if (emailConflict) {
+        setActionModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Gmail / Email Already in Use',
+          message: `The email address "${formData.email.trim()}" is already registered to another account. Please choose a different Gmail address.`,
+          buttonText: 'OK',
+          onClose: () => setActionModal({ isOpen: false }),
+        });
+        return;
       }
     }
 
@@ -1106,86 +1014,18 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
               if (adminErr) {
                 const errMsg = (adminErr.message || '').toLowerCase();
                 if (errMsg.includes('already') || errMsg.includes('exists') || adminErr.status === 422) {
-                  // Check if a profile actually exists in public.profiles
-                  const { data: profCheck } = await supabase
-                    .from('profiles')
-                    .select('id, email, is_archived, deleted_at')
-                    .ilike('email', cleanEmail)
-                    .maybeSingle();
-
-                  // If no active profile exists in public.profiles, this is an orphaned auth.user record from an earlier manual deletion
-                  if (!profCheck || profCheck.is_archived === true || profCheck.deleted_at) {
-                    try {
-                      const { data: userListData } = await supabaseAdmin.auth.admin.listUsers();
-                      const existingAuthUser = (userListData?.users || []).find(
-                        (u) => (u.email || '').toLowerCase().trim() === cleanEmail
-                      );
-
-                      if (existingAuthUser) {
-                        // Delete the orphaned auth record and create fresh
-                        await supabaseAdmin.auth.admin.deleteUser(existingAuthUser.id);
-                        const { data: reCreated, error: reErr } = await supabaseAdmin.auth.admin.createUser({
-                          email: pendingUserPayload.email,
-                          password: formData.password || 'password123',
-                          email_confirm: true,
-                          user_metadata: {
-                            full_name: pendingUserPayload.full_name,
-                            first_name: pendingUserPayload.first_name,
-                            middle_initial: pendingUserPayload.middle_initial,
-                            last_name: pendingUserPayload.last_name,
-                            gender: pendingUserPayload.gender,
-                            age: pendingUserPayload.age,
-                            birth_date: pendingUserPayload.birth_date,
-                            civil_status: pendingUserPayload.civil_status,
-                            office: pendingUserPayload.office,
-                            position: pendingUserPayload.position,
-                            role: pendingUserPayload.role,
-                            phone: pendingUserPayload.phone,
-                          },
-                        });
-                        if (!reErr && reCreated?.user?.id) {
-                          assignedId = reCreated.user.id;
-                        } else {
-                          // Or update password and reuse the auth ID
-                          await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
-                            password: formData.password || 'password123',
-                            user_metadata: {
-                              full_name: pendingUserPayload.full_name,
-                              first_name: pendingUserPayload.first_name,
-                              middle_initial: pendingUserPayload.middle_initial,
-                              last_name: pendingUserPayload.last_name,
-                              gender: pendingUserPayload.gender,
-                              age: pendingUserPayload.age,
-                              birth_date: pendingUserPayload.birth_date,
-                              civil_status: pendingUserPayload.civil_status,
-                              office: pendingUserPayload.office,
-                              position: pendingUserPayload.position,
-                              role: pendingUserPayload.role,
-                              phone: pendingUserPayload.phone,
-                            },
-                          });
-                          assignedId = existingAuthUser.id;
-                        }
-                      }
-                    } catch (orphanErr) {
-                      console.warn('Orphaned auth user recovery warning:', orphanErr);
-                    }
-                  }
-
-                  if (!assignedId) {
-                    setIsSaveSecurityModalOpen(false);
-                    setIsSaving(false);
-                    setIsProcessing(false);
-                    setActionModal({
-                      isOpen: true,
-                      type: 'error',
-                      title: 'Gmail / Email Already in Use',
-                      message: `The Gmail address "${pendingUserPayload.email}" is already registered in Supabase Authentication. If deleted in profiles table, please also delete it in Supabase Authentication -> Users tab.`,
-                      buttonText: 'OK',
-                      onClose: () => setActionModal({ isOpen: false }),
-                    });
-                    return;
-                  }
+                  setIsSaveSecurityModalOpen(false);
+                  setIsSaving(false);
+                  setIsProcessing(false);
+                  setActionModal({
+                    isOpen: true,
+                    type: 'error',
+                    title: 'Gmail / Email Already in Use',
+                    message: `The Gmail address "${pendingUserPayload.email}" has already been registered in the system. Please use a different Gmail address.`,
+                    buttonText: 'OK',
+                    onClose: () => setActionModal({ isOpen: false }),
+                  });
+                  return;
                 }
               }
               if (!adminErr && adminCreated?.user?.id) {
@@ -1296,8 +1136,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
         const existingIdx = residents.findIndex(
           (r) => (r.email && r.email.toLowerCase() === cleanEmail) ||
-                 (editingId && r.id === editingId) ||
-                 (editingUser?.id && r.id === editingUser.id)
+            (editingId && r.id === editingId) ||
+            (editingUser?.id && r.id === editingUser.id)
         );
         const originalCreatedAt = (existingIdx >= 0 ? residents[existingIdx].created_at : null) || editingUser?.created_at;
 
@@ -1331,7 +1171,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             localStorage.setItem('zapatera_residents_db', JSON.stringify(filtered));
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (pendingUserPayload.role === 'admin' || pendingUserPayload.role === 'treasurer') {
@@ -1342,8 +1182,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
         const existingIdx = admins.findIndex(
           (a) => (a.email && a.email.toLowerCase() === cleanEmail) ||
-                 (editingId && a.id === editingId) ||
-                 (editingUser?.id && a.id === editingUser.id)
+            (editingId && a.id === editingId) ||
+            (editingUser?.id && a.id === editingUser.id)
         );
         const originalCreatedAt = (existingIdx >= 0 ? admins[existingIdx].created_at : null) || editingUser?.created_at;
 
@@ -1374,8 +1214,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         const cleanEmail = pendingUserPayload.email.toLowerCase().trim();
         const existingIdx = superAdmins.findIndex(
           (s) => (s.email && s.email.toLowerCase() === cleanEmail) ||
-                 (editingId && s.id === editingId) ||
-                 (editingUser?.id && s.id === editingUser.id)
+            (editingId && s.id === editingId) ||
+            (editingUser?.id && s.id === editingUser.id)
         );
         const originalCreatedAt = (existingIdx >= 0 ? superAdmins[existingIdx].created_at : null) || editingUser?.created_at;
 
@@ -1407,13 +1247,12 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       pendingUserPayload.role === 'super_admin' || pendingUserPayload.role === 'superadmin'
         ? 'Super Administrator'
         : pendingUserPayload.role === 'admin'
-        ? 'Barangay Admin'
-        : pendingUserPayload.role === 'treasurer'
-        ? 'Barangay Treasurer'
-        : 'Resident';
+          ? 'Barangay Admin'
+          : pendingUserPayload.role === 'treasurer'
+            ? 'Barangay Treasurer'
+            : 'Resident';
     const isNew = !editingId && !editingUser;
 
-    saveCompletedRef.current = true;
     setIsSaveSecurityModalOpen(false);
     setIsModalOpen(false);
     clearForm();
@@ -1429,11 +1268,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         ? `The new ${roleTitle} account for "${savedName}" (${savedEmail}) has been created successfully.`
         : `The profile details for "${savedName}" (${savedEmail}) were updated successfully.`,
       buttonText: 'Done',
-      onClose: () => {
-        setActionModal({ isOpen: false });
-        setIsModalOpen(false);
-        clearForm();
-      },
+      onClose: () => setActionModal({ isOpen: false }),
     });
   }
 
@@ -1633,7 +1468,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
     try {
       if (securityActionType === 'unlock') {
-        await unlockUserAccount(targetEmail, adminId, securityActionTargetUser?.id);
+        await unlockUserAccount(targetEmail, adminId);
       } else {
         await lockUserAccount(targetEmail, adminId, 'SuperAdmin Manual Lockout');
       }
@@ -1704,24 +1539,14 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
     fetchUsers();
   };
 
-  const isAccountLocked = (u) => {
-    if (!u) return false;
-    const cleanEmail = String(u.email || '').toLowerCase().trim();
-    if (u.is_locked === false && (u.failed_attempts || 0) < 3 && (u.failed_login_attempts || 0) < 3) {
-      if (typeof localStorage !== 'undefined' && cleanEmail) {
-        localStorage.removeItem(`zapatera_locked_${cleanEmail}`);
-        localStorage.removeItem(`zapatera_failed_${cleanEmail}`);
-        localStorage.removeItem(`zapatera_locked_${u.email}`);
-        localStorage.removeItem(`zapatera_failed_${u.email}`);
-      }
-      return false;
-    }
-    return Boolean(
-      u.is_locked === true ||
-        (u.failed_login_attempts || 0) >= 3 ||
-        (u.failed_attempts || 0) >= 3
+  const isAccountLocked = (u) =>
+    Boolean(
+      u.is_locked ||
+      (u.failed_login_attempts || 0) >= 3 ||
+      (u.failed_attempts || 0) >= 3 ||
+      u.is_active === false ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem(`zapatera_locked_${u.email}`) === 'true')
     );
-  };
 
   const normalizeRole = (role) => {
     const r = String(role || 'resident').toLowerCase().trim();
@@ -1748,8 +1573,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
       filterStatus === 'all'
         ? true
         : filterStatus === 'locked'
-        ? isLocked
-        : !isLocked;
+          ? isLocked
+          : !isLocked;
 
     const userRole = normalizeRole(u.role);
     const matchesRole = filterRole === 'all' ? true : userRole === filterRole;
@@ -1893,9 +1718,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
             setFilterStatus('all');
             setFilterRole('all');
           }}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${
-            filterStatus === 'all' && filterRole === 'all' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] shadow-sky-500/15 hover:scale-[1.01] ${filterStatus === 'all' && filterRole === 'all' ? 'ring-4 ring-offset-2 ring-sky-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -1917,9 +1741,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         {/* Card 2: Active Accounts */}
         <div
           onClick={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01] ${
-            filterStatus === 'active' ? 'ring-4 ring-offset-2 ring-emerald-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#34d399] via-[#10b981] to-[#059669] shadow-emerald-500/15 hover:scale-[1.01] ${filterStatus === 'active' ? 'ring-4 ring-offset-2 ring-emerald-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -1939,9 +1762,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         {/* Card 3: Locked Out Accounts */}
         <div
           onClick={() => setFilterStatus(filterStatus === 'locked' ? 'all' : 'locked')}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#fb7185] via-[#f43f5e] to-[#e11d48] shadow-rose-500/15 hover:scale-[1.01] ${
-            filterStatus === 'locked' ? 'ring-4 ring-offset-2 ring-rose-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#fb7185] via-[#f43f5e] to-[#e11d48] shadow-rose-500/15 hover:scale-[1.01] ${filterStatus === 'locked' ? 'ring-4 ring-offset-2 ring-rose-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -1961,9 +1783,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
         {/* Card 4: Resident & Voter Breakdown */}
         <div
           onClick={() => setFilterRole(filterRole === 'resident' ? 'all' : 'resident')}
-          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${
-            filterRole === 'resident' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
-          }`}
+          className={`relative overflow-hidden rounded-[26px] p-5 text-white shadow-lg transition-all cursor-pointer bg-linear-to-br from-[#818cf8] via-[#6366f1] to-[#4f46e5] shadow-indigo-500/15 hover:scale-[1.01] ${filterRole === 'resident' ? 'ring-4 ring-offset-2 ring-indigo-400' : ''
+            }`}
         >
           <div className="flex items-start justify-between">
             <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-sm">
@@ -2003,11 +1824,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                 aria-label="Filter by Account Status"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${
-                  filterStatus !== 'all'
-                    ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
-                    : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
-                }`}
+                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${filterStatus !== 'all'
+                  ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
+                  : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
+                  }`}
               >
                 <option value="all">All Account Status ({totalAccountsCount})</option>
                 <option value="active">Active Accounts ({activeAccountsCount})</option>
@@ -2025,11 +1845,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                 aria-label="Filter by User Role"
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value)}
-                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${
-                  filterRole !== 'all'
-                    ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
-                    : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
-                }`}
+                className={`appearance-none pl-9 pr-9 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer focus:outline-none ${filterRole !== 'all'
+                  ? 'bg-blue-50/90 text-[#3b5bfd] border-blue-200 shadow-2xs'
+                  : 'bg-[#f4f7fb] text-slate-700 border-transparent hover:bg-slate-200/70'
+                  }`}
               >
                 <option value="all">All Roles ({totalAccountsCount})</option>
                 <option value="resident">Resident ({residentAccountsCount})</option>
@@ -2186,27 +2005,26 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                               roleNorm === 'super_admin'
                                 ? 'purple'
                                 : roleNorm === 'admin'
-                                ? 'blue'
-                                : roleNorm === 'treasurer'
-                                ? 'success'
-                                : 'resident'
+                                  ? 'blue'
+                                  : roleNorm === 'treasurer'
+                                    ? 'success'
+                                    : 'resident'
                             }
                           >
                             {roleNorm === 'super_admin'
                               ? 'Super Admin'
                               : roleNorm === 'admin'
-                              ? 'Barangay Admin'
-                              : roleNorm === 'treasurer'
-                              ? 'Barangay Treasurer'
-                              : 'Resident'}
+                                ? 'Barangay Admin'
+                                : roleNorm === 'treasurer'
+                                  ? 'Barangay Treasurer'
+                                  : 'Resident'}
                           </Badge>
                           {roleNorm === 'resident' && (
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
-                                isUserRegisteredVoter(u)
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-[#f4f7fb] text-slate-500 border border-slate-200/80'
-                              }`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${isUserRegisteredVoter(u)
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-[#f4f7fb] text-slate-500 border border-slate-200/80'
+                                }`}
                             >
                               <Vote className="w-2.5 h-2.5 shrink-0" />
                               <span>{isUserRegisteredVoter(u) ? 'Registered Voter' : 'Non-Voter'}</span>
@@ -2356,11 +2174,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     key={`page-${pageNum}`}
                     type="button"
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                      safeCurrentPage === pageNum
-                        ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
-                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-[#f4f7fb]'
-                    }`}
+                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all cursor-pointer ${safeCurrentPage === pageNum
+                      ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-[#f4f7fb]'
+                      }`}
                   >
                     {pageNum}
                   </button>
@@ -2388,12 +2205,7 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
           setIsSaveSecurityModalOpen(false);
           setSavePasswordInput('');
           setSaveAuthError('');
-          if (!saveCompletedRef.current) {
-            setIsModalOpen(true);
-          } else {
-            setIsModalOpen(false);
-            clearForm();
-          }
+          setIsModalOpen(true);
         }}
         onVerified={() => handleSaveExecute(true)}
         currentUser={currentUser}
@@ -2495,11 +2307,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       placeholder="e.g. Dela Cruz"
                       value={formData.last_name}
                       onChange={(e) => handleFieldChange('last_name', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none transition-all ${
-                        fieldErrors.last_name
-                          ? 'border-rose-500 focus:border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none transition-all ${fieldErrors.last_name
+                        ? 'border-rose-500 focus:border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.last_name && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2518,11 +2329,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       placeholder="e.g. Juan"
                       value={formData.first_name}
                       onChange={(e) => handleFieldChange('first_name', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none transition-all ${
-                        fieldErrors.first_name
-                          ? 'border-rose-500 focus:border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none transition-all ${fieldErrors.first_name
+                        ? 'border-rose-500 focus:border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.first_name && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2575,11 +2385,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       max={new Date().toISOString().split('T')[0]}
                       value={formData.birth_date}
                       onChange={(e) => handleFieldChange('birth_date', e.target.value)}
-                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl outline-none ${
-                        fieldErrors.birth_date
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl outline-none ${fieldErrors.birth_date
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.birth_date && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2628,11 +2437,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     <select
                       value={formData.civil_status || 'Single'}
                       onChange={(e) => handleFieldChange('civil_status', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${
-                        fieldErrors.civil_status
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${fieldErrors.civil_status
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     >
                       {CIVIL_STATUS_OPTIONS.map((st) => (
                         <option key={st} value={st}>
@@ -2663,11 +2471,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     <select
                       value={formData.sitio}
                       onChange={(e) => handleFieldChange('sitio', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${
-                        fieldErrors.sitio
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${fieldErrors.sitio
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     >
                       {SAMPLE_SITIOS.map((sitio) => (
                         <option key={sitio} value={sitio}>
@@ -2692,11 +2499,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       value={formData.address}
                       onChange={(e) => handleFieldChange('address', e.target.value)}
                       placeholder="e.g. Sitio Zapatera Proper, Cebu City"
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${
-                        fieldErrors.address
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${fieldErrors.address
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.address && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2719,11 +2525,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     <button
                       type="button"
                       onClick={() => handleFieldChange('voter_status', 'Registered Voter')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        formData.voter_status === 'Registered Voter'
-                          ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-200 hover:text-[#3b5bfd]'
-                      }`}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${formData.voter_status === 'Registered Voter'
+                        ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-200 hover:text-[#3b5bfd]'
+                        }`}
                     >
                       <Vote className="w-3.5 h-3.5" />
                       <span>Yes (Registered Voter)</span>
@@ -2731,11 +2536,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     <button
                       type="button"
                       onClick={() => handleFieldChange('voter_status', 'Not Registered Voter')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        formData.voter_status === 'Not Registered Voter'
-                          ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] shadow-xs'
-                          : 'bg-white border-slate-200 text-slate-700 hover:border-blue-200 hover:text-[#3b5bfd]'
-                      }`}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${formData.voter_status === 'Not Registered Voter'
+                        ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-200 hover:text-[#3b5bfd]'
+                        }`}
                     >
                       <Vote className="w-3.5 h-3.5 opacity-60" />
                       <span>No (Non-Voter)</span>
@@ -2758,8 +2562,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   {formData.role === 'super_admin'
                     ? 'Super Administrator Credentials *'
                     : formData.role === 'treasurer'
-                    ? 'Barangay Treasurer Credentials *'
-                    : 'Barangay Admin Credentials *'}
+                      ? 'Barangay Treasurer Credentials *'
+                      : 'Barangay Admin Credentials *'}
                 </span>
 
                 {/* 1. Name Information (First Name, M.I., Last Name) */}
@@ -2773,11 +2577,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       placeholder="e.g. Juan"
                       value={formData.first_name}
                       onChange={(e) => handleFieldChange('first_name', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${
-                        fieldErrors.first_name
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${fieldErrors.first_name
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.first_name && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2810,11 +2613,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       placeholder="e.g. Dela Cruz"
                       value={formData.last_name}
                       onChange={(e) => handleFieldChange('last_name', e.target.value)}
-                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${
-                        fieldErrors.last_name
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${fieldErrors.last_name
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.last_name && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2862,11 +2664,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       placeholder="e.g. 35"
                       value={formData.age}
                       onChange={(e) => handleFieldChange('age', e.target.value)}
-                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${
-                        fieldErrors.age
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${fieldErrors.age
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     {fieldErrors.age && (
                       <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2883,11 +2684,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     <select
                       value={formData.gender || 'Male'}
                       onChange={(e) => handleFieldChange('gender', e.target.value)}
-                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${
-                        fieldErrors.gender
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full px-3 py-2 text-xs bg-white border rounded-xl outline-none cursor-pointer ${fieldErrors.gender
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     >
                       {GENDER_OPTIONS.map((g) => (
                         <option key={g} value={g}>
@@ -2927,11 +2727,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                     value={formData.address}
                     onChange={(e) => handleFieldChange('address', e.target.value)}
                     placeholder="e.g. Barangay Zapatera Hall, Cebu City"
-                    className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${
-                      fieldErrors.address
-                        ? 'border-rose-500'
-                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                    }`}
+                    className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl outline-none ${fieldErrors.address
+                      ? 'border-rose-500'
+                      : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                      }`}
                   />
                   {fieldErrors.address && (
                     <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2960,11 +2759,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   value={formData.email}
                   onChange={(e) => handleFieldChange('email', e.target.value)}
                   placeholder="e.g. user@gmail.com"
-                  className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl font-mono outline-none disabled:opacity-60 ${
-                    fieldErrors.email
-                      ? 'border-rose-500'
-                      : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                  }`}
+                  className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl font-mono outline-none disabled:opacity-60 ${fieldErrors.email
+                    ? 'border-rose-500'
+                    : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                    }`}
                 />
                 {fieldErrors.email && (
                   <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -2982,11 +2780,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   value={formData.phone}
                   onChange={(e) => handleFieldChange('phone', e.target.value)}
                   placeholder="09171234567"
-                  className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${
-                    fieldErrors.phone
-                      ? 'border-rose-500'
-                      : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                  }`}
+                  className={`w-full px-3.5 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${fieldErrors.phone
+                    ? 'border-rose-500'
+                    : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                    }`}
                 />
                 {fieldErrors.phone && (
                   <p className="text-rose-600 text-[11px] mt-1 flex items-center gap-1 font-semibold">
@@ -3021,9 +2818,8 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                   ].map((item) => (
                     <div
                       key={item.label}
-                      className={`flex items-center space-x-1 ${
-                        item.ok ? 'text-emerald-600 font-bold' : 'text-slate-500 font-medium'
-                      }`}
+                      className={`flex items-center space-x-1 ${item.ok ? 'text-emerald-600 font-bold' : 'text-slate-500 font-medium'
+                        }`}
                     >
                       {item.ok ? (
                         <Check className="w-3 h-3 text-emerald-500 shrink-0" />
@@ -3048,11 +2844,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       value={formData.password}
                       onChange={(e) => handleFieldChange('password', e.target.value)}
                       placeholder="Create password"
-                      className={`w-full pl-3.5 pr-9 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${
-                        fieldErrors.password
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full pl-3.5 pr-9 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${fieldErrors.password
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     <button
                       type="button"
@@ -3080,11 +2875,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                       value={formData.confirm_password}
                       onChange={(e) => handleFieldChange('confirm_password', e.target.value)}
                       placeholder="Repeat password"
-                      className={`w-full pl-3.5 pr-9 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${
-                        fieldErrors.confirm_password
-                          ? 'border-rose-500'
-                          : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
-                      }`}
+                      className={`w-full pl-3.5 pr-9 py-2 text-xs bg-white border rounded-xl font-mono outline-none ${fieldErrors.confirm_password
+                        ? 'border-rose-500'
+                        : 'border-slate-200 text-slate-900 focus:border-[#3b5bfd]'
+                        }`}
                     />
                     <button
                       type="button"
@@ -3192,19 +2986,19 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                             viewingUser.role === 'super_admin' || viewingUser.role === 'superadmin'
                               ? 'purple'
                               : viewingUser.role === 'admin'
-                              ? 'blue'
-                              : viewingUser.role === 'treasurer'
-                              ? 'success'
-                              : 'active'
+                                ? 'blue'
+                                : viewingUser.role === 'treasurer'
+                                  ? 'success'
+                                  : 'active'
                           }
                         >
                           {viewingUser.role === 'super_admin' || viewingUser.role === 'superadmin'
                             ? 'Super Admin'
                             : viewingUser.role === 'admin'
-                            ? 'Barangay Admin'
-                            : viewingUser.role === 'treasurer'
-                            ? 'Barangay Treasurer'
-                            : 'Resident'}
+                              ? 'Barangay Admin'
+                              : viewingUser.role === 'treasurer'
+                                ? 'Barangay Treasurer'
+                                : 'Resident'}
                         </Badge>
                       </div>
                       <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5 truncate">
@@ -3216,11 +3010,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
 
                   <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1.5 shrink-0">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
-                        isLocked
-                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      }`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${isLocked
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}
                     >
                       {isLocked ? (
                         <>
@@ -3301,11 +3094,10 @@ export default function UsersView({ users = [], onSaveUser, onDeleteUser, curren
                         </span>
                         <div className="mt-1">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                              isVoter
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-white text-slate-600 border border-slate-200'
-                            }`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isVoter
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-white text-slate-600 border border-slate-200'
+                              }`}
                           >
                             {isVoter ? 'Registered Voter' : 'Non-Voter'}
                           </span>

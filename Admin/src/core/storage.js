@@ -1076,9 +1076,10 @@ export const StorageService = {
           updated_at: new Date().toISOString(),
         };
 
-        const payloadWithEvent = saved.event_date
-          ? { ...basePayload, event_date: new Date(saved.event_date).toISOString() }
-          : basePayload;
+        const payloadWithEvent = {
+          ...basePayload,
+          event_date: saved.event_date ? new Date(saved.event_date).toISOString() : null,
+        };
 
         // Clean core payload guaranteed to match base news schema without optional migration columns
         const corePayload = {

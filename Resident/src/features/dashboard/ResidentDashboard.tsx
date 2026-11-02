@@ -21,7 +21,6 @@ import {
   Phone,
   AlertTriangle,
   Info,
-  Sparkles,
   ChevronRight,
   ChevronLeft,
   Check,
@@ -542,7 +541,7 @@ export default function ResidentDashboard({
       <View style={styles.topHeaderStrip}>
         <View style={styles.topHeaderLeft}>
           <View style={styles.greetingBadgePill}>
-            <Sparkles size={11} color="#0284c7" />
+            <ShieldCheck size={12} color="#0284c7" />
             <Text style={styles.greetingBadgeText}>
               {currentUser.sitio || 'Barangay Zapatera'} • Resident Desk
             </Text>
@@ -1295,9 +1294,17 @@ export default function ResidentDashboard({
 
                 <View style={styles.bulletinSlideBody}>
                   <View style={styles.bulletinMetaTopRow}>
-                    <Calendar size={11} color="#94a3b8" />
-                    <Text style={styles.announcementDate}>{item.date}</Text>
+                    <Clock size={11} color="#94a3b8" />
+                    <Text style={styles.announcementDate}>Published: {item.date}</Text>
                   </View>
+                  {item.event_date ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 2 }}>
+                      <Calendar size={11} color="#7c3aed" />
+                      <Text style={{ fontSize: 10, color: '#6d28d9', fontWeight: '700' }} numberOfLines={1}>
+                        Event: {new Date(item.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  ) : null}
 
                   <Text style={styles.announcementTitle} numberOfLines={1}>
                     {item.title}

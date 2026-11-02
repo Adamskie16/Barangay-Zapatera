@@ -25,7 +25,7 @@ import {
   ChevronDown,
   X,
   Layers,
-  Sparkles,
+  FileCheck2,
 } from 'lucide-react';
 import { DocumentType } from '../../types';
 import { formatCurrency } from '../../core/security';
@@ -489,7 +489,7 @@ export default function DocumentCatalogView({
             {reqList.length > 0 && (
               <View style={styles.reqStrip}>
                 <View style={styles.reqStripHeader}>
-                  <Sparkles size={11} color="#2563eb" />
+                  <FileCheck2 size={11} color="#2563eb" />
                   <Text style={styles.reqStripTitle}>
                     Key Requirements ({reqList.length})
                   </Text>

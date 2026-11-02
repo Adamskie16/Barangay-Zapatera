@@ -22,7 +22,6 @@ import {
   Search,
   X,
   Layers,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,

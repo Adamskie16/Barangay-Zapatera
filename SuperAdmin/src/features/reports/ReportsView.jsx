@@ -39,7 +39,6 @@ import {
   ChevronsRight,
   Table,
   TrendingUp,
-  Sparkles,
   CheckCircle2,
   Clock,
   XCircle,
@@ -698,7 +697,7 @@ export default function ReportsView({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-1">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[11px] font-bold tracking-wide mb-2 border border-blue-100">
-            <Sparkles className="w-3.5 h-3.5" />
+            <TrendingUp className="w-3.5 h-3.5" />
             <span>Executive Intelligence & Analytics</span>
           </div>
           <h2 className="text-2xl sm:text-[26px] font-extrabold text-slate-900 tracking-tight">

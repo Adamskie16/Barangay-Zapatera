@@ -26,7 +26,6 @@ import {
   ArrowLeft,
   Printer,
   FileBadge,
-  Sparkles,
   MapPin,
   Phone,
   Cake,
@@ -1954,8 +1953,8 @@ export default function ReceiveRequestView({
                                         </span>
                                       ) : (
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                          <Sparkles className="w-3 h-3 text-emerald-700 shrink-0" />
-                                          <span>AI: Sharp & Complete</span>
+                                          <CheckCircle className="w-3 h-3 text-emerald-700 shrink-0" />
+                                          <span>Verified: Sharp & Complete</span>
                                         </span>
                                       )
                                     ) : null}
@@ -2592,9 +2591,9 @@ export default function ReceiveRequestView({
           <div className="p-3.5 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-xl space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center space-x-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <FileText className="w-4 h-4 text-indigo-600" />
                 <span className="font-bold text-indigo-950 text-xs">
-                  AI Copilot: Multilingual Notice Drafting
+                  Administrative Assistant: Multilingual Notice Drafting
                 </span>
               </div>
 
@@ -2691,8 +2690,8 @@ export default function ReceiveRequestView({
                 }}
                 className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center space-x-1 cursor-pointer"
               >
-                <Sparkles className="w-3 h-3" />
-                <span>Re-draft with AI</span>
+                <RotateCcw className="w-3 h-3" />
+                <span>Re-draft Notice Template</span>
               </button>
             </div>
             <textarea

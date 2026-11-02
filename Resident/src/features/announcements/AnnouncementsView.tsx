@@ -27,7 +27,8 @@ import {
   Trash2,
   Reply,
   Lock,
-  Sparkles,
+  Bookmark,
+  Clock,
   Wrench,
   Users,
   Bell,
@@ -631,15 +632,15 @@ export default function AnnouncementsView({
                           </View>
                         ) : item.is_important ? (
                           <View style={styles.importantBadge}>
-                            <Sparkles size={10} color="#1d4ed8" />
+                            <Bookmark size={10} color="#1d4ed8" />
                             <Text style={styles.importantBadgeText}>PRIORITY</Text>
                           </View>
                         ) : null}
                       </View>
 
                       <View style={styles.dateChip}>
-                        <Calendar size={11} color="#64748b" />
-                        <Text style={styles.cardDate}>{item.date}</Text>
+                        <Clock size={11} color="#64748b" />
+                        <Text style={styles.cardDate}>Published: {item.date}</Text>
                       </View>
                     </View>
 
@@ -654,9 +655,17 @@ export default function AnnouncementsView({
                   {item.description}
                 </Text>
 
-                {/* Structured Meta Strip (Venue / Issued By) */}
-                {(item.location || item.author) ? (
+                {/* Structured Meta Strip (Event Scheduled Date / Venue / Issued By) */}
+                {(item.event_date || item.location || item.author) ? (
                   <View style={styles.metaStrip}>
+                    {item.event_date ? (
+                      <View style={[styles.metaStripItem, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe', borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2.5 }]}>
+                        <Calendar size={12} color="#7c3aed" />
+                        <Text style={[styles.metaStripText, { color: '#6d28d9', fontWeight: '700' }]} numberOfLines={1}>
+                          Event Date: {new Date(item.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                    ) : null}
                     {item.location ? (
                       <View style={styles.metaStripItem}>
                         <MapPin size={12} color="#2563eb" />
@@ -797,11 +806,22 @@ export default function AnnouncementsView({
                 {/* Structured Metadata Card */}
                 <View style={styles.modalMetaCard}>
                   <View style={styles.modalMetaItem}>
-                    <Calendar size={14} color="#2563eb" />
+                    <Clock size={14} color="#2563eb" />
                     <Text style={styles.modalMetaLabel}>
-                      Published: <Text style={styles.modalMetaVal}>{activeModalItem.date}</Text>
+                      Published Time: <Text style={styles.modalMetaVal}>{activeModalItem.date || (activeModalItem.created_at ? new Date(activeModalItem.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')}</Text>
                     </Text>
                   </View>
+                  {activeModalItem.event_date ? (
+                    <View style={styles.modalMetaItem}>
+                      <Calendar size={14} color="#7c3aed" />
+                      <Text style={styles.modalMetaLabel}>
+                        Event / Scheduled Date (Calendar):{' '}
+                        <Text style={[styles.modalMetaVal, { color: '#6d28d9', fontWeight: '700' }]}>
+                          {new Date(activeModalItem.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </Text>
+                    </View>
+                  ) : null}
                   {activeModalItem.location ? (
                     <View style={styles.modalMetaItem}>
                       <MapPin size={14} color="#2563eb" />
@@ -1078,9 +1098,9 @@ export default function AnnouncementsView({
                   <View style={styles.aiCleanSuccessBox}>
                     <View style={styles.aiCleanSuccessHeader}>
                       <View style={styles.aiCleanSuccessIconCircle}>
-                        <Sparkles size={13} color="#16a34a" />
+                        <ShieldCheck size={13} color="#16a34a" />
                       </View>
-                      <Text style={styles.aiCleanSuccessTitle}>AI Language Sanitizer Applied</Text>
+                      <Text style={styles.aiCleanSuccessTitle}>Language Standards Applied</Text>
                       <View style={styles.aiCleanSuccessBadge}>
                         <Text style={styles.aiCleanSuccessBadgeText}>CLEAN & READY</Text>
                       </View>
@@ -1165,8 +1185,8 @@ export default function AnnouncementsView({
                           onPress={handleAutoCleanWithAi}
                           activeOpacity={0.8}
                         >
-                          <Sparkles size={13} color="#ffffff" />
-                          <Text style={styles.aiAutoCleanBtnText}>✨ Auto-Sanitize with AI</Text>
+                          <ShieldCheck size={13} color="#ffffff" />
+                          <Text style={styles.aiAutoCleanBtnText}>Auto-Sanitize Language</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.aiDismissBtn}

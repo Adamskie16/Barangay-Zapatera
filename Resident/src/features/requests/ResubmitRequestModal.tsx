@@ -18,7 +18,6 @@ import {
   AlertCircle,
   AlertTriangle,
   RotateCcw,
-  Sparkles,
   ArrowRight,
   ShieldAlert,
   Info,
@@ -717,7 +716,7 @@ export default function ResubmitRequestModal({
                                     hasWarning ? styles.aiInspectionWarning : styles.aiInspectionPassed,
                                   ]}
                                 >
-                                  <Sparkles size={11} color={hasWarning ? '#b45309' : '#15803d'} />
+                                  <CheckCircle2 size={11} color={hasWarning ? '#b45309' : '#15803d'} />
                                   <Text
                                     style={[
                                       styles.aiInspectionText,
@@ -787,7 +786,7 @@ export default function ResubmitRequestModal({
             {/* 5. Resident Compliance Notes to Staff (Optional / Helpful) */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionTitleRow}>
-                <Sparkles size={15} color="#2563eb" />
+                <FileText size={15} color="#2563eb" />
                 <Text style={styles.sectionTitle}>Notes for Barangay Staff (Optional)</Text>
               </View>
               <Text style={styles.inputHelperText}>

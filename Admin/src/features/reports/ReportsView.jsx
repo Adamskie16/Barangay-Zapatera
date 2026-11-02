@@ -38,7 +38,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   TrendingUp,
-  Sparkles,
   ShieldCheck,
   Table as TableIcon,
   User,
@@ -846,7 +845,7 @@ export default function ReportsView({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200/70 text-[10px] font-extrabold uppercase tracking-wider text-[#3b5bfd] shadow-2xs mb-2">
-            <Sparkles className="w-3 h-3" />
+            <TrendingUp className="w-3 h-3" />
             <span>Analytics &amp; Official Audit</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight">

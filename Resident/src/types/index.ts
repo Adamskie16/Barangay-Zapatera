@@ -208,6 +208,7 @@ export interface BarangayAnnouncement {
   is_important?: boolean;
   is_emergency?: boolean;
   created_at?: string;
+  event_date?: string | null;
 }
 
 export interface BarangayEvent {

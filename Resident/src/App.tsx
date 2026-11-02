@@ -289,6 +289,7 @@ export default function App() {
           author: newsItem.author || 'Barangay Administration',
           is_important: !!newsItem.is_important,
           is_emergency: true,
+          event_date: newsItem.event_date || null,
         },
       });
     }
@@ -328,6 +329,7 @@ export default function App() {
       is_important: !!newsItem.is_important,
       is_emergency: isEmergency,
       created_at: newsItem.created_at || new Date().toISOString(),
+      event_date: newsItem.event_date || null,
     };
 
     setAnnouncements((prev) => {
@@ -1172,6 +1174,7 @@ export default function App() {
               is_important: !!item.is_important,
               is_emergency: isEm,
               created_at: item.created_at || new Date().toISOString(),
+              event_date: item.event_date || null,
             };
           });
 
@@ -1179,9 +1182,9 @@ export default function App() {
             id: evt.id ? (String(evt.id).startsWith('event-') ? String(evt.id) : `event-${evt.id}`) : `event-${Date.now()}-${Math.random()}`,
             title: evt.title,
             category: 'Events',
-            date: evt.event_date
-              ? new Date(evt.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-              : new Date(evt.created_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            date: evt.created_at
+              ? new Date(evt.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             description: evt.description || '',
             content: `${evt.description || ''}\n\n📍 Venue: ${evt.location || 'Barangay Zapatera Multi-Purpose Gym'}\n📅 Event Schedule: ${evt.event_date ? new Date(evt.event_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'TBA'}`,
             banner_url: evt.image_url || '',
@@ -1189,7 +1192,8 @@ export default function App() {
             author: evt.created_by_name || 'Barangay Office',
             is_important: false,
             is_emergency: false,
-            created_at: evt.created_at || evt.event_date || new Date().toISOString(),
+            created_at: evt.created_at || new Date().toISOString(),
+            event_date: evt.event_date || null,
           }));
 
           const combined = [...newsItems, ...eventItems].sort((a, b) => {
@@ -1242,6 +1246,7 @@ export default function App() {
             is_important: !!raw.is_important,
             is_emergency: !!raw.is_emergency,
             created_at: raw.created_at || new Date().toISOString(),
+            event_date: raw.event_date || null,
           });
         }
         setAnnouncements(unique);

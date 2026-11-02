@@ -21,7 +21,6 @@ import {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
-  Sparkles,
   ArrowRight,
   ArrowLeft,
   Camera,
@@ -1604,7 +1603,7 @@ export default function RequestFlowModal({
                                     }}
                                   >
                                     {uploaded.ai_quality.status === 'passed' ? (
-                                      <Sparkles size={14} color="#15803d" />
+                                      <CheckCircle2 size={14} color="#15803d" />
                                     ) : (
                                       <AlertTriangle size={14} color="#b45309" />
                                     )}

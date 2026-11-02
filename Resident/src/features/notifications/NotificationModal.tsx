@@ -20,7 +20,6 @@ import {
   CheckCheck,
   AlertTriangle,
   Trash2,
-  Sparkles,
 } from 'lucide-react';
 import { ResidentNotification } from '../../types';
 import { ensureInterFontLoaded } from '../../core/fontSetup';

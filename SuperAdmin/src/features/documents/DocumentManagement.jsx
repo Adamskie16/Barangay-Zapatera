@@ -10,7 +10,6 @@ import {
   Calendar,
   MapPin,
   RotateCcw,
-  Sparkles,
   Phone,
   Clock,
   Cake,
@@ -341,7 +340,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center">
-              <Sparkles size={14} />
+              <FileText size={14} />
             </div>
             <div>
               <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">

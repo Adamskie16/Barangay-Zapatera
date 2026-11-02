@@ -13,7 +13,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  Sparkles,
   CheckCircle2,
   XCircle,
   ArrowUpDown,
@@ -275,7 +274,7 @@ export default function MonthlyDemandReport({
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-[#3b5bfd] text-[10px] font-extrabold uppercase tracking-wider border border-blue-100 mb-2">
-            <Sparkles className="w-3 h-3" />
+            <TrendingUp className="w-3 h-3" />
             <span>Business Intelligence &amp; Treasurer Ledger</span>
             {rpcMetrics && (
               <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px]">
@@ -788,7 +787,7 @@ export default function MonthlyDemandReport({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-xl bg-[#3b5bfd] text-white flex items-center justify-center">
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 </div>
                 <div>
                   <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
