@@ -1069,5 +1069,3 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
     </div>
   );
 }
-  );
-}
