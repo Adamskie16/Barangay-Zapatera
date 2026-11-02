@@ -288,3 +288,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_monthly_demand_metrics(TIMESTAMPTZ, TIMESTAMPTZ) TO anon, authenticated, service_role;
+

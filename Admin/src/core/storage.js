@@ -152,7 +152,15 @@ export const StorageService = {
   // DOCUMENT TYPES (Directly maps to public.document_types)
   getDocTypes: () => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.DOC_TYPES) || '[]');
+      const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.DOC_TYPES) || '[]');
+      const deletedList = JSON.parse(localStorage.getItem('zapatera_deleted_doc_types') || '[]');
+      if (!Array.isArray(deletedList) || deletedList.length === 0) return list;
+      const deletedSet = new Set(deletedList.map((v) => String(v).toLowerCase().trim()));
+      return list.filter(
+        (d) =>
+          !deletedSet.has(String(d.id || '').toLowerCase().trim()) &&
+          !deletedSet.has(String(d.code || '').toLowerCase().trim())
+      );
     } catch {
       return [];
     }
@@ -167,28 +175,42 @@ export const StorageService = {
           .order('title', { ascending: true });
 
         if (!error && data && data.length > 0) {
-          const formatted = data.map((d) => ({
-            id: d.id,
-            code: d.code,
-            title: d.title,
-            description: d.description || '',
-            fee: Number(d.fee) || 0,
-            fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
-            is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
-            processing_days: Number(d.processing_days) || 1,
-            requirements: Array.isArray(d.requirements)
-              ? d.requirements
-              : typeof d.requirements === 'string'
-              ? JSON.parse(d.requirements || '[]')
-              : [],
-            is_active: d.is_active !== false,
-            template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
-            template_title: d.template_title || d.title || '',
-            template_body: d.template_body || '',
-            doc_stamps: Number(d.doc_stamps) || 30,
-            created_at: d.created_at,
-            updated_at: d.updated_at,
-          }));
+          let deletedSet = new Set();
+          try {
+            const deletedList = JSON.parse(localStorage.getItem('zapatera_deleted_doc_types') || '[]');
+            if (Array.isArray(deletedList)) {
+              deletedSet = new Set(deletedList.map((v) => String(v).toLowerCase().trim()));
+            }
+          } catch {}
+
+          const formatted = data
+            .filter(
+              (d) =>
+                !deletedSet.has(String(d.id || '').toLowerCase().trim()) &&
+                !deletedSet.has(String(d.code || '').toLowerCase().trim())
+            )
+            .map((d) => ({
+              id: d.id,
+              code: d.code,
+              title: d.title,
+              description: d.description || '',
+              fee: Number(d.fee) || 0,
+              fee_type: d.fee_type || (d.is_variable_fee ? 'variable' : 'fixed'),
+              is_variable_fee: Boolean(d.is_variable_fee || d.fee_type === 'variable'),
+              processing_days: Number(d.processing_days) || 1,
+              requirements: Array.isArray(d.requirements)
+                ? d.requirements
+                : typeof d.requirements === 'string'
+                ? JSON.parse(d.requirements || '[]')
+                : [],
+              is_active: d.is_active !== false,
+              template_type: d.template_type || (d.code?.toLowerCase().includes('bus') || d.title?.toLowerCase().includes('business') ? 'business' : 'standard'),
+              template_title: d.template_title || d.title || '',
+              template_body: d.template_body || '',
+              doc_stamps: Number(d.doc_stamps) || 30,
+              created_at: d.created_at,
+              updated_at: d.updated_at,
+            }));
           localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(formatted));
           return formatted;
         }
@@ -200,6 +222,18 @@ export const StorageService = {
   },
 
   saveDocType: async (docType, adminActor) => {
+    try {
+      const deletedList = JSON.parse(localStorage.getItem('zapatera_deleted_doc_types') || '[]');
+      if (Array.isArray(deletedList) && deletedList.length > 0) {
+        const cleaned = deletedList.filter(
+          (v) =>
+            String(v).toLowerCase().trim() !== String(docType.id || '').toLowerCase().trim() &&
+            String(v).toLowerCase().trim() !== String(docType.code || '').toLowerCase().trim()
+        );
+        localStorage.setItem('zapatera_deleted_doc_types', JSON.stringify(cleaned));
+      }
+    } catch {}
+
     const docTypes = StorageService.getDocTypes();
     const existingIndex = docTypes.findIndex((d) => 
       (docType.id && d.id === docType.id) || 
@@ -306,14 +340,38 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.DOC_TYPES, JSON.stringify(docTypes));
 
     try {
+      const deletedList = JSON.parse(localStorage.getItem('zapatera_deleted_doc_types') || '[]');
+      const nextDeleted = new Set(Array.isArray(deletedList) ? deletedList : []);
+      if (docTypeId) nextDeleted.add(String(docTypeId));
+      if (target?.id) nextDeleted.add(String(target.id));
+      if (target?.code) nextDeleted.add(String(target.code));
+      localStorage.setItem('zapatera_deleted_doc_types', JSON.stringify(Array.from(nextDeleted)));
+    } catch {}
+
+    try {
       if (isSupabaseConfigured()) {
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docTypeId);
-        if (isUuid) {
-          await supabase.from('document_types').delete().eq('id', docTypeId);
-        } else if (target && target.code) {
-          await supabase.from('document_types').delete().eq('code', target.code);
-        } else {
-          await supabase.from('document_types').delete().eq('code', docTypeId);
+        const rpcPayload = {
+          p_doc_type_id: isUuid ? docTypeId : null,
+          p_doc_code: target?.code || (!isUuid ? String(docTypeId) : null),
+        };
+
+        // 1. Prefer safe_delete_document_type RPC (detaches document_requests FK before deleting)
+        const { error: rpcErr } = await supabase.rpc('safe_delete_document_type', rpcPayload);
+
+        if (rpcErr) {
+          // 2. Fallback if migration not run yet: detach document_requests FK first, then delete
+          if (isUuid) {
+            await supabase
+              .from('document_requests')
+              .update({ document_type_id: null })
+              .eq('document_type_id', docTypeId);
+            await supabase.from('document_types').delete().eq('id', docTypeId);
+          } else if (target && target.code) {
+            await supabase.from('document_types').delete().eq('code', target.code);
+          } else {
+            await supabase.from('document_types').delete().eq('code', docTypeId);
+          }
         }
       }
     } catch (err) {
