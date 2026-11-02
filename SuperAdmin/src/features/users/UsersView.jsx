@@ -87,16 +87,14 @@ export const purgeStaleLocalUser = (emailToClean) => {
 };
 
 const SAMPLE_SITIOS = [
-  'Sitio Zapatera Proper',
-  'Sitio Zapatera Central',
-  'Sitio Lower Zapatera',
-  'Sitio Riverside',
-  'Sitio San Roque',
-  'Sitio Manga',
-  'Sitio Sto. Niño',
-  'Sitio Kawayan',
-  'Sitio Mabolo Border',
-  'Sitio Centro',
+  'Caimito',
+  'Bayabas',
+  'Sab-ah',
+  'Lemonsito',
+  'Nangka',
+  'Mangga',
+  'Green Mosque',
+  'Riverside',
 ];
 
 const CIVIL_STATUS_OPTIONS = ['Single', 'Married', 'Widowed', 'Separated', 'Divorced'];

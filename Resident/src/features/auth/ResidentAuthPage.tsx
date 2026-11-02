@@ -45,14 +45,14 @@ import GlobalFooter from '../../components/GlobalFooter';
 // SAMPLE SITIO LIST FOR BARANGAY ZAPATERA
 // ============================================================================
 export const SAMPLE_SITIOS: string[] = [
-  'Sitio Zapatera Proper',
-  'Sitio San Roque',
-  'Sitio Lower Zapatera',
-  'Sitio Upper Zapatera',
-  'Sitio Central',
-  'Sitio Riverside',
-  'Sitio Ramos',
-  'Sitio Kamagong',
+  'Caimito',
+  'Bayabas',
+  'Sab-ah',
+  'Lemonsito',
+  'Nangka',
+  'Mangga',
+  'Green Mosque',
+  'Riverside',
 ];
 
 export const CIVIL_STATUS_OPTIONS: string[] = [
