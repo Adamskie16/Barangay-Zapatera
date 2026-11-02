@@ -69,11 +69,15 @@ export default function MonthlyDemandReport({
   const [showCsvMenu, setShowCsvMenu] = useState(false);
   const [showPrintableModal, setShowPrintableModal] = useState(false);
 
-  // Table Sorting & 10-Row Pagination State
+  // Certificate Demand Ranking ("What Certificate is in Demand") Pagination State
+  const [rankingPage, setRankingPage] = useState(1);
+  const [rankingPageSize, setRankingPageSize] = useState(4);
+
+  // Operational Health Table Sorting & Pagination State
   const [sortKey, setSortKey] = useState('demand_rank');
   const [sortDir, setSortDir] = useState('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(5);
 
   // Compute full demand, bottleneck, Sitio/Purok, and Purpose metrics
   const trackerData = useMemo(() => {
@@ -128,7 +132,14 @@ export default function MonthlyDemandReport({
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
+    setRankingPage(1);
   }, [periodFilter, selectedYear, customStartDate, customEndDate]);
+
+  const rankingList = trackerData.demandMetrics || [];
+  const rankingTotalPages = Math.max(1, Math.ceil(rankingList.length / rankingPageSize));
+  const safeRankingPage = Math.min(Math.max(1, rankingPage), rankingTotalPages);
+  const rankingStartIndex = (safeRankingPage - 1) * rankingPageSize;
+  const paginatedRanking = rankingList.slice(rankingStartIndex, rankingStartIndex + rankingPageSize);
 
   const demandList = useMemo(() => {
     const base = trackerData.demandMetrics || [];
@@ -146,7 +157,8 @@ export default function MonthlyDemandReport({
 
   const totalPages = Math.max(1, Math.ceil(demandList.length / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const paginatedDemand = demandList.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const tableStartIndex = (safePage - 1) * pageSize;
+  const paginatedDemand = demandList.slice(tableStartIndex, tableStartIndex + pageSize);
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -580,7 +592,7 @@ export default function MonthlyDemandReport({
           </div>
 
           <div className="space-y-3">
-            {trackerData.demandMetrics.slice(0, 7).map((item, idx) => {
+            {paginatedRanking.map((item, idx) => {
               const barColors = [
                 'bg-[#3b5bfd]',
                 'bg-[#0ea5e9]',
@@ -590,9 +602,10 @@ export default function MonthlyDemandReport({
                 'bg-[#ec4899]',
                 'bg-[#64748b]',
               ];
+              const colorIndex = rankingStartIndex + idx;
               const isPositiveMoM = item.mom_growth_pct >= 0;
               return (
-                <div key={item.document_type_id || idx} className="bg-white p-3 rounded-2xl border border-slate-200/60 space-y-1.5">
+                <div key={item.document_type_id || colorIndex} className="bg-white p-3 rounded-2xl border border-slate-200/60 space-y-1.5">
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-6 h-6 rounded-lg bg-blue-50 text-[#3b5bfd] font-mono font-extrabold text-[11px] flex items-center justify-center shrink-0">
@@ -623,7 +636,7 @@ export default function MonthlyDemandReport({
                   </div>
                   <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${barColors[idx % barColors.length]} rounded-full transition-all duration-500`}
+                      className={`h-full ${barColors[colorIndex % barColors.length]} rounded-full transition-all duration-500`}
                       style={{ width: `${Math.max(item.pct_of_total_volume, item.total_requests > 0 ? 6 : 2)}%` }}
                     />
                   </div>
@@ -635,6 +648,69 @@ export default function MonthlyDemandReport({
                 </div>
               );
             })}
+          </div>
+
+          {/* Pagination Footer for Certificate Demand Ranking */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-200/70 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-500 font-semibold">
+                Showing{' '}
+                <strong className="text-slate-700">
+                  {rankingList.length === 0 ? 0 : rankingStartIndex + 1}
+                </strong>
+                –
+                <strong className="text-slate-700">
+                  {Math.min(rankingStartIndex + rankingPageSize, rankingList.length)}
+                </strong>{' '}
+                of <strong className="text-slate-700">{rankingList.length}</strong> certificates
+              </span>
+              <select
+                value={rankingPageSize}
+                onChange={(e) => {
+                  setRankingPageSize(Number(e.target.value));
+                  setRankingPage(1);
+                }}
+                className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 focus:outline-none cursor-pointer"
+                aria-label="Ranking items per page"
+              >
+                <option value={4}>4 / page</option>
+                <option value={6}>6 / page</option>
+                <option value={10}>10 / page</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={safeRankingPage <= 1}
+                onClick={() => setRankingPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold flex items-center gap-1 text-[11px] cursor-pointer"
+              >
+                <ChevronLeft className="w-3 h-3" /> Prev
+              </button>
+              {Array.from({ length: rankingTotalPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setRankingPage(pageNum)}
+                  className={`w-7 h-7 rounded-xl text-[11px] font-extrabold transition-colors cursor-pointer ${
+                    pageNum === safeRankingPage
+                      ? 'bg-[#3b5bfd] text-white shadow-2xs'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={safeRankingPage >= rankingTotalPages}
+                onClick={() => setRankingPage((p) => Math.min(rankingTotalPages, p + 1))}
+                className="px-2.5 py-1 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold flex items-center gap-1 text-[11px] cursor-pointer"
+              >
+                Next <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -933,32 +1009,72 @@ export default function MonthlyDemandReport({
           </table>
         </div>
 
-        {/* 10-Row Pagination Footer */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2 text-xs">
-            <span className="text-slate-500 font-medium">
-              Page <strong>{safePage}</strong> of <strong>{totalPages}</strong>
+        {/* Pagination Footer for Certificate Demand & Operational Health Table */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 px-1 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-slate-500 font-semibold">
+              Showing{' '}
+              <strong className="text-slate-800">
+                {demandList.length === 0 ? 0 : tableStartIndex + 1}
+              </strong>
+              –
+              <strong className="text-slate-800">
+                {Math.min(tableStartIndex + pageSize, demandList.length)}
+              </strong>{' '}
+              of <strong className="text-slate-800">{demandList.length}</strong> Certificate Types
             </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={safePage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" /> Prev
-              </button>
-              <button
-                type="button"
-                disabled={safePage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                Next <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-[#f8fafc] border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+              aria-label="Table rows per page"
+            >
+              <option value={5}>5 / page</option>
+              <option value={10}>10 / page</option>
+              <option value={15}>15 / page</option>
+            </select>
           </div>
-        )}
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-semibold mr-1">
+              Page <strong className="text-slate-700">{safePage}</strong> of{' '}
+              <strong className="text-slate-700">{totalPages}</strong>
+            </span>
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setCurrentPage(pageNum)}
+                className={`w-8 h-8 rounded-xl text-xs font-extrabold transition-colors cursor-pointer ${
+                  pageNum === safePage
+                    ? 'bg-[#3b5bfd] text-white shadow-2xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {pageNum}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-bold flex items-center gap-1 cursor-pointer"
+            >
+              Next <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 5. FORMAL PRINTABLE LEDGER PREVIEW MODAL */}
