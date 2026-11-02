@@ -33,6 +33,7 @@ import {
   ChevronsRight,
   LayoutGrid,
   Table as TableIcon,
+  FileText,
 } from 'lucide-react';
 import {
   getBulletinComments,

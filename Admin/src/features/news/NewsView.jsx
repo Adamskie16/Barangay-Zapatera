@@ -37,6 +37,7 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Globe,
+  FileText,
 } from 'lucide-react';
 import {
   getBulletinComments,

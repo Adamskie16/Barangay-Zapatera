@@ -764,43 +764,38 @@ export default function RequestTrackingModal({
 
       {/* Confirmation Modal for Request Cancellation */}
       {showCancelConfirm && (
-        <Modal
-          visible={true}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowCancelConfirm(false)}
-        >
-          <View style={styles.confirmOverlay}>
-            <View style={styles.confirmBox}>
-              <View style={styles.confirmIconCircle}>
-                <AlertTriangle size={24} color="#dc2626" />
-              </View>
-              <Text style={styles.confirmTitle}>Cancel Document Request?</Text>
-              <Text style={styles.confirmMessage}>
-                Are you sure you want to cancel your request for "
-                {request.document_title}" (Ref: {request.tracking_number})?
-              </Text>
-              <View style={styles.confirmBtnRow}>
-                <TouchableOpacity
-                  style={styles.confirmCancelBtn}
-                  onPress={() => setShowCancelConfirm(false)}
-                >
-                  <Text style={styles.confirmCancelBtnText}>Keep Request</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.confirmProceedBtn}
-                  onPress={() => {
-                    setShowCancelConfirm(false);
-                    onCancelRequest?.(request);
-                    onClose();
-                  }}
-                >
-                  <Text style={styles.confirmProceedBtnText}>Yes, Cancel</Text>
-                </TouchableOpacity>
-              </View>
+        <View style={[StyleSheet.absoluteFillObject, styles.confirmOverlay, { zIndex: 9999 }]}>
+          <View style={styles.confirmBox}>
+            <View style={styles.confirmIconCircle}>
+              <AlertTriangle size={24} color="#dc2626" />
+            </View>
+            <Text style={styles.confirmTitle}>Cancel Document Request?</Text>
+            <Text style={styles.confirmMessage}>
+              Are you sure you want to cancel your request for "
+              {request.document_title}" (Ref: {request.tracking_number})?
+            </Text>
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setShowCancelConfirm(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmCancelBtnText}>Keep Request</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmProceedBtn}
+                onPress={() => {
+                  setShowCancelConfirm(false);
+                  onCancelRequest?.(request);
+                  onClose();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmProceedBtnText}>Yes, Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </View>
       )}
     </Modal>
   );

@@ -28,3 +28,4 @@ CREATE INDEX IF NOT EXISTS idx_news_event_date ON public.news(event_date);
 
 -- 4. Reload PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
+

@@ -2080,15 +2080,16 @@ export default function App() {
         }
 
         if (updateRes?.error) {
-          const minimalPayload = {
-            status: 'declined',
+          const fallbackPayload = {
+            status: 'rejected',
+            rejection_reason: cancelReason,
             notes: updatedNotes,
             updated_at: nowIso,
           };
           if (isValidUuid) {
-            await supabase.from('document_requests').update(minimalPayload).eq('id', req.id);
+            await supabase.from('document_requests').update(fallbackPayload).eq('id', req.id);
           } else if (req.tracking_number) {
-            await supabase.from('document_requests').update(minimalPayload).eq('tracking_number', req.tracking_number);
+            await supabase.from('document_requests').update(fallbackPayload).eq('tracking_number', req.tracking_number);
           }
         }
       }
