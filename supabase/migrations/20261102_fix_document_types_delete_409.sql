@@ -120,3 +120,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.safe_delete_document_type(UUID, TEXT) TO anon, authenticated, service_role;
+

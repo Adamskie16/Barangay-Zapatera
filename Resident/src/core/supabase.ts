@@ -5,14 +5,172 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://qzmxwxmtuzo
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF6bXh3eG10dXpvYW53ZXZmdG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwODIwMjQsImV4cCI6MjA5OTY1ODAyNH0.eUsrHf8qnYmx5SF_BTR0L9Hma4OkQZkSg0APrr8LgOg';
 
 /**
+ * Tracks whether the Supabase host is currently reachable (DNS + network online).
+ * Prevents WebSocket connection attempts from firing while DNS or Wi-Fi is temporarily down
+ * (avoiding Chromium's native `net::ERR_NAME_NOT_RESOLVED` console error).
+ */
+let hostReachable: boolean = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+let reachabilityCheckPromise: Promise<boolean> | null = null;
+
+export const isSupabaseHostReachable = (): boolean => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return false;
+  }
+  return hostReachable;
+};
+
+export const waitForSupabaseReachable = async (): Promise<boolean> => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    hostReachable = false;
+    return false;
+  }
+  if (reachabilityCheckPromise) {
+    return reachabilityCheckPromise;
+  }
+  reachabilityCheckPromise = (async () => {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+      const res = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'HEAD',
+        headers: { apikey: supabaseAnonKey },
+        signal: controller?.signal,
+      });
+      if (timer) clearTimeout(timer);
+      hostReachable = Boolean(res);
+      return hostReachable;
+    } catch {
+      hostReachable = false;
+      return false;
+    } finally {
+      reachabilityCheckPromise = null;
+    }
+  })();
+  return reachabilityCheckPromise;
+};
+
+/**
+ * Resilient WebSocket wrapper for @supabase/realtime-js.
+ * Guards against calling `new WebSocket(...)` when DNS or Wi-Fi is unreachable,
+ * preventing `WebSocket connection to 'wss://...' failed: net::ERR_NAME_NOT_RESOLVED`.
+ */
+class ResilientWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  private ws: WebSocket | null = null;
+  private _binaryType: BinaryType = 'arraybuffer';
+  public onopen: ((this: WebSocket, ev: Event) => any) | null = null;
+  public onerror: ((this: WebSocket, ev: Event) => any) | null = null;
+  public onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null;
+  public onclose: ((this: WebSocket, ev: CloseEvent) => any) | null = null;
+  public readyState: number = ResilientWebSocket.CONNECTING;
+  public url: string = '';
+  public protocol: string = '';
+  public extensions: string = '';
+  public bufferedAmount: number = 0;
+
+  constructor(url: string | URL, protocols?: string | string[]) {
+    this.url = String(url);
+
+    // If browser is offline or host DNS recently failed, skip native WebSocket instantiation
+    if (!isSupabaseHostReachable() || typeof WebSocket === 'undefined') {
+      this.readyState = ResilientWebSocket.CLOSED;
+      setTimeout(() => {
+        if (typeof this.onclose === 'function') {
+          this.onclose.call(this as any, {
+            code: 1006,
+            reason: 'Supabase host temporarily unreachable (DNS/Offline)',
+            wasClean: false,
+          } as CloseEvent);
+        }
+      }, 50);
+      return;
+    }
+
+    try {
+      const validProtocols =
+        typeof protocols === 'string' || Array.isArray(protocols) ? protocols : undefined;
+      this.ws = validProtocols ? new WebSocket(url, validProtocols) : new WebSocket(url);
+      this.ws.binaryType = this._binaryType;
+
+      this.ws.onopen = (ev: Event) => {
+        hostReachable = true;
+        this.readyState = ResilientWebSocket.OPEN;
+        if (typeof this.onopen === 'function') this.onopen.call(this.ws!, ev);
+      };
+
+      this.ws.onmessage = (ev: MessageEvent) => {
+        if (typeof this.onmessage === 'function') this.onmessage.call(this.ws!, ev);
+      };
+
+      this.ws.onerror = (ev: Event) => {
+        if (typeof this.onerror === 'function') this.onerror.call(this.ws!, ev);
+      };
+
+      this.ws.onclose = (ev: CloseEvent) => {
+        this.readyState = ResilientWebSocket.CLOSED;
+        if (typeof this.onclose === 'function') this.onclose.call(this.ws!, ev);
+      };
+    } catch {
+      this.readyState = ResilientWebSocket.CLOSED;
+      setTimeout(() => {
+        if (typeof this.onclose === 'function') {
+          this.onclose.call(this as any, {
+            code: 1006,
+            reason: 'WebSocket initialization skipped',
+            wasClean: false,
+          } as CloseEvent);
+        }
+      }, 50);
+    }
+  }
+
+  get binaryType(): BinaryType {
+    return this.ws ? this.ws.binaryType : this._binaryType;
+  }
+
+  set binaryType(value: BinaryType) {
+    this._binaryType = value;
+    if (this.ws) {
+      this.ws.binaryType = value;
+    }
+  }
+
+  send(data: string | ArrayBuffer | Blob | ArrayBufferView): void {
+    if (this.ws && this.ws.readyState === ResilientWebSocket.OPEN) {
+      this.ws.send(data);
+    }
+  }
+
+  close(code?: number, reason?: string): void {
+    this.readyState = ResilientWebSocket.CLOSING;
+    if (this.ws) {
+      try {
+        this.ws.close(code, reason);
+      } catch {}
+    }
+    this.readyState = ResilientWebSocket.CLOSED;
+  }
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void {
+    if (this.ws) {
+      this.ws.addEventListener(type, listener, options);
+    }
+  }
+
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void {
+    if (this.ws) {
+      this.ws.removeEventListener(type, listener, options);
+    }
+  }
+}
+
+/**
  * Resilient Fetch Handler:
  * Specifically mitigates Chromium net::ERR_QUIC_PROTOCOL_ERROR, UDP packet drops, and transient network dropouts.
- *
- * Why net::ERR_QUIC_PROTOCOL_ERROR happens:
- * Cloudflare/Supabase advertises HTTP/3 (QUIC over UDP 443). If the user's ISP, Wi-Fi router, or local
- * firewall filters or corrupts UDP 443 packets, Chromium's QUIC session fails.
- * On the initial error, Chromium marks the QUIC origin as broken and schedules fallback to standard TCP (HTTP/1.1 or HTTP/2).
- * By retrying with a short backoff, the retry immediately traverses TCP and succeeds cleanly without crashing the app.
  */
 const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const maxRetries = 3;
@@ -21,6 +179,7 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(input, init);
+      hostReachable = true;
 
       // Gracefully handle 401 Unauthorized caused by expired or invalid JWT session tokens
       if (response.status === 401) {
@@ -36,7 +195,6 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
             bodyText.includes('invalid claim');
 
           if (isJwtExpiry) {
-            // 1. Purge stale Supabase auth tokens from storage
             if (typeof localStorage !== 'undefined') {
               Object.keys(localStorage).forEach((k) => {
                 if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
@@ -45,7 +203,6 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
               });
             }
 
-            // 2. Retry once with clean anon key in Authorization header if present
             if (init && init.headers) {
               const newHeaders = new Headers(init.headers as any);
               newHeaders.set('Authorization', `Bearer ${supabaseAnonKey}`);
@@ -71,11 +228,10 @@ const resilientFetch: typeof fetch = async (input: RequestInfo | URL, init?: Req
         errMsg.includes('abort');
 
       if (isNetworkOrQuicError && attempt < maxRetries - 1) {
-        // Exponential backoff: 200ms, 500ms
-        // Allows Chromium's socket pool to mark the QUIC session as broken and switch to TCP
         await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, attempt)));
         continue;
       }
+      hostReachable = false;
       break;
     }
   }
@@ -93,6 +249,19 @@ export const supabase = ((typeof window !== 'undefined' && (window as any)[globa
         persistSession: true,
         detectSessionInUrl: true,
       },
+      realtime: {
+        transport: ResilientWebSocket as any,
+        timeout: 20000,
+        heartbeatIntervalMs: 30000,
+        reconnectAfterMs: (tries: number) => {
+          if (!isSupabaseHostReachable()) {
+            // Probe HTTP reachability in the background while backing off
+            waitForSupabaseReachable();
+            return 15000;
+          }
+          return [1000, 2500, 5000, 10000][tries - 1] || 15000;
+        },
+      },
       global: {
         fetch: resilientFetch,
       },
@@ -100,6 +269,23 @@ export const supabase = ((typeof window !== 'undefined' && (window as any)[globa
 
 if (typeof window !== 'undefined') {
   (window as any)[globalSupabaseKey] = supabase;
+
+  window.addEventListener('offline', () => {
+    hostReachable = false;
+    try {
+      supabase.realtime?.disconnect?.();
+    } catch {}
+  });
+
+  window.addEventListener('online', () => {
+    waitForSupabaseReachable().then((reachable) => {
+      if (reachable) {
+        try {
+          supabase.realtime?.connect?.();
+        } catch {}
+      }
+    });
+  });
 } else if (typeof globalThis !== 'undefined') {
   (globalThis as any)[globalSupabaseKey] = supabase;
 }

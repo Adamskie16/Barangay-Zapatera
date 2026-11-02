@@ -6,6 +6,137 @@ const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJI
 
 const supabaseServiceRoleKey = import.meta.env?.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
 
+let hostReachable = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+let reachabilityCheckPromise = null;
+
+export const isSupabaseHostReachable = () => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  return hostReachable;
+};
+
+export const waitForSupabaseReachable = async () => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    hostReachable = false;
+    return false;
+  }
+  if (reachabilityCheckPromise) return reachabilityCheckPromise;
+  reachabilityCheckPromise = (async () => {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+      const res = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'HEAD',
+        headers: { apikey: supabaseAnonKey },
+        signal: controller?.signal,
+      });
+      if (timer) clearTimeout(timer);
+      hostReachable = Boolean(res);
+      return hostReachable;
+    } catch {
+      hostReachable = false;
+      return false;
+    } finally {
+      reachabilityCheckPromise = null;
+    }
+  })();
+  return reachabilityCheckPromise;
+};
+
+class ResilientWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  constructor(url, protocols) {
+    this.url = String(url);
+    this.ws = null;
+    this._binaryType = 'arraybuffer';
+    this.onopen = null;
+    this.onerror = null;
+    this.onmessage = null;
+    this.onclose = null;
+    this.readyState = ResilientWebSocket.CONNECTING;
+
+    if (!isSupabaseHostReachable() || typeof WebSocket === 'undefined') {
+      this.readyState = ResilientWebSocket.CLOSED;
+      setTimeout(() => {
+        if (typeof this.onclose === 'function') {
+          this.onclose({
+            code: 1006,
+            reason: 'Supabase host temporarily unreachable (DNS/Offline)',
+            wasClean: false,
+          });
+        }
+      }, 50);
+      return;
+    }
+
+    try {
+      const validProtocols =
+        typeof protocols === 'string' || Array.isArray(protocols) ? protocols : undefined;
+      this.ws = validProtocols ? new WebSocket(url, validProtocols) : new WebSocket(url);
+      this.ws.binaryType = this._binaryType;
+
+      this.ws.onopen = (ev) => {
+        hostReachable = true;
+        this.readyState = ResilientWebSocket.OPEN;
+        if (typeof this.onopen === 'function') this.onopen.call(this.ws, ev);
+      };
+      this.ws.onmessage = (ev) => {
+        if (typeof this.onmessage === 'function') this.onmessage.call(this.ws, ev);
+      };
+      this.ws.onerror = (ev) => {
+        if (typeof this.onerror === 'function') this.onerror.call(this.ws, ev);
+      };
+      this.ws.onclose = (ev) => {
+        this.readyState = ResilientWebSocket.CLOSED;
+        if (typeof this.onclose === 'function') this.onclose.call(this.ws, ev);
+      };
+    } catch {
+      this.readyState = ResilientWebSocket.CLOSED;
+      setTimeout(() => {
+        if (typeof this.onclose === 'function') {
+          this.onclose({ code: 1006, reason: 'WebSocket initialization skipped', wasClean: false });
+        }
+      }, 50);
+    }
+  }
+
+  get binaryType() {
+    return this.ws ? this.ws.binaryType : this._binaryType;
+  }
+
+  set binaryType(value) {
+    this._binaryType = value;
+    if (this.ws) this.ws.binaryType = value;
+  }
+
+  send(data) {
+    if (this.ws && this.ws.readyState === ResilientWebSocket.OPEN) {
+      this.ws.send(data);
+    }
+  }
+
+  close(code, reason) {
+    this.readyState = ResilientWebSocket.CLOSING;
+    if (this.ws) {
+      try {
+        this.ws.close(code, reason);
+      } catch {}
+    }
+    this.readyState = ResilientWebSocket.CLOSED;
+  }
+
+  addEventListener(type, listener, options) {
+    if (this.ws) this.ws.addEventListener(type, listener, options);
+  }
+
+  removeEventListener(type, listener, options) {
+    if (this.ws) this.ws.removeEventListener(type, listener, options);
+  }
+}
+
 /**
  * Resilient fetch wrapper with retry to gracefully bypass Chromium net::ERR_QUIC_PROTOCOL_ERROR
  * and network packet drops by allowing Chromium to fall back to TCP.
@@ -16,6 +147,7 @@ const resilientFetch = async (input, init) => {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(input, init);
+      hostReachable = true;
 
       // Gracefully handle 401 Unauthorized caused by expired or invalid JWT session tokens
       if (response.status === 401) {
@@ -58,6 +190,7 @@ const resilientFetch = async (input, init) => {
         await new Promise((resolve) => setTimeout(resolve, 200 * Math.pow(2, attempt)));
         continue;
       }
+      hostReachable = false;
       break;
     }
   }
@@ -73,6 +206,18 @@ export const supabase = (typeof window !== 'undefined' && window[globalSupabaseK
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+      },
+      realtime: {
+        transport: ResilientWebSocket,
+        timeout: 20000,
+        heartbeatIntervalMs: 30000,
+        reconnectAfterMs: (tries) => {
+          if (!isSupabaseHostReachable()) {
+            waitForSupabaseReachable();
+            return 15000;
+          }
+          return [1000, 2500, 5000, 10000][tries - 1] || 15000;
+        },
       },
       global: {
         fetch: resilientFetch,

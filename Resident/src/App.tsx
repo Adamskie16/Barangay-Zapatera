@@ -21,7 +21,7 @@ import {
   ResidentNotification,
 } from './types';
 import { MobileStorage } from './core/storage';
-import { supabase, isSupabaseConfigured } from './core/supabase';
+import { supabase, isSupabaseConfigured, waitForSupabaseReachable } from './core/supabase';
 import {
   OFFICIAL_DOC_TYPES,
   DEFAULT_BARANGAY_CONFIG,
@@ -379,17 +379,19 @@ export default function App() {
     fetchDocTypes();
     fetchAnnouncements();
 
-    // Subscribe to live system configuration updates from SuperAdmin
-    let configChannel: any = null;
-    let newsChannel: any = null;
-    let eventsChannel: any = null;
-    let notifsChannel: any = null;
+    // Subscribe to live system configuration, news, events, and notifications on a single multiplexed channel
+    let liveSyncChannel: any = null;
+    let isEffectMounted = true;
     let broadcastChannel: BroadcastChannel | null = null;
 
-    if (isSupabaseConfigured()) {
+    const setupLiveSyncChannel = async () => {
+      if (!isSupabaseConfigured() || !isEffectMounted || liveSyncChannel) return;
+      const reachable = await waitForSupabaseReachable();
+      if (!reachable || !isEffectMounted || liveSyncChannel) return;
+
       try {
-        configChannel = supabase
-          .channel('resident-system-config')
+        liveSyncChannel = supabase
+          .channel('resident-live-sync')
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'system_config' },
@@ -404,11 +406,6 @@ export default function App() {
               }
             }
           )
-          .subscribe();
-
-        // Real-time synchronization for News & Announcements
-        newsChannel = supabase
-          .channel('resident-news-live')
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'news' },
@@ -423,11 +420,6 @@ export default function App() {
               }
             }
           )
-          .subscribe();
-
-        // Real-time synchronization for Barangay Events
-        eventsChannel = supabase
-          .channel('resident-events-live')
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'events' },
@@ -435,11 +427,6 @@ export default function App() {
               fetchAnnouncements();
             }
           )
-          .subscribe();
-
-        // Real-time synchronization for Resident Notifications
-        notifsChannel = supabase
-          .channel('resident-notifications-live')
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'notifications' },
@@ -453,6 +440,23 @@ export default function App() {
       } catch (err) {
         console.warn('Realtime subscription notice:', err);
       }
+    };
+
+    setupLiveSyncChannel();
+
+    const handleOnlineReconnect = () => {
+      setupLiveSyncChannel();
+      fetchSystemConfig();
+      fetchDocTypes();
+      fetchAnnouncements();
+      if (currentUserRef.current) {
+        fetchResidentRequests(currentUserRef.current);
+        fetchResidentNotifications(currentUserRef.current);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnlineReconnect);
     }
 
     // Cross-tab BroadcastChannel listener for immediate news and notifications
@@ -562,13 +566,12 @@ export default function App() {
     }
 
     return () => {
-      if (configChannel) supabase.removeChannel(configChannel);
-      if (newsChannel) supabase.removeChannel(newsChannel);
-      if (eventsChannel) supabase.removeChannel(eventsChannel);
-      if (notifsChannel) supabase.removeChannel(notifsChannel);
+      isEffectMounted = false;
+      if (liveSyncChannel) supabase.removeChannel(liveSyncChannel);
       if (broadcastChannel) broadcastChannel.close();
       if (typeof window !== 'undefined') {
         window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('online', handleOnlineReconnect);
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibility);
@@ -582,6 +585,7 @@ export default function App() {
 
   useEffect(() => {
     let deviceChannel: any = null;
+    let isDeviceMounted = true;
 
     if (currentUser) {
       fetchResidentRequests(currentUser);
@@ -599,28 +603,31 @@ export default function App() {
 
       // Realtime listener for remote session termination
       if (isSupabaseConfigured() && currentUser.id) {
-        try {
-          deviceChannel = supabase
-            .channel(`resident-device-check-${currentUser.id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'user_devices',
-                filter: `user_id=eq.${currentUser.id}`,
-              },
-              (payload: any) => {
-                if (payload.new && payload.new.is_active === false) {
-                  // Admin terminated this session remotely!
-                  handleInactivityLogout('Notice: Your device session was ended remotely. Your account remains active—please sign in again.');
+        waitForSupabaseReachable().then((reachable) => {
+          if (!reachable || !isDeviceMounted) return;
+          try {
+            deviceChannel = supabase
+              .channel(`resident-device-check-${currentUser.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: 'UPDATE',
+                  schema: 'public',
+                  table: 'user_devices',
+                  filter: `user_id=eq.${currentUser.id}`,
+                },
+                (payload: any) => {
+                  if (payload.new && payload.new.is_active === false) {
+                    // Admin terminated this session remotely!
+                    handleInactivityLogout('Notice: Your device session was ended remotely. Your account remains active—please sign in again.');
+                  }
                 }
-              }
-            )
-            .subscribe();
-        } catch {
-          // Handled
-        }
+              )
+              .subscribe();
+          } catch {
+            // Handled
+          }
+        });
       }
     } else {
       setRequests([]);
@@ -628,6 +635,7 @@ export default function App() {
     }
 
     return () => {
+      isDeviceMounted = false;
       if (deviceChannel) {
         supabase.removeChannel(deviceChannel);
       }
@@ -642,6 +650,7 @@ export default function App() {
 
     let profileChannel: any = null;
     let securityBroadcastChannel: any = null;
+    let isProfileMounted = true;
     let broadcastChannel: BroadcastChannel | null = null;
 
     const deletionNoticeText = 'Notice: Your resident account has been deleted by Barangay Zapatera administration. You have been logged out.';
@@ -679,6 +688,17 @@ export default function App() {
         if (!data) {
           // Check if session has expired due to inactivity
           const { data: authData, error: authErr } = await supabase.auth.getUser();
+          if (authErr) {
+            const authErrMsg = String(authErr.message || authErr || '').toLowerCase();
+            if (
+              authErrMsg.includes('fetch') ||
+              authErrMsg.includes('network') ||
+              authErrMsg.includes('resolved') ||
+              authErrMsg.includes('offline')
+            ) {
+              return;
+            }
+          }
           if (authErr || !authData?.user) {
             handleInactivityLogout(
               'Notice: Your resident session has expired due to inactivity. Your account is active and safe. Please sign in again.'
@@ -741,71 +761,74 @@ export default function App() {
 
     // 1. Supabase Realtime subscription on public.profiles for this resident (Both UPDATE and DELETE)
     if (isSupabaseConfigured()) {
-      try {
-        profileChannel = supabase
-          .channel(`resident-profile-sync-${currentUser.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'profiles',
-              filter: `id=eq.${currentUser.id}`,
-            },
-            (payload: any) => {
-              if (payload.eventType === 'DELETE') {
-                handleLogout(deletionNoticeText);
-                return;
-              }
-
-              if (payload?.new) {
-                const updatedRow = payload.new;
-
-                // Check if account has been deleted, archived, or deactivated
-                if (updatedRow.is_archived === true || updatedRow.deleted_at || updatedRow.is_active === false) {
+      waitForSupabaseReachable().then((reachable) => {
+        if (!reachable || !isProfileMounted) return;
+        try {
+          profileChannel = supabase
+            .channel(`resident-profile-sync-${currentUser.id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${currentUser.id}`,
+              },
+              (payload: any) => {
+                if (payload.eventType === 'DELETE') {
                   handleLogout(deletionNoticeText);
                   return;
                 }
 
-                if (updatedRow.is_locked) {
-                  handleLogout('Notice: Your resident account has been locked. Please unlock via Gmail.');
-                  return;
+                if (payload?.new) {
+                  const updatedRow = payload.new;
+
+                  // Check if account has been deleted, archived, or deactivated
+                  if (updatedRow.is_archived === true || updatedRow.deleted_at || updatedRow.is_active === false) {
+                    handleLogout(deletionNoticeText);
+                    return;
+                  }
+
+                  if (updatedRow.is_locked) {
+                    handleLogout('Notice: Your resident account has been locked. Please unlock via Gmail.');
+                    return;
+                  }
+
+                  setCurrentUser((prev: any) => {
+                    if (!prev) return updatedRow;
+                    const updated = {
+                      ...prev,
+                      ...updatedRow,
+                      push_token: updatedRow.push_token || prev.push_token,
+                    };
+                    MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
+                    return updated;
+                  });
                 }
-
-                setCurrentUser((prev: any) => {
-                  if (!prev) return updatedRow;
-                  const updated = {
-                    ...prev,
-                    ...updatedRow,
-                    push_token: updatedRow.push_token || prev.push_token,
-                  };
-                  MobileStorage.setItem('zapatera_resident_session', JSON.stringify(updated));
-                  return updated;
-                });
               }
-            }
-          )
-          .subscribe();
+            )
+            .subscribe();
 
-        securityBroadcastChannel = supabase
-          .channel('zapatera_account_security_broadcast')
-          .on(
-            'broadcast',
-            { event: 'ACCOUNT_DELETED' },
-            (payload: any) => {
-              const deletedId = payload?.payload?.userId;
-              const deletedEmail = (payload?.payload?.email || '').toLowerCase().trim();
-              const myEmail = (currentUser?.email || '').toLowerCase().trim();
+          securityBroadcastChannel = supabase
+            .channel('zapatera_account_security_broadcast')
+            .on(
+              'broadcast',
+              { event: 'ACCOUNT_DELETED' },
+              (payload: any) => {
+                const deletedId = payload?.payload?.userId;
+                const deletedEmail = (payload?.payload?.email || '').toLowerCase().trim();
+                const myEmail = (currentUser?.email || '').toLowerCase().trim();
 
-              if (deletedId === currentUser?.id || (deletedEmail && deletedEmail === myEmail)) {
-                handleLogout(deletionNoticeText);
+                if (deletedId === currentUser?.id || (deletedEmail && deletedEmail === myEmail)) {
+                  handleLogout(deletionNoticeText);
+                }
               }
-            }
-          )
-          .subscribe();
-      } catch (err) {
-        console.warn('Error creating profile realtime subscription:', err);
-      }
+            )
+            .subscribe();
+        } catch (err) {
+          console.warn('Error creating profile realtime subscription:', err);
+        }
+      });
     }
 
     // 2. Cross-tab BroadcastChannel listener for immediate deletion notification from SuperAdmin / AccountManagement
@@ -862,6 +885,7 @@ export default function App() {
     }
 
     return () => {
+      isProfileMounted = false;
       if (profileChannel && isSupabaseConfigured()) {
         supabase.removeChannel(profileChannel);
       }
