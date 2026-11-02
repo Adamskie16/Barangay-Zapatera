@@ -69,23 +69,23 @@ BEGIN
             COALESCE((to_jsonb(r)->>'is_archived')::BOOLEAN, false) AS is_archived,
             (to_jsonb(r)->>'deleted_at') AS deleted_at_val,
             COALESCE(
-                r.document_type_id::TEXT,
-                dt.id::TEXT,
+                to_jsonb(r)->>'document_type_id',
+                to_jsonb(dt)->>'id',
                 COALESCE(NULLIF(TRIM(to_jsonb(r)->>'document_title'), ''), 'BARANGAY CLEARANCE')
             ) AS doc_id,
             COALESCE(
-                NULLIF(TRIM(dt.code), ''),
+                NULLIF(TRIM(to_jsonb(dt)->>'code'), ''),
                 NULLIF(TRIM(to_jsonb(r)->>'document_code'), ''),
                 'BC-GEN'
             ) AS doc_code,
             COALESCE(
-                NULLIF(TRIM(dt.title), ''),
+                NULLIF(TRIM(to_jsonb(dt)->>'title'), ''),
                 NULLIF(TRIM(to_jsonb(r)->>'document_title'), ''),
                 'Barangay Clearance'
             ) AS doc_title,
             COALESCE(
                 NULLIF(to_jsonb(r)->>'fee', '')::NUMERIC,
-                dt.fee,
+                NULLIF(to_jsonb(dt)->>'fee', '')::NUMERIC,
                 0
             ) AS resolved_fee,
             COALESCE(
@@ -104,9 +104,9 @@ BEGIN
             ) AS resolved_purpose
         FROM public.document_requests r
         LEFT JOIN public.document_types dt
-          ON r.document_type_id = dt.id
+          ON (to_jsonb(r)->>'document_type_id') = (to_jsonb(dt)->>'id')
         LEFT JOIN public.profiles p
-          ON r.resident_id = p.id
+          ON (to_jsonb(r)->>'resident_id') = (to_jsonb(p)->>'id')
         WHERE COALESCE((to_jsonb(r)->>'is_archived')::BOOLEAN, false) = false
           AND (to_jsonb(r)->>'deleted_at') IS NULL
     ),
@@ -268,6 +268,9 @@ BEGIN
         END AS recommendation_insight
     FROM ranked rk
     ORDER BY rk.rnk ASC;
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN;
 END;
 $$;
 

@@ -34,3 +34,4 @@ WHERE dr.document_type_id = dt.id
 
 -- Notify PostgREST to reload schema cache
 NOTIFY pgrst, 'reload schema';
+

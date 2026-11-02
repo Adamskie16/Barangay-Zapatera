@@ -3,7 +3,12 @@
 
 import { supabase, supabaseAdmin, isSupabaseConfigured } from './supabase';
 
-let isPickupEmailFunctionAvailable = true;
+// Only invoke the optional send-pickup-email Edge Function when explicitly enabled via env,
+// avoiding CORS preflight 404 errors when the Edge Function is not deployed on Supabase.
+let isPickupEmailFunctionAvailable =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.VITE_ENABLE_PICKUP_EMAIL_FUNCTION === 'true';
 
 export const isRequestDeleted = (req, deletedList) => {
   if (!req) return true;

@@ -38,8 +38,13 @@ import {
   downloadReportAsPDF,
 } from './reportUtils';
 
-// Circuit breaker to avoid repeated 400/404 calls if RPC migration hasn't been applied yet
-let isDemandRpcAvailable = true;
+// Only call the optional PostgreSQL RPC when explicitly enabled via VITE_ENABLE_DEMAND_RPC=true,
+// preventing HTTP 400 console errors while computeDemandTrackerMetrics aggregates live records directly.
+let isDemandRpcAvailable =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.VITE_ENABLE_DEMAND_RPC === 'true';
+let isDemandRpcInFlight = false;
 
 export default function MonthlyDemandReport({
   requests = [],
@@ -90,7 +95,8 @@ export default function MonthlyDemandReport({
   useEffect(() => {
     let isMounted = true;
     async function fetchRpcDemandMetrics() {
-      if (!isSupabaseConfigured() || !isDemandRpcAvailable || !startIso || !endIso) return;
+      if (!isSupabaseConfigured() || !isDemandRpcAvailable || isDemandRpcInFlight || !startIso || !endIso) return;
+      isDemandRpcInFlight = true;
       try {
         const { data, error } = await supabase.rpc('get_monthly_demand_metrics', {
           p_start_date: startIso,
@@ -109,6 +115,8 @@ export default function MonthlyDemandReport({
       } catch {
         isDemandRpcAvailable = false;
         if (isMounted) setRpcMetrics(null);
+      } finally {
+        isDemandRpcInFlight = false;
       }
     }
     fetchRpcDemandMetrics();
