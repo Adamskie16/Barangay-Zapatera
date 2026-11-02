@@ -13,8 +13,12 @@ import {
   SlidersHorizontal,
   X,
   Inbox,
+  FileSpreadsheet,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import { DESIGN_TOKENS } from '../core/designTokens';
+import { exportToCsv, formatCsvTimestamp, formatCsvDecimal } from '../core/exportToCsv';
 
 /**
  * Enterprise Production-Grade Civic DataTable
@@ -46,11 +50,16 @@ export default function DataTable({
   zebraStriping = false,
   fixedHeader = false,
   extraHeaderControls = null,
+  exportable = true,
+  exportFilenamePrefix = 'Barangay_Zapatera_Records',
+  onExportCsv = null,
   className = '',
 }) {
   // 1. Search State with Debounce
   const [rawSearch, setRawSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isLoadingExport, setIsLoadingExport] = useState(false);
+  const [exportToastMessage, setExportToastMessage] = useState('');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -197,6 +206,94 @@ export default function DataTable({
     onResetFilters?.();
   };
 
+  // Export ALL filtered & sorted records across all pages (never limited to current 10-row page)
+  const handleExportFilteredCsv = async () => {
+    if (isLoadingExport) return;
+    setIsLoadingExport(true);
+    try {
+      if (typeof onExportCsv === 'function') {
+        await onExportCsv(sortedData);
+        setExportToastMessage(`Successfully exported ${sortedData.length} records to CSV.`);
+        setTimeout(() => setExportToastMessage(''), 4500);
+        return;
+      }
+
+      const exportColumns = columns
+        .filter((col) => {
+          const key = String(col.key || '').toLowerCase();
+          return (
+            col.exportable !== false &&
+            key !== 'actions' &&
+            key !== 'action' &&
+            key !== 'controls'
+          );
+        })
+        .map((col) => {
+          const headerText =
+            typeof col.header === 'string'
+              ? col.header
+              : typeof col.label === 'string'
+              ? col.label
+              : String(col.key || 'Column');
+
+          return {
+            header: headerText,
+            accessor: (row) => {
+              let rawVal = col.csvAccessor
+                ? col.csvAccessor(row)
+                : col.accessor
+                ? typeof col.accessor === 'function'
+                  ? col.accessor(row)
+                  : row[col.accessor]
+                : row[col.key];
+
+              if (rawVal === null || rawVal === undefined) return '';
+
+              const keyLower = String(col.sortKey || col.key || '').toLowerCase();
+              if (
+                keyLower.includes('created_at') ||
+                keyLower.includes('updated_at') ||
+                keyLower.includes('date') ||
+                keyLower.includes('timestamp')
+              ) {
+                return formatCsvTimestamp(rawVal);
+              }
+              if (
+                keyLower === 'fee' ||
+                keyLower.includes('amount') ||
+                keyLower.includes('revenue') ||
+                keyLower.includes('price')
+              ) {
+                return formatCsvDecimal(rawVal);
+              }
+              if (typeof rawVal === 'object') {
+                return '';
+              }
+              return rawVal;
+            },
+          };
+        });
+
+      const activeTabSlug =
+        statusTabs?.activeTab && statusTabs.activeTab !== 'all'
+          ? String(statusTabs.activeTab)
+              .split('_')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join('_')
+          : 'All';
+      const dateStamp = new Date().toISOString().split('T')[0];
+      const filename = `${exportFilenamePrefix}_${activeTabSlug}_${dateStamp}.csv`;
+
+      const count = exportToCsv(filename, exportColumns, sortedData);
+      setExportToastMessage(`Successfully exported ${count} records to CSV.`);
+      setTimeout(() => setExportToastMessage(''), 4500);
+    } catch (err) {
+      console.error('CSV export error:', err);
+    } finally {
+      setIsLoadingExport(false);
+    }
+  };
+
   // Generate numbered page buttons (e.g. 1 2 3 ... 5)
   const getPageNumbers = () => {
     const pages = [];
@@ -320,6 +417,40 @@ export default function DataTable({
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset</span>
             </button>
+          )}
+
+          {/* Export Filtered CSV Button (Exports complete filtered dataset across all pages) */}
+          {exportable && (
+            <button
+              type="button"
+              onClick={handleExportFilteredCsv}
+              disabled={isLoadingExport || sortedData.length === 0}
+              className="px-4 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-full inline-flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title={`Export all ${sortedData.length} matching records across all pages to CSV`}
+            >
+              {isLoadingExport ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting CSV...</span>
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Export Filtered CSV</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {exportToastMessage && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold inline-flex items-center gap-1.5 shrink-0"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>{exportToastMessage}</span>
+            </div>
           )}
 
           {extraHeaderControls}

@@ -73,3 +73,4 @@ CREATE TRIGGER trg_sync_document_type_validity
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
+

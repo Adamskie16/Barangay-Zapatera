@@ -96,114 +96,152 @@ DECLARE
     v_prev_end        TIMESTAMPTZ;
     v_grand_total     BIGINT;
 BEGIN
-    v_period_interval := GREATEST(p_end_date - p_start_date, INTERVAL '1 day');
-    v_prev_end        := p_start_date - INTERVAL '1 second';
-    v_prev_start      := p_start_date - v_period_interval;
+    v_period_interval := GREATEST(COALESCE(p_end_date, NOW()) - COALESCE(p_start_date, date_trunc('month', NOW())), INTERVAL '1 day');
+    v_prev_end        := COALESCE(p_start_date, date_trunc('month', NOW())) - INTERVAL '1 second';
+    v_prev_start      := COALESCE(p_start_date, date_trunc('month', NOW())) - v_period_interval;
 
-    -- Total non-archived requests in the selected window
+    -- Total non-archived requests in the selected window (schema-resilient via to_jsonb)
     SELECT COUNT(*)
     INTO v_grand_total
     FROM public.document_requests r
-    WHERE COALESCE(r.is_archived, false) = false
-      AND r.deleted_at IS NULL
-      AND r.created_at >= p_start_date
-      AND r.created_at <= p_end_date;
+    WHERE COALESCE((to_jsonb(r)->>'is_archived')::BOOLEAN, false) = false
+      AND (to_jsonb(r)->>'deleted_at') IS NULL
+      AND r.created_at >= COALESCE(p_start_date, date_trunc('month', NOW()))
+      AND r.created_at <= COALESCE(p_end_date, NOW());
 
     RETURN QUERY
-    WITH current_period AS (
+    WITH normalized_requests AS (
         SELECT
-            COALESCE(r.document_type_id::TEXT, dt.id::TEXT, COALESCE(r.document_title, 'BARANGAY CLEARANCE')) AS doc_id,
-            COALESCE(dt.code, 'BC-GEN') AS doc_code,
-            COALESCE(dt.title, r.document_title, 'Barangay Certificate') AS doc_title,
+            r.id,
+            r.created_at,
+            COALESCE(
+                (to_jsonb(r)->>'updated_at')::TIMESTAMPTZ,
+                r.created_at
+            ) AS resolved_updated_at,
+            LOWER(COALESCE(to_jsonb(r)->>'status', 'pending')) AS norm_status,
+            COALESCE((to_jsonb(r)->>'is_claimed')::BOOLEAN, false) AS is_claimed,
+            COALESCE((to_jsonb(r)->>'is_archived')::BOOLEAN, false) AS is_archived,
+            (to_jsonb(r)->>'deleted_at') AS deleted_at_val,
+            COALESCE(
+                r.document_type_id::TEXT,
+                dt.id::TEXT,
+                COALESCE(NULLIF(TRIM(to_jsonb(r)->>'document_title'), ''), 'BARANGAY CLEARANCE')
+            ) AS doc_id,
+            COALESCE(
+                NULLIF(TRIM(dt.code), ''),
+                NULLIF(TRIM(to_jsonb(r)->>'document_code'), ''),
+                'BC-GEN'
+            ) AS doc_code,
+            COALESCE(
+                NULLIF(TRIM(dt.title), ''),
+                NULLIF(TRIM(to_jsonb(r)->>'document_title'), ''),
+                'Barangay Clearance'
+            ) AS doc_title,
+            COALESCE(
+                NULLIF(to_jsonb(r)->>'fee', '')::NUMERIC,
+                dt.fee,
+                0
+            ) AS resolved_fee,
+            COALESCE(
+                NULLIF(TRIM(to_jsonb(r)->>'rejection_reason'), ''),
+                NULLIF(TRIM(to_jsonb(r)->>'admin_notes'), ''),
+                'Incomplete / Unverified Supporting Documents'
+            ) AS resolved_rejection_reason,
+            COALESCE(
+                NULLIF(TRIM(to_jsonb(r)->>'resident_address'), ''),
+                NULLIF(TRIM(to_jsonb(p)->>'address'), ''),
+                'Barangay Zapatera Proper'
+            ) AS resolved_address,
+            COALESCE(
+                NULLIF(TRIM(to_jsonb(r)->>'purpose'), ''),
+                'General Legal / Identification'
+            ) AS resolved_purpose
+        FROM public.document_requests r
+        LEFT JOIN public.document_types dt
+          ON r.document_type_id = dt.id
+        LEFT JOIN public.profiles p
+          ON r.resident_id = p.id
+        WHERE COALESCE((to_jsonb(r)->>'is_archived')::BOOLEAN, false) = false
+          AND (to_jsonb(r)->>'deleted_at') IS NULL
+    ),
+    current_period AS (
+        SELECT
+            nr.doc_id,
+            nr.doc_code,
+            nr.doc_title,
             COUNT(*) AS req_count,
             COUNT(*) FILTER (
-                WHERE LOWER(COALESCE(r.status, '')) IN ('approved', 'ready_for_pickup', 'issued', 'completed')
-                   OR COALESCE(r.is_claimed, false) = true
+                WHERE nr.norm_status IN ('approved', 'ready_for_pickup', 'issued', 'completed')
+                   OR nr.is_claimed = true
             ) AS app_count,
             COUNT(*) FILTER (
-                WHERE LOWER(COALESCE(r.status, '')) IN ('issued', 'completed')
-                   OR COALESCE(r.is_claimed, false) = true
+                WHERE nr.norm_status IN ('issued', 'completed')
+                   OR nr.is_claimed = true
             ) AS iss_count,
             COUNT(*) FILTER (
-                WHERE LOWER(COALESCE(r.status, 'pending')) IN ('pending', 'under_review', 'under review', 'processing')
+                WHERE nr.norm_status IN ('pending', 'under_review', 'under review', 'processing')
             ) AS pend_count,
             COUNT(*) FILTER (
-                WHERE LOWER(COALESCE(r.status, '')) IN ('declined', 'rejected')
+                WHERE nr.norm_status IN ('declined', 'rejected')
             ) AS dec_count,
-            -- Turnaround time in hours from created_at to approved_at / updated_at for processed items
             AVG(
                 CASE
-                    WHEN LOWER(COALESCE(r.status, '')) IN ('approved', 'ready_for_pickup', 'issued', 'completed')
-                         AND COALESCE(r.updated_at, r.created_at) > r.created_at
-                    THEN EXTRACT(EPOCH FROM (COALESCE(r.updated_at, NOW()) - r.created_at)) / 3600.0
+                    WHEN nr.norm_status IN ('approved', 'ready_for_pickup', 'issued', 'completed')
+                         AND nr.resolved_updated_at > nr.created_at
+                    THEN EXTRACT(EPOCH FROM (nr.resolved_updated_at - nr.created_at)) / 3600.0
                     ELSE NULL
                 END
             ) AS avg_hours,
-            -- Revenue collected on approved/issued/claimed requests
             SUM(
                 CASE
-                    WHEN LOWER(COALESCE(r.status, '')) IN ('approved', 'ready_for_pickup', 'issued', 'completed')
-                         OR COALESCE(r.is_claimed, false) = true
-                    THEN COALESCE(r.fee, dt.fee, 0)
+                    WHEN nr.norm_status IN ('approved', 'ready_for_pickup', 'issued', 'completed')
+                         OR nr.is_claimed = true
+                    THEN nr.resolved_fee
                     ELSE 0
                 END
             ) AS rev_sum
-        FROM public.document_requests r
-        LEFT JOIN public.document_types dt
-          ON r.document_type_id = dt.id OR LOWER(TRIM(r.document_title)) = LOWER(TRIM(dt.title))
-        WHERE COALESCE(r.is_archived, false) = false
-          AND r.deleted_at IS NULL
-          AND r.created_at >= p_start_date
-          AND r.created_at <= p_end_date
+        FROM normalized_requests nr
+        WHERE nr.created_at >= COALESCE(p_start_date, date_trunc('month', NOW()))
+          AND nr.created_at <= COALESCE(p_end_date, NOW())
         GROUP BY 1, 2, 3
     ),
     previous_period AS (
         SELECT
-            COALESCE(dt.title, r.document_title, 'Barangay Certificate') AS doc_title,
+            nr.doc_title,
             COUNT(*) AS prev_count
-        FROM public.document_requests r
-        LEFT JOIN public.document_types dt
-          ON r.document_type_id = dt.id OR LOWER(TRIM(r.document_title)) = LOWER(TRIM(dt.title))
-        WHERE COALESCE(r.is_archived, false) = false
-          AND r.deleted_at IS NULL
-          AND r.created_at >= v_prev_start
-          AND r.created_at <= v_prev_end
+        FROM normalized_requests nr
+        WHERE nr.created_at >= v_prev_start
+          AND nr.created_at <= v_prev_end
         GROUP BY 1
     ),
     rejection_reasons AS (
-        SELECT DISTINCT ON (COALESCE(r.document_title, 'Barangay Certificate'))
-            COALESCE(r.document_title, 'Barangay Certificate') AS doc_title,
-            COALESCE(NULLIF(TRIM(r.rejection_reason), ''), NULLIF(TRIM(r.admin_notes), ''), 'Incomplete / Unverified Supporting Documents') AS reason
-        FROM public.document_requests r
-        WHERE COALESCE(r.is_archived, false) = false
-          AND r.deleted_at IS NULL
-          AND LOWER(COALESCE(r.status, '')) IN ('declined', 'rejected')
-          AND r.created_at >= p_start_date
-          AND r.created_at <= p_end_date
+        SELECT DISTINCT ON (nr.doc_title)
+            nr.doc_title,
+            nr.resolved_rejection_reason AS reason
+        FROM normalized_requests nr
+        WHERE nr.norm_status IN ('declined', 'rejected')
+          AND nr.created_at >= COALESCE(p_start_date, date_trunc('month', NOW()))
+          AND nr.created_at <= COALESCE(p_end_date, NOW())
         GROUP BY 1, 2
         ORDER BY 1, COUNT(*) DESC
     ),
     top_sitios AS (
-        SELECT DISTINCT ON (COALESCE(r.document_title, 'Barangay Certificate'))
-            COALESCE(r.document_title, 'Barangay Certificate') AS doc_title,
-            COALESCE(NULLIF(TRIM(r.resident_address), ''), 'Barangay Zapatera Proper') AS sitio
-        FROM public.document_requests r
-        WHERE COALESCE(r.is_archived, false) = false
-          AND r.deleted_at IS NULL
-          AND r.created_at >= p_start_date
-          AND r.created_at <= p_end_date
+        SELECT DISTINCT ON (nr.doc_title)
+            nr.doc_title,
+            nr.resolved_address AS sitio
+        FROM normalized_requests nr
+        WHERE nr.created_at >= COALESCE(p_start_date, date_trunc('month', NOW()))
+          AND nr.created_at <= COALESCE(p_end_date, NOW())
         GROUP BY 1, 2
         ORDER BY 1, COUNT(*) DESC
     ),
     top_purposes AS (
-        SELECT DISTINCT ON (COALESCE(r.document_title, 'Barangay Certificate'))
-            COALESCE(r.document_title, 'Barangay Certificate') AS doc_title,
-            COALESCE(NULLIF(TRIM(r.purpose), ''), 'General Legal / Identification') AS purpose_val
-        FROM public.document_requests r
-        WHERE COALESCE(r.is_archived, false) = false
-          AND r.deleted_at IS NULL
-          AND r.created_at >= p_start_date
-          AND r.created_at <= p_end_date
+        SELECT DISTINCT ON (nr.doc_title)
+            nr.doc_title,
+            nr.resolved_purpose AS purpose_val
+        FROM normalized_requests nr
+        WHERE nr.created_at >= COALESCE(p_start_date, date_trunc('month', NOW()))
+          AND nr.created_at <= COALESCE(p_end_date, NOW())
         GROUP BY 1, 2
         ORDER BY 1, COUNT(*) DESC
     ),
@@ -288,4 +326,6 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_monthly_demand_metrics(TIMESTAMPTZ, TIMESTAMPTZ) TO anon, authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';
 

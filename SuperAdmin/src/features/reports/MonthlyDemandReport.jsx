@@ -38,6 +38,9 @@ import {
   downloadReportAsPDF,
 } from './reportUtils';
 
+// Circuit breaker to avoid repeated 400/404 calls if RPC migration hasn't been applied yet
+let isDemandRpcAvailable = true;
+
 export default function MonthlyDemandReport({
   requests = [],
   docTypes = [],
@@ -76,26 +79,35 @@ export default function MonthlyDemandReport({
       selectedYear,
       customStartDate,
       customEndDate,
-      rpcMetrics: null, // Use client-enriched metrics merged with RPC below
+      rpcMetrics,
     });
-  }, [requests, docTypes, periodFilter, selectedYear, customStartDate, customEndDate]);
+  }, [requests, docTypes, periodFilter, selectedYear, customStartDate, customEndDate, rpcMetrics]);
+
+  const startIso = trackerData.startDate ? trackerData.startDate.toISOString() : '';
+  const endIso = trackerData.endDate ? trackerData.endDate.toISOString() : '';
 
   // Query PostgreSQL RPC get_monthly_demand_metrics(p_start_date, p_end_date) when period changes
   useEffect(() => {
     let isMounted = true;
     async function fetchRpcDemandMetrics() {
-      if (!isSupabaseConfigured() || !trackerData.startDate || !trackerData.endDate) return;
+      if (!isSupabaseConfigured() || !isDemandRpcAvailable || !startIso || !endIso) return;
       try {
         const { data, error } = await supabase.rpc('get_monthly_demand_metrics', {
-          p_start_date: trackerData.startDate.toISOString(),
-          p_end_date: trackerData.endDate.toISOString(),
+          p_start_date: startIso,
+          p_end_date: endIso,
         });
-        if (!error && Array.isArray(data) && data.length > 0 && isMounted) {
+        if (error) {
+          isDemandRpcAvailable = false;
+          if (isMounted) setRpcMetrics(null);
+          return;
+        }
+        if (Array.isArray(data) && data.length > 0 && isMounted) {
           setRpcMetrics(data);
         } else if (isMounted) {
           setRpcMetrics(null);
         }
       } catch {
+        isDemandRpcAvailable = false;
         if (isMounted) setRpcMetrics(null);
       }
     }
@@ -103,7 +115,7 @@ export default function MonthlyDemandReport({
     return () => {
       isMounted = false;
     };
-  }, [trackerData.startDate, trackerData.endDate]);
+  }, [startIso, endIso]);
 
   // Reset pagination when filter changes
   useEffect(() => {

@@ -42,6 +42,8 @@ import {
   ShieldCheck,
   Table as TableIcon,
   User,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -60,6 +62,8 @@ import {
   Tooltip,
 } from 'recharts';
 import { formatDate, formatCurrency } from '../../core/security';
+import { supabase, isSupabaseConfigured } from '../../core/supabase';
+import { exportToCsv, formatCsvTimestamp, formatCsvDecimal } from '../../core/exportToCsv';
 
 // Custom Floating Callout Tooltip matching DashboardView
 function CustomReportTooltip({ active, payload, label }) {
@@ -99,6 +103,8 @@ export default function ReportsView({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportStatusText, setExportStatusText] = useState('');
+  const [isLoadingExport, setIsLoadingExport] = useState(false);
+  const [exportToastMessage, setExportToastMessage] = useState('');
 
   // Interactive Chart & Breakdown Controls
   const [chartType, setChartType] = useState('area'); // 'area' | 'bar' | 'table'
@@ -481,11 +487,172 @@ export default function ReportsView({
     });
   };
 
-  const handleExportApplicationsCSV = () => {
-    executeExport('Exporting Applications CSV...', () => {
-      const rows = buildApplicationsCSV(filteredRequests);
-      exportToCSV(`Barangay_Zapatera_Document_Requests_${currentYear}`, rows);
-    });
+  const handleExportApplicationsCSV = async () => {
+    if (isLoadingExport) return;
+    setIsExportMenuOpen(false);
+    setIsLoadingExport(true);
+    setIsExporting(true);
+    setExportStatusText('Exporting CSV...');
+
+    try {
+      let exportDataset = [...sortedRequests];
+
+      // 1. Dynamically query Supabase for the complete filtered dataset (bypassing pagination .range())
+      if (isSupabaseConfigured()) {
+        try {
+          let query = supabase
+            .from('document_requests')
+            .select('*, profiles(full_name, email, contact_number, address), document_types(title, code, fee)')
+            .order('created_at', { ascending: sortDirection === 'asc' });
+
+          // Apply active Status Filter directly in Supabase query when single-status
+          if (statusFilter === 'pending') {
+            query = query.in('status', ['pending', 'under_review', 'under review', 'processing']);
+          } else if (statusFilter === 'under_review') {
+            query = query.in('status', ['under_review', 'under review', 'processing']);
+          } else if (statusFilter === 'approved') {
+            query = query.in('status', ['approved', 'ready_for_pickup', 'issued', 'completed']);
+          } else if (statusFilter === 'issued') {
+            query = query.in('status', ['issued', 'completed']);
+          } else if (statusFilter === 'declined') {
+            query = query.in('status', ['declined', 'rejected']);
+          }
+
+          // Apply active Date Range filter directly in Supabase query
+          const now = new Date();
+          if (dateRange === 'today') {
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+            query = query.gte('created_at', startOfDay);
+          } else if (dateRange === 'this_month') {
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            query = query.gte('created_at', startOfMonth);
+          } else if (dateRange === 'last_30_days') {
+            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+            query = query.gte('created_at', thirtyDaysAgo);
+          }
+
+          const { data: dbRows, error } = await query;
+
+          if (!error && Array.isArray(dbRows) && dbRows.length > 0) {
+            const localById = new Map(requests.map((r) => [String(r.id), r]));
+            const docTypeById = new Map(docTypes.map((dt) => [String(dt.id), dt]));
+
+            const normalizedDbRows = dbRows
+              .filter((r) => !r.is_archived && !r.deleted_at)
+              .map((r) => {
+                const localMatch = localById.get(String(r.id)) || {};
+                const dtMatch = docTypeById.get(String(r.document_type_id)) || r.document_types || {};
+                return {
+                  ...localMatch,
+                  ...r,
+                  tracking_number:
+                    r.tracking_number ||
+                    localMatch.tracking_number ||
+                    `ZAP-${new Date(r.created_at || Date.now()).getFullYear()}-${String(r.id || '').slice(0, 6).toUpperCase()}`,
+                  resident_name:
+                    r.resident_name ||
+                    r.profiles?.full_name ||
+                    localMatch.resident_name ||
+                    '',
+                  resident_email:
+                    r.resident_email ||
+                    r.profiles?.email ||
+                    localMatch.resident_email ||
+                    '',
+                  resident_contact:
+                    r.resident_contact ||
+                    r.profiles?.contact_number ||
+                    localMatch.resident_contact ||
+                    '',
+                  resident_address:
+                    r.resident_address ||
+                    r.profiles?.address ||
+                    localMatch.resident_address ||
+                    '',
+                  document_title:
+                    r.document_title ||
+                    dtMatch.title ||
+                    localMatch.document_title ||
+                    'Barangay Certificate',
+                  fee:
+                    r.fee !== undefined && r.fee !== null
+                      ? Number(r.fee)
+                      : dtMatch.fee !== undefined && dtMatch.fee !== null
+                      ? Number(dtMatch.fee)
+                      : Number(localMatch.fee || 0),
+                };
+              })
+              .filter((r) => {
+                // Ensure strict parity with active client filters (docFilter, selectedMonthFilter, searchQuery)
+                if (docFilter !== 'all' && r.document_title !== docFilter && String(r.document_type_id) !== String(docFilter)) {
+                  return false;
+                }
+                if (selectedMonthFilter !== 'all' && r.created_at) {
+                  const d = new Date(r.created_at);
+                  if (d.getMonth() !== Number(selectedMonthFilter)) return false;
+                }
+                if (searchQuery.trim()) {
+                  const q = searchQuery.toLowerCase().trim();
+                  const tracking = String(r.tracking_number || '').toLowerCase();
+                  const name = String(r.resident_name || '').toLowerCase();
+                  const doc = String(r.document_title || '').toLowerCase();
+                  const purpose = String(r.purpose || '').toLowerCase();
+                  if (!tracking.includes(q) && !name.includes(q) && !doc.includes(q) && !purpose.includes(q)) {
+                    return false;
+                  }
+                }
+                return true;
+              });
+
+            exportDataset = normalizedDbRows;
+          }
+        } catch {
+          // Fallback to complete in-memory filtered dataset across all pages
+          exportDataset = [...sortedRequests];
+        }
+      }
+
+      // 2. Define Strict CSV Column Schema (clean numbers, formatted dates, empty strings for nulls)
+      const csvColumns = [
+        { header: 'No.', accessor: (_row, idx) => idx + 1 },
+        { header: 'Tracking Number', accessor: (r) => r.tracking_number || '' },
+        { header: 'Resident Name', accessor: (r) => r.resident_name || '' },
+        { header: 'Email Address', accessor: (r) => r.resident_email || '' },
+        { header: 'Contact Number', accessor: (r) => r.resident_contact || '' },
+        { header: 'Address / Sitio / Purok', accessor: (r) => r.resident_address || '' },
+        { header: 'Document Type', accessor: (r) => r.document_title || '' },
+        { header: 'Purpose', accessor: (r) => r.purpose || '' },
+        { header: 'Fee (PHP)', accessor: (r) => formatCsvDecimal(r.fee ?? 0) },
+        { header: 'Status', accessor: (r) => String(r.status || 'pending').toUpperCase() },
+        { header: 'Claimed', accessor: (r) => (r.is_claimed ? 'YES' : 'NO') },
+        { header: 'Official Receipt (OR) No.', accessor: (r) => r.or_number || '' },
+        { header: 'Submitted At', accessor: (r) => formatCsvTimestamp(r.created_at) },
+        { header: 'Last Updated At', accessor: (r) => formatCsvTimestamp(r.updated_at || r.created_at) },
+      ];
+
+      // 3. Build Descriptive Dynamic Filename with Active Filter Context & Current Date
+      const statusSlug =
+        statusFilter === 'all'
+          ? 'All'
+          : statusFilter
+              .split('_')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+              .join('_');
+      const dateStamp = new Date().toISOString().split('T')[0];
+      const dynamicFilename = `Barangay_Document_Requests_${statusSlug}_${dateStamp}.csv`;
+
+      const exportedCount = exportToCsv(dynamicFilename, csvColumns, exportDataset);
+      setExportToastMessage(`Successfully exported ${exportedCount} records to CSV.`);
+      setTimeout(() => {
+        setExportToastMessage('');
+      }, 4500);
+    } catch (e) {
+      console.error('Export failed:', e);
+    } finally {
+      setIsLoadingExport(false);
+      setIsExporting(false);
+      setExportStatusText('');
+    }
   };
 
   const handleExportMonthlyCSV = () => {
@@ -1341,7 +1508,17 @@ export default function ReportsView({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {exportToastMessage && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs animate-fade-in"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>{exportToastMessage}</span>
+              </div>
+            )}
             {(statusFilter !== 'all' ||
               docFilter !== 'all' ||
               selectedMonthFilter !== 'all' ||
@@ -1364,11 +1541,21 @@ export default function ReportsView({
             <button
               type="button"
               onClick={handleExportApplicationsCSV}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-[#3b5bfd] bg-blue-50 hover:bg-[#3b5bfd] hover:text-white rounded-full transition-all cursor-pointer"
-              title="Download currently filtered records to CSV"
+              disabled={isLoadingExport}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+              title="Export all matching filtered records across all pages to CSV"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Table CSV</span>
+              {isLoadingExport ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting CSV...</span>
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Export Filtered CSV</span>
+                </>
+              )}
             </button>
           </div>
         </div>

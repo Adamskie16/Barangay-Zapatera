@@ -2,47 +2,54 @@
 // Export to Downloads (CSV, JSON, HTML) & Professional Printable Report Utilities
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import {
+  exportToCsv,
+  formatCsvTimestamp,
+  formatCsvDecimal,
+  escapeCsvCell,
+} from '../../core/exportToCsv';
+
+export { exportToCsv, formatCsvTimestamp, formatCsvDecimal, escapeCsvCell };
 
 /**
- * Universal CSV Export with UTF-8 BOM for 100% Microsoft Excel & Spreadsheet compatibility
+ * Universal CSV Export with UTF-8 BOM for 100% Microsoft Excel & Spreadsheet compatibility.
+ * Supports:
+ *   - exportToCSV(filename, rows)
+ *   - exportToCSV(rows, filename)
+ *   - exportToCSV(filename, columns, data)
  */
-export function exportToCSV(filename, rows) {
-  if (!rows || !rows.length) {
-    alert('No data available to export.');
-    return;
-  }
-  const separator = ',';
-  const keys = Object.keys(rows[0]);
-  
-  const headerLine = keys.map((k) => `"${String(k).replace(/"/g, '""')}"`).join(separator);
-  const dataLines = rows.map((row) =>
-    keys
-      .map((k) => {
-        let cell = row[k] === null || row[k] === undefined ? '' : String(row[k]);
-        cell = cell.replace(/"/g, '""');
-        return `"${cell}"`;
-      })
-      .join(separator)
-  );
+export function exportToCSV(arg1, arg2, arg3) {
+  let filename = 'Barangay_Zapatera_Export';
+  let columns = [];
+  let rows = [];
 
-  const csvContent = [headerLine, ...dataLines].join('\r\n');
-  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  const cleanFilename = filename.toLowerCase().endsWith('.csv') ? filename : `${filename}.csv`;
-  link.setAttribute('download', cleanFilename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  if (Array.isArray(arg3)) {
+    filename = typeof arg1 === 'string' && arg1 ? arg1 : filename;
+    columns = Array.isArray(arg2) ? arg2 : [];
+    rows = arg3;
+  } else if (Array.isArray(arg1)) {
+    rows = arg1;
+    filename = typeof arg2 === 'string' && arg2 ? arg2 : filename;
+  } else if (Array.isArray(arg2)) {
+    filename = typeof arg1 === 'string' && arg1 ? arg1 : filename;
+    rows = arg2;
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return 0;
+  }
+
+  return exportToCsv(filename, columns, rows);
 }
 
 /**
- * Export raw structured data as JSON download
+ * Export raw structured data as JSON download (supports both (filename, data) and (data, filename))
  */
-export function exportToJSON(filename, data) {
-  const jsonContent = JSON.stringify(data, null, 2);
+export function exportToJSON(arg1, arg2) {
+  const isFirstString = typeof arg1 === 'string';
+  const filename = isFirstString ? arg1 : (typeof arg2 === 'string' && arg2 ? arg2 : 'Barangay_Zapatera_Export');
+  const data = isFirstString ? arg2 : arg1;
+  const jsonContent = JSON.stringify(data ?? {}, null, 2);
   const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -52,7 +59,7 @@ export function exportToJSON(filename, data) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 /**
@@ -197,28 +204,34 @@ export async function downloadReportAsPDF(htmlContent, filename = 'Barangay_Zapa
  * Build CSV records for Applications Pipeline Log
  */
 export function buildApplicationsCSV(requests = []) {
-  return requests.map((r, idx) => {
-    const feeVal = r.claimed_fee !== undefined && r.claimed_fee !== null
-      ? Number(r.claimed_fee)
-      : (r.amount_paid !== undefined && r.amount_paid !== null ? Number(r.amount_paid) : Number(r.fee || 0));
+  return (Array.isArray(requests) ? requests : []).map((r, idx) => {
+    const feeVal =
+      r.claimed_fee !== undefined && r.claimed_fee !== null && r.claimed_fee !== ''
+        ? Number(r.claimed_fee)
+        : r.amount_paid !== undefined && r.amount_paid !== null && r.amount_paid !== ''
+        ? Number(r.amount_paid)
+        : Number(r.fee || 0);
+    const isClaimedOrIssued = Boolean(
+      r.status === 'issued' || r.status === 'completed' || r.is_claimed
+    );
 
     return {
       'No.': idx + 1,
-      'Tracking Number': r.tracking_number || 'N/A',
-      'Resident Name': r.resident_name || 'N/A',
+      'Tracking Number': r.tracking_number || '',
+      'Resident Name': r.resident_name || '',
       'Email Address': r.resident_email || '',
-      'Contact Number': r.resident_phone || '',
+      'Contact Number': r.resident_phone || r.contact_number || '',
       'Sitio / Address': r.resident_address || '',
-      'Document Type': r.document_title || 'N/A',
+      'Document Type': r.document_title || '',
       'Purpose': r.purpose || 'Official Use',
-      'Fee (PHP)': feeVal,
-      'Status': (r.status || 'pending').toUpperCase(),
-      'Claimed / Issued': (r.status === 'issued' || r.status === 'completed' || r.is_claimed) ? 'YES' : 'NO',
-      'Claimed Fee (PHP)': (r.status === 'issued' || r.status === 'completed' || r.is_claimed) ? feeVal : 'N/A',
-      'Pickup Date': r.pickup_date || 'To be scheduled',
+      'Fee (PHP)': formatCsvDecimal(feeVal),
+      'Status': String(r.status || 'pending').toUpperCase(),
+      'Claimed / Issued': isClaimedOrIssued ? 'YES' : 'NO',
+      'Claimed Fee (PHP)': isClaimedOrIssued ? formatCsvDecimal(feeVal) : '0.00',
+      'Pickup Date': r.pickup_date || '',
       'Pickup Slot': r.pickup_time_slot || 'Regular Office Hours',
-      'Submission Date': r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A',
-      'Last Updated': r.updated_at ? new Date(r.updated_at).toLocaleString('en-US') : (r.created_at ? new Date(r.created_at).toLocaleString('en-US') : 'N/A'),
+      'Submission Date': formatCsvTimestamp(r.created_at),
+      'Last Updated': formatCsvTimestamp(r.updated_at || r.created_at),
     };
   });
 }
