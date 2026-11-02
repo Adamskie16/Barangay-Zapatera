@@ -14,10 +14,12 @@ import {
   DollarSign,
   AlertCircle,
   Clock,
+  TrendingUp,
 } from 'lucide-react';
 import { formatDate, formatCurrency } from '../../core/security';
 import { StorageService } from '../../core/storage';
 import { TableSkeleton, useDelayedLoading } from '../../components/loaders';
+import MonthlyDemandReport from '../reports/MonthlyDemandReport';
 
 export default function ApprovedDocumentsView({
   requests = [],
@@ -33,6 +35,7 @@ export default function ApprovedDocumentsView({
   const [claimFilter, setClaimFilter] = useState('all'); // 'all' | 'unclaimed' | 'claimed'
   const [docTypeFilter, setDocTypeFilter] = useState('all');
   const [targetTracking, setTargetTracking] = useState('');
+  const [showDemandTracker, setShowDemandTracker] = useState(false);
   const showSkeleton = useDelayedLoading(loading, 150);
 
   useEffect(() => {
@@ -656,8 +659,30 @@ export default function ApprovedDocumentsView({
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span>{claimedCount} Claimed ({claimRate}%)</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowDemandTracker((prev) => !prev)}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer ${
+              showDemandTracker
+                ? 'bg-[#3b5bfd] text-white shadow-blue-500/20'
+                : 'bg-white border border-blue-200 text-[#3b5bfd] hover:bg-blue-50'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>{showDemandTracker ? 'Hide Demand & Revenue Tracker' : 'Certificate Demand & Revenue Tracker'}</span>
+          </button>
         </div>
       </div>
+
+      {/* Collapsible Certificate Demand & Service Improvement Tracker (Treasurer Portal) */}
+      {showDemandTracker && (
+        <MonthlyDemandReport
+          requests={requests}
+          docTypes={allDocTypes}
+          currentUser={currentUser}
+          config={config}
+        />
+      )}
 
       {/* 4 Colorful Gradient KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">

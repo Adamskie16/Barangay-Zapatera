@@ -2048,8 +2048,12 @@ export const StorageService = {
 
     if (isSupabaseConfigured()) {
       try {
+        const validUserId = await resolveValidProfileId({
+          id: resolvedLog.user_id || StorageService.getCurrentUser()?.id,
+          email: activeEmail,
+        });
         const payload = {
-          user_id: resolvedLog.user_id || StorageService.getCurrentUser()?.id || null,
+          ...(validUserId ? { user_id: validUserId } : {}),
           user_email: activeEmail,
           action: resolvedLog.action || 'Super Admin Action',
           feature: resolvedLog.feature || 'General',
@@ -2057,7 +2061,11 @@ export const StorageService = {
           level: resolvedLog.level || 'info',
           created_at: new Date().toISOString(),
         };
-        await supabase.from('activity_logs').insert([payload]);
+        const { error } = await supabase.from('activity_logs').insert([payload]);
+        if (error && payload.user_id) {
+          const { user_id: _omitted, ...fallbackPayload } = payload;
+          await supabase.from('activity_logs').insert([fallbackPayload]);
+        }
       } catch {
         // Handled silently
       }

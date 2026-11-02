@@ -1984,16 +1984,26 @@ export const StorageService = {
 
     if (isSupabaseConfigured()) {
       try {
+        const activeUser = StorageService.getCurrentUser();
+        const candidateEmail = log.user_email || activeUser?.email || 'admin@zapatera.gov.ph';
+        const validUserId = await resolveValidProfileId({
+          id: log.user_id || activeUser?.id,
+          email: candidateEmail,
+        });
         const payload = {
-          user_id: log.user_id || null,
-          user_email: log.user_email || 'admin@zapatera.gov.ph',
+          ...(validUserId ? { user_id: validUserId } : {}),
+          user_email: candidateEmail,
           action: log.action || 'Admin Action',
           feature: log.feature || 'General',
           details: log.details || '',
           level: log.level || 'info',
           created_at: new Date().toISOString(),
         };
-        await supabase.from('activity_logs').insert([payload]);
+        const { error } = await supabase.from('activity_logs').insert([payload]);
+        if (error && payload.user_id) {
+          const { user_id: _omitted, ...fallbackPayload } = payload;
+          await supabase.from('activity_logs').insert([fallbackPayload]);
+        }
       } catch {
         // Handled silently
       }

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Badge from '../../components/Badge';
 import PrintableReportModal from './PrintableReportModal';
+import MonthlyDemandReport from './MonthlyDemandReport';
 import {
   exportToCSV,
   exportToJSON,
@@ -10,6 +11,9 @@ import {
   buildRevenueAuditCSV,
   buildSummaryKPIsCSV,
   generatePrintableHTML,
+  computeDemandTrackerMetrics,
+  exportDemandTrackerWorkbookCSV,
+  generateDemandTrackerPrintableHTML,
 } from './reportUtils';
 import {
   BarChart3,
@@ -486,6 +490,41 @@ export default function ReportsView({
     });
   };
 
+  const handleExportDemandTrackerCSV = () => {
+    executeExport('Exporting Certificate Demand & Service Improvement Workbook...', () => {
+      const trackerData = computeDemandTrackerMetrics({
+        requests,
+        docTypes,
+        periodFilter: 'all',
+        selectedYear: currentYear,
+      });
+      exportDemandTrackerWorkbookCSV({
+        filename: `Barangay_Zapatera_Certificate_Demand_Tracker_${currentYear}`,
+        trackerData,
+      });
+    });
+  };
+
+  const handleExportDemandTrackerPDF = () => {
+    executeExport('Generating Certificate Demand & Service Improvement PDF...', async () => {
+      const trackerData = computeDemandTrackerMetrics({
+        requests,
+        docTypes,
+        periodFilter: 'all',
+        selectedYear: currentYear,
+      });
+      const htmlContent = generateDemandTrackerPrintableHTML({
+        config,
+        currentUser,
+        trackerData,
+      });
+      await downloadReportAsPDF(
+        htmlContent,
+        `Barangay_Zapatera_Certificate_Demand_Tracker_${currentYear}`
+      );
+    });
+  };
+
   // Precomputed Sparklines
   const reqSpark = buildSparklinePaths(sparklineData.map((d) => d.requests));
   const compSpark = buildSparklinePaths(sparklineData.map((d) => d.completed));
@@ -603,6 +642,20 @@ export default function ReportsView({
                     </div>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={handleExportDemandTrackerCSV}
+                    className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-[#f4f7fb] flex items-center space-x-3 transition-colors cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">Certificate Demand Tracker (.CSV)</p>
+                      <p className="text-[10px] text-slate-400">Tab 1 Summary + Tab 2 Request Logs</p>
+                    </div>
+                  </button>
+
                   <div className="my-1 border-t border-slate-100" />
                   <div className="px-4 py-1.5">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -621,6 +674,20 @@ export default function ReportsView({
                     <div>
                       <p className="font-bold text-slate-800">Download Official Report (PDF)</p>
                       <p className="text-[10px] text-slate-400">Formatted LGU report with signatories</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportDemandTrackerPDF}
+                    className="w-full px-4 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-[#f4f7fb] flex items-center space-x-3 transition-colors cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#3b5bfd] flex items-center justify-center shrink-0">
+                      <Printer className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">Certificate Demand Ledger (PDF)</p>
+                      <p className="text-[10px] text-slate-400">MoM growth, turnaround & bottleneck audit</p>
                     </div>
                   </button>
 
@@ -1289,6 +1356,14 @@ export default function ReportsView({
           </div>
         </div>
       </div>
+
+      {/* CERTIFICATE DEMAND & SERVICE IMPROVEMENT TRACKER */}
+      <MonthlyDemandReport
+        requests={requests}
+        docTypes={docTypes}
+        currentUser={currentUser}
+        config={config}
+      />
 
       {/* BOTTOM SECTION: Document Requests Audit Log with Pill Filters */}
       <div className="bg-white rounded-[28px] border border-slate-100/80 shadow-xs overflow-hidden">

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Badge from '../../components/Badge';
 import PrintableReportModal from './PrintableReportModal';
+import MonthlyDemandReport from './MonthlyDemandReport';
 import {
   exportToCSV,
   exportToJSON,
@@ -11,6 +12,9 @@ import {
   buildRevenueAuditCSV,
   buildSummaryKPIsCSV,
   generatePrintableHTML,
+  computeDemandTrackerMetrics,
+  exportDemandTrackerWorkbookCSV,
+  generateDemandTrackerPrintableHTML,
 } from './reportUtils';
 import {
   BarChart2,
@@ -597,6 +601,38 @@ export default function ReportsView({
     });
   };
 
+  const handleExportDemandTrackerPDF = () => {
+    executeExport('Generating Certificate Demand & Improvement PDF...', async () => {
+      const trackerData = computeDemandTrackerMetrics({
+        requests,
+        docTypes,
+        periodFilter: selectedMonthFilter,
+        selectedYear: currentYear,
+      });
+      const html = generateDemandTrackerPrintableHTML({
+        config,
+        currentUser,
+        trackerData,
+      });
+      await downloadReportAsPDF(html, `Barangay_Zapatera_Certificate_Demand_Tracker_${currentYear}`);
+    });
+  };
+
+  const handleExportDemandTrackerCSV = () => {
+    executeExport('Exporting Certificate Demand Workbook CSV...', () => {
+      const trackerData = computeDemandTrackerMetrics({
+        requests,
+        docTypes,
+        periodFilter: selectedMonthFilter,
+        selectedYear: currentYear,
+      });
+      exportDemandTrackerWorkbookCSV({
+        filename: `Barangay_Zapatera_Certificate_Demand_Tracker_${currentYear}`,
+        trackerData,
+      });
+    });
+  };
+
   const handleDirectPrintOfficialReport = () => {
     const html = generatePrintableHTML({
       title: 'Official Barangay Operations & Audit Report',
@@ -688,6 +724,18 @@ export default function ReportsView({
                 <div className="p-1.5 space-y-0.5">
                   <button
                     type="button"
+                    onClick={handleExportDemandTrackerPDF}
+                    className="w-full text-left px-3 py-2 rounded-2xl text-xs font-medium text-slate-700 hover:bg-blue-50/80 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <TrendingUp className="w-4 h-4 text-[#3b5bfd] shrink-0" />
+                    <div>
+                      <p className="font-bold text-slate-800">Certificate Demand Tracker (PDF)</p>
+                      <p className="text-[10px] text-slate-400">Demand ranking, MoM, bottlenecks &amp; insights</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleExportFullReportPDF}
                     className="w-full text-left px-3 py-2 rounded-2xl text-xs font-medium text-slate-700 hover:bg-rose-50/70 flex items-center space-x-2.5 transition-colors cursor-pointer"
                   >
@@ -742,6 +790,18 @@ export default function ReportsView({
                 </div>
 
                 <div className="p-1.5 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={handleExportDemandTrackerCSV}
+                    className="w-full text-left px-3 py-2 rounded-2xl text-xs font-medium text-slate-700 hover:bg-emerald-50/70 flex items-center space-x-2.5 transition-colors cursor-pointer"
+                  >
+                    <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-bold text-slate-800">Certificate Demand Workbook (CSV)</p>
+                      <p className="text-[10px] text-slate-400">Multi-tab demand, Sitio &amp; logs export</p>
+                    </div>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleExportFullSummaryCSV}
@@ -1254,6 +1314,14 @@ export default function ReportsView({
           </div>
         </div>
       </div>
+
+      {/* ================= CERTIFICATE DEMAND & SERVICE IMPROVEMENT TRACKER ================= */}
+      <MonthlyDemandReport
+        requests={requests}
+        docTypes={docTypes}
+        currentUser={currentUser}
+        config={config}
+      />
 
       {/* ================= BOTTOM SECTION: DOCUMENT REQUESTS AUDIT REGISTRY ================= */}
       <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-5">
