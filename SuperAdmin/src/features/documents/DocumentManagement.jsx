@@ -33,7 +33,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
   const templateKeys = Object.keys(documentTemplates);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('barangayCertification');
   const [selectedCatalogCode, setSelectedCatalogCode] = useState('');
-  
+
   // 2. Certificate Template
   const [documentTitle, setDocumentTitle] = useState(documentTemplates.barangayCertification.title);
   const [name, setName] = useState('');
@@ -265,7 +265,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
       : (Number(found.fee) || 0);
     setFee(catalogFee);
     if (catalogFee > 0 && Number(found.fee) !== catalogFee) {
-      StorageService.saveDocType({ ...found, fee: catalogFee }).catch(() => {});
+      StorageService.saveDocType({ ...found, fee: catalogFee }).catch(() => { });
     }
     setDocStamps(Number(found.doc_stamps) || 30);
     if ((catalogFee > 0 || isVar) && !orNumber) {
@@ -424,8 +424,8 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                   const feeLabel = (dt.is_variable_fee || dt.fee_type === 'variable')
                     ? 'Depends on Claim'
                     : dt.fee > 0
-                    ? `₱${Number(dt.fee).toFixed(2)}`
-                    : 'FREE / Exempt';
+                      ? `₱${Number(dt.fee).toFixed(2)}`
+                      : 'FREE / Exempt';
                   return (
                     <option key={code} value={code}>
                       {dt.code ? `[${dt.code}] ` : ''}{dt.title || dt.name} • {feeLabel}
@@ -450,10 +450,10 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
 
       {/* 2. Main 2-Column Split: Left Categorized Form Controls | Right Sticky Live A4 Print Studio */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        
+
         {/* LEFT COLUMN: Categorized Form Sections (5 Cols) */}
         <div className="xl:col-span-5 space-y-5">
-          
+
           {/* CARD A: Resident & Applicant Profile */}
           <div className="bg-white p-5 sm:p-6 rounded-[26px] border border-slate-100/80 shadow-xs space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -724,7 +724,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                         if (selectedCatalogCode && !selectedCatalogCode.startsWith('preset:')) {
                           const matched = docTypes.find((d) => (d.code || d.id) === selectedCatalogCode);
                           if (matched) {
-                            StorageService.saveDocType({ ...matched, fee: nextFee }).catch(() => {});
+                            StorageService.saveDocType({ ...matched, fee: nextFee }).catch(() => { });
                           }
                         }
                       }}
@@ -830,11 +830,10 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                       key={p}
                       type="button"
                       onClick={() => setPurpose(p)}
-                      className={`text-[10px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
-                        purpose === p
+                      className={`text-[10px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${purpose === p
                           ? 'bg-[#3b5bfd] text-white border-[#3b5bfd] font-bold'
                           : 'bg-[#f4f7fb] text-slate-600 border-slate-200 hover:bg-slate-200/70'
-                      }`}
+                        }`}
                     >
                       {p}
                     </button>
@@ -926,11 +925,10 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
                     key={z}
                     type="button"
                     onClick={() => setPreviewZoom(z)}
-                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer ${
-                      previewZoom === z
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer ${previewZoom === z
                         ? 'bg-white text-[#3b5bfd] shadow-2xs'
                         : 'text-slate-500 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     {Math.round(z * 100)}%
                   </button>
@@ -1069,5 +1067,7 @@ export default function DocumentManagement({ docTypes = [], config = {}, onNavig
         />
       </div>
     </div>
+  );
+}
   );
 }

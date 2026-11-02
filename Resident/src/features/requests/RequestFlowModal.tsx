@@ -110,8 +110,8 @@ export default function RequestFlowModal({
     initialDoc?.id || docTypes[0]?.id || 'dt-001'
   );
   const [isDocDropdownOpen, setIsDocDropdownOpen] = useState<boolean>(false);
-  const [purpose, setPurpose] = useState<string>(COMMON_PURPOSES[0]);
-  const [customPurpose, setCustomPurpose] = useState<string>(COMMON_PURPOSES[0]);
+  const [purpose, setPurpose] = useState<string>('');
+  const [customPurpose, setCustomPurpose] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Tracks whether the user attempted to proceed on the current step so missing required fields highlight prominently
@@ -138,12 +138,16 @@ export default function RequestFlowModal({
   }, []);
 
   useEffect(() => {
+    if (visible) {
+      setPurpose('');
+      setCustomPurpose('');
+    }
     if (initialDoc?.id) {
       setSelectedDocId(initialDoc.id);
     } else if (docTypes.length > 0 && !selectedDocId) {
       setSelectedDocId(docTypes[0].id);
     }
-  }, [initialDoc, docTypes]);
+  }, [visible, initialDoc, docTypes]);
 
   // Step 2 Resident Info State
   const [yearsInBarangay, setYearsInBarangay] = useState<string>(
@@ -225,15 +229,11 @@ export default function RequestFlowModal({
     );
   }, [selectedDoc]);
 
-  // When switching to/from business document, align default purpose if user hasn't typed custom
+  // Keep purpose empty when switching documents so the resident always inputs or selects their own purpose
   useEffect(() => {
-    if (isBusinessDoc) {
-      if (!customPurpose || customPurpose === COMMON_PURPOSES[0]) {
-        setPurpose(BUSINESS_PURPOSES[0]);
-        setCustomPurpose(BUSINESS_PURPOSES[0]);
-      }
-    }
-  }, [isBusinessDoc]);
+    setPurpose('');
+    setCustomPurpose('');
+  }, [selectedDocId]);
 
   // Requirements list normalized from selectedDoc
   const requirementsToUpload =
@@ -614,6 +614,8 @@ export default function RequestFlowModal({
 
   const resetForm = () => {
     setCurrentStep(1);
+    setPurpose('');
+    setCustomPurpose('');
     setUploadedFiles({});
     setUploadError('');
     setShowStepValidation(false);
@@ -960,7 +962,7 @@ export default function RequestFlowModal({
                   >
                     <TextInput
                       style={styles.textInputFlex}
-                      placeholder="Type your specific purpose (e.g., Local Employment, Scholarship...)"
+                      placeholder="Enter your purpose for requesting this document"
                       placeholderTextColor="#94a3b8"
                       value={customPurpose}
                       onChangeText={(txt) => {
