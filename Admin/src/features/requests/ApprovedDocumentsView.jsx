@@ -469,12 +469,18 @@ export default function ApprovedDocumentsView({
       render: (req) => {
         const claimed = isClaimed(req);
         const matchingDoc = allDocTypes.find(
-          (d) => d.id === req.document_type_id || d.title === req.document_title || d.code === req.document_type
+          (d) =>
+            d.id === req.document_type_id ||
+            (d.code && (d.code === req.document_type_id || d.code === req.document_type)) ||
+            (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
         );
         const isVar = Boolean(req.is_variable_fee || matchingDoc?.is_variable_fee || matchingDoc?.fee_type === 'variable');
         const claimedFee = req.claimed_fee !== undefined && req.claimed_fee !== null
           ? Number(req.claimed_fee)
           : (req.amount_paid !== undefined && req.amount_paid !== null ? Number(req.amount_paid) : Number(req.fee || 0));
+        const catalogFee = (matchingDoc && matchingDoc.fee !== undefined && matchingDoc.fee !== null)
+          ? Number(matchingDoc.fee)
+          : Number(req.fee || 0);
 
         return (
           <div>
@@ -485,12 +491,12 @@ export default function ApprovedDocumentsView({
                 <span>Claimed Fee: {claimedFee > 0 ? formatCurrency(claimedFee) : 'FREE'}</span>
               </span>
             ) : isVar ? (
-              <span className="inline-flex items-center text-[10px] text-[#3b5bfd] bg-blue-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
+              <span className="inline-flex items-center text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full font-bold mt-0.5">
                 Fee: Depends on claim
               </span>
             ) : (
-              <span className="inline-flex items-center text-[10px] text-slate-600 bg-[#f4f7fb] px-2 py-0.5 rounded-full font-bold mt-0.5">
-                Fee: {req.fee > 0 ? formatCurrency(req.fee) : 'Free'}
+              <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full font-bold mt-0.5">
+                Fee: {catalogFee > 0 ? formatCurrency(catalogFee) : 'Free'}
               </span>
             )}
           </div>

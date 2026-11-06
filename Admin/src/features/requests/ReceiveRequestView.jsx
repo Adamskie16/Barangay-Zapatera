@@ -315,16 +315,127 @@ export default function ReceiveRequestView({
     return pages;
   };
 
+  // Helper to reliably find matching document template in the Service Catalog (docTypes)
+  const getMatchedDocType = (req) => {
+    if (!req || !Array.isArray(docTypes) || docTypes.length === 0) return null;
+
+    const reqDocId = String(req.document_type_id || req.document_id || '').trim();
+    const reqDocCode = String(req.document_code || '').trim().toLowerCase();
+    const reqTitle = String(req.document_title || '').trim().toLowerCase();
+
+    // 1. Match by ID or Code
+    if (reqDocId) {
+      const byId = docTypes.find((d) => String(d.id || '').trim() === reqDocId);
+      if (byId) return byId;
+      const byCodeExact = docTypes.find((d) => String(d.code || '').trim().toLowerCase() === reqDocId.toLowerCase());
+      if (byCodeExact) return byCodeExact;
+    }
+
+    if (reqDocCode) {
+      const byCode = docTypes.find((d) => String(d.code || '').trim().toLowerCase() === reqDocCode);
+      if (byCode) return byCode;
+    }
+
+    // 2. Exact Title Match
+    if (reqTitle) {
+      const byTitle = docTypes.find((d) => String(d.title || '').trim().toLowerCase() === reqTitle);
+      if (byTitle) return byTitle;
+    }
+
+    // 3. Substring / keyword match (handles "Business Permit" vs "Business Clearance", etc.)
+    if (reqTitle) {
+      const bySub = docTypes.find((d) => {
+        const dTitle = String(d.title || '').trim().toLowerCase();
+        return dTitle && (dTitle.includes(reqTitle) || reqTitle.includes(dTitle));
+      });
+      if (bySub) return bySub;
+
+      if (reqTitle.includes('business')) {
+        const biz = docTypes.find(
+          (d) => (d.code || '').toLowerCase().includes('bus') || (d.title || '').toLowerCase().includes('business')
+        );
+        if (biz) return biz;
+      }
+
+      if (reqTitle.includes('indigency')) {
+        const ind = docTypes.find(
+          (d) => (d.code || '').toLowerCase().includes('ind') || (d.title || '').toLowerCase().includes('indigency')
+        );
+        if (ind) return ind;
+      }
+
+      if (reqTitle.includes('clearance') && !reqTitle.includes('business')) {
+        const clr = docTypes.find(
+          (d) =>
+            ((d.code || '').toLowerCase().includes('bc') || (d.title || '').toLowerCase().includes('clearance')) &&
+            !(d.title || '').toLowerCase().includes('business')
+        );
+        if (clr) return clr;
+      }
+    }
+
+    return null;
+  };
+
+  // Render processing fee badge for the Operational Request Queue table
+  const renderDocumentRequestedFee = (req) => {
+    const matchedDoc = getMatchedDocType(req);
+    const isClaimedReq = Boolean(req.is_claimed || (req.claimed_fee !== undefined && req.claimed_fee !== null && Number(req.claimed_fee) > 0));
+
+    // If document is already claimed, display the collected claimed fee
+    if (isClaimedReq && req.claimed_fee !== undefined && req.claimed_fee !== null) {
+      const claimedVal = Number(req.claimed_fee);
+      return (
+        <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full font-bold mt-0.5">
+          {claimedVal > 0 ? formatCurrency(claimedVal) : 'Free'}
+        </span>
+      );
+    }
+
+    // Check if the service catalog marks this document as "Depends on Claim"
+    const isVariable = matchedDoc
+      ? Boolean(matchedDoc.is_variable_fee || matchedDoc.fee_type === 'variable')
+      : Boolean(req.is_variable_fee || req.fee_type === 'variable');
+
+    if (isVariable) {
+      return (
+        <span className="inline-flex items-center text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-full font-bold mt-0.5">
+          Depends on Claim
+        </span>
+      );
+    }
+
+    // Priority: Fetch processing fee directly from the service catalog
+    if (matchedDoc && matchedDoc.fee !== undefined && matchedDoc.fee !== null) {
+      const catalogFee = Number(matchedDoc.fee) || 0;
+      return (
+        <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full font-bold mt-0.5">
+          {catalogFee > 0 ? formatCurrency(catalogFee) : 'Free'}
+        </span>
+      );
+    }
+
+    // Fallback: Check request fee if not found in catalog (default to Free)
+    if (req.fee !== undefined && req.fee !== null && Number(req.fee) > 0) {
+      return (
+        <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full font-bold mt-0.5">
+          {formatCurrency(Number(req.fee))}
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full font-bold mt-0.5">
+        Free
+      </span>
+    );
+  };
+
   // Determine if a request has required attachments
   const getRequirementList = (req) => {
     if (!req) return [];
 
-    const matchedDocType = docTypes.find(
-      (dt) =>
-        dt.id === req.document_type_id ||
-        dt.code === req.document_type_id ||
-        dt.title?.toLowerCase() === req.document_title?.toLowerCase()
-    );
+    const matchedDocType = getMatchedDocType(req);
 
     const docTypeReqs = matchedDocType?.requirements?.filter(
       (r) => r && typeof r === 'string' && r.trim().toLowerCase() !== 'none' && r.trim().toLowerCase() !== 'no requirements' && r.trim().toLowerCase() !== 'n/a'
@@ -518,22 +629,19 @@ export default function ReceiveRequestView({
     setGenCapitalInvested(cInv);
     setGenGrossSales(gSale);
 
-    // Fee setup (prefill fee assessed or default)
-    const matchedDocForFee = docTypes.find(
-      (d) =>
-        d.id === req.document_type_id ||
-        (d.code && d.code === req.document_type_id) ||
-        (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
-    );
+    // Fee setup (fetch fee assessed or service catalog fee)
+    const matchedDocForFee = getMatchedDocType(req);
+    const isVarFee = matchedDocForFee
+      ? Boolean(matchedDocForFee.is_variable_fee || matchedDocForFee.fee_type === 'variable')
+      : Boolean(req.is_variable_fee || req.fee_type === 'variable');
+
     const initialFee =
       req.claimed_fee !== undefined && req.claimed_fee !== null && Number(req.claimed_fee) > 0
         ? Number(req.claimed_fee)
-        : req.fee !== undefined && req.fee !== null && Number(req.fee) > 0
+        : matchedDocForFee && !isVarFee
+        ? Number(matchedDocForFee.fee) || 0
+        : req.fee !== undefined && req.fee !== null && Number(req.fee) > 0 && !isVarFee
         ? Number(req.fee)
-        : matchedDocForFee && Number(matchedDocForFee.fee) > 0
-        ? Number(matchedDocForFee.fee)
-        : isBusiness
-        ? 500
         : 0;
     setGenFee(initialFee);
     setGenDocStamps(req.doc_stamps !== undefined ? Number(req.doc_stamps) : 30);
@@ -1346,28 +1454,7 @@ export default function ReceiveRequestView({
                       {/* Document Requested */}
                       <td className="p-4">
                         <p className="font-bold text-slate-800">{req.document_title}</p>
-                        <span className="inline-flex items-center text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold mt-0.5">
-                          {(() => {
-                            const matchedDoc = docTypes.find(
-                              (d) =>
-                                d.id === req.document_type_id ||
-                                (d.code && d.code === req.document_type_id) ||
-                                (d.title || '').toLowerCase().trim() === (req.document_title || '').toLowerCase().trim()
-                            );
-                            const isBiz = (req.document_title || matchedDoc?.title || '').toLowerCase().includes('business');
-                            const rowFee =
-                              Number(req.claimed_fee) > 0
-                                ? Number(req.claimed_fee)
-                                : Number(req.fee) > 0
-                                ? Number(req.fee)
-                                : matchedDoc && Number(matchedDoc.fee) > 0
-                                ? Number(matchedDoc.fee)
-                                : isBiz
-                                ? 500
-                                : 0;
-                            return rowFee > 0 ? formatCurrency(rowFee) : 'Free';
-                          })()}
-                        </span>
+                        {renderDocumentRequestedFee(req)}
                       </td>
 
                       {/* Pick-up Time Slot */}
