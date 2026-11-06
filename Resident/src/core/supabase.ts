@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { MobileStorage } from './storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://qzmxwxmtuzoanwevftnd.supabase.co';
@@ -253,7 +254,7 @@ export const supabase = ((typeof window !== 'undefined' && (window as any)[globa
         storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : MobileStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: Platform.OS === 'web' && typeof window !== 'undefined',
       },
       realtime: {
         transport: ResilientWebSocket as any,

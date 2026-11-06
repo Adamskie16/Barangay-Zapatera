@@ -77,11 +77,15 @@ export async function requestPhoneNotificationPermission(): Promise<boolean> {
     const isGranted = permission === 'granted';
 
     if (isGranted) {
-      localStorage.setItem('zapatera_phone_notif_enabled', 'true');
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('zapatera_phone_notif_enabled', 'true');
+      }
       playNotificationChime(false);
       vibratePhone(false);
     } else if (permission === 'denied') {
-      localStorage.setItem('zapatera_phone_notif_enabled', 'false');
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('zapatera_phone_notif_enabled', 'false');
+      }
     }
 
     if (typeof window !== 'undefined') {

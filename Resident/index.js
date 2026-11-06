@@ -57,10 +57,14 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   }
 }
 
-if (Text.defaultProps == null) Text.defaultProps = {};
-Text.defaultProps.style = [{ fontFamily: 'Inter' }, Text.defaultProps.style];
+if (Platform.OS === 'web') {
+  try {
+    if (Text && Text.defaultProps == null) Text.defaultProps = {};
+    if (Text && Text.defaultProps) Text.defaultProps.style = [{ fontFamily: 'Inter' }, Text.defaultProps.style];
 
-if (TextInput.defaultProps == null) TextInput.defaultProps = {};
-TextInput.defaultProps.style = [{ fontFamily: 'Inter' }, TextInput.defaultProps.style];
+    if (TextInput && TextInput.defaultProps == null) TextInput.defaultProps = {};
+    if (TextInput && TextInput.defaultProps) TextInput.defaultProps.style = [{ fontFamily: 'Inter' }, TextInput.defaultProps.style];
+  } catch {}
+}
 
 registerRootComponent(App);

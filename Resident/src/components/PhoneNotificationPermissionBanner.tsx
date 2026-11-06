@@ -24,7 +24,10 @@ export default function PhoneNotificationPermissionBanner({
     const status = getNotificationPermissionStatus();
     setPermission(status);
 
-    const dismissedInSession = sessionStorage.getItem('zapatera_phone_notif_banner_dismissed') === 'true';
+    const dismissedInSession =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem('zapatera_phone_notif_banner_dismissed') === 'true'
+        : false;
     if (status === 'default' && !dismissedInSession) {
       setIsDismissed(false);
     }
@@ -37,9 +40,13 @@ export default function PhoneNotificationPermissionBanner({
       }
     };
 
-    window.addEventListener('zapatera_notification_permission_changed', handlePermChange);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('zapatera_notification_permission_changed', handlePermChange);
+    }
     return () => {
-      window.removeEventListener('zapatera_notification_permission_changed', handlePermChange);
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('zapatera_notification_permission_changed', handlePermChange);
+      }
     };
   }, []);
 
@@ -55,7 +62,9 @@ export default function PhoneNotificationPermissionBanner({
         }, 3000);
       } else {
         setIsDismissed(true);
-        sessionStorage.setItem('zapatera_phone_notif_banner_dismissed', 'true');
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('zapatera_phone_notif_banner_dismissed', 'true');
+        }
         onPermissionChanged?.(false);
       }
     } catch {
@@ -67,7 +76,9 @@ export default function PhoneNotificationPermissionBanner({
 
   const handleDismiss = () => {
     setIsDismissed(true);
-    sessionStorage.setItem('zapatera_phone_notif_banner_dismissed', 'true');
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('zapatera_phone_notif_banner_dismissed', 'true');
+    }
   };
 
   if (isDismissed || permission !== 'default') {
