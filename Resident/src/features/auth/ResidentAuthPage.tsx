@@ -191,8 +191,8 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
     const isRecovery =
       (hash.includes('type=recovery') ||
-      search.includes('type=recovery') ||
-      (hash.includes('access_token') && !isSignupConfirm)) && !isSignupConfirm;
+        search.includes('type=recovery') ||
+        (hash.includes('access_token') && !isSignupConfirm)) && !isSignupConfirm;
 
     if (isSignupConfirm) {
       setAuthStep('credentials');
@@ -228,7 +228,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
               setSuccessBanner('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
             }
           }
-        }).catch(() => {});
+        }).catch(() => { });
       } else if (search.includes('code=')) {
         const rawSearch = search.startsWith('?') ? search.substring(1) : search;
         const searchParams = new URLSearchParams(rawSearch);
@@ -245,7 +245,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 setSuccessBanner('Account Confirmed Successfully! Your email has been verified. You may now sign in.');
               }
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -471,7 +471,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         if (Array.isArray(deletedList) && deletedList.some((d: any) => (d.email || d).toLowerCase() === cleanEmail)) {
           isExplicitlyDeleted = true;
         }
-      } catch {}
+      } catch { }
     }
 
     if (isExplicitlyDeleted) {
@@ -583,7 +583,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           if (match) {
             verifiedProfile = match;
           }
-        } catch {}
+        } catch { }
       }
 
       // If profile not found, is inactive, or is locked -> immediately terminate session
@@ -592,7 +592,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           if (isSupabaseConfigured()) {
             await supabase.auth.signOut();
           }
-        } catch {}
+        } catch { }
         setAuthError('Email or password is incorrect.');
         setLoading(false);
         return;
@@ -603,7 +603,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           if (isSupabaseConfigured()) {
             await supabase.auth.signOut();
           }
-        } catch {}
+        } catch { }
         const msg = 'Your account is temporarily locked due to multiple failed login attempts. Please contact an administrator.';
         setIsLocked(true);
         setAuthError(msg);
@@ -621,7 +621,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           if (isSupabaseConfigured()) {
             await supabase.auth.signOut();
           }
-        } catch {}
+        } catch { }
         setAuthError('Your account is currently deactivated. Please contact an administrator.');
         setLoading(false);
         return;
@@ -635,7 +635,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           if (isSupabaseConfigured()) {
             await supabase.auth.signOut();
           }
-        } catch {}
+        } catch { }
         setAuthError('Email or password is incorrect.');
         setLoading(false);
         return;
@@ -699,7 +699,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
         if (isSupabaseConfigured()) {
           await supabase.auth.signOut();
         }
-      } catch {}
+      } catch { }
       setErrorMessage('Email or password is incorrect.');
       return;
     }
@@ -874,7 +874,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
           );
           await MobileStorage.setItem('zapatera_residents_db', JSON.stringify(updated));
         }
-      } catch {}
+      } catch { }
 
       if (typeof window !== 'undefined') {
         window.history.replaceState(null, '', window.location.pathname);

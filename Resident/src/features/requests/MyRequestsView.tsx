@@ -475,6 +475,7 @@ export default function MyRequestsView({
           const isBusinessDoc = `${req.document_title || ''} ${matchedDoc?.title || ''}`
             .toLowerCase()
             .includes('business');
+          const isVarFee = !claimed && Boolean(req.is_variable_fee || req.fee_type === 'variable' || matchedDoc?.fee_type === 'variable' || matchedDoc?.is_variable_fee);
           const resolvedFee =
             claimed &&
             req.claimed_fee !== undefined &&
@@ -485,12 +486,10 @@ export default function MyRequestsView({
               ? Number(req.fee)
               : matchedDoc && Number(matchedDoc.fee) > 0
               ? Number(matchedDoc.fee)
-              : isBusinessDoc
-              ? 500
               : 0;
 
           const feeDisplay =
-            resolvedFee === 0 ? 'FREE' : formatCurrency(resolvedFee);
+            isVarFee ? 'Depends on Claim' : resolvedFee === 0 ? 'FREE' : formatCurrency(resolvedFee);
 
           return (
             <TouchableOpacity
@@ -655,13 +654,19 @@ export default function MyRequestsView({
                   <View
                     style={[
                       styles.feeBadge,
-                      feeDisplay === 'FREE' ? styles.feeBadgeFree : styles.feeBadgePaid,
+                      feeDisplay === 'Depends on Claim'
+                        ? styles.feeBadgeVariable
+                        : feeDisplay === 'FREE'
+                        ? styles.feeBadgeFree
+                        : styles.feeBadgePaid,
                     ]}
                   >
                     <Text
                       style={[
                         styles.feeBadgeText,
-                        feeDisplay === 'FREE'
+                        feeDisplay === 'Depends on Claim'
+                          ? styles.feeBadgeTextVariable
+                          : feeDisplay === 'FREE'
                           ? styles.feeBadgeTextFree
                           : styles.feeBadgeTextPaid,
                       ]}
@@ -1358,6 +1363,9 @@ const styles = StyleSheet.create({
   feeBadgePaid: {
     backgroundColor: '#eff6ff',
   },
+  feeBadgeVariable: {
+    backgroundColor: '#fef3c7',
+  },
   feeBadgeText: {
     fontFamily: 'Inter',
     fontSize: 11,
@@ -1368,6 +1376,9 @@ const styles = StyleSheet.create({
   },
   feeBadgeTextPaid: {
     color: '#1d4ed8',
+  },
+  feeBadgeTextVariable: {
+    color: '#b45309',
   },
   footerActionsRow: {
     flexDirection: 'row',

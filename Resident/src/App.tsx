@@ -2459,7 +2459,7 @@ export default function App() {
   if (!currentUser || (currentUser.role || '').toLowerCase() !== 'resident') {
     return (
       <SafeAreaView style={styles.authContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#eff2fc" />
+        <StatusBar barStyle="dark-content" />
         {/* Security Notice Modal (for Account Deletion, Deactivation, or Lockout) */}
         <SecurityNoticeModal
           visible={Boolean(accountDeletedNotice)}
@@ -2502,7 +2502,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.appContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <StatusBar barStyle="dark-content" />
 
       {/* Top Government-Service Navbar */}
       <Navbar

@@ -115,7 +115,7 @@ export default function RequestFlowModal({
 
   // Tracks whether the user attempted to proceed on the current step so missing required fields highlight prominently
   const [showStepValidation, setShowStepValidation] = useState<boolean>(false);
-  const bodyScrollRef = useRef<ScrollView>(null);
+  const bodyScrollRef = useRef<any>(null);
 
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
@@ -538,11 +538,13 @@ export default function RequestFlowModal({
         is_variable_fee: Boolean(
           selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
         ),
-        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the processing fee of ${
-          resolvedDocFee === 0
+        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the processing fee (${
+          selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
+            ? 'Depends on Claim'
+            : resolvedDocFee === 0
             ? '₱0.00 (FREE)'
             : formatCurrency(resolvedDocFee)
-        }.`,
+        }).`,
         timeline: [
           {
             status: 'pending',
@@ -635,13 +637,12 @@ export default function RequestFlowModal({
   if (!visible) return null;
 
   const activeStepMeta = STEP_META.find((s) => s.num === currentStep);
+  const isSelectedDocVar = Boolean(selectedDoc?.fee_type === 'variable' || selectedDoc?.is_variable_fee);
   const selectedDocFee =
-    Number(selectedDoc?.fee) > 0
+    !isSelectedDocVar && Number(selectedDoc?.fee) > 0
       ? Number(selectedDoc?.fee)
-      : isBusinessDoc
-      ? 500
       : 0;
-  const isSelectedDocFree = selectedDocFee === 0;
+  const isSelectedDocFree = !isSelectedDocVar && selectedDocFee === 0;
 
   return (
     <Modal
@@ -813,7 +814,9 @@ export default function RequestFlowModal({
                           {selectedDoc?.title}
                         </Text>
                         <Text style={styles.dropdownSelectedSub}>
-                          {isSelectedDocFree
+                          {isSelectedDocVar
+                            ? 'Depends on Claim'
+                            : isSelectedDocFree
                             ? 'FREE'
                             : formatCurrency(selectedDocFee)}{' '}
                           • {selectedDoc?.processing_days || 1}{' '}
@@ -834,9 +837,9 @@ export default function RequestFlowModal({
                     <View style={styles.dropdownMenuCard}>
                       {availableDocTypes.map((dt) => {
                         const isSelected = dt.id === selectedDoc?.id;
-                        const dtIsBiz = (dt.title || '').toLowerCase().includes('business');
-                        const dtFee = Number(dt.fee) > 0 ? Number(dt.fee) : dtIsBiz ? 500 : 0;
-                        const dtFree = dtFee === 0;
+                        const dtIsVar = Boolean(dt.fee_type === 'variable' || dt.is_variable_fee);
+                        const dtFee = Number(dt.fee) > 0 ? Number(dt.fee) : 0;
+                        const dtFree = !dtIsVar && dtFee === 0;
                         return (
                           <TouchableOpacity
                             key={dt.id}
@@ -868,18 +871,26 @@ export default function RequestFlowModal({
                               <View
                                 style={[
                                   styles.miniFeePill,
-                                  dtFree ? styles.miniFeePillFree : styles.miniFeePillPaid,
+                                  dtIsVar
+                                    ? styles.miniFeePillVariable
+                                    : dtFree
+                                    ? styles.miniFeePillFree
+                                    : styles.miniFeePillPaid,
                                 ]}
                               >
                                 <Text
                                   style={[
                                     styles.miniFeePillText,
-                                    dtFree
+                                    dtIsVar
+                                      ? styles.miniFeePillTextVariable
+                                      : dtFree
                                       ? styles.miniFeePillTextFree
                                       : styles.miniFeePillTextPaid,
                                   ]}
                                 >
-                                  {dtFree
+                                  {dtIsVar
+                                    ? 'Depends on Claim'
+                                    : dtFree
                                     ? 'FREE'
                                     : formatCurrency(dtFee)}
                                 </Text>
@@ -903,7 +914,9 @@ export default function RequestFlowModal({
                     <View
                       style={[
                         styles.selectedDocFeeBadge,
-                        isSelectedDocFree
+                        isSelectedDocVar
+                          ? styles.selectedDocFeeBadgeVariable
+                          : isSelectedDocFree
                           ? styles.selectedDocFeeBadgeFree
                           : styles.selectedDocFeeBadgePaid,
                       ]}
@@ -911,12 +924,16 @@ export default function RequestFlowModal({
                       <Text
                         style={[
                           styles.selectedDocFeeText,
-                          isSelectedDocFree
+                          isSelectedDocVar
+                            ? styles.selectedDocFeeTextVariable
+                            : isSelectedDocFree
                             ? styles.selectedDocFeeTextFree
                             : styles.selectedDocFeeTextPaid,
                         ]}
                       >
-                        {isSelectedDocFree
+                        {isSelectedDocVar
+                          ? 'Depends on Claim'
+                          : isSelectedDocFree
                           ? 'FREE'
                           : formatCurrency(selectedDocFee)}
                       </Text>
@@ -1855,8 +1872,10 @@ export default function RequestFlowModal({
                     </Text>
                     <Text style={styles.summaryFeeText}>
                       Document Fee:{' '}
-                      <Text style={{ color: '#2563eb', fontWeight: '800' }}>
-                        {isSelectedDocFree
+                      <Text style={{ color: isSelectedDocVar ? '#b45309' : '#2563eb', fontWeight: '800' }}>
+                        {isSelectedDocVar
+                          ? 'Depends on Claim'
+                          : isSelectedDocFree
                           ? 'FREE'
                           : formatCurrency(selectedDocFee)}
                       </Text>
@@ -2545,6 +2564,9 @@ const styles = StyleSheet.create({
   miniFeePillPaid: {
     backgroundColor: '#eff6ff',
   },
+  miniFeePillVariable: {
+    backgroundColor: '#fef3c7',
+  },
   miniFeePillText: {
     fontFamily: 'Inter',
     fontSize: 10,
@@ -2555,6 +2577,9 @@ const styles = StyleSheet.create({
   },
   miniFeePillTextPaid: {
     color: '#1d4ed8',
+  },
+  miniFeePillTextVariable: {
+    color: '#b45309',
   },
 
   /* Selected Document Summary Card */
@@ -2595,6 +2620,9 @@ const styles = StyleSheet.create({
   selectedDocFeeBadgePaid: {
     backgroundColor: '#ffffff',
   },
+  selectedDocFeeBadgeVariable: {
+    backgroundColor: '#fef3c7',
+  },
   selectedDocFeeText: {
     fontFamily: 'Inter',
     fontSize: 11.5,
@@ -2605,6 +2633,9 @@ const styles = StyleSheet.create({
   },
   selectedDocFeeTextPaid: {
     color: '#1d4ed8',
+  },
+  selectedDocFeeTextVariable: {
+    color: '#b45309',
   },
   selectedDocDesc: {
     fontFamily: 'Inter',

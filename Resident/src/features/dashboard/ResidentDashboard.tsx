@@ -48,7 +48,7 @@ import GlobalFooter from '../../components/GlobalFooter';
 import { formatCurrency } from '../../core/security';
 
 interface SwipeableCarouselProps {
-  scrollRef: React.RefObject<ScrollView | null>;
+  scrollRef: React.RefObject<any>;
   scrollOffsetRef: React.MutableRefObject<number>;
   onDragStateChange?: (isDragging: boolean) => void;
   children: React.ReactNode;
@@ -282,9 +282,9 @@ export default function ResidentDashboard({
   const [isDraggingCarousel, setIsDraggingCarousel] = useState(false);
 
   // Horizontal ScrollView refs & scroll offsets for smooth button/touch scrolling
-  const docScrollRef = useRef<ScrollView | null>(null);
+  const docScrollRef = useRef<any>(null);
   const docScrollOffset = useRef(0);
-  const bulletinScrollRef = useRef<ScrollView | null>(null);
+  const bulletinScrollRef = useRef<any>(null);
   const bulletinScrollOffset = useRef(0);
 
   const handleScrollDocs = (direction: 'left' | 'right') => {
@@ -1147,8 +1147,9 @@ export default function ResidentDashboard({
           >
             {availableDocTypes.map((doc) => {
               const { Icon: DocIcon, color: iconColor, bg: iconBg } = getDocVisual(doc);
-              const isBusinessDoc = (doc.title || '').toLowerCase().includes('business');
-              const resolvedFee = Number(doc.fee) > 0 ? Number(doc.fee) : isBusinessDoc ? 500 : 0;
+              const isVariable = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
+              const resolvedFee = Number(doc.fee) > 0 ? Number(doc.fee) : 0;
+              const isFree = !isVariable && resolvedFee === 0;
               return (
                 <View key={doc.id} style={styles.docTypeCard}>
                   <View>
@@ -1159,7 +1160,9 @@ export default function ResidentDashboard({
                       <View
                         style={[
                           styles.feeTag,
-                          resolvedFee === 0
+                          isVariable
+                            ? styles.feeTagVariable
+                            : isFree
                             ? styles.feeTagFree
                             : styles.feeTagPaid,
                         ]}
@@ -1167,12 +1170,16 @@ export default function ResidentDashboard({
                         <Text
                           style={[
                             styles.feeTagText,
-                            resolvedFee === 0
+                            isVariable
+                              ? styles.feeTagTextVariable
+                              : isFree
                               ? styles.feeTagTextFree
                               : styles.feeTagTextPaid,
                           ]}
                         >
-                          {resolvedFee === 0
+                          {isVariable
+                            ? 'Depends on Claim'
+                            : isFree
                             ? 'FREE'
                             : formatCurrency(resolvedFee)}
                         </Text>
@@ -2273,6 +2280,9 @@ const styles = StyleSheet.create({
   feeTagPaid: {
     backgroundColor: '#f0f9ff',
   },
+  feeTagVariable: {
+    backgroundColor: '#fef3c7',
+  },
   feeTagText: {
     fontFamily: 'Inter',
     fontSize: 10,
@@ -2283,6 +2293,9 @@ const styles = StyleSheet.create({
   },
   feeTagTextPaid: {
     color: '#0284c7',
+  },
+  feeTagTextVariable: {
+    color: '#b45309',
   },
   docTypeTitle: {
     fontFamily: 'Inter',

@@ -6,6 +6,7 @@ import {
   Inbox,
   Search,
   SlidersHorizontal,
+  CheckCircle,
   CheckCircle2,
   XCircle,
   AlertTriangle,

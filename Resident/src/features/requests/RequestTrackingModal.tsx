@@ -208,6 +208,7 @@ export default function RequestTrackingModal({
   const isBusinessDoc = `${request.document_title || ''} ${matchedDoc?.title || ''}`
     .toLowerCase()
     .includes('business');
+  const isVarFee = !isClaimed && Boolean(request.is_variable_fee || request.fee_type === 'variable' || matchedDoc?.fee_type === 'variable' || matchedDoc?.is_variable_fee);
   const resolvedFee =
     isClaimed &&
       request.claimed_fee !== undefined &&
@@ -218,12 +219,10 @@ export default function RequestTrackingModal({
         ? Number(request.fee)
         : matchedDoc && Number(matchedDoc.fee) > 0
           ? Number(matchedDoc.fee)
-          : isBusinessDoc
-            ? 500
-            : 0;
+          : 0;
 
   const feeFormatted =
-    resolvedFee === 0 ? 'FREE (₱0.00)' : formatCurrency(resolvedFee);
+    isVarFee ? 'Depends on Claim' : resolvedFee === 0 ? 'FREE (₱0.00)' : formatCurrency(resolvedFee);
 
   return (
     <Modal

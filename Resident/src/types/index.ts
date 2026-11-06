@@ -183,6 +183,7 @@ export interface DocumentRequest {
   claimed_fee?: number;
   claimed_by_admin?: string;
   issued_at?: string;
+  fee_type?: 'fixed' | 'variable';
   is_variable_fee?: boolean;
   is_resubmitted?: boolean;
   resubmitted_at?: string;

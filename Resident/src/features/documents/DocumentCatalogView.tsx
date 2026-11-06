@@ -93,7 +93,7 @@ export default function DocumentCatalogView({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
 
   useEffect(() => {
     ensureInterFontLoaded();
@@ -412,10 +412,9 @@ export default function DocumentCatalogView({
       {paginatedDocs.map((doc) => {
         const docCategory = getDocumentCategory(doc);
         const visual = getDocVisual(doc);
-        const isBusinessDoc = (doc.title || '').toLowerCase().includes('business');
-        const resolvedFee =
-          Number(doc.fee) > 0 ? Number(doc.fee) : isBusinessDoc ? 500 : 0;
-        const isFree = resolvedFee === 0;
+        const isVariable = Boolean(doc.is_variable_fee || doc.fee_type === 'variable');
+        const resolvedFee = Number(doc.fee) > 0 ? Number(doc.fee) : 0;
+        const isFree = !isVariable && resolvedFee === 0;
         const reqList = Array.isArray(doc.requirements) ? doc.requirements : [];
 
         return (
@@ -439,16 +438,24 @@ export default function DocumentCatalogView({
                   <View
                     style={[
                       styles.feePill,
-                      isFree ? styles.feePillFree : styles.feePillPaid,
+                      isVariable
+                        ? styles.feePillVariable
+                        : isFree
+                        ? styles.feePillFree
+                        : styles.feePillPaid,
                     ]}
                   >
                     <Text
                       style={[
                         styles.feePillText,
-                        isFree ? styles.feePillTextFree : styles.feePillTextPaid,
+                        isVariable
+                          ? styles.feePillTextVariable
+                          : isFree
+                          ? styles.feePillTextFree
+                          : styles.feePillTextPaid,
                       ]}
                     >
-                      {isFree ? 'FREE' : formatCurrency(resolvedFee)}
+                      {isVariable ? 'Depends on Claim' : isFree ? 'FREE' : formatCurrency(resolvedFee)}
                     </Text>
                   </View>
                 </View>
@@ -947,6 +954,9 @@ const styles = StyleSheet.create({
   feePillPaid: {
     backgroundColor: '#eff6ff',
   },
+  feePillVariable: {
+    backgroundColor: '#fef3c7',
+  },
   feePillText: {
     fontFamily: 'Inter',
     fontSize: 11,
@@ -957,6 +967,9 @@ const styles = StyleSheet.create({
   },
   feePillTextPaid: {
     color: '#1d4ed8',
+  },
+  feePillTextVariable: {
+    color: '#b45309',
   },
 
   metaBadgesRow: {

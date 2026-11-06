@@ -291,16 +291,22 @@ Generated on: ${new Date().toLocaleString('en-US')}
                       <View
                         style={[
                           styles.docPillFeeTag,
-                          item.fee === 0 ? styles.pillFeeFree : styles.pillFeePaid,
+                          item.is_variable_fee || item.fee_type === 'variable'
+                            ? styles.pillFeeVariable
+                            : item.fee === 0 ? styles.pillFeeFree : styles.pillFeePaid,
                         ]}
                       >
                         <Text
                           style={[
                             styles.docPillFeeText,
-                            item.fee === 0 ? styles.pillFeeTextFree : styles.pillFeeTextPaid,
+                            item.is_variable_fee || item.fee_type === 'variable'
+                              ? styles.pillFeeTextVariable
+                              : item.fee === 0 ? styles.pillFeeTextFree : styles.pillFeeTextPaid,
                           ]}
                         >
-                          {item.fee === 0 ? 'FREE' : `₱${item.fee}`}
+                          {item.is_variable_fee || item.fee_type === 'variable'
+                            ? 'Depends on Claim'
+                            : item.fee === 0 ? 'FREE' : `₱${item.fee}`}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -386,12 +392,10 @@ Generated on: ${new Date().toLocaleString('en-US')}
                       <Text style={styles.metaLabel}>Processing Fee:</Text>
                       <Text style={styles.metaValue}>
                         {(() => {
-                          const resolvedFee =
-                            Number(activeDoc.fee) > 0
-                              ? Number(activeDoc.fee)
-                              : (activeDoc.title || '').toLowerCase().includes('business')
-                              ? 500
-                              : 0;
+                          if (activeDoc.is_variable_fee || activeDoc.fee_type === 'variable') {
+                            return 'Depends on Claim';
+                          }
+                          const resolvedFee = Number(activeDoc.fee) > 0 ? Number(activeDoc.fee) : 0;
                           return resolvedFee === 0 ? 'FREE / No Charge' : formatCurrency(resolvedFee);
                         })()}
                       </Text>
@@ -824,6 +828,9 @@ const styles = StyleSheet.create({
   pillFeePaid: {
     backgroundColor: '#eff6ff',
   },
+  pillFeeVariable: {
+    backgroundColor: '#fef3c7',
+  },
   docPillFeeText: {
     fontSize: 9,
     fontWeight: '800',
@@ -833,6 +840,9 @@ const styles = StyleSheet.create({
   },
   pillFeeTextPaid: {
     color: '#1d4ed8',
+  },
+  pillFeeTextVariable: {
+    color: '#b45309',
   },
   subTabsContainer: {
     flexDirection: 'row',

@@ -202,7 +202,13 @@ export default function ResubmitRequestModal({
     requirementsList = filterValidRequirements(Object.keys(uploadedFiles));
   }
 
-  const resolvedDocFee = Number(matchedDocType?.fee ?? request.fee ?? 0);
+  const isVarFee = Boolean(
+    matchedDocType?.is_variable_fee ||
+    matchedDocType?.fee_type === 'variable' ||
+    request.is_variable_fee ||
+    request.fee_type === 'variable'
+  );
+  const resolvedDocFee = isVarFee ? 0 : Number(matchedDocType?.fee ?? request.fee ?? 0);
   const resolvedValidity = matchedDocType?.validity || '6 Months from issuance';
   const resolvedProcessingTime =
     matchedDocType?.processing_time ||
@@ -335,7 +341,7 @@ export default function ResubmitRequestModal({
 
       const notesParts = [
         `Document: ${matchedDocType?.title || request.document_title}`,
-        `Fee: ₱${resolvedDocFee}`,
+        `Fee: ${isVarFee ? 'Depends on Claim' : `₱${resolvedDocFee}`}`,
         currentUser?.civil_status ? `Civil Status: ${currentUser.civil_status}` : '',
         request.pickup_location ? `Pickup Window: ${request.pickup_location}` : '',
         isBusinessDoc && businessName.trim() ? `[Business: ${businessName.trim()}]` : '',
@@ -480,7 +486,7 @@ export default function ResubmitRequestModal({
                 <View style={styles.docInfoItem}>
                   <Text style={styles.docInfoLabel}>Processing Fee</Text>
                   <Text style={styles.docInfoVal}>
-                    {resolvedDocFee > 0 ? `₱${resolvedDocFee.toFixed(2)}` : '₱0.00 (Free)'}
+                    {isVarFee ? 'Depends on Claim' : resolvedDocFee > 0 ? `₱${resolvedDocFee.toFixed(2)}` : '₱0.00 (Free)'}
                   </Text>
                 </View>
                 <View style={styles.docInfoItem}>
