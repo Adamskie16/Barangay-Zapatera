@@ -7,6 +7,9 @@ dist-ssr/
 
 # Expo / tooling
 .expo/
+Resident/.expo/
+Resident/android/
+Resident/ios/
 
 # Environment variables
 .env
