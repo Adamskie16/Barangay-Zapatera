@@ -332,6 +332,11 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
                 />
+                {residentAge !== null && (
+                  <p className="text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded inline-block bg-sky-950/80 text-sky-300 border border-sky-800">
+                    Age: {residentAge} yrs old {isAge50AndAbove ? '• Age 50+ Priority' : ''}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -349,20 +354,21 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
             </div>
           </div>
 
-          {/* Contact & Sitio Details */}
+          {/* Contact & Residency Details */}
           <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
             <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">3. Contact & Residency Details *</h4>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Gmail / Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="juan.delacruz@gmail.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
-                />
+                <label className="block text-slate-300 font-semibold mb-1">Select Sitio *</label>
+                <select
+                  value={formData.sitio}
+                  onChange={(e) => setFormData({ ...formData, sitio: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+                >
+                  {SAMPLE_SITIOS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -377,53 +383,63 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Registered Voter Status *</label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, voter_status: 'Registered Voter' })}
-                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      formData.voter_status === 'Registered Voter'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
-                    }`}
-                  >
-                    Yes (Voter)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, voter_status: 'Not Registered Voter' })}
-                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      formData.voter_status === 'Not Registered Voter'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400'
-                    }`}
-                  >
-                    No (Non-Voter)
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Select Sitio *</label>
-                <select
-                  value={formData.sitio}
-                  onChange={(e) => setFormData({ ...formData, sitio: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white"
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Registered Voter Status *</label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, voter_status: 'Registered Voter' })}
+                  className={'py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ' +
+                    (formData.voter_status === 'Registered Voter'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400')
+                  }
                 >
-                  {SAMPLE_SITIOS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  Yes (Voter)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, voter_status: 'Not Registered Voter' })}
+                  className={'py-2 px-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ' +
+                    (formData.voter_status === 'Not Registered Voter'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500/50 hover:text-blue-400')
+                  }
+                >
+                  No (Non-Voter)
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Password & Security Section */}
+          {/* Account Credentials & Security Section */}
           <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
-            <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">3. Password & Security *</h4>
+            <h4 className="font-bold text-blue-400 uppercase tracking-wider text-[11px]">4. Account Credentials & Security *</h4>
+
+            {/* Gmail with Age 50+ Relative Recommendation Indicator */}
+            <div>
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
+                <label className="block text-slate-300 font-semibold text-xs">Gmail / Email Address *</label>
+                {isAge50AndAbove && (
+                  <span className="text-[10px] font-bold text-sky-300 bg-sky-950/80 border border-sky-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    Use email of relatives (Recommended)
+                  </span>
+                )}
+              </div>
+              {isAge50AndAbove && (
+                <p className="text-[11px] text-sky-200/90 bg-sky-950/60 border border-sky-800/60 rounded-lg p-2.5 mb-2 leading-relaxed">
+                  Notice for residents age 50 and above: You may use the Gmail address of a trusted relative or family member (recommended) to easily receive official updates and notices.
+                </p>
+              )}
+              <input
+                type="email"
+                required
+                placeholder={isAge50AndAbove ? 'relative.email@gmail.com or your email' : 'juan.delacruz@gmail.com'}
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono"
+              />
+            </div>
 
             {/* Strong Password Requirements Checklist */}
             <div className="p-3 bg-slate-950 border border-blue-900/60 rounded-lg space-y-1.5 text-[11px]">

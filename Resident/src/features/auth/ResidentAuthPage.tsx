@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ensureInterFontLoaded } from '../../core/fontSetup';
 import {
   View,
@@ -32,6 +32,7 @@ import {
   Square,
   Calendar,
   ChevronDown,
+  Users,
 } from 'lucide-react';
 import { ResidentUser } from '../../types';
 import { sanitizeInput, isAccountLocked, recordFailedAttempt, resetFailedAttempts, unlockUserAccount, checkRateLimit, checkAccountExists } from '../../core/security';
@@ -149,6 +150,22 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     confirmPassword: '',
     privacyPolicyAccepted: false,
   });
+
+  // Calculate age from birth_date
+  const residentAge = useMemo(() => {
+    if (!regData.birth_date) return null;
+    const bDate = new Date(regData.birth_date);
+    if (isNaN(bDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - bDate.getFullYear();
+    const m = today.getMonth() - bDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < bDate.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
+  }, [regData.birth_date]);
+
+  const isAge50AndAbove = residentAge !== null && residentAge >= 50;
 
   // Per-Field Error Messages & Touched State
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
@@ -1449,111 +1466,6 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
             </View>
 
             <View style={styles.sectionDividerBadge}>
-              <Text style={styles.sectionDividerText}>ACCOUNT CREDENTIALS</Text>
-            </View>
-
-            {/* 2. Gmail Address Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                Gmail Address <Text style={styles.requiredAsterisk}>*</Text>
-              </Text>
-              <TextInput
-                style={[
-                  styles.modernInput,
-                  fieldErrors.email ? styles.inputErrorBorder : (regData.email && validateGmail(regData.email) ? styles.inputSuccessBorder : null),
-                ]}
-                placeholder="example@gmail.com"
-                placeholderTextColor="#94a3b8"
-                value={regData.email}
-                onChangeText={(txt) => handleFieldChange('email', txt)}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              {fieldErrors.email ? (
-                <Text style={styles.fieldErrorText}>{fieldErrors.email}</Text>
-              ) : null}
-            </View>
-
-            {/* 3. Password & Confirm Password in Compact Layout */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                Password <Text style={styles.requiredAsterisk}>*</Text>
-              </Text>
-              <View style={[
-                styles.passwordWrapper,
-                fieldErrors.password ? styles.inputErrorBorder : (regData.password && isStrongPassword(regData.password) ? styles.inputSuccessBorder : null),
-              ]}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Create a strong password"
-                  placeholderTextColor="#94a3b8"
-                  value={regData.password}
-                  onChangeText={(txt) => handleFieldChange('password', txt)}
-                  secureTextEntry={!showRegPassword}
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowRegPassword(!showRegPassword)}
-                >
-                  {showRegPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
-                </TouchableOpacity>
-              </View>
-              {fieldErrors.password ? (
-                <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
-              ) : null}
-
-              {/* Compact 2-Column Password Requirements Grid */}
-              <View style={styles.pwdReqBox}>
-                <View style={styles.pwdReqGrid}>
-                  <Text style={[styles.pwdReqItem, passwordStrength.hasLength ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasLength ? '✓' : '•'} 8+ characters
-                  </Text>
-                  <Text style={[styles.pwdReqItem, passwordStrength.hasUpper ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasUpper ? '✓' : '•'} Uppercase (A-Z)
-                  </Text>
-                  <Text style={[styles.pwdReqItem, passwordStrength.hasLower ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasLower ? '✓' : '•'} Lowercase (a-z)
-                  </Text>
-                  <Text style={[styles.pwdReqItem, passwordStrength.hasNumber ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasNumber ? '✓' : '•'} Number (0-9)
-                  </Text>
-                  <Text style={[styles.pwdReqItem, passwordStrength.hasSpecial ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
-                    {passwordStrength.hasSpecial ? '✓' : '•'} Special char (!@#$)
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* 4. Confirm Password Field */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                Confirm Password <Text style={styles.requiredAsterisk}>*</Text>
-              </Text>
-              <View style={[
-                styles.passwordWrapper,
-                fieldErrors.confirmPassword ? styles.inputErrorBorder : (passwordsMatch ? styles.inputSuccessBorder : null),
-              ]}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Repeat your password"
-                  placeholderTextColor="#94a3b8"
-                  value={regData.confirmPassword}
-                  onChangeText={(txt) => handleFieldChange('confirmPassword', txt)}
-                  secureTextEntry={!showRegConfirmPassword}
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
-                >
-                  {showRegConfirmPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
-                </TouchableOpacity>
-              </View>
-              {fieldErrors.confirmPassword ? (
-                <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
-              ) : null}
-            </View>
-
-            <View style={[styles.sectionDividerBadge, { marginTop: 4 }]}>
               <Text style={styles.sectionDividerText}>RESIDENT INFORMATION</Text>
             </View>
 
@@ -1648,6 +1560,13 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                   />
                   <Calendar size={18} color="#64748b" style={{ marginRight: 10, pointerEvents: 'none', flexShrink: 0 }} />
                 </View>
+                {residentAge !== null && (
+                  <View style={[styles.ageIndicatorBadge, isAge50AndAbove && styles.ageIndicatorBadgeSenior]}>
+                    <Text style={[styles.ageIndicatorText, isAge50AndAbove && styles.ageIndicatorTextSenior]}>
+                      Age: {residentAge} yrs old {isAge50AndAbove ? '• Age 50+ Priority' : ''}
+                    </Text>
+                  </View>
+                )}
                 {fieldErrors.birth_date ? (
                   <Text style={styles.fieldErrorText}>{fieldErrors.birth_date}</Text>
                 ) : null}
@@ -1847,6 +1766,133 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
                 <Text style={styles.fieldErrorText}>{fieldErrors.voter_status}</Text>
               ) : null}
             </View>
+
+
+            <View style={[styles.sectionDividerBadge, { marginTop: 10 }]}>
+              <Text style={styles.sectionDividerText}>ACCOUNT CREDENTIALS</Text>
+            </View>
+
+            {/* 2. Gmail Address Field (with Age 50+ Relative Recommendation Indicator) */}
+            <View style={styles.inputGroup}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 6, gap: 4 }}>
+                <Text style={styles.inputLabel}>
+                  Gmail Address <Text style={styles.requiredAsterisk}>*</Text>
+                </Text>
+                {isAge50AndAbove && (
+                  <View style={styles.relativeEmailPill}>
+                    <Users size={12} color="#1d4ed8" />
+                    <Text style={styles.relativeEmailPillText}>
+                      Use email of relatives (Recommended)
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {isAge50AndAbove && (
+                <View style={styles.relativeEmailCallout}>
+                  <Info size={14} color="#1d4ed8" style={{ marginTop: 1, flexShrink: 0 }} />
+                  <Text style={styles.relativeEmailCalloutText}>
+                    Notice for residents age 50 and above: You may use the Gmail address of a trusted relative or family member (recommended) to easily receive official barangay announcements, document notices, and verification codes.
+                  </Text>
+                </View>
+              )}
+
+              <TextInput
+                style={[
+                  styles.modernInput,
+                  fieldErrors.email ? styles.inputErrorBorder : (regData.email && validateGmail(regData.email) ? styles.inputSuccessBorder : null),
+                ]}
+                placeholder={isAge50AndAbove ? "relative.email@gmail.com or your email" : "example@gmail.com"}
+                placeholderTextColor="#94a3b8"
+                value={regData.email}
+                onChangeText={(txt) => handleFieldChange('email', txt)}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              {fieldErrors.email ? (
+                <Text style={styles.fieldErrorText}>{fieldErrors.email}</Text>
+              ) : null}
+            </View>
+
+            {/* 3. Password & Confirm Password in Compact Layout */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Password <Text style={styles.requiredAsterisk}>*</Text>
+              </Text>
+              <View style={[
+                styles.passwordWrapper,
+                fieldErrors.password ? styles.inputErrorBorder : (regData.password && isStrongPassword(regData.password) ? styles.inputSuccessBorder : null),
+              ]}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Create a strong password"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.password}
+                  onChangeText={(txt) => handleFieldChange('password', txt)}
+                  secureTextEntry={!showRegPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowRegPassword(!showRegPassword)}
+                >
+                  {showRegPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
+                </TouchableOpacity>
+              </View>
+              {fieldErrors.password ? (
+                <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>
+              ) : null}
+
+              {/* Compact 2-Column Password Requirements Grid */}
+              <View style={styles.pwdReqBox}>
+                <View style={styles.pwdReqGrid}>
+                  <Text style={[styles.pwdReqItem, passwordStrength.hasLength ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
+                    {passwordStrength.hasLength ? '✓' : '•'} 8+ characters
+                  </Text>
+                  <Text style={[styles.pwdReqItem, passwordStrength.hasUpper ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
+                    {passwordStrength.hasUpper ? '✓' : '•'} Uppercase (A-Z)
+                  </Text>
+                  <Text style={[styles.pwdReqItem, passwordStrength.hasLower ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
+                    {passwordStrength.hasLower ? '✓' : '•'} Lowercase (a-z)
+                  </Text>
+                  <Text style={[styles.pwdReqItem, passwordStrength.hasNumber ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
+                    {passwordStrength.hasNumber ? '✓' : '•'} Number (0-9)
+                  </Text>
+                  <Text style={[styles.pwdReqItem, passwordStrength.hasSpecial ? styles.pwdReqItemValid : styles.pwdReqItemInvalid]}>
+                    {passwordStrength.hasSpecial ? '✓' : '•'} Special char (!@#$)
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 4. Confirm Password Field */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Confirm Password <Text style={styles.requiredAsterisk}>*</Text>
+              </Text>
+              <View style={[
+                styles.passwordWrapper,
+                fieldErrors.confirmPassword ? styles.inputErrorBorder : (passwordsMatch ? styles.inputSuccessBorder : null),
+              ]}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Repeat your password"
+                  placeholderTextColor="#94a3b8"
+                  value={regData.confirmPassword}
+                  onChangeText={(txt) => handleFieldChange('confirmPassword', txt)}
+                  secureTextEntry={!showRegConfirmPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                >
+                  {showRegConfirmPassword ? <EyeOff size={17} color="#94a3b8" /> : <Eye size={17} color="#94a3b8" />}
+                </TouchableOpacity>
+              </View>
+              {fieldErrors.confirmPassword ? (
+                <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
+              ) : null}
+            </View>
+
 
             {/* Privacy Agreement */}
             <View style={styles.privacyPolicyContainer}>
@@ -2724,5 +2770,64 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#78350f',
     lineHeight: 16,
+  },
+  relativeEmailPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    gap: 4,
+  },
+  relativeEmailPillText: {
+    fontFamily: 'Inter',
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  relativeEmailCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    gap: 8,
+  },
+  relativeEmailCalloutText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    color: '#1e40af',
+    lineHeight: 16,
+    flex: 1,
+  },
+  ageIndicatorBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+  },
+  ageIndicatorBadgeSenior: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  ageIndicatorText: {
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  ageIndicatorTextSenior: {
+    color: '#1d4ed8',
+    fontWeight: '700',
   },
 });
