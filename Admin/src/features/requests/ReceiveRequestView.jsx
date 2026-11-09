@@ -1886,7 +1886,11 @@ export default function ReceiveRequestView({
                     </div>
 
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Years in Barangay</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {(selectedRequest?.document_title?.toLowerCase().includes('business') || selectedRequest?.document_type?.toLowerCase().includes('bus') || Boolean(selectedRequest?.business_name))
+                          ? 'Length of Business'
+                          : 'Years in Barangay'}
+                      </p>
                       <p className="text-xs text-slate-800 mt-0.5 font-medium">{residentYears}</p>
                     </div>
 
@@ -2319,7 +2323,9 @@ export default function ReceiveRequestView({
                     {/* 6 & 8. Years in Barangay & Issued Date */}
                     <div className="grid grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">6. Years in Barangay</label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[11px]">
+                          {genTemplateType === 'business' ? '6. Length of Business in Years' : '6. Years in Barangay'}
+                        </label>
                         <input
                           type="text"
                           value={genYearsInBarangay}

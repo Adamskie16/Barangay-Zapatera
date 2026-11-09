@@ -93,11 +93,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
       return;
     }
 
-    // 5. Mobile Number Validation
-    if (!formData.phone.trim()) {
-      setError('Please enter your active mobile phone number.');
-      return;
-    }
+    // 5. Mobile Number (Optional)
 
     // 6. Voter Status Validation
     if (!formData.voter_status) {
@@ -370,10 +366,9 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }: Re
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Mobile Phone Number *</label>
+                <label className="block text-slate-300 font-semibold mb-1">Mobile Phone Number (Optional)</label>
                 <input
                   type="tel"
-                  required
                   placeholder="09171234567"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}

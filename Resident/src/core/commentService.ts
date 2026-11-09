@@ -1,5 +1,3 @@
-// Resident/src/core/commentService.ts
-// Real-time comments & official replies service for Barangay Zapatera bulletins
 
 import { supabase, isSupabaseConfigured } from './supabase';
 import { checkContentModeration } from './contentModerationService';
@@ -21,6 +19,12 @@ export interface BulletinComment {
 }
 
 const STORAGE_KEY = 'zapatera_bulletin_comments';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(val: any): boolean {
+  return typeof val === 'string' && UUID_REGEX.test(val);
+}
 
 // Circuit breaker state to prevent spamming 404s when SQL migration has not been run in Supabase yet
 let isRemoteTableAvailable: boolean | null = null;
@@ -157,10 +161,16 @@ export async function getBulletinComments(newsId: string): Promise<BulletinComme
     if (data) {
       isRemoteTableAvailable = true;
       const allLocal = getLocalComments();
-      const existingIds = new Set(data.map((c: any) => c.id));
-      const filteredOther = allLocal.filter((c) => String(c.news_id) !== String(newsId) && !existingIds.has(c.id));
-      saveLocalComments([...filteredOther, ...data]);
-      return data;
+      const existingIds = new Set(data.map((c: any) => String(c.id)));
+      // Preserve local comments for this news that aren't yet in remote (e.g. pending sync cm-*)
+      const localUnsynced = allLocal.filter((c) => String(c.news_id) === String(newsId) && !existingIds.has(String(c.id)));
+      const otherNewsComments = allLocal.filter((c) => String(c.news_id) !== String(newsId));
+
+      const mergedThisNews = [...data, ...localUnsynced].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      saveLocalComments([...otherNewsComments, ...data, ...localUnsynced]);
+      return mergedThisNews;
     }
   } catch (err) {
     handleRemoteError(err);
@@ -219,32 +229,45 @@ export async function postBulletinComment(commentData: {
         news_id: newComment.news_id,
       });
       bc.close();
-    } catch {}
+    } catch { }
   }
 
   // 3. Persist to Supabase if table is available
   if (!shouldSkipRemote()) {
     try {
+      const remoteParentId = isValidUuid(newComment.parent_id) ? newComment.parent_id : null;
       const payload: any = {
-        news_id: newComment.news_id,
+        news_id: String(newComment.news_id),
         author_id: newComment.author_id || null,
         author_name: newComment.author_name,
         author_role: newComment.author_role,
         author_avatar: newComment.author_avatar || null,
         content: newComment.content,
-        parent_id: newComment.parent_id || null,
+        parent_id: remoteParentId,
         reply_to_name: newComment.reply_to_name || null,
         is_official_response: newComment.is_official_response,
         created_at: newComment.created_at,
         updated_at: newComment.updated_at,
       };
 
-      const { data, error } = await supabase.from('bulletin_comments').insert([payload]).select();
+      let { data, error } = await supabase.from('bulletin_comments').insert([payload]).select();
+      if (error && payload.parent_id) {
+        console.warn('Comment insert failed on parent_id, retrying without parent_id:', error);
+        payload.parent_id = null;
+        const retry = await supabase.from('bulletin_comments').insert([payload]).select();
+        data = retry.data;
+        error = retry.error;
+      }
+
       if (error) {
         handleRemoteError(error);
       } else if (data && data[0]) {
         isRemoteTableAvailable = true;
-        const realComment = data[0];
+        const realComment = {
+          ...data[0],
+          parent_id: newComment.parent_id || data[0].parent_id,
+          reply_to_name: newComment.reply_to_name || data[0].reply_to_name,
+        };
         const updatedLocal = getLocalComments().map((c) => (c.id === newComment.id ? realComment : c));
         saveLocalComments(updatedLocal);
         return realComment;
@@ -275,7 +298,7 @@ export async function deleteBulletinComment(commentId: string, newsId?: string):
         news_id: newsId,
       });
       bc.close();
-    } catch {}
+    } catch { }
   }
 
   if (!shouldSkipRemote()) {
@@ -339,7 +362,7 @@ export function subscribeToBulletinComments(newsId: string, onUpdate: () => void
           }
         }
       };
-    } catch {}
+    } catch { }
   }
 
   // 3. Storage event listener for cross-tab sync
@@ -399,7 +422,7 @@ export async function getUserCommentHistory(
         allComments = Array.from(map.values());
         saveLocalComments(allComments);
       }
-    } catch {}
+    } catch { }
   }
 
   // Filter comments authored by this resident

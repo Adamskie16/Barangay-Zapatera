@@ -102,6 +102,23 @@ export const OFFICIAL_DOC_TYPES: DocumentType[] = [
     ],
     is_active: true,
   },
+  {
+    id: 'dt-007',
+    code: 'BC-07',
+    title: 'Barangay Certification (Affidavit / Legal Purpose)',
+    category: 'Certificate',
+    description: 'Official certification issued for sworn affidavits, legal undertakings, bank verification, guardianship, or government requirements.',
+    fee: 50,
+    processing_days: 1,
+    validity: '6 Months from issuance',
+    requirements: [
+      'Valid Government-Issued ID',
+      'Proof of Residency (Utility Bill / Landlord Certification)',
+      'Community Tax Certificate (Cedula)',
+      'Draft / Copy of Affidavit (If Applicable)',
+    ],
+    is_active: true,
+  },
 ];
 
 export const DEFAULT_BARANGAY_CONFIG: BarangayConfig = {

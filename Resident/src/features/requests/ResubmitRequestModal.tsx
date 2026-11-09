@@ -293,7 +293,7 @@ export default function ResubmitRequestModal({
     }
 
     if (!yearsInBarangay.trim()) {
-      setUploadError('Please enter your Length of Residency (Years in Barangay Zapatera).');
+      setUploadError(isBusinessDoc ? 'Please enter Length of Business in Years.' : 'Please enter your Length of Residency (Years in Barangay Zapatera).');
       return;
     }
 
@@ -314,10 +314,7 @@ export default function ResubmitRequestModal({
         setUploadError('Required Field Missing: Please specify the Nature of Business.');
         return;
       }
-      if (!businessContact.trim()) {
-        setUploadError('Required Field Missing: Please provide a valid Contact Number.');
-        return;
-      }
+      // Contact Number is optional
     }
 
     const filesArray = Object.values(uploadedFiles);
@@ -529,7 +526,7 @@ export default function ResubmitRequestModal({
               />
 
               <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                Length of Residency (Years in Barangay Zapatera) <Text style={{ color: '#dc2626' }}>*</Text>
+                {isBusinessDoc ? 'Length of Business in Years' : 'Length of Residency (Years in Barangay Zapatera)'} <Text style={{ color: '#dc2626' }}>*</Text>
               </Text>
               <TextInput
                 style={styles.textInput}
@@ -539,7 +536,7 @@ export default function ResubmitRequestModal({
                   setYearsInBarangay(txt.replace(/[^0-9]/g, ''));
                   if (txt.trim()) setUploadError('');
                 }}
-                placeholder="Enter number of years living in Barangay Zapatera (e.g., 5)"
+                placeholder={isBusinessDoc ? "Enter number of years business has operated (e.g., 3)" : "Enter number of years living in Barangay Zapatera (e.g., 5)"}
                 placeholderTextColor="#94a3b8"
               />
             </View>
@@ -600,7 +597,7 @@ export default function ResubmitRequestModal({
                 />
 
                 <Text style={[styles.fieldLabel, { marginTop: 10 }]}>
-                  Contact Number <Text style={{ color: '#dc2626' }}>*</Text>
+                  Contact Number <Text style={{ color: '#64748b', fontWeight: 'normal', fontSize: 11 }}>(Optional)</Text>
                 </Text>
                 <TextInput
                   style={styles.textInput}

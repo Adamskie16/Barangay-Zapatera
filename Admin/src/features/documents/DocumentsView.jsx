@@ -113,6 +113,8 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
     'Contract of Lease / Lessor Consent',
     'PSA Birth Certificate',
     'Affidavit of Loss / Undertaking (Notarized)',
+    'Affidavit of Cohabitation / Guardianship (Notarized)',
+    'Notarized Affidavit / Sworn Statement',
     'Endorsement Letter / Formal Letter of Request',
     'Barangay Lupon Mediation Clearance',
     'Medical Certificate / Clinical Referral',
@@ -1551,20 +1553,36 @@ export default function DocumentsView({ docTypes = [], onSaveDocType, onDeleteDo
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
-                    Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={formData.fee}
-                    onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                    className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
-                    placeholder="0.00"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
+                      Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(0 for Free)</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={formData.fee}
+                      onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
+                      Documentary Stamp / Doc Stamps (PHP)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.doc_stamps !== undefined ? formData.doc_stamps : 30}
+                      onChange={(e) => setFormData({ ...formData, doc_stamps: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#f4f7fb] border border-slate-200/80 focus:bg-white focus:border-[#3b5bfd] rounded-2xl outline-none font-bold transition-all"
+                      placeholder="30.00"
+                    />
+                  </div>
                 </div>
               )}
 

@@ -4,6 +4,7 @@
 
 export interface ModerationResult {
   isClean: boolean;
+  isValid?: boolean;
   flaggedWords: string[];
   sanitizedText: string;
   warningMessage: string;
@@ -197,6 +198,7 @@ export function checkContentModeration(text: string): ModerationResult {
 
   return {
     isClean,
+    isValid: isClean,
     flaggedWords,
     sanitizedText: sanitized,
     warningMessage,

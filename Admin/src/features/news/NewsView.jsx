@@ -1,5 +1,5 @@
 // Admin/src/features/news/NewsView.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Newspaper,
   Plus,
@@ -156,6 +156,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
   const [adminReplyText, setAdminReplyText] = useState('');
   const [replyingToComment, setReplyingToComment] = useState(null);
   const [submittingReply, setSubmittingReply] = useState(false);
+  const commentInputRef = useRef(null);
 
   // Load comment counts for all news bulletins
   useEffect(() => {
@@ -206,23 +207,26 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     if (!adminReplyText.trim() || !selectedNewsForComments || submittingReply) return;
 
     const modCheck = checkContentModeration(adminReplyText.trim());
-    if (!modCheck.isValid) {
+    if (!modCheck.isClean && modCheck.flaggedWords && modCheck.flaggedWords.length > 0) {
       alert(`Reply contains inappropriate or flagged language (${modCheck.flaggedWords.join(', ')}). Please use respectful official wording.`);
       return;
     }
 
     setSubmittingReply(true);
     try {
+      // If replying to a reply, effective root parent is the parent's parent_id or its own id
+      const effectiveParentId = replyingToComment?.parent_id || replyingToComment?.id || null;
+
       const reply = await postOfficialReply({
         news_id: selectedNewsForComments.id,
         adminUser: currentUser,
         content: adminReplyText.trim(),
-        parent_id: replyingToComment?.id || null,
+        parent_id: effectiveParentId,
         reply_to_name: replyingToComment?.author_name || null,
       });
 
       setBulletinComments((prev) => {
-        if (prev.some((c) => c.id === reply.id)) return prev;
+        if (prev.some((c) => String(c.id) === String(reply.id))) return prev;
         return [...prev, reply];
       });
 
@@ -375,7 +379,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               ...currentUser,
               full_name: 'System Auto-Expire (Duration Reached)',
             });
-          } catch {}
+          } catch { }
           continue;
         }
         activeCombined.push(item);
@@ -501,7 +505,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
       try {
         const compressedDataUrl = await compressImage(file);
         setFormData((prev) => ({ ...prev, banner_url: compressedDataUrl }));
-      } catch (_) {}
+      } catch (_) { }
     } finally {
       setIsUploading(false);
     }
@@ -567,7 +571,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
             status: payload.is_published ? 'upcoming' : 'archived',
             target_audience: payload.target_audience,
           });
-        } catch {}
+        } catch { }
       }
 
       setIsFormModalOpen(false);
@@ -615,7 +619,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           if (item.category === 'Events' && onDeleteEvent) {
             try {
               await onDeleteEvent(item.id);
-            } catch {}
+            } catch { }
           }
           await loadNews();
           setActionModal({
@@ -776,11 +780,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
           <button
             type="button"
             onClick={() => setShowCalendar((prev) => !prev)}
-            className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
-              showCalendar
+            className={`inline-flex items-center space-x-2 px-4 py-2.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${showCalendar
                 ? 'bg-white border-sky-200 text-[#38bdf8] shadow-xs'
                 : 'bg-white/70 border-slate-200/80 text-slate-600 hover:bg-white'
-            }`}
+              }`}
           >
             <Calendar className="w-4 h-4" />
             <span>{showCalendar ? 'Hide Calendar' : 'Show Calendar'}</span>
@@ -881,11 +884,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'table'
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${viewMode === 'table'
                     ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
                     : 'text-slate-500 hover:text-slate-800'
-                }`}
+                  }`}
                 title="Table View (10-row default)"
               >
                 <TableIcon className="w-3.5 h-3.5" />
@@ -894,11 +896,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
               <button
                 type="button"
                 onClick={() => setViewMode('cards')}
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'cards'
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${viewMode === 'cards'
                     ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
                     : 'text-slate-500 hover:text-slate-800'
-                }`}
+                  }`}
                 title="Card Grid View"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
@@ -919,11 +920,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${
-                  selectedCategory === cat
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer ${selectedCategory === cat
                     ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25 font-bold'
                     : 'bg-[#f4f7fb] text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 {cat}
               </button>
@@ -1150,17 +1150,16 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                               {/* Category */}
                               <td className="p-4 whitespace-nowrap">
                                 <span
-                                  className={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase ${
-                                    item.category === 'Emergency' || item.is_emergency
+                                  className={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase ${item.category === 'Emergency' || item.is_emergency
                                       ? 'bg-rose-50 text-rose-600 border border-rose-200'
                                       : item.category === 'Events'
-                                      ? 'bg-violet-50 text-violet-600 border border-violet-200'
-                                      : item.category === 'Government Services'
-                                      ? 'bg-sky-50 text-[#38bdf8] border border-sky-200'
-                                      : item.category === 'Maintenance'
-                                      ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                                      : 'bg-[#f4f7fb] text-slate-600 border border-slate-200/70'
-                                  }`}
+                                        ? 'bg-violet-50 text-violet-600 border border-violet-200'
+                                        : item.category === 'Government Services'
+                                          ? 'bg-sky-50 text-[#38bdf8] border border-sky-200'
+                                          : item.category === 'Maintenance'
+                                            ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                                            : 'bg-[#f4f7fb] text-slate-600 border border-slate-200/70'
+                                    }`}
                                 >
                                   {item.category || 'General'}
                                 </span>
@@ -1191,11 +1190,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                 <button
                                   type="button"
                                   onClick={() => handleOpenCommentsModal(item)}
-                                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                                    commentsCount > 0
+                                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${commentsCount > 0
                                       ? 'bg-sky-50 text-[#38bdf8] border-sky-200 hover:bg-sky-100'
                                       : 'bg-[#f4f7fb] text-slate-500 border-slate-200/70 hover:bg-slate-100'
-                                  }`}
+                                    }`}
                                   title="View resident feedback"
                                 >
                                   <MessageSquare className="w-3.5 h-3.5" />
@@ -1208,17 +1206,15 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                 <button
                                   type="button"
                                   onClick={() => handleTogglePublish(item)}
-                                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                                    item.is_published !== false
+                                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${item.is_published !== false
                                       ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
                                       : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
-                                  }`}
+                                    }`}
                                   title="Click to toggle publish status"
                                 >
                                   <span
-                                    className={`w-1.5 h-1.5 rounded-full ${
-                                      item.is_published !== false ? 'bg-emerald-500' : 'bg-slate-400'
-                                    }`}
+                                    className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-emerald-500' : 'bg-slate-400'
+                                      }`}
                                   />
                                   <span>{item.is_published !== false ? 'Published' : 'Draft'}</span>
                                 </button>
@@ -1262,22 +1258,20 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 </div>
               ) : (
                 <div
-                  className={`grid gap-5 ${
-                    showCalendar
+                  className={`grid gap-5 ${showCalendar
                       ? 'grid-cols-1 md:grid-cols-2'
                       : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
-                  }`}
+                    }`}
                 >
                   {paginatedNews.map((item) => (
                     <div
                       key={item.id}
-                      className={`bg-white rounded-[26px] border transition-all duration-200 flex flex-col overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-0.5 ${
-                        item.is_emergency
+                      className={`bg-white rounded-[26px] border transition-all duration-200 flex flex-col overflow-hidden shadow-xs hover:shadow-lg hover:-translate-y-0.5 ${item.is_emergency
                           ? 'border-rose-200 ring-2 ring-rose-500/15'
                           : item.category === 'Events' || item.event_date
-                          ? 'border-violet-200/80'
-                          : 'border-slate-100/90'
-                      }`}
+                            ? 'border-violet-200/80'
+                            : 'border-slate-100/90'
+                        }`}
                     >
                       {/* Banner Image */}
                       {item.banner_url ? (
@@ -1292,13 +1286,12 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                           {/* Category Badges */}
                           <div className="absolute top-3.5 left-3.5 flex flex-wrap gap-1.5">
                             <span
-                              className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full shadow-xs ${
-                                item.category === 'Emergency' || item.is_emergency
+                              className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full shadow-xs ${item.category === 'Emergency' || item.is_emergency
                                   ? 'bg-rose-600 text-white'
                                   : item.category === 'Events'
-                                  ? 'bg-violet-600 text-white'
-                                  : 'bg-[#3b5bfd] text-white'
-                              }`}
+                                    ? 'bg-violet-600 text-white'
+                                    : 'bg-[#3b5bfd] text-white'
+                                }`}
                             >
                               {item.category}
                             </span>
@@ -1313,16 +1306,14 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                           {/* Published Status Badge */}
                           <div className="absolute top-3.5 right-3.5">
                             <span
-                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 backdrop-blur-xs ${
-                                item.is_published !== false
+                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 backdrop-blur-xs ${item.is_published !== false
                                   ? 'bg-emerald-500/90 text-white'
                                   : 'bg-slate-800/80 text-slate-200'
-                              }`}
+                                }`}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  item.is_published !== false ? 'bg-white animate-ping' : 'bg-slate-400'
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-white animate-ping' : 'bg-slate-400'
+                                  }`}
                               />
                               <span>{item.is_published !== false ? 'LIVE' : 'DRAFT'}</span>
                             </span>
@@ -1336,9 +1327,9 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                 {item.event_date
                                   ? formatDate(item.event_date).split(',')[0]
                                   : item.date ||
-                                    (item.created_at
-                                      ? formatDate(item.created_at).split(',')[0]
-                                      : 'Official Notice')}
+                                  (item.created_at
+                                    ? formatDate(item.created_at).split(',')[0]
+                                    : 'Official Notice')}
                               </span>
                             </span>
                             {item.location && (
@@ -1353,13 +1344,12 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                         <div className="p-4 pb-0 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full ${
-                                item.category === 'Emergency' || item.is_emergency
+                              className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full ${item.category === 'Emergency' || item.is_emergency
                                   ? 'bg-rose-50 text-rose-600 border border-rose-200'
                                   : item.category === 'Events'
-                                  ? 'bg-violet-50 text-violet-600 border border-violet-200'
-                                  : 'bg-sky-50 text-[#38bdf8] border border-sky-200'
-                              }`}
+                                    ? 'bg-violet-50 text-violet-600 border border-violet-200'
+                                    : 'bg-sky-50 text-[#38bdf8] border border-sky-200'
+                                }`}
                             >
                               {item.category}
                             </span>
@@ -1371,16 +1361,14 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                             )}
                           </div>
                           <span
-                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 ${
-                              item.is_published !== false
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 ${item.is_published !== false
                                 ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                                 : 'bg-slate-100 text-slate-500 border border-slate-200'
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                item.is_published !== false ? 'bg-emerald-500' : 'bg-slate-400'
-                              }`}
+                              className={`w-1.5 h-1.5 rounded-full ${item.is_published !== false ? 'bg-emerald-500' : 'bg-slate-400'
+                                }`}
                             />
                             <span>{item.is_published !== false ? 'LIVE' : 'DRAFT'}</span>
                           </span>
@@ -1451,11 +1439,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                             <button
                               type="button"
                               onClick={() => handleTogglePublish(item)}
-                              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
-                                item.is_published !== false
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${item.is_published !== false
                                   ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
                                   : 'bg-[#f4f7fb] text-slate-400 hover:bg-slate-200'
-                              }`}
+                                }`}
                               title={
                                 item.is_published !== false
                                   ? 'Live (Click to Unpublish)'
@@ -1540,11 +1527,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                           key={`page-${num}`}
                           type="button"
                           onClick={() => setCurrentPage(num)}
-                          className={`min-w-[28px] h-7 px-2 text-xs font-extrabold rounded-full transition-colors cursor-pointer ${
-                            safeCurrentPage === num
+                          className={`min-w-[28px] h-7 px-2 text-xs font-extrabold rounded-full transition-colors cursor-pointer ${safeCurrentPage === num
                               ? 'bg-[#3b5bfd] text-white shadow-sm shadow-blue-500/25'
                               : 'hover:bg-[#f4f7fb] text-slate-600'
-                          }`}
+                            }`}
                         >
                           {num}
                         </button>
@@ -1883,11 +1869,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                       setFormData({ ...formData, duration_days: days, expires_at: exp });
                     }
                   }}
-                  className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer text-center ${
-                    formData.duration_days === opt.value || (opt.value === 'custom' && formData.duration_days === 'custom')
+                  className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border transition-all cursor-pointer text-center ${formData.duration_days === opt.value || (opt.value === 'custom' && formData.duration_days === 'custom')
                       ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   {opt.label}
                 </button>
@@ -2123,7 +2108,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
         </Modal>
       )}
 
-            {/* Resident Comments & Official Barangay Replies Modal */}
+      {/* Resident Comments & Official Barangay Replies Modal */}
       {selectedNewsForComments && (
         <Modal
           isOpen={!!selectedNewsForComments}
@@ -2167,14 +2152,15 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 bulletinComments
                   .filter((c) => !c.parent_id)
                   .map((rootComment) => {
-                    const replies = bulletinComments.filter((c) => c.parent_id === rootComment.id);
+                    const replies = bulletinComments.filter((c) => String(c.parent_id) === String(rootComment.id));
                     const isRootOfficial = rootComment.is_official_response || rootComment.author_role === 'admin' || rootComment.author_role === 'super_admin';
                     const rootMod = checkContentModeration(rootComment.content || '');
+                    const isRootFlagged = Boolean(!rootMod.isClean && rootMod.flaggedWords && rootMod.flaggedWords.length > 0);
 
                     return (
                       <div key={rootComment.id} className="space-y-2">
                         {/* Root Comment Box */}
-                        <div className={`p-3.5 rounded-xl border ${!rootMod.isValid ? 'bg-rose-50/50 border-rose-300' : isRootOfficial ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'} shadow-2xs`}>
+                        <div className={`p-3.5 rounded-xl border ${isRootFlagged ? 'bg-rose-50/50 border-rose-300' : isRootOfficial ? 'bg-blue-50/70 border-blue-200' : 'bg-white border-slate-200'} shadow-2xs`}>
                           <div className="flex items-start justify-between">
                             <div className="flex items-center space-x-2">
                               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isRootOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
@@ -2188,7 +2174,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                       Official Response
                                     </span>
                                   )}
-                                  {!rootMod.isValid && (
+                                  {isRootFlagged && (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300">
                                       <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                                       <span>AI Flag: Profanity ({rootMod.flaggedWords.join(', ')})</span>
@@ -2204,6 +2190,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                 type="button"
                                 onClick={() => {
                                   setReplyingToComment(rootComment);
+                                  setTimeout(() => commentInputRef.current?.focus(), 50);
                                 }}
                                 className="px-2 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-100 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer"
                               >
@@ -2228,11 +2215,12 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                         {replies.map((reply) => {
                           const isReplyOfficial = reply.is_official_response || reply.author_role === 'admin' || reply.author_role === 'super_admin';
                           const replyMod = checkContentModeration(reply.content || '');
+                          const isReplyFlagged = Boolean(!replyMod.isClean && replyMod.flaggedWords && replyMod.flaggedWords.length > 0);
 
                           return (
                             <div key={reply.id} className="flex items-start space-x-2 pl-6">
                               <CornerDownRight className="w-4 h-4 text-slate-400 mt-2 shrink-0" />
-                              <div className={`flex-1 p-3 rounded-xl border ${!replyMod.isValid ? 'bg-rose-50/50 border-rose-300' : isReplyOfficial ? 'bg-blue-50/90 border-blue-300' : 'bg-white border-slate-200'} shadow-2xs`}>
+                              <div className={`flex-1 p-3 rounded-xl border ${isReplyFlagged ? 'bg-rose-50/50 border-rose-300' : isReplyOfficial ? 'bg-blue-50/90 border-blue-300' : 'bg-white border-slate-200'} shadow-2xs`}>
                                 <div className="flex items-start justify-between">
                                   <div className="flex items-center space-x-2">
                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isReplyOfficial ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
@@ -2246,7 +2234,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                             Official Response
                                           </span>
                                         )}
-                                        {!replyMod.isValid && (
+                                        {isReplyFlagged && (
                                           <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300">
                                             <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
                                             <span>AI Flag: Profanity ({replyMod.flaggedWords.join(', ')})</span>
@@ -2257,14 +2245,27 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                     </div>
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteComment(reply.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Delete reply"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReplyingToComment(reply);
+                                        setTimeout(() => commentInputRef.current?.focus(), 50);
+                                      }}
+                                      className="px-2 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-100 rounded-lg flex items-center space-x-1 transition-colors cursor-pointer"
+                                    >
+                                      <Reply className="w-3 h-3" />
+                                      <span>Reply</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(reply.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Delete reply"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {reply.reply_to_name && (
@@ -2304,6 +2305,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
 
               <div className="flex items-center space-x-2">
                 <input
+                  ref={commentInputRef}
                   type="text"
                   placeholder={replyingToComment ? `Type official reply to @${replyingToComment.author_name}...` : 'Write an official barangay remark or public notice...'}
                   value={adminReplyText}

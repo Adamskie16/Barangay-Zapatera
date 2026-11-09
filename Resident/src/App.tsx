@@ -933,13 +933,13 @@ export default function App() {
     if (!currentUser) return;
 
     let idleTimeoutId: any = null;
-    const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutes of complete inactivity
+    const INACTIVITY_LIMIT_MS = 5 * 60 * 1000; // 5 minutes of complete inactivity
 
     const resetInactivityTimer = () => {
       if (idleTimeoutId) clearTimeout(idleTimeoutId);
       idleTimeoutId = setTimeout(() => {
         handleInactivityLogout(
-          'Notice: Your session was paused after 20 minutes of inactivity to protect your account and records. Your account is active and has NOT been deleted. Please sign in again.'
+          'Notice: Your session was paused after 5 minutes of inactivity to protect your account and records. Your account is active and has NOT been deleted. Please sign in again.'
         );
       }, INACTIVITY_LIMIT_MS);
     };

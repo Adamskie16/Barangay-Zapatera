@@ -375,9 +375,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
     if (!regData.civil_status || !regData.civil_status.trim()) {
       errors.civil_status = 'Civil Status is required.';
     }
-    if (!regData.phone || !regData.phone.trim()) {
-      errors.phone = 'Mobile Phone number is required.';
-    }
+    // Mobile phone number is optional
     if (!regData.sitio || !regData.sitio.trim()) {
       errors.sitio = 'Sitio selection is required.';
     }
@@ -1657,7 +1655,7 @@ export default function ResidentAuthPage({ onLoginSuccess }: ResidentAuthPagePro
 
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>
-                  Mobile Phone <Text style={styles.requiredAsterisk}>*</Text>
+                  Mobile Phone <Text style={{ color: '#64748b', fontWeight: 'normal', fontSize: 11 }}>(Optional)</Text>
                 </Text>
                 <TextInput
                   style={[

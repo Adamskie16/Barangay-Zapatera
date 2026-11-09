@@ -173,6 +173,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
   const [adminReplyText, setAdminReplyText] = useState('');
   const [replyingToComment, setReplyingToComment] = useState(null);
   const [submittingReply, setSubmittingReply] = useState(false);
+  const commentInputRef = useRef(null);
 
   // Load comment counts for all news bulletins
   useEffect(() => {
@@ -223,23 +224,25 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
     if (!adminReplyText.trim() || !selectedNewsForComments || submittingReply) return;
 
     const modCheck = checkContentModeration(adminReplyText.trim());
-    if (!modCheck.isValid) {
+    if (!modCheck.isClean && modCheck.flaggedWords && modCheck.flaggedWords.length > 0) {
       alert(`Reply contains inappropriate or flagged language (${modCheck.flaggedWords.join(', ')}). Please use respectful official wording.`);
       return;
     }
 
     setSubmittingReply(true);
     try {
+      const effectiveParentId = replyingToComment?.parent_id || replyingToComment?.id || null;
+
       const reply = await postOfficialReply({
         news_id: selectedNewsForComments.id,
         adminUser: currentUser,
         content: adminReplyText.trim(),
-        parent_id: replyingToComment?.id || null,
+        parent_id: effectiveParentId,
         reply_to_name: replyingToComment?.author_name || null,
       });
 
       setBulletinComments((prev) => {
-        if (prev.some((c) => c.id === reply.id)) return prev;
+        if (prev.some((c) => String(c.id) === String(reply.id))) return prev;
         return [...prev, reply];
       });
 
@@ -2189,18 +2192,19 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                 bulletinComments
                   .filter((c) => !c.parent_id)
                   .map((rootComment) => {
-                    const replies = bulletinComments.filter((c) => c.parent_id === rootComment.id);
+                    const replies = bulletinComments.filter((c) => String(c.parent_id) === String(rootComment.id));
                     const isRootOfficial =
                       rootComment.is_official_response ||
                       rootComment.author_role === 'admin' ||
                       rootComment.author_role === 'super_admin';
                     const rootMod = checkContentModeration(rootComment.content || '');
+                    const isRootFlagged = Boolean(!rootMod.isClean && rootMod.flaggedWords && rootMod.flaggedWords.length > 0);
 
                     return (
                       <div key={rootComment.id} className="space-y-2">
                         <div
                           className={`p-3.5 rounded-2xl border ${
-                            !rootMod.isValid
+                            isRootFlagged
                               ? 'bg-rose-50/50 border-rose-300'
                               : isRootOfficial
                               ? 'bg-blue-50/70 border-blue-200'
@@ -2240,7 +2244,10 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                             <div className="flex items-center space-x-1">
                               <button
                                 type="button"
-                                onClick={() => setReplyingToComment(rootComment)}
+                                onClick={() => {
+                                  setReplyingToComment(rootComment);
+                                  setTimeout(() => commentInputRef.current?.focus(), 50);
+                                }}
                                 className="px-2.5 py-1 text-[11px] font-bold text-[#3b5bfd] hover:bg-blue-100 rounded-full flex items-center space-x-1 transition-colors cursor-pointer"
                               >
                                 <Reply className="w-3 h-3" />
@@ -2307,14 +2314,27 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
                                     </div>
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteComment(reply.id)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
-                                    title="Delete reply"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReplyingToComment(reply);
+                                        setTimeout(() => commentInputRef.current?.focus(), 50);
+                                      }}
+                                      className="px-2.5 py-1 text-[11px] font-bold text-[#3b5bfd] hover:bg-blue-100 rounded-full flex items-center space-x-1 transition-colors cursor-pointer"
+                                    >
+                                      <Reply className="w-3 h-3" />
+                                      <span>Reply</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(reply.id)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors cursor-pointer"
+                                      title="Delete reply"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {reply.reply_to_name && (
@@ -2357,6 +2377,7 @@ export default function NewsView({ currentUser, events = [], onSaveEvent, onDele
 
               <div className="flex items-center space-x-2">
                 <input
+                  ref={commentInputRef}
                   type="text"
                   placeholder={
                     replyingToComment

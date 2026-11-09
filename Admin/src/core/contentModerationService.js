@@ -38,7 +38,7 @@ function normalizeText(raw) {
 
 export function checkContentModeration(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], sanitizedText: '', warningMessage: '' };
+    return { isClean: true, isValid: true, flaggedWords: [], sanitizedText: '', warningMessage: '' };
   }
 
   const rawTrimmed = text.trim();
@@ -69,7 +69,7 @@ export function checkContentModeration(text) {
     ? ''
     : `Inappropriate or foul language was detected (${flaggedWords.join(', ')}).`;
 
-  return { isClean, flaggedWords, sanitizedText: sanitized, warningMessage };
+  return { isClean, isValid: isClean, flaggedWords, sanitizedText: sanitized, warningMessage };
 }
 
 export function censorProfanity(text) {

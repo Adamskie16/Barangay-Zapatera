@@ -40,6 +40,8 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
     'Contract of Lease / Lessor Consent',
     'PSA Birth Certificate',
     'Affidavit of Loss / Undertaking (Notarized)',
+    'Affidavit of Cohabitation / Guardianship (Notarized)',
+    'Notarized Affidavit / Sworn Statement',
     'Endorsement Letter / Formal Letter of Request',
     'Barangay Lupon Mediation Clearance',
     'Medical Certificate / Clinical Referral',
@@ -182,6 +184,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       is_variable_fee: false,
       processing_days: 1,
       validity_months: 6,
+      doc_stamps: 30,
       requirementsList: [
         { id: `req-create-1`, selectedOption: 'No Required Documents (None)', customText: '' },
       ],
@@ -209,6 +212,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       is_variable_fee: isVar,
       processing_days: doc.processing_days || 1,
       validity_months: parsedValidityMonths,
+      doc_stamps: doc.doc_stamps !== undefined ? doc.doc_stamps : 30,
       requirementsList: parseRequirementsToList(doc.requirements || doc.requirementsStr),
       is_active: doc.is_active !== false,
     });
@@ -245,6 +249,7 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
       processing_days: Number(formData.processing_days) || 1,
       validity_months: validityMonths,
       validity: validityText,
+      doc_stamps: Number(formData.doc_stamps) || 30,
       requirements: requirementsList,
       is_active: formData.is_active,
     };
@@ -559,20 +564,36 @@ export default function DocumentInfoManagement({ docTypes = [], onSaveDocType, o
               </div>
             </div>
           ) : (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(Set 0 for Free / Exempt)</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.fee}
-                onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="0.00"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Standard Processing Fee (PHP) <span className="text-slate-400 font-normal">(0 for Free)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={formData.fee}
+                  onChange={(e) => setFormData({ ...formData, fee: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Documentary Stamp (Doc Stamps PHP)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.doc_stamps !== undefined ? formData.doc_stamps : 30}
+                  onChange={(e) => setFormData({ ...formData, doc_stamps: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="30.00"
+                />
+              </div>
             </div>
           )}
 

@@ -237,38 +237,38 @@ export default function RequestFlowModal({
   // Requirements list normalized from selectedDoc
   const requirementsToUpload =
     selectedDoc?.requirements &&
-    Array.isArray(selectedDoc.requirements) &&
-    selectedDoc.requirements.length > 0
+      Array.isArray(selectedDoc.requirements) &&
+      selectedDoc.requirements.length > 0
       ? selectedDoc.requirements
-          .filter((r) => {
-            const str =
-              typeof r === 'string'
-                ? r
-                : (r as any).name || (r as any).title || '';
-            const s = str.trim().toLowerCase();
-            return (
-              s &&
-              s !== 'none' &&
-              !s.includes('no required document') &&
-              !s.startsWith('none (')
-            );
-          })
-          .map((r, i) => {
-            const name =
-              typeof r === 'string'
-                ? r
-                : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
-            const isReq =
-              typeof r === 'object' && 'is_required' in (r as any)
-                ? !!(r as any).is_required
-                : true;
-            return {
-              id: `req-${i}`,
-              name,
-              description: 'Original or clear digital scanned copy / camera photo',
-              is_required: isReq,
-            };
-          })
+        .filter((r) => {
+          const str =
+            typeof r === 'string'
+              ? r
+              : (r as any).name || (r as any).title || '';
+          const s = str.trim().toLowerCase();
+          return (
+            s &&
+            s !== 'none' &&
+            !s.includes('no required document') &&
+            !s.startsWith('none (')
+          );
+        })
+        .map((r, i) => {
+          const name =
+            typeof r === 'string'
+              ? r
+              : (r as any).name || (r as any).title || `Requirement ${i + 1}`;
+          const isReq =
+            typeof r === 'object' && 'is_required' in (r as any)
+              ? !!(r as any).is_required
+              : true;
+          return {
+            id: `req-${i}`,
+            name,
+            description: 'Original or clear digital scanned copy / camera photo',
+            is_required: isReq,
+          };
+        })
       : selectedDoc?.requirement_items || [];
 
   // Mandatory requirements calculation for Step 3 progress
@@ -371,7 +371,7 @@ export default function RequestFlowModal({
   const handleRemoveFile = async (reqName: string) => {
     const existing = uploadedFiles[reqName];
     if (existing?.storage_path) {
-      deleteStoredFile('documents', existing.storage_path).catch(() => {});
+      deleteStoredFile('documents', existing.storage_path).catch(() => { });
     }
     setUploadedFiles((prev) => {
       const updated = { ...prev };
@@ -412,7 +412,9 @@ export default function RequestFlowModal({
       if (isYearsEmpty) {
         setShowStepValidation(true);
         setUploadError(
-          'Required Field Missing: Please enter how many years you have resided in Barangay Zapatera.'
+          isBusinessDoc
+            ? 'Required Field Missing: Please enter how many years the business has operated.'
+            : 'Required Field Missing: Please enter how many years you have resided in Barangay Zapatera.'
         );
         bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
         return;
@@ -443,12 +445,7 @@ export default function RequestFlowModal({
           bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
           return;
         }
-        if (!businessContact.trim()) {
-          setShowStepValidation(true);
-          setUploadError('Required Field Missing: Please provide a valid Contact Number.');
-          bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
-          return;
-        }
+        // Business contact number is optional
       }
 
       setShowStepValidation(false);
@@ -460,8 +457,7 @@ export default function RequestFlowModal({
         setShowStepValidation(true);
         const missing = mandatoryItems.find((m) => !uploadedFiles[m.name]);
         setUploadError(
-          `Required Attachment Missing: Please upload all mandatory documents (${mandatoryUploadedCount} of ${totalMandatory} submitted). Missing: "${
-            missing?.name || 'Required Document'
+          `Required Attachment Missing: Please upload all mandatory documents (${mandatoryUploadedCount} of ${totalMandatory} submitted). Missing: "${missing?.name || 'Required Document'
           }".`
         );
         bodyScrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -501,8 +497,8 @@ export default function RequestFlowModal({
         Number(selectedDoc.fee) > 0
           ? Number(selectedDoc.fee)
           : isBusinessDoc
-          ? 500
-          : 0;
+            ? 500
+            : 0;
 
       const newRequest: DocumentRequest = {
         id: `req-${Date.now()}`,
@@ -538,13 +534,12 @@ export default function RequestFlowModal({
         is_variable_fee: Boolean(
           selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
         ),
-        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the processing fee (${
-          selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
+        pickup_instructions: `Please arrive during your selected 30-minute interval (${selectedSlot}). Bring your valid ID and the processing fee (${selectedDoc.fee_type === 'variable' || selectedDoc.is_variable_fee
             ? 'Depends on Claim'
             : resolvedDocFee === 0
-            ? '₱0.00 (FREE)'
-            : formatCurrency(resolvedDocFee)
-        }).`,
+              ? '₱0.00 (FREE)'
+              : formatCurrency(resolvedDocFee)
+          }).`,
         timeline: [
           {
             status: 'pending',
@@ -817,8 +812,8 @@ export default function RequestFlowModal({
                           {isSelectedDocVar
                             ? 'Depends on Claim'
                             : isSelectedDocFree
-                            ? 'FREE'
-                            : formatCurrency(selectedDocFee)}{' '}
+                              ? 'FREE'
+                              : formatCurrency(selectedDocFee)}{' '}
                           • {selectedDoc?.processing_days || 1}{' '}
                           {Number(selectedDoc?.processing_days || 1) === 1
                             ? 'Working Day'
@@ -874,8 +869,8 @@ export default function RequestFlowModal({
                                   dtIsVar
                                     ? styles.miniFeePillVariable
                                     : dtFree
-                                    ? styles.miniFeePillFree
-                                    : styles.miniFeePillPaid,
+                                      ? styles.miniFeePillFree
+                                      : styles.miniFeePillPaid,
                                 ]}
                               >
                                 <Text
@@ -884,15 +879,15 @@ export default function RequestFlowModal({
                                     dtIsVar
                                       ? styles.miniFeePillTextVariable
                                       : dtFree
-                                      ? styles.miniFeePillTextFree
-                                      : styles.miniFeePillTextPaid,
+                                        ? styles.miniFeePillTextFree
+                                        : styles.miniFeePillTextPaid,
                                   ]}
                                 >
                                   {dtIsVar
                                     ? 'Depends on Claim'
                                     : dtFree
-                                    ? 'FREE'
-                                    : formatCurrency(dtFee)}
+                                      ? 'FREE'
+                                      : formatCurrency(dtFee)}
                                 </Text>
                               </View>
                               {isSelected && <CheckCircle2 size={15} color="#2563eb" />}
@@ -917,8 +912,8 @@ export default function RequestFlowModal({
                         isSelectedDocVar
                           ? styles.selectedDocFeeBadgeVariable
                           : isSelectedDocFree
-                          ? styles.selectedDocFeeBadgeFree
-                          : styles.selectedDocFeeBadgePaid,
+                            ? styles.selectedDocFeeBadgeFree
+                            : styles.selectedDocFeeBadgePaid,
                       ]}
                     >
                       <Text
@@ -927,15 +922,15 @@ export default function RequestFlowModal({
                           isSelectedDocVar
                             ? styles.selectedDocFeeTextVariable
                             : isSelectedDocFree
-                            ? styles.selectedDocFeeTextFree
-                            : styles.selectedDocFeeTextPaid,
+                              ? styles.selectedDocFeeTextFree
+                              : styles.selectedDocFeeTextPaid,
                         ]}
                       >
                         {isSelectedDocVar
                           ? 'Depends on Claim'
                           : isSelectedDocFree
-                          ? 'FREE'
-                          : formatCurrency(selectedDocFee)}
+                            ? 'FREE'
+                            : formatCurrency(selectedDocFee)}
                       </Text>
                     </View>
                   </View>
@@ -1065,7 +1060,7 @@ export default function RequestFlowModal({
                 >
                   <View style={styles.fieldLabelRow}>
                     <Text style={styles.inputLabel}>
-                      Length of Residency (Years in Barangay) <Text style={styles.reqAsterisk}>*</Text>
+                      {isBusinessDoc ? 'Length of Business in Years' : 'Length of Residency (Years in Barangay)'} <Text style={styles.reqAsterisk}>*</Text>
                     </Text>
                     {isYearsEmpty ? (
                       <View style={styles.statusIndicatorRequired}>
@@ -1090,7 +1085,7 @@ export default function RequestFlowModal({
                   >
                     <TextInput
                       style={styles.textInputFlex}
-                      placeholder="Enter number of years living in Barangay Zapatera (e.g. 5)"
+                      placeholder={isBusinessDoc ? "Enter number of years business has operated (e.g. 3)" : "Enter number of years living in Barangay Zapatera (e.g. 5)"}
                       placeholderTextColor="#94a3b8"
                       keyboardType="numeric"
                       value={yearsInBarangay}
@@ -1110,7 +1105,7 @@ export default function RequestFlowModal({
                     <View style={styles.inlineMissingHint}>
                       <AlertCircle size={12} color="#dc2626" />
                       <Text style={styles.inlineMissingHintText}>
-                        Required field: Please input how many years you have lived in Barangay Zapatera.
+                        {isBusinessDoc ? "Required field: Please input how many years the business has operated." : "Required field: Please input how many years you have lived in Barangay Zapatera."}
                       </Text>
                     </View>
                   )}
@@ -1291,26 +1286,13 @@ export default function RequestFlowModal({
                     <View style={{ marginTop: 12 }}>
                       <View style={styles.fieldLabelRow}>
                         <Text style={styles.inputLabel}>
-                          Contact Number <Text style={styles.reqAsterisk}>*</Text>
+                          Contact Number <Text style={{ color: '#64748b', fontWeight: 'normal', fontSize: 11 }}>(Optional)</Text>
                         </Text>
-                        {!businessContact.trim() ? (
-                          <View style={styles.statusIndicatorRequired}>
-                            <AlertCircle size={10} color="#dc2626" />
-                            <Text style={styles.statusIndicatorRequiredText}>REQUIRED</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.statusIndicatorDone}>
-                            <CheckCircle2 size={10} color="#059669" />
-                            <Text style={styles.statusIndicatorDoneText}>ENTERED</Text>
-                          </View>
-                        )}
                       </View>
                       <View
                         style={[
                           styles.inputBoxRow,
-                          !businessContact.trim() && showStepValidation
-                            ? styles.inputBoxRowMissing
-                            : styles.inputBoxRowValid,
+                          styles.inputBoxRowValid,
                         ]}
                       >
                         <TextInput
@@ -1431,8 +1413,8 @@ export default function RequestFlowModal({
                     style={[
                       styles.reqProgressCard,
                       !isAllMandatoryUploaded &&
-                        showStepValidation &&
-                        styles.reqProgressCardError,
+                      showStepValidation &&
+                      styles.reqProgressCardError,
                     ]}
                   >
                     <View style={styles.reqProgressHeader}>
@@ -1459,8 +1441,8 @@ export default function RequestFlowModal({
                             {totalMandatory === 0
                               ? 'No mandatory attachments required'
                               : isAllMandatoryUploaded
-                              ? 'All required attachments uploaded (100%)'
-                              : `${mandatoryUploadedCount} of ${totalMandatory} required document(s) attached`}
+                                ? 'All required attachments uploaded (100%)'
+                                : `${mandatoryUploadedCount} of ${totalMandatory} required document(s) attached`}
                           </Text>
                         </View>
                       </View>
@@ -1518,8 +1500,8 @@ export default function RequestFlowModal({
                             styles.uploadItemCard,
                             isMissingMandatory && styles.uploadItemCardMissing,
                             showStepValidation &&
-                              isMissingMandatory &&
-                              styles.uploadItemCardErrorStrong,
+                            isMissingMandatory &&
+                            styles.uploadItemCardErrorStrong,
                             uploaded && styles.uploadItemCardUploaded,
                           ]}
                         >
@@ -1634,10 +1616,9 @@ export default function RequestFlowModal({
                                     >
                                       {uploaded.ai_quality.status === 'passed'
                                         ? `AI Check: Clear & Readable (${uploaded.ai_quality.qualityScore}%)`
-                                        : `AI Quality Notice: ${
-                                            uploaded.ai_quality.issues.join(', ') ||
-                                            'Check clarity'
-                                          }`}
+                                        : `AI Quality Notice: ${uploaded.ai_quality.issues.join(', ') ||
+                                        'Check clarity'
+                                        }`}
                                     </Text>
                                   </View>
 
@@ -1876,8 +1857,8 @@ export default function RequestFlowModal({
                         {isSelectedDocVar
                           ? 'Depends on Claim'
                           : isSelectedDocFree
-                          ? 'FREE'
-                          : formatCurrency(selectedDocFee)}
+                            ? 'FREE'
+                            : formatCurrency(selectedDocFee)}
                       </Text>
                     </Text>
                   </View>
@@ -1896,7 +1877,7 @@ export default function RequestFlowModal({
                         'Barangay Zapatera'}
                     </Text>
                     <Text style={styles.summarySubText}>
-                      Years in Barangay: {yearsInBarangay} year(s)
+                      {isBusinessDoc ? `Length of Business: ${yearsInBarangay} year(s)` : `Years in Barangay: ${yearsInBarangay} year(s)`}
                     </Text>
                   </View>
 
@@ -2120,8 +2101,8 @@ export default function RequestFlowModal({
                   styles.nextBtn,
                   isSubmitting && { opacity: 0.6 },
                   currentStep === 3 &&
-                    !isAllMandatoryUploaded &&
-                    styles.nextBtnIncomplete,
+                  !isAllMandatoryUploaded &&
+                  styles.nextBtnIncomplete,
                 ]}
                 onPress={handleNextStep}
                 disabled={isSubmitting}
@@ -2138,10 +2119,10 @@ export default function RequestFlowModal({
                       {currentStep === 5
                         ? 'Submit Application'
                         : currentStep === 3
-                        ? isAllMandatoryUploaded
-                          ? 'Continue to Schedule'
-                          : `Upload Required (${mandatoryUploadedCount}/${totalMandatory})`
-                        : 'Continue'}
+                          ? isAllMandatoryUploaded
+                            ? 'Continue to Schedule'
+                            : `Upload Required (${mandatoryUploadedCount}/${totalMandatory})`
+                          : 'Continue'}
                     </Text>
                     <ArrowRight size={15} color="#ffffff" />
                   </>

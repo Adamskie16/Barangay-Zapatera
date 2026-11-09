@@ -309,7 +309,7 @@ export default function ProfileView({
 
   const handleSaveProfile = () => {
     setEditSubmittedAttempt(true);
-    if (!editFirstName.trim() || !editLastName.trim() || !editPhone.trim() || !editAddress.trim()) {
+    if (!editFirstName.trim() || !editLastName.trim() || !editAddress.trim()) {
       return;
     }
 
@@ -402,7 +402,7 @@ export default function ProfileView({
 
   const isFirstMissing = editSubmittedAttempt && !editFirstName.trim();
   const isLastMissing = editSubmittedAttempt && !editLastName.trim();
-  const isPhoneMissing = editSubmittedAttempt && !editPhone.trim();
+  const isPhoneMissing = false;
   const isAddressMissing = editSubmittedAttempt && !editAddress.trim();
 
   return (
@@ -582,7 +582,7 @@ export default function ProfileView({
           <View style={styles.infoCol}>
             <Text style={styles.infoLabel}>Contact Mobile Number</Text>
             <Text style={styles.infoValue}>
-              {currentUser.phone || '0917-123-4567'}
+              {currentUser.phone || 'Not provided'}
             </Text>
           </View>
         </View>
@@ -838,7 +838,7 @@ export default function ProfileView({
               {/* Mobile Number */}
               <View style={styles.fieldLabelRow}>
                 <Text style={styles.formLabel}>
-                  Mobile Number <Text style={styles.reqAsterisk}>*</Text>
+                  Mobile Number (Optional)
                 </Text>
                 {isPhoneMissing && (
                   <View style={styles.missingBadge}>

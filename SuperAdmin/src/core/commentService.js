@@ -6,6 +6,12 @@ import { checkContentModeration } from './contentModerationService';
 
 const STORAGE_KEY = 'zapatera_bulletin_comments';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(val) {
+  return typeof val === 'string' && UUID_REGEX.test(val);
+}
+
 // Circuit breaker state to prevent spamming 404s when SQL migration has not been run in Supabase yet
 let isRemoteTableAvailable = null;
 let lastTableCheckTime = 0;
@@ -139,10 +145,16 @@ export async function getBulletinComments(newsId) {
     if (data) {
       isRemoteTableAvailable = true;
       const allLocal = getLocalComments();
-      const existingIds = new Set(data.map((c) => c.id));
-      const filteredOther = allLocal.filter((c) => String(c.news_id) !== String(newsId) && !existingIds.has(c.id));
-      saveLocalComments([...filteredOther, ...data]);
-      return data;
+      const existingIds = new Set(data.map((c) => String(c.id)));
+      // Preserve any local comments for this news that are not yet in remote (e.g. pending sync cm-*)
+      const localUnsynced = allLocal.filter((c) => String(c.news_id) === String(newsId) && !existingIds.has(String(c.id)));
+      const otherNewsComments = allLocal.filter((c) => String(c.news_id) !== String(newsId));
+      
+      const mergedThisNews = [...data, ...localUnsynced].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      saveLocalComments([...otherNewsComments, ...data, ...localUnsynced]);
+      return mergedThisNews;
     }
   } catch (err) {
     handleRemoteError(err);
@@ -205,26 +217,42 @@ export async function postOfficialReply({
   // 4. Persist to Supabase if table is available
   if (!shouldSkipRemote()) {
     try {
+      const remoteParentId = isValidUuid(newComment.parent_id) ? newComment.parent_id : null;
       const payload = {
-        news_id: newComment.news_id,
+        news_id: String(newComment.news_id),
         author_id: newComment.author_id,
         author_name: newComment.author_name,
         author_role: newComment.author_role,
         author_avatar: newComment.author_avatar,
         content: newComment.content,
-        parent_id: newComment.parent_id,
+        parent_id: remoteParentId,
         reply_to_name: newComment.reply_to_name,
         is_official_response: true,
         created_at: newComment.created_at,
         updated_at: newComment.updated_at,
       };
 
-      const { data, error } = await supabase.from('bulletin_comments').insert([payload]).select();
+      let { data, error } = await supabase.from('bulletin_comments').insert([payload]).select();
+      
+      // If error occurred and parent_id was non-null, retry once with parent_id = null
+      if (error && payload.parent_id) {
+        console.warn('Bulletin reply insertion failed with parent_id constraint. Retrying with parent_id = null:', error);
+        payload.parent_id = null;
+        const retry = await supabase.from('bulletin_comments').insert([payload]).select();
+        data = retry.data;
+        error = retry.error;
+      }
+
       if (error) {
         handleRemoteError(error);
       } else if (data && data[0]) {
         isRemoteTableAvailable = true;
-        const realComment = data[0];
+        const realComment = {
+          ...data[0],
+          // Keep original local parent_id and reply_to_name if remote was coerced to null
+          parent_id: newComment.parent_id || data[0].parent_id,
+          reply_to_name: newComment.reply_to_name || data[0].reply_to_name,
+        };
         const updatedLocal = getLocalComments().map((c) => (c.id === newComment.id ? realComment : c));
         saveLocalComments(updatedLocal);
         return realComment;
