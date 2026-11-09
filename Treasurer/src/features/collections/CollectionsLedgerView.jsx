@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   Search,
   Filter,
+  MessageSquare,
+  AlertCircle,
 } from 'lucide-react';
 import DataTable from '../../components/DataTable';
 import { formatCurrency, formatDate } from '../../core/security';
@@ -47,6 +49,7 @@ export default function CollectionsLedgerView({
   const [payMethod, setPayMethod] = useState('Cash');
   const [payOrNumber, setPayOrNumber] = useState('');
   const [payAmount, setPayAmount] = useState('');
+  const [payDocStamps, setPayDocStamps] = useState('30');
   const [payNotes, setPayNotes] = useState('');
   const [markCompletedOnPay, setMarkCompletedOnPay] = useState(true);
 
@@ -54,6 +57,10 @@ export default function CollectionsLedgerView({
   const [waiveReason, setWaiveReason] = useState('Indigent Resident');
   const [waiveNotes, setWaiveNotes] = useState('');
   const [markCompletedOnWaive, setMarkCompletedOnWaive] = useState(true);
+
+  // Feedback & Remarks Modal
+  const [feedbackModalTx, setFeedbackModalTx] = useState(null);
+  const [feedbackText, setFeedbackText] = useState('');
 
   // Compute status counts for status tabs
   const counts = useMemo(() => {
@@ -121,13 +128,25 @@ export default function CollectionsLedgerView({
 
   // Open Payment Modal
   const handleOpenPaymentModal = (req) => {
-    const fee = Number(req.fee ?? req.amount ?? 0);
+    const isDepends = Boolean(
+      req.is_depends_on_claim ||
+      req.processing_fee_type === 'depends_on_claim' ||
+      (Number(req.fee ?? req.amount ?? 0) === 0 && !req.is_paid && !req.is_waived)
+    );
+    const resolvedFee = req.claimed_fee !== undefined && req.claimed_fee !== null && Number(req.claimed_fee) > 0
+      ? Number(req.claimed_fee)
+      : Number(req.fee ?? req.amount ?? 0);
+    const docStamps = req.doc_stamps !== undefined && req.doc_stamps !== null
+      ? Number(req.doc_stamps)
+      : 30;
     const generatedOr = StorageService.generateNextOrNumber(requests);
+
     setPaymentModalTx(req);
     setPayMethod('Cash');
     setPayOrNumber(generatedOr);
-    setPayAmount(String(fee));
-    setPayNotes('');
+    setPayAmount(isDepends && resolvedFee === 0 ? '' : String(resolvedFee));
+    setPayDocStamps(String(docStamps));
+    setPayNotes(req.treasurer_notes || '');
     setMarkCompletedOnPay(true);
   };
 
@@ -136,12 +155,17 @@ export default function CollectionsLedgerView({
     e.preventDefault();
     if (!paymentModalTx) return;
 
+    const baseFee = Number(payAmount) || 0;
+    const docStamps = Number(payDocStamps) || 0;
+    const totalCollected = baseFee + docStamps;
+
     setIsSubmitting(true);
     try {
       const updated = await StorageService.recordPaymentAsync({
         requestId: paymentModalTx.id,
         trackingNumber: paymentModalTx.tracking_number,
-        amount: Number(payAmount) || 0,
+        amount: baseFee,
+        docStamps: docStamps,
         paymentMethod: payMethod,
         orNumber: payOrNumber.trim() || StorageService.generateNextOrNumber(requests),
         notes: payNotes.trim(),
@@ -152,7 +176,7 @@ export default function CollectionsLedgerView({
 
       setNotification({
         type: 'success',
-        message: `Payment of ${formatCurrency(Number(payAmount) || 0)} recorded for ${paymentModalTx.resident_name || paymentModalTx.full_name || 'resident'}. Official Receipt #${payOrNumber} issued.`,
+        message: `Payment of ${formatCurrency(totalCollected)} (Fee: ${formatCurrency(baseFee)} + Doc Stamps: ${formatCurrency(docStamps)}) recorded for ${paymentModalTx.resident_name || paymentModalTx.full_name || 'resident'}. Official Receipt #${payOrNumber} issued.`,
       });
 
       // Close payment modal and open Official Receipt for printing
@@ -164,6 +188,43 @@ export default function CollectionsLedgerView({
       setNotification({
         type: 'error',
         message: 'Could not record payment. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  // Open Feedback Modal
+  const handleOpenFeedbackModal = (req) => {
+    setFeedbackModalTx(req);
+    setFeedbackText(req.treasurer_notes || '');
+  };
+
+  // Save Feedback
+  const handleSaveFeedback = async (e) => {
+    e.preventDefault();
+    if (!feedbackModalTx) return;
+
+    setIsSubmitting(true);
+    try {
+      await StorageService.updateTreasurerFeedbackAsync({
+        requestId: feedbackModalTx.id,
+        trackingNumber: feedbackModalTx.tracking_number,
+        remarks: feedbackText.trim(),
+      });
+
+      if (onRefresh) await onRefresh();
+
+      setNotification({
+        type: 'success',
+        message: `Official feedback saved for tracking #${feedbackModalTx.tracking_number}.`,
+      });
+      setFeedbackModalTx(null);
+    } catch (err) {
+      setNotification({
+        type: 'error',
+        message: 'Could not save feedback. Please try again.',
       });
     } finally {
       setIsSubmitting(false);
@@ -255,10 +316,53 @@ export default function CollectionsLedgerView({
       header: 'Fee (PHP)',
       sortable: true,
       align: 'right',
-      accessor: (row) => Number(row.fee ?? row.amount ?? 0),
+      accessor: (row) => Number(row.claimed_fee ?? row.fee ?? row.amount ?? 0),
       render: (row) => {
-        const fee = Number(row.fee ?? row.amount ?? 0);
-        return <span className="font-black text-slate-900">{formatCurrency(fee)}</span>;
+        const isDepends = Boolean(
+          row.is_depends_on_claim ||
+          row.processing_fee_type === 'depends_on_claim' ||
+          (Number(row.fee ?? row.amount ?? 0) === 0 && !row.is_paid && !row.is_waived && row.payment_status !== 'paid')
+        );
+        const fee = Number(row.claimed_fee ?? row.fee ?? row.amount ?? 0);
+        if (isDepends && !row.is_paid && row.payment_status !== 'paid') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 whitespace-nowrap">
+              Depends on Claim
+            </span>
+          );
+        }
+        return <span className="font-bold text-slate-900">{formatCurrency(fee)}</span>;
+      },
+    },
+    {
+      key: 'doc_stamps',
+      header: 'Doc Stamps',
+      sortable: true,
+      align: 'right',
+      render: (row) => {
+        const isWaived = row.payment_status === 'waived' || row.is_waived === true;
+        if (isWaived) return <span className="text-purple-600 font-semibold text-xs">Exempt</span>;
+        const ds = row.doc_stamps !== undefined && row.doc_stamps !== null ? Number(row.doc_stamps) : 30;
+        return <span className="font-mono text-xs font-semibold text-slate-700">{formatCurrency(ds)}</span>;
+      },
+    },
+    {
+      key: 'amount_paid',
+      header: 'Total (PHP)',
+      sortable: true,
+      align: 'right',
+      render: (row) => {
+        const isWaived = row.payment_status === 'waived' || row.is_waived === true;
+        if (isWaived) return <span className="text-purple-700 font-bold text-xs">₱0.00</span>;
+        const isPaid = row.payment_status === 'paid' || row.is_paid === true || row.status === 'released' || row.status === 'completed';
+        const fee = Number(row.claimed_fee ?? row.fee ?? row.amount ?? 0);
+        const ds = row.doc_stamps !== undefined && row.doc_stamps !== null ? Number(row.doc_stamps) : 30;
+        const total = Number(row.amount_paid) > 0 ? Number(row.amount_paid) : (fee + ds);
+        return (
+          <span className={`font-black text-xs ${isPaid ? 'text-emerald-700' : 'text-slate-900'}`}>
+            {formatCurrency(total)}
+          </span>
+        );
       },
     },
     {
@@ -329,48 +433,61 @@ export default function CollectionsLedgerView({
         const isPaid = row.payment_status === 'paid' || row.is_paid === true || row.status === 'released' || row.status === 'completed';
         const isWaived = row.payment_status === 'waived' || row.is_waived === true;
 
-        if (isPaid) {
-          return (
-            <button
-              onClick={() => setReceiptModalTx(row)}
-              title="View & Print Official Receipt"
-              className="px-2.5 py-1 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
-            >
-              <Eye className="w-3.5 h-3.5 text-blue-600" />
-              <span>View Receipt</span>
-            </button>
-          );
-        }
-
-        if (isWaived) {
-          return (
-            <button
-              onClick={() => setSelectedTx(row)}
-              title="View Waiver Details"
-              className="px-2.5 py-1 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
-            >
-              <Gift className="w-3.5 h-3.5 text-purple-600" />
-              <span>Waiver Info</span>
-            </button>
-          );
-        }
-
         return (
           <div className="flex items-center justify-center gap-1.5">
+            {isPaid && (
+              <button
+                onClick={() => setReceiptModalTx(row)}
+                title="View & Print Official Receipt"
+                className="px-2.5 py-1 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
+              >
+                <Eye className="w-3.5 h-3.5 text-blue-600" />
+                <span>Receipt</span>
+              </button>
+            )}
+
+            {isWaived && (
+              <button
+                onClick={() => setSelectedTx(row)}
+                title="View Waiver Details"
+                className="px-2.5 py-1 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-semibold"
+              >
+                <Gift className="w-3.5 h-3.5 text-purple-600" />
+                <span>Waiver</span>
+              </button>
+            )}
+
+            {!isPaid && !isWaived && (
+              <>
+                <button
+                  onClick={() => handleOpenPaymentModal(row)}
+                  title="Collect Fee & Issue Official Receipt"
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-bold shadow-2xs"
+                >
+                  <Receipt className="w-3.5 h-3.5 text-white" />
+                  <span>Collect</span>
+                </button>
+                <button
+                  onClick={() => handleOpenWaiveModal(row)}
+                  title="Mark as Free / Waived (Indigent/Senior/PWD)"
+                  className="px-2 py-1 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 transition-colors cursor-pointer text-xs font-medium"
+                >
+                  Waive
+                </button>
+              </>
+            )}
+
             <button
-              onClick={() => handleOpenPaymentModal(row)}
-              title="Collect Fee & Issue Official Receipt"
-              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-bold shadow-2xs"
+              onClick={() => handleOpenFeedbackModal(row)}
+              title="Official Treasurer Feedback / Remarks"
+              className={`p-1.5 rounded-lg border transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-medium ${
+                row.treasurer_notes
+                  ? 'text-sky-700 bg-sky-50 border-sky-300 hover:bg-sky-100'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border-slate-200'
+              }`}
             >
-              <Receipt className="w-3.5 h-3.5 text-white" />
-              <span>Collect Fee</span>
-            </button>
-            <button
-              onClick={() => handleOpenWaiveModal(row)}
-              title="Mark as Free / Waived (Indigent/Senior/PWD)"
-              className="px-2 py-1 rounded-lg text-slate-600 hover:text-purple-700 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 transition-colors cursor-pointer text-xs font-medium"
-            >
-              Waive
+              <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+              {row.treasurer_notes && <span className="hidden sm:inline text-[11px] font-semibold text-sky-700">Remarks</span>}
             </button>
           </div>
         );
@@ -487,13 +604,36 @@ export default function CollectionsLedgerView({
                     {paymentModalTx.document_type || paymentModalTx.document_name || 'Clearance'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-medium">Standard Fee:</span>
-                  <span className="font-bold text-slate-900">
-                    {formatCurrency(Number(paymentModalTx.fee ?? paymentModalTx.amount ?? 0))}
-                  </span>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Fee Policy:</span>
+                  {Boolean(
+                    paymentModalTx.is_depends_on_claim ||
+                    paymentModalTx.processing_fee_type === 'depends_on_claim' ||
+                    (Number(paymentModalTx.fee ?? paymentModalTx.amount ?? 0) === 0 && !paymentModalTx.is_paid && !paymentModalTx.is_waived)
+                  ) ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                      Depends on Claim
+                    </span>
+                  ) : (
+                    <span className="font-bold text-slate-900">
+                      {formatCurrency(Number(paymentModalTx.fee ?? paymentModalTx.amount ?? 0))}
+                    </span>
+                  )}
                 </div>
               </div>
+
+              {Boolean(
+                paymentModalTx.is_depends_on_claim ||
+                paymentModalTx.processing_fee_type === 'depends_on_claim' ||
+                (Number(paymentModalTx.fee ?? paymentModalTx.amount ?? 0) === 0 && !paymentModalTx.is_paid && !paymentModalTx.is_waived)
+              ) && (
+                <div className="p-2.5 bg-amber-50/80 rounded-xl border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <span>
+                    <strong>Assessment Required:</strong> This service's processing fee depends on claim/evaluation. Enter the assessed fee determined for this resident.
+                  </span>
+                </div>
+              )}
 
               {/* OR Number */}
               <div>
@@ -510,20 +650,56 @@ export default function CollectionsLedgerView({
                 />
               </div>
 
-              {/* Amount to Collect */}
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  Amount Collected (PHP)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                />
+              {/* Fee and Doc Stamps Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Document Fee */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Document Fee (PHP)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  />
+                </div>
+
+                {/* Doc Stamps */}
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">
+                    Doc Stamps (PHP)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={payDocStamps}
+                    onChange={(e) => setPayDocStamps(e.target.value)}
+                    placeholder="30.00"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  />
+                </div>
+              </div>
+
+              {/* Total Calculation Strip */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between text-blue-950">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-blue-700 tracking-wider">Total Collected</p>
+                  <p className="text-[10px] text-blue-600 font-mono mt-0.5">
+                    {formatCurrency(Number(payAmount) || 0)} fee + {formatCurrency(Number(payDocStamps) || 0)} stamps
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-base font-black text-blue-900">
+                    {formatCurrency((Number(payAmount) || 0) + (Number(payDocStamps) || 0))}
+                  </p>
+                </div>
               </div>
 
               {/* Payment Method */}
@@ -543,16 +719,16 @@ export default function CollectionsLedgerView({
                 </select>
               </div>
 
-              {/* Notes */}
+              {/* Remarks / Notes */}
               <div>
                 <label className="block text-slate-700 font-semibold mb-1">
-                  Remarks / Notes (Optional)
+                  Treasurer Remarks / Comment Feedback (Optional)
                 </label>
                 <input
                   type="text"
                   value={payNotes}
                   onChange={(e) => setPayNotes(e.target.value)}
-                  placeholder="e.g. Received at Barangay Hall Cashier"
+                  placeholder="e.g. Paid at counter. Requirements validated."
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                 />
               </div>
@@ -763,12 +939,30 @@ export default function CollectionsLedgerView({
                     {formatDate(receiptModalTx.payment_date || receiptModalTx.created_at)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                  <span className="font-bold text-slate-700 text-sm">Amount Paid:</span>
-                  <span className="font-black text-slate-900 text-lg">
-                    {formatCurrency(Number(receiptModalTx.fee ?? receiptModalTx.amount ?? 0))}
+                <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                  <span className="text-slate-500 font-medium">Document Fee:</span>
+                  <span className="font-bold text-slate-800">
+                    {formatCurrency(Number(receiptModalTx.fee ?? 0))}
                   </span>
                 </div>
+                <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                  <span className="text-slate-500 font-medium">Documentary Stamp (Doc Stamps):</span>
+                  <span className="font-bold text-slate-800">
+                    {formatCurrency(Number(receiptModalTx.doc_stamps !== undefined ? receiptModalTx.doc_stamps : 30))}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="font-bold text-slate-800 text-sm">Total Amount Paid:</span>
+                  <span className="font-black text-blue-900 text-lg">
+                    {formatCurrency(Number(receiptModalTx.amount_paid ?? (Number(receiptModalTx.fee ?? 0) + Number(receiptModalTx.doc_stamps !== undefined ? receiptModalTx.doc_stamps : 30))))}
+                  </span>
+                </div>
+                {receiptModalTx.treasurer_notes && (
+                  <div className="mt-2 p-2.5 bg-slate-100/90 rounded-xl border border-slate-200 text-[11px] text-slate-700">
+                    <span className="font-bold text-slate-900">Remarks / Instructions: </span>
+                    <span>{receiptModalTx.treasurer_notes}</span>
+                  </div>
+                )}
               </div>
 
               {/* Footer Signatures */}
@@ -863,6 +1057,92 @@ export default function CollectionsLedgerView({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: TREASURER FEEDBACK & REMARKS */}
+      {feedbackModalTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative overflow-hidden space-y-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-600">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Treasurer Feedback & Notes</h3>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    {feedbackModalTx.tracking_number || 'BZ-2026-PEND'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setFeedbackModalTx(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFeedback} className="space-y-3.5 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <p className="font-semibold text-slate-900">
+                  Resident: {feedbackModalTx.resident_name || feedbackModalTx.full_name || 'Resident'}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  Document: {feedbackModalTx.document_type || feedbackModalTx.document_name || 'Clearance'} • Status:{' '}
+                  <span className="font-bold uppercase text-blue-700">{feedbackModalTx.payment_status || 'unpaid'}</span>
+                </p>
+                {feedbackModalTx.purpose && (
+                  <p className="text-[11px] text-slate-500">
+                    Purpose: <span className="font-medium text-slate-700">{feedbackModalTx.purpose}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Existing System Notes if any */}
+              {feedbackModalTx.notes && (
+                <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-200 text-amber-900 text-[11px]">
+                  <p className="font-bold text-amber-800">Processing / Compliance History:</p>
+                  <p className="mt-0.5 text-amber-950 font-mono text-[10px] break-words">{feedbackModalTx.notes}</p>
+                </div>
+              )}
+
+              {/* Treasurer Remarks Input */}
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Official Treasurer Feedback / Remarks
+                </label>
+                <textarea
+                  rows={3}
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Enter remarks, verification notes, or cashier instructions visible to staff and resident..."
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 text-xs"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  This note is synced in real-time and visible across Admin, SuperAdmin, and Resident portals.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackModalTx(null)}
+                  className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Feedback'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

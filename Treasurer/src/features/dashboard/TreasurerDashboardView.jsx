@@ -89,6 +89,7 @@ export default function TreasurerDashboardView({
   config = {},
   onRefresh,
   onNavigateToReports,
+  onNavigateToCollections,
 }) {
   // Interactive UI States
   const [analyticsTab, setAnalyticsTab] = useState('collection'); // 'collection' | 'fulfillment' | 'overview' | 'rate'
@@ -955,6 +956,15 @@ export default function TreasurerDashboardView({
               </h2>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onNavigateToCollections || onNavigateToReports}
+                  className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-[#3b5bfd] text-xs font-bold hover:bg-blue-100 transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Open Collections Ledger to Collect Fees & Issue Receipts"
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>Collections Ledger</span>
+                </button>
                 <button
                   type="button"
                   onClick={onNavigateToReports}

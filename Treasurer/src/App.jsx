@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import TreasurerLoginPage from './features/auth/TreasurerLoginPage';
 import TreasurerDashboardView from './features/dashboard/TreasurerDashboardView';
+import CollectionsLedgerView from './features/collections/CollectionsLedgerView';
 import TreasurerReportsView from './features/reports/TreasurerReportsView';
 import AccountView from './features/account/AccountView';
 import GlobalFooter from './components/GlobalFooter';
@@ -194,10 +195,22 @@ export default function App() {
                     config={config}
                     onRefresh={refreshFinancialData}
                     onNavigateToReports={() => handleNavigateTab('reports')}
+                    onNavigateToCollections={() => handleNavigateTab('collections')}
                   />
                 )}
 
-                {(activeTab === 'reports' || activeTab === 'collections') && (
+                {activeTab === 'collections' && (
+                  <CollectionsLedgerView
+                    requests={requests}
+                    docTypes={docTypes}
+                    config={config}
+                    currentUser={currentUser}
+                    onRefresh={refreshFinancialData}
+                    onNavigateToReports={() => handleNavigateTab('reports')}
+                  />
+                )}
+
+                {activeTab === 'reports' && (
                   <TreasurerReportsView
                     requests={requests}
                     docTypes={docTypes}

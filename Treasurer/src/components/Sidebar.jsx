@@ -36,6 +36,7 @@ export default function Sidebar({
   // Primary Treasury Workspace Navigation Items
   const topLevelItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
+    { id: 'collections', label: 'Collections Ledger', icon: Receipt },
     { id: 'reports', label: 'Collection Reports', icon: FileBarChart2 },
   ];
 

@@ -508,6 +508,7 @@ export const StorageService = {
     requestId,
     trackingNumber,
     amount,
+    docStamps = 30,
     paymentMethod = 'cash',
     orNumber,
     notes = '',
@@ -515,7 +516,9 @@ export const StorageService = {
   }) => {
     const now = new Date().toISOString();
     const finalOrNumber = orNumber || StorageService.generateNextOrNumber();
-    const parsedAmount = Number(amount) || 0;
+    const parsedFee = Number(amount) || 0;
+    const parsedDocStamps = Number(docStamps) || 0;
+    const totalCollected = parsedFee + parsedDocStamps;
 
     // 1. Update localStorage
     const localRequests = StorageService.getRequests();
@@ -524,17 +527,24 @@ export const StorageService = {
     const updatedRequests = localRequests.map((req) => {
       const match = (req.id && req.id === requestId) || (req.tracking_number && req.tracking_number === trackingNumber);
       if (match) {
+        const combinedNotes = notes
+          ? (req.notes ? `${req.notes} | [Treasurer Note]: ${notes}` : `[Treasurer Note]: ${notes}`)
+          : (req.notes || '');
+
         updatedRequest = {
           ...req,
           payment_status: 'paid',
           is_paid: true,
-          fee: parsedAmount,
-          amount_paid: parsedAmount,
+          fee: parsedFee,
+          doc_stamps: parsedDocStamps,
+          amount_paid: totalCollected,
+          total_collected: totalCollected,
           payment_method: paymentMethod,
           or_number: finalOrNumber,
           official_receipt_number: finalOrNumber,
           payment_date: now,
-          treasurer_notes: notes,
+          treasurer_notes: notes || req.treasurer_notes,
+          notes: combinedNotes,
           status: markCompleted ? 'completed' : (req.status || 'approved'),
           updated_at: now,
           ...(markCompleted
@@ -556,7 +566,6 @@ export const StorageService = {
     try {
       if (isSupabaseConfigured()) {
         const isUuid = requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId);
-        const currentUser = StorageService.getCurrentUser();
 
         const payload = {
           payment_status: 'paid',
@@ -564,7 +573,11 @@ export const StorageService = {
           payment_method: paymentMethod,
           or_number: finalOrNumber,
           payment_date: now,
-          fee: parsedAmount,
+          fee: parsedFee,
+          doc_stamps: parsedDocStamps,
+          amount_paid: totalCollected,
+          notes: updatedRequest?.notes || notes,
+          treasurer_notes: notes,
           updated_at: now,
         };
 
@@ -585,11 +598,15 @@ export const StorageService = {
         const { error } = await query;
         if (error) {
           console.warn('Supabase document_requests payment update note:', error);
-          // Retry with core columns
+          // Retry with core columns if doc_stamps or treasurer_notes not in schema
           const minimalPayload = {
             payment_status: 'paid',
             is_paid: true,
-            status: markCompleted ? 'completed' : 'approved',
+            or_number: finalOrNumber,
+            payment_method: paymentMethod,
+            fee: parsedFee,
+            amount_paid: totalCollected,
+            status: markCompleted ? 'completed' : (updatedRequest?.status || 'approved'),
             updated_at: now,
           };
           if (isUuid) {
@@ -607,8 +624,28 @@ export const StorageService = {
     StorageService.logActivity({
       action: 'Recorded Payment',
       module: 'Treasury Collections',
-      details: `Collected ₱${parsedAmount} (${paymentMethod.toUpperCase()}) for tracking #${trackingNumber || requestId} with OR No. ${finalOrNumber}.`,
+      details: `Collected ₱${totalCollected} (Fee: ₱${parsedFee}, Doc Stamps: ₱${parsedDocStamps}, ${paymentMethod.toUpperCase()}) for tracking #${trackingNumber || requestId} with OR No. ${finalOrNumber}.`,
     });
+
+    // 4. Cross-tab BroadcastChannel for Real-time Multi-portal Sync
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUESTS_UPDATED',
+          requestId: updatedRequest?.id,
+          trackingNumber: updatedRequest?.tracking_number,
+          status: updatedRequest?.status,
+          payment_status: 'paid',
+          or_number: finalOrNumber,
+          fee: parsedFee,
+          doc_stamps: parsedDocStamps,
+          amount_paid: totalCollected,
+          treasurer_notes: notes,
+        });
+        bc.close();
+      } catch {}
+    }
 
     return updatedRequest;
   },
@@ -630,12 +667,17 @@ export const StorageService = {
     const updatedRequests = localRequests.map((req) => {
       const match = (req.id && req.id === requestId) || (req.tracking_number && req.tracking_number === trackingNumber);
       if (match) {
+        const combinedNotes = notes
+          ? (req.notes ? `${req.notes} | [Treasurer Waiver]: ${notes}` : `[Treasurer Waiver]: ${notes}`)
+          : (req.notes || '');
+
         updatedRequest = {
           ...req,
           payment_status: 'waived',
           is_waived: true,
           waived_reason: reason,
-          treasurer_notes: notes,
+          treasurer_notes: notes || req.treasurer_notes,
+          notes: combinedNotes,
           status: markCompleted ? 'completed' : (req.status || 'approved'),
           updated_at: now,
           ...(markCompleted
@@ -662,6 +704,8 @@ export const StorageService = {
           payment_status: 'waived',
           is_waived: true,
           waived_reason: reason,
+          notes: updatedRequest?.notes || notes,
+          treasurer_notes: notes,
           updated_at: now,
         };
 
@@ -678,20 +722,7 @@ export const StorageService = {
           query = query.eq('tracking_number', trackingNumber);
         }
 
-        const { error } = await query;
-        if (error) {
-          console.warn('Supabase document_requests waive update note:', error);
-          const minPayload = {
-            payment_status: 'waived',
-            status: markCompleted ? 'completed' : 'approved',
-            updated_at: now,
-          };
-          if (isUuid) {
-            await supabase.from('document_requests').update(minPayload).eq('id', requestId);
-          } else if (trackingNumber) {
-            await supabase.from('document_requests').update(minPayload).eq('tracking_number', trackingNumber);
-          }
-        }
+        await query;
       }
     } catch (err) {
       console.warn('Supabase waivePaymentAsync catch:', err);
@@ -699,10 +730,116 @@ export const StorageService = {
 
     // 3. Log Activity
     StorageService.logActivity({
-      action: 'Waived Fee',
+      action: 'Waived Payment',
       module: 'Treasury Collections',
-      details: `Waived fee for tracking #${trackingNumber || requestId}. Reason: ${reason}.`,
+      details: `Waived fee (${reason}) for tracking #${trackingNumber || requestId}.`,
     });
+
+    // 4. Cross-tab BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUESTS_UPDATED',
+          requestId: updatedRequest?.id,
+          trackingNumber: updatedRequest?.tracking_number,
+          status: updatedRequest?.status,
+          payment_status: 'waived',
+          waived_reason: reason,
+        });
+        bc.close();
+      } catch {}
+    }
+
+    return updatedRequest;
+  },
+
+  // UPDATE TREASURER FEEDBACK / REMARKS ON REQUEST
+  updateTreasurerFeedbackAsync: async ({
+    requestId,
+    trackingNumber,
+    remarks = '',
+  }) => {
+    const now = new Date().toISOString();
+    const cleanRemarks = String(remarks || '').trim();
+
+    // 1. Update localStorage
+    const localRequests = StorageService.getRequests();
+    let updatedRequest = null;
+
+    const updatedRequests = localRequests.map((req) => {
+      const match = (req.id && req.id === requestId) || (req.tracking_number && req.tracking_number === trackingNumber);
+      if (match) {
+        const combinedNotes = cleanRemarks
+          ? (req.notes ? `${req.notes} | [Treasurer Feedback]: ${cleanRemarks}` : `[Treasurer Feedback]: ${cleanRemarks}`)
+          : (req.notes || '');
+
+        updatedRequest = {
+          ...req,
+          treasurer_notes: cleanRemarks,
+          notes: combinedNotes,
+          updated_at: now,
+        };
+        return updatedRequest;
+      }
+      return req;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedRequests));
+
+    // 2. Update Supabase
+    try {
+      if (isSupabaseConfigured()) {
+        const isUuid = requestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId);
+        const payload = {
+          notes: updatedRequest?.notes || cleanRemarks,
+          treasurer_notes: cleanRemarks,
+          updated_at: now,
+        };
+
+        let query = supabase.from('document_requests').update(payload);
+        if (isUuid) {
+          query = query.eq('id', requestId);
+        } else if (trackingNumber) {
+          query = query.eq('tracking_number', trackingNumber);
+        }
+
+        const { error } = await query;
+        if (error) {
+          console.warn('Supabase feedback update note:', error);
+          const fallback = { notes: updatedRequest?.notes || cleanRemarks, updated_at: now };
+          if (isUuid) {
+            await supabase.from('document_requests').update(fallback).eq('id', requestId);
+          } else if (trackingNumber) {
+            await supabase.from('document_requests').update(fallback).eq('tracking_number', trackingNumber);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('updateTreasurerFeedbackAsync catch:', err);
+    }
+
+    // 3. Log Activity
+    StorageService.logActivity({
+      action: 'Updated Remarks/Feedback',
+      module: 'Treasury Collections',
+      details: `Added Treasurer feedback for #${trackingNumber || requestId}: "${cleanRemarks}"`,
+    });
+
+    // 4. Cross-tab BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('zapatera_security_channel');
+        bc.postMessage({
+          type: 'DOCUMENT_REQUESTS_UPDATED',
+          requestId: updatedRequest?.id,
+          trackingNumber: updatedRequest?.tracking_number,
+          notes: updatedRequest?.notes,
+          treasurer_notes: cleanRemarks,
+        });
+        bc.close();
+      } catch {}
+    }
 
     return updatedRequest;
   },

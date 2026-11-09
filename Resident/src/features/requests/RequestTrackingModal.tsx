@@ -24,6 +24,7 @@ import {
   Copy,
   Check,
   PackageCheck,
+  Receipt,
 } from 'lucide-react';
 import { DocumentRequest, DocumentType, BarangayConfig } from '../../types';
 import Badge from '../../components/Badge';
